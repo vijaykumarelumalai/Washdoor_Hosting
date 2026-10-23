@@ -1,0 +1,110 @@
+/* src/styles/theme.css
+   Washdoor global design tokens — dark navy + purple accent.
+   Import once in index.js or App.js.
+*/
+
+:root {
+  /* ── Backgrounds ─────────────────────────────── */
+  --bg-app:           #0d1117;
+  --bg-surface:       #161b27;
+  --bg-elevated:      #1e2435;
+  --bg-input:         #1a2030;
+  --bg-input-focus:   #1e2638;
+  --bg-hover:         #242b3d;
+  --bg-modal-overlay: rgba(0, 0, 0, 0.72);
+
+  /* ── Purple accent scale ─────────────────────── */
+  --accent:           #7c5cfc;
+  --accent-light:     #9f84fd;
+  --accent-dark:      #5a3de8;
+  --accent-glow:      rgba(124, 92, 252, 0.25);
+  --accent-subtle:    rgba(124, 92, 252, 0.10);
+
+  /* ── Text ────────────────────────────────────── */
+  --text-primary:     #e8eaf0;
+  --text-secondary:   #9ba3b8;
+  --text-muted:       #5c657a;
+  --text-accent:      #9f84fd;
+  --text-danger:      #f87171;
+  --text-success:     #4ade80;
+  --text-warning:     #facc15;
+
+  /* ── Borders ─────────────────────────────────── */
+  --border:           #252d42;
+  --border-focus:     #7c5cfc;
+  --border-danger:    #f87171;
+  --border-success:   #4ade80;
+
+  /* ── Status colours ──────────────────────────── */
+  --color-danger:     #f87171;
+  --color-success:    #4ade80;
+  --color-warning:    #facc15;
+  --color-info:       #60a5fa;
+
+  /* ── Shadows ─────────────────────────────────── */
+  --shadow-sm:        0 1px 3px rgba(0,0,0,.45);
+  --shadow-md:        0 4px 16px rgba(0,0,0,.55);
+  --shadow-lg:        0 8px 32px rgba(0,0,0,.65);
+  --shadow-accent:    0 0 0 3px var(--accent-glow);
+
+  /* ── Spacing ─────────────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* ── Radii ───────────────────────────────────── */
+  --radius-sm:  6px;
+  --radius-md:  10px;
+  --radius-lg:  14px;
+  --radius-xl:  20px;
+  --radius-full: 9999px;
+
+  /* ── Typography ──────────────────────────────── */
+  --font-sans:  'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-mono:  'JetBrains Mono', 'Fira Code', monospace;
+
+  /* ── Transitions ─────────────────────────────── */
+  --transition: 150ms ease;
+}
+
+/* ── Reset / base ────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Scrollbar ───────────────────────────────────── */
+::-webkit-scrollbar {
+  display: none;
+  width: 0px;
+  height: 0px;
+}
+
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+/* ── Focus ring ──────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
