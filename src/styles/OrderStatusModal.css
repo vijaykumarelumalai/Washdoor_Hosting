@@ -1,0 +1,779 @@
+/* src/styles/OrderStatusModal.css */
+/* Compact Styles for Laundry Order Status Dialog (25% -> 50% -> 90%) */
+
+.order-status-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 7, 16, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  z-index: 2000;
+  animation: overlayFadeIn 0.16s ease;
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.order-status-modal-content {
+  background: #091322;
+  border: 1px solid #1a2c47;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 470px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  animation: modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  color: #cdd9e8;
+}
+
+@keyframes modalScaleIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── Dynamic Header ── */
+.status-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border-bottom: 1px solid #16263e;
+  background: #07101c;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.status-header-icon-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.status-header-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #093461 0%, #06203d 100%);
+  border: 1px solid #115293;
+  color: #38bdf8;
+  box-shadow: 0 2px 10px rgba(6, 182, 212, 0.18);
+  font-size: 15px;
+}
+
+.status-live-pulse-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #00e5ff;
+  box-shadow: 0 0 6px #00e5ff;
+  border: 1.5px solid #07101c;
+  animation: statusPulse 2s infinite ease-in-out;
+}
+
+@keyframes statusPulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.3); opacity: 1; box-shadow: 0 0 10px #00e5ff; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.status-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.status-dynamic-title {
+  font-size: 14px;
+  font-weight: 750;
+  color: #ffffff;
+  margin: 0;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-order-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: #7d93b0;
+  flex-wrap: wrap;
+}
+
+.status-order-pill {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #0d2645;
+  border: 1px solid #1c4b82;
+  color: #51b5ff;
+}
+
+.status-customer-name {
+  font-weight: 650;
+  color: #dfe7f5;
+}
+
+.status-phone-tag {
+  color: #8da4c4;
+}
+
+.status-pref-tag {
+  color: #38bdf8;
+  font-size: 10.5px;
+}
+
+.status-meta-separator {
+  color: #3b4e68;
+}
+
+.status-close-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #798da6;
+  font-size: 18px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  transition: all 0.15s ease;
+  margin-left: auto;
+}
+
+.status-close-btn:hover {
+  background: #142236;
+  color: #ffffff;
+}
+
+/* ── Progress Bar Section ── */
+.status-progress-section {
+  padding: 8px 16px;
+  background: #081424;
+  border-bottom: 1px solid #14243a;
+}
+
+.status-progress-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.status-progress-label {
+  font-size: 10.5px;
+  font-weight: 650;
+  color: #8ba1bd;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.status-progress-percentage-badge {
+  font-size: 11px;
+  font-weight: 750;
+  color: #38bdf8;
+  background: #092a47;
+  border: 1px solid #134e80;
+  padding: 1px 7px;
+  border-radius: 10px;
+}
+
+.status-progress-track {
+  height: 5px;
+  background: #0e1c2e;
+  border: 1px solid #182c47;
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.status-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  background: linear-gradient(90deg, #0879f9 0%, #00d2ff 100%);
+  box-shadow: 0 0 10px rgba(0, 210, 255, 0.45);
+}
+
+.status-progress-fill.stage-1 {
+  background: linear-gradient(90deg, #0879f9 0%, #38bdf8 100%);
+}
+
+.status-progress-fill.stage-2 {
+  background: linear-gradient(90deg, #0879f9 0%, #f59e0b 100%);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.35);
+}
+
+.status-progress-fill.stage-3 {
+  background: linear-gradient(90deg, #0879f9 0%, #10b981 70%, #00e5ff 100%);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.45);
+}
+
+/* ── Modal Body ── */
+.status-modal-body {
+  padding: 12px 16px;
+  overflow-y: auto;
+  max-height: calc(85vh - 140px);
+}
+
+.status-modal-body::-webkit-scrollbar {
+  width: 5px;
+}
+.status-modal-body::-webkit-scrollbar-thumb {
+  background: #1b2d47;
+  border-radius: 5px;
+}
+
+/* ── Stepper List & Cards ── */
+.status-stepper-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.status-stage-card {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #091526;
+  border: 1px solid #162740;
+  transition: all 0.2s ease;
+}
+
+.status-stage-card.current {
+  background: #0b1a30;
+  border-color: #0093dd;
+  box-shadow: 0 0 14px rgba(0, 147, 221, 0.14);
+}
+
+.status-stage-card.completed {
+  background: #081320;
+  border-color: #1a3d2e;
+}
+
+.status-stage-card.pending {
+  opacity: 0.5;
+  background: #07101b;
+  border-color: #122033;
+}
+
+/* Node indicator col */
+.stage-node-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 22px;
+}
+
+.stage-node-circle {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  font-weight: 750;
+  transition: all 0.2s ease;
+}
+
+.stage-node-circle.current {
+  background: #0879f9;
+  color: #fff;
+  border: 1.5px solid #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+}
+
+.stage-node-circle.completed {
+  background: #0b3d2c;
+  color: #10b981;
+  border: 1.5px solid #10b981;
+}
+
+.stage-node-circle.pending {
+  background: #0e1c2e;
+  color: #5d728e;
+  border: 1.5px solid #1a2e47;
+}
+
+.stage-connector-line {
+  width: 2px;
+  flex: 1;
+  min-height: 24px;
+  background: #14243a;
+  margin-top: 4px;
+  border-radius: 1px;
+}
+
+.stage-connector-line.active {
+  background: #10b981;
+}
+
+/* Stage Content */
+.stage-content-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.stage-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.stage-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.stage-title {
+  font-size: 13px;
+  font-weight: 750;
+  color: #ffffff;
+  margin: 0;
+}
+
+.stage-state-pill {
+  font-size: 9.5px;
+  font-weight: 650;
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.stage-state-pill.completed {
+  background: #08291b;
+  color: #10b981;
+  border: 1px solid #115e3c;
+}
+
+.stage-state-pill.current {
+  background: #072a47;
+  color: #38bdf8;
+  border: 1px solid #0093dd;
+}
+
+.stage-state-pill.pending {
+  background: #0d1a29;
+  color: #637895;
+  border: 1px solid #172a40;
+}
+
+.stage-percentage-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: #8fa5c2;
+}
+
+.stage-short-desc {
+  font-size: 11px;
+  color: #8aa0bc;
+  margin: 2px 0 6px 0;
+  line-height: 1.35;
+}
+
+.stage-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid #14243a;
+  border-radius: 6px;
+  padding: 5px 8px;
+  margin-bottom: 6px;
+}
+
+.stage-check-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #9ab0cc;
+}
+
+.stage-check-item .check-icon.checked {
+  color: #10b981;
+  font-weight: 800;
+}
+
+.stage-check-item .check-icon.current {
+  color: #38bdf8;
+  font-weight: 800;
+}
+
+.stage-check-item .check-icon.pending {
+  color: #4b607d;
+}
+
+/* Stage Action Callout */
+.stage-action-box {
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: #08172c;
+  border: 1px dashed #1a385f;
+  border-radius: 8px;
+}
+
+.action-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: #adc2dc;
+  flex-wrap: wrap;
+}
+
+.status-action-btn {
+  padding: 5px 12px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.status-action-btn.primary {
+  background: #0879f9;
+  color: #ffffff;
+  box-shadow: 0 2px 10px rgba(8, 121, 249, 0.35);
+}
+
+.status-action-btn.primary:hover:not(:disabled) {
+  background: #1a87ff;
+  transform: translateY(-1px);
+}
+
+.status-action-btn.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status-action-btn.bill-btn {
+  background: #059669;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-shadow: 0 2px 10px rgba(5, 150, 105, 0.35);
+}
+
+.status-action-btn.bill-btn:hover {
+  background: #10b981;
+  transform: translateY(-1px);
+}
+
+/* ── Bill Invoice View (90% Stage) ── */
+.status-bill-view {
+  background: #060e1a;
+  border: 1px solid #1a2f4c;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.bill-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  border-bottom: 1px solid #14253d;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+.bill-kicker {
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #51b5ff;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.bill-title {
+  margin: 2px 0;
+  font-size: 14.5px;
+  font-weight: 750;
+  color: #ffffff;
+}
+
+.bill-date {
+  margin: 0;
+  font-size: 10.5px;
+  color: #7289a6;
+}
+
+.bill-status-pill {
+  background: #062b1e;
+  border: 1px solid #0d6d4a;
+  color: #10b981;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.bill-customer-card {
+  background: #091525;
+  border: 1px solid #142842;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+
+.bill-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.bill-field-label {
+  display: block;
+  font-size: 9.5px;
+  color: #6a82a0;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.bill-field-val {
+  font-size: 11.5px;
+  color: #e2eaf5;
+}
+
+.bill-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 10px;
+}
+
+.bill-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.bill-table th {
+  background: #0a1728;
+  color: #8aa0be;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 6px 8px;
+  border-bottom: 1px solid #162942;
+  text-align: left;
+}
+
+.bill-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #112035;
+  color: #c4d3e5;
+}
+
+.bill-item-sub {
+  display: block;
+  font-size: 10px;
+  color: #6a83a3;
+  margin-top: 1px;
+}
+
+.bill-calc-label {
+  text-align: right;
+  font-weight: 600;
+  color: #7e95b3;
+}
+
+.bill-calc-val {
+  text-align: right;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.bill-grand-total-row td {
+  border-top: 1.5px solid #203a5f;
+  border-bottom: none;
+  font-size: 13px;
+  font-weight: 800;
+  color: #38bdf8;
+  padding-top: 8px;
+}
+
+.bill-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #14253d;
+}
+
+.status-btn-secondary {
+  background: #0e1e33;
+  border: 1px solid #1c3558;
+  color: #c5d4e7;
+  padding: 5px 12px;
+  border-radius: 7px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.status-btn-secondary:hover {
+  background: #142a47;
+  color: #fff;
+}
+
+.status-btn-print {
+  background: #0879f9;
+  border: none;
+  color: #fff;
+  padding: 5px 12px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 650;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.status-btn-print:hover {
+  background: #1886ff;
+}
+
+/* ── Dialog Footer ── */
+.status-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 16px;
+  background: #07101b;
+  border-top: 1px solid #14243a;
+  flex-shrink: 0;
+}
+
+.status-saved-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: #10b981;
+  background: #062217;
+  border: 1px solid #0c5338;
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+
+.saved-indicator {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 5px #10b981;
+}
+
+.status-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-footer-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
+}
+
+.status-footer-btn.advance {
+  background: #0879f9;
+  color: #ffffff;
+  box-shadow: 0 2px 10px rgba(8, 121, 249, 0.35);
+}
+
+.status-footer-btn.advance:hover:not(:disabled) {
+  background: #1a87ff;
+}
+
+.status-footer-btn.advance:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status-footer-btn.view-bill-special {
+  background: #059669;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-shadow: 0 2px 10px rgba(5, 150, 105, 0.3);
+}
+
+.status-footer-btn.view-bill-special:hover {
+  background: #10b981;
+}
+
+.status-footer-btn.close-action {
+  background: #101c2e;
+  border: 1px solid #1e334f;
+  color: #c7d5e6;
+}
+
+.status-footer-btn.close-action:hover {
+  background: #172740;
+  color: #ffffff;
+}
+
+@media (max-width: 600px) {
+  .order-status-modal-content {
+    max-height: 94vh;
+    border-radius: 12px;
+  }
+  .status-modal-header,
+  .status-progress-section,
+  .status-modal-body,
+  .status-modal-footer {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .action-hint {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .status-action-btn {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
+}

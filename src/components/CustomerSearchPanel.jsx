@@ -1,24 +1,25 @@
 // src/components/CustomerSearchPanel.jsx
 // Step 1: Customer Lookup connected to live Supabase database
 
-import React, { useState, useEffect } from 'react';
-import { searchCustomers, getAllCustomers } from '../services/customerService';
+import React, { useState, useEffect, useRef } from 'react';
+import { searchCustomers } from '../services/customerService';
 import { useDebounce } from '../hooks/useDebounce';
 import { formatPhoneDisplay } from '../utils/validation';
 
 export default function CustomerSearchPanel({ onSelect, onNewCustomer }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
-  const [allMaster, setAllMaster] = useState([]);
   const [loading, setLoading] = useState(false);
   const debouncedQuery = useDebounce(query, 300);
+  const inputRef = useRef(null);
 
-  // Load real existing customers from Supabase on mount
-  useEffect(() => {
-    getAllCustomers().then(({ data }) => {
-      if (data) setAllMaster(data);
-    });
-  }, []);
+  const handleClear = () => {
+    setQuery('');
+    setResults([]);
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
 
   useEffect(() => {
     if (!debouncedQuery.trim()) {
@@ -47,7 +48,6 @@ export default function CustomerSearchPanel({ onSelect, onNewCustomer }) {
   }, [debouncedQuery]);
 
   const hasSearched = query.trim().length > 0;
-  const displayList = hasSearched ? results : allMaster;
 
   return (
     <div id="lookupPanel">
@@ -56,14 +56,27 @@ export default function CustomerSearchPanel({ onSelect, onNewCustomer }) {
         <div className="search-wrap">
           <span className="search-icon">⌕</span>
           <input
+            ref={inputRef}
             className="search"
             id="customerSearch"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by customer ID (e.g. CUST-00001), phone, or name…"
+            placeholder="Search by phone number, customer name and customer id…"
             autoComplete="off"
             autoFocus
+            style={{ paddingRight: query ? '50px' : '18px' }}
           />
+          {query && (
+            <button
+              type="button"
+              className="search-clear-btn"
+              onClick={handleClear}
+              aria-label="Clear search"
+              title="Clear search"
+            >
+              ✕
+            </button>
+          )}
         </div>
         <button
           type="button"
@@ -75,8 +88,8 @@ export default function CustomerSearchPanel({ onSelect, onNewCustomer }) {
         </button>
       </div>
 
-      {/* ── Initial Empty State (When no customers in DB and no search query) ── */}
-      {!hasSearched && displayList.length === 0 && (
+      {/* ── Initial Empty State (Default when not searching) ── */}
+      {!hasSearched && (
         <div className="lookup-empty" id="lookupEmpty">
           <div className="lookup-empty-icon" aria-hidden="true">⌕</div>
           <div className="lookup-empty-title">Search Existing Customer or Register New</div>
@@ -98,21 +111,19 @@ export default function CustomerSearchPanel({ onSelect, onNewCustomer }) {
       )}
 
       {/* ── Customer List Header ── */}
-      {(!loading && displayList.length > 0) && (
+      {hasSearched && !loading && results.length > 0 && (
         <div className="matches-head" id="matchesHead">
           <strong>
-            {hasSearched
-              ? `Matching Customers (${displayList.length})`
-              : `Registered Customers (${displayList.length})`}
+            Matching Customers ({results.length})
           </strong>
           <span>ⓘ Click Select on any customer to create order</span>
         </div>
       )}
 
-      {/* ── Customers List ── */}
-      {!loading && displayList.length > 0 && (
+      {/* ── Customers List (Only shown when searched) ── */}
+      {hasSearched && !loading && results.length > 0 && (
         <div className="customer-list" id="customerList">
-          {displayList.map((c, index) => {
+          {results.map((c, index) => {
             const custId = c.customerId || c.customer_code || c.id || 'CUST-00001';
             const intakeType = c.intakeType || c.intake_type || 'Walk-In';
             const commPref = c.communicationPreference || c.communication_pref || 'WhatsApp';

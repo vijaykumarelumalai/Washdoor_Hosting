@@ -7,7 +7,17 @@ import CustomerForm from './CustomerForm';
 import { friendlySupabaseError, formatPhoneDisplay } from '../utils/validation';
 
 export default function CustomerManagement({ showToast }) {
-  const [customers, setCustomers] = useState([]);
+  // Stale-while-revalidate: instant local cache for 0ms load time
+  const [customers, setCustomers] = useState(() => {
+    try {
+      const cached = localStorage.getItem('washdoor_customers_cache');
+      if (!cached) return [];
+      const parsed = JSON.parse(cached);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
   const [editingCustomer, setEditingCustomer] = useState(null);
@@ -27,8 +37,13 @@ export default function CustomerManagement({ showToast }) {
 
     if (res.error) {
       showToast(`⚠️ ${friendlySupabaseError(res.error)}`);
-    } else {
-      setCustomers(res.data || []);
+    } else if (res.data && Array.isArray(res.data)) {
+      setCustomers(res.data);
+      if (!q.trim()) {
+        try {
+          localStorage.setItem('washdoor_customers_cache', JSON.stringify(res.data));
+        } catch {}
+      }
     }
   }, [showToast]);
 
@@ -37,7 +52,8 @@ export default function CustomerManagement({ showToast }) {
   }, [loadData, query]);
 
   const handleUpdate = async ({ customerData, existingCustomerId }) => {
-    const { error } = await updateCustomer(existingCustomerId, customerData);
+    const targetId = existingCustomerId || editingCustomer?.customerId || editingCustomer?.customer_id || customerData?.customer_id;
+    const { error } = await updateCustomer(targetId, customerData);
     if (error) {
       showToast(`⚠️ ${friendlySupabaseError(error)}`);
       return;
@@ -90,22 +106,39 @@ export default function CustomerManagement({ showToast }) {
           <button
             type="button"
             className="secondary"
-            style={{ padding: '6px 12px', fontSize: '13px' }}
+            disabled={loading}
+            style={{ padding: '6px 12px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             onClick={() => {
               loadData(query);
-              showToast('↻ Customer records refreshed');
+              showToast('↻ Syncing customer records...');
             }}
             title="Reload customers from database"
           >
-            ↻ Refresh
+            <span className={loading ? 'sync-spinner' : ''}>{loading ? '' : '↻'}</span>
+            <span>{loading ? 'Syncing...' : 'Refresh'}</span>
           </button>
         </div>
       </div>
 
-      {/* ── List ── */}
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '48px', color: '#9aacc5' }}>
-          Loading customer records…
+      {/* ── Customer List with Skeleton Loader ── */}
+      {loading && customers.length === 0 ? (
+        <div className="orders">
+          <div className="syncing-banner">
+            <span className="sync-spinner"></span>
+            <span>Connecting to Supabase and syncing customer records…</span>
+          </div>
+          {[1, 2, 3].map((n) => (
+            <div key={n} className="skeleton-order-card">
+              <span className="order-chevron" style={{ opacity: 0.2 }}>⌄</span>
+              <div className="skeleton-avatar skeleton-shimmer"></div>
+              <div className="skeleton-info-wrap">
+                <div className="skeleton-bar skeleton-bar-name skeleton-shimmer"></div>
+                <div className="skeleton-bar skeleton-bar-pill skeleton-shimmer"></div>
+                <div className="skeleton-bar skeleton-bar-phone skeleton-shimmer"></div>
+              </div>
+              <div className="skeleton-btn skeleton-shimmer"></div>
+            </div>
+          ))}
         </div>
       ) : customers.length === 0 ? (
         <div className="orders" style={{ textAlign: 'center', padding: '48px', color: '#7e91ac' }}>
@@ -114,6 +147,12 @@ export default function CustomerManagement({ showToast }) {
         </div>
       ) : (
         <div className="orders">
+          {loading && (
+            <div className="syncing-banner" style={{ margin: '0 0 6px 0', alignSelf: 'flex-start' }}>
+              <span className="sync-spinner"></span>
+              <span>Syncing latest customer records…</span>
+            </div>
+          )}
           {customers.map((c) => {
             const custId = c.customerId || c.customer_code || c.id || 'CUST-00001';
             const orderCount = c.orders?.[0]?.count ?? 1;
@@ -222,9 +261,6 @@ export default function CustomerManagement({ showToast }) {
                   <span className="badge-tag badge-zone" title="Service Zone">
                     🗺️ {zone}
                   </span>
-                  <span className="badge-tag badge-price" title="Price List Scheme">
-                    💲 {priceList}
-                  </span>
                   <span className="badge-tag badge-intake" title="Customer Classification">
                     👤 {classification}
                   </span>
@@ -307,25 +343,37 @@ export default function CustomerManagement({ showToast }) {
             if (e.target.className === 'overlay') setEditingCustomer(null);
           }}
         >
-          <div className="modal" style={{ maxWidth: '820px' }}>
+          <div className="modal" style={{ width: '100%', maxWidth: '480px' }}>
             <div className="modal-head">
               <div className="modal-icon">✏</div>
-              <div className="modal-title">Edit Customer Record</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1, minWidth: 0 }}>
+                <div className="modal-title">Edit Customer Record</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span className="cust-id-pill" style={{ fontSize: '11.5px', padding: '2px 8px' }}>
+                    {editingCustomer.customerId || editingCustomer.customer_id || `CUST-${String(editingCustomer.id).padStart(5, '0')}`}
+                  </span>
+                  <span style={{ fontSize: '12.5px', color: '#9aacc5', fontWeight: '550' }}>
+                    {editingCustomer.customer_name}
+                  </span>
+                </div>
+              </div>
               <button
                 type="button"
                 className="close"
                 onClick={() => setEditingCustomer(null)}
+                aria-label="Close"
               >
                 ×
               </button>
             </div>
-            <div style={{ padding: '0 24px 24px' }}>
-              <CustomerForm
-                initialCustomer={editingCustomer}
-                onBack={() => setEditingCustomer(null)}
-                onSubmit={handleUpdate}
-              />
-            </div>
+            <CustomerForm
+              initialCustomer={editingCustomer}
+              customerId={editingCustomer.customerId || editingCustomer.customer_id || `CUST-${String(editingCustomer.id).padStart(5, '0')}`}
+              isOrderFlow={false}
+              submitLabel="Update Customer Record"
+              onBack={() => setEditingCustomer(null)}
+              onSubmit={handleUpdate}
+            />
           </div>
         </div>
       )}

@@ -2,6 +2,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateCustomer, friendlySupabaseError, formatPhoneDisplay } from '../utils/validation.js';
+import { formatOrderId, formatCustomerId } from '../services/customerService.js';
+
+test('formatOrderId generates canonical 5-digit padded order identifier starting with ORDER', () => {
+  assert.equal(formatOrderId(null), 'ORDER-00001');
+  assert.equal(formatOrderId(''), 'ORDER-00001');
+  assert.equal(formatOrderId(1), 'ORDER-00001');
+  assert.equal(formatOrderId('2'), 'ORDER-00002');
+  assert.equal(formatOrderId('ORDER-00005'), 'ORDER-00005');
+  assert.equal(formatOrderId('ORDER-12'), 'ORDER-00012');
+  assert.equal(formatOrderId('order-99'), 'ORDER-00099');
+});
+
+test('formatCustomerId generates canonical 5-digit padded customer identifier starting with CUST', () => {
+  assert.equal(formatCustomerId(null), 'CUST-00001');
+  assert.equal(formatCustomerId(''), 'CUST-00001');
+  assert.equal(formatCustomerId(1), 'CUST-00001');
+  assert.equal(formatCustomerId('CUST-00003'), 'CUST-00003');
+  assert.equal(formatCustomerId('cust-42'), 'CUST-00042');
+});
 
 test('validateCustomer accepts a valid minimal customer payload', () => {
   const valid = {

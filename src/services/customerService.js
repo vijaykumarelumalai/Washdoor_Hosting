@@ -2,18 +2,62 @@
 // 100% Real Database Service connected to Supabase 'washdoor_orders_master'
 // Zero hardcoded mock customer data.
 
-import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient.js';
 
 // Helper to format any Customer ID into canonical CUST-00001 (5-digit padded) format
 export function formatCustomerId(id) {
   if (!id) return 'CUST-00001';
   const str = String(id).trim();
-  const match = str.match(/\d+/);
+  const match = str.match(/CUST-(\d+)/i) || str.match(/\d+/);
   if (match) {
-    const num = parseInt(match[0], 10);
+    const num = parseInt(match[1] || match[0], 10);
     return `CUST-${String(num).padStart(5, '0')}`;
   }
-  return str.toUpperCase();
+  return str.toUpperCase().startsWith('CUST-') ? str.toUpperCase() : `CUST-${str.toUpperCase()}`;
+}
+
+// Helper to format any Order ID into canonical ORDER-00001 (5-digit padded, starting with ORDER)
+export function formatOrderId(id) {
+  if (!id) return 'ORDER-00001';
+  const str = String(id).trim();
+  const match = str.match(/ORDER-(\d+)/i) || str.match(/\d+/);
+  if (match) {
+    const num = parseInt(match[1] || match[0], 10);
+    return `ORDER-${String(num).padStart(5, '0')}`;
+  }
+  return str.toUpperCase().startsWith('ORDER-') ? str.toUpperCase() : `ORDER-${str.toUpperCase()}`;
+}
+
+/**
+ * Computes the next unique sequential order identifier starting from ORDER-00001
+ * by querying real existing records in washdoor_orders_master.
+ */
+export async function getNextOrderId() {
+  try {
+    if (isSupabaseConfigured()) {
+      const { data, error } = await supabase
+        .from('washdoor_orders_master')
+        .select('order_number')
+        .order('created_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        let maxNum = 0;
+        data.forEach((row) => {
+          if (row.order_number) {
+            const match = row.order_number.match(/ORDER-(\d+)/i);
+            if (match) {
+              const num = parseInt(match[1], 10);
+              if (num > maxNum) maxNum = num;
+            }
+          }
+        });
+        return `ORDER-${String(maxNum + 1).padStart(5, '0')}`;
+      }
+    }
+  } catch (err) {
+    console.warn('getNextOrderId lookup note:', err);
+  }
+  return 'ORDER-00001';
 }
 
 /**
@@ -52,19 +96,34 @@ export async function getNextCustomerId() {
 
 // Convert washdoor_orders_master row into UI shape
 function mapMasterRowToOrder(row) {
+  const orderNum = row.order_number ? formatOrderId(row.order_number) : (row.order_id ? formatOrderId(row.order_id) : 'ORDER-00001');
+  const custId = formatCustomerId(row.customer_id);
+
+  const rawStatus = row.order_status || 'Order in Progress';
+  let progress = 25;
+  if (rawStatus === 'Ready for Billing' || row.customer_history?.progress === 50) {
+    progress = 50;
+  } else if (rawStatus === 'Product Status' || row.customer_history?.progress === 90) {
+    progress = 90;
+  } else {
+    progress = 25;
+  }
+
   return {
-    id: row.order_id || row.id,
-    order_number: row.order_number,
+    id: orderNum,
+    order_id: row.order_id || orderNum,
+    order_number: orderNum,
     order_type: row.order_type || 'walk-in',
     preference: row.service_category || 'Standard',
     preference_notes: row.order_notes,
-    status: row.order_status || 'Laundry In Progress',
+    status: rawStatus,
+    progress: progress,
     total_amount: Number(row.total_amount || 0),
     created_at: row.created_at,
     customer: {
-      id: row.customer_id || 'CUST-00001',
-      customerId: row.customer_id || 'CUST-00001',
-      customer_code: row.customer_id || 'CUST-00001',
+      id: custId,
+      customerId: custId,
+      customer_code: custId,
       customer_name: row.customer_name,
       customerName: row.customer_name,
       mobile_number: row.mobile_number,
@@ -89,11 +148,23 @@ function mapMasterRowToOrder(row) {
       alternate_phone: row.alternate_phone,
       company_name: row.company_name,
       gst_number: row.gst_number,
+      tax_exemption: Boolean(row.tax_exemption),
+      map_link: row.map_link,
+      date_of_birth: row.date_of_birth,
+      anniversary_date: row.anniversary_date,
+      special_occasion: row.special_occasion,
+      special_occasion_date: row.special_occasion_date,
+      price_list: row.price_list,
+      credit_limit: row.credit_limit,
+      referral_code: row.referral_code,
+      marketing_source: row.marketing_source,
+      customer_status: row.customer_status || 'Active',
+      service_zone: row.area_service_zone,
       membership_id: row.membership_id,
       customer_classification: row.customer_classification || 'Regular Customer',
       customerClassification: row.customer_classification || 'Regular Customer',
       internal_comments: row.internal_comments,
-      notes: row.order_notes,
+      notes: row.order_notes || row.internal_comments,
     },
   };
 }
@@ -215,7 +286,7 @@ export async function createCustomer(payload) {
   }
 
   try {
-    const generatedOrderNum = `WD-${Math.floor(112000 + (Date.now() % 880000))}`;
+    const generatedOrderNum = await getNextOrderId();
     const { data, error } = await supabase
       .from('washdoor_orders_master')
       .insert([{
@@ -261,23 +332,55 @@ export async function updateCustomer(id, payload) {
   const clean = cleanPayload(payload);
 
   try {
-    const { data, error } = await supabase
-      .from('washdoor_orders_master')
-      .update({
-        customer_name: clean.customer_name,
-        street_area: clean.address,
-        city: clean.city,
-        pincode: clean.pincode,
-        email: clean.email,
-        alternate_phone: clean.alternate_phone,
-        internal_comments: clean.internal_comments,
-        do_not_disturb: Boolean(clean.dnd),
-        tier: clean.tier || 'SILVER',
-        tax_exemption: Boolean(clean.tax_exemption),
-        updated_at: new Date().toISOString(),
-      })
-      .or(`customer_id.eq.${id},mobile_number.eq.${clean.mobile_number}`)
-      .select();
+    const updateObj = {
+      customer_name: clean.customer_name,
+      mobile_number: clean.mobile_number,
+      alternate_phone: clean.alternate_phone,
+      email: clean.email,
+      company_name: clean.company_name,
+      gst_number: clean.gst_number,
+      tax_exemption: Boolean(clean.tax_exemption),
+      street_area: clean.address,
+      city: clean.city,
+      pincode: clean.pincode,
+      date_of_birth: clean.date_of_birth,
+      map_link: clean.map_link,
+      communication_preference: clean.communication_pref || 'WhatsApp',
+      preferred_language: clean.communication_lang || 'English',
+      do_not_disturb: Boolean(clean.dnd),
+      internal_comments: clean.internal_comments,
+      order_notes: clean.notes || clean.internal_comments,
+      customer_classification: clean.customer_classification || 'Regular Customer',
+      customer_status: clean.customer_status || 'Active',
+      price_list: clean.price_list || 'Standard',
+      area_service_zone: clean.service_zone ? (clean.service_zone.startsWith('zone-') ? `Zone ${clean.service_zone.replace('zone-', '')}` : clean.service_zone) : undefined,
+      default_discount_pct: clean.default_discount !== undefined && clean.default_discount !== null ? Number(clean.default_discount) : undefined,
+      credit_limit: clean.credit_limit !== undefined && clean.credit_limit !== null ? Number(clean.credit_limit) : undefined,
+      membership_id: clean.membership_id,
+      referral_code: clean.referral_code,
+      marketing_source: clean.marketing_source,
+      anniversary_date: clean.anniversary_date,
+      special_occasion: clean.special_occasion,
+      special_occasion_date: clean.special_occasion_date,
+      tier: clean.tier || 'SILVER',
+      service_category: clean.service_category || clean.orderPreference,
+      item_count: clean.item_count !== undefined && clean.item_count !== null ? Number(clean.item_count) : undefined,
+      order_notes: clean.order_notes || clean.notes || clean.internal_comments,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Remove undefined properties
+    Object.keys(updateObj).forEach((k) => updateObj[k] === undefined && delete updateObj[k]);
+
+    let query = supabase.from('washdoor_orders_master').update(updateObj);
+
+    if (id) {
+      query = query.or(`customer_id.eq.${id},mobile_number.eq.${clean.mobile_number}`);
+    } else if (clean.mobile_number) {
+      query = query.eq('mobile_number', clean.mobile_number);
+    }
+
+    const { data, error } = await query.select();
 
     return { data, error };
   } catch (err) {
@@ -323,10 +426,11 @@ export async function createOrderWithCustomer({
   }
 
   try {
-    const generatedOrderNumber = `WD-${Math.floor(112000 + (Date.now() % 880000))}`;
+    const nextOrderId = await getNextOrderId();
+    const generatedOrderNumber = cleanCust.order_number ? formatOrderId(cleanCust.order_number) : nextOrderId;
     
     // Resolve customer ID in standard CUST-00001 format
-    let finalCustId = existingCustomerId || cleanCust.customer_code || cleanCust.customerId || cleanCust.id;
+    let finalCustId = existingCustomerId || cleanCust.customer_code || cleanCust.customerId || cleanCust.customer_id || cleanCust.id;
     if (finalCustId && String(finalCustId).toUpperCase().includes('CUST-')) {
       finalCustId = formatCustomerId(finalCustId);
     } else {
@@ -334,7 +438,7 @@ export async function createOrderWithCustomer({
     }
 
     const masterInsert = {
-      order_number: cleanCust.order_number || generatedOrderNumber,
+      order_number: generatedOrderNumber,
       customer_id: finalCustId,
       customer_name: cleanCust.customer_name,
       mobile_number: cleanCust.mobile_number,
@@ -354,6 +458,8 @@ export async function createOrderWithCustomer({
       do_not_disturb: Boolean(cleanCust.dnd),
       internal_comments: cleanCust.internal_comments || null,
       order_notes: orderPreferenceNotes || cleanCust.notes || null,
+      service_category: orderPreference || cleanCust.service_category || 'Wash & Steam Press',
+      item_count: cleanCust.item_count ? Number(cleanCust.item_count) : 1,
       customer_classification: cleanCust.customer_classification || 'Regular Customer',
       customer_status: 'Active',
       tier: cleanCust.tier || 'SILVER',
@@ -389,6 +495,51 @@ export async function createOrderWithCustomer({
 
     return { data: null, error: insertMasterErr };
   } catch (err) {
+    return { data: null, error: err };
+  }
+}
+
+/**
+ * Updates order status and progress stage in Supabase washdoor_orders_master.
+ * Supported stages:
+ * - 'Order in Progress' (25%)
+ * - 'Ready for Billing' (50%)
+ * - 'Product Status' (90%)
+ */
+export async function updateOrderStatus(orderIdentifier, newStatus, progressPercentage = 25) {
+  if (!isSupabaseConfigured()) {
+    return { data: null, error: new Error('Supabase not configured') };
+  }
+
+  try {
+    const formattedId = orderIdentifier ? String(orderIdentifier).trim() : '';
+
+    const updateObj = {
+      order_status: newStatus,
+      updated_at: new Date().toISOString(),
+      customer_history: {
+        last_status: newStatus,
+        progress: progressPercentage,
+        updated_at: new Date().toISOString(),
+      },
+    };
+
+    let query = supabase.from('washdoor_orders_master').update(updateObj);
+
+    if (formattedId.startsWith('ORDER-')) {
+      query = query.eq('order_number', formattedId);
+    } else {
+      query = query.or(`order_number.eq.${formattedId},order_id.eq.${formattedId}`);
+    }
+
+    const { data, error } = await query.select();
+    if (error) {
+      console.error('Supabase updateOrderStatus error:', error);
+      return { data: null, error };
+    }
+    return { data, error: null };
+  } catch (err) {
+    console.error('updateOrderStatus catch:', err);
     return { data: null, error: err };
   }
 }

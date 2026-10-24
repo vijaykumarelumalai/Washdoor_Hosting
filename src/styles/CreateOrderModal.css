@@ -23,10 +23,10 @@
 .modal {
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
+  border-radius: 14px;
   width: 100%;
-  max-width: 600px;
-  max-height: 92vh;
+  max-width: 480px;
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-lg);
@@ -44,16 +44,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-5) var(--space-6);
+  padding: 11px 16px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
 .modal-header h2 {
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 14.5px;
+  font-weight: 650;
   color: var(--text-primary);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
 }
 
 .modal-close-btn {
@@ -61,10 +61,10 @@
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  padding: var(--space-1);
+  padding: 3px;
   border-radius: var(--radius-sm);
   line-height: 1;
-  font-size: 20px;
+  font-size: 18px;
   transition: color var(--transition), background var(--transition);
 }
 
@@ -77,17 +77,17 @@
 .modal-body {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-6);
+  padding: 13px 16px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: 12px;
 }
 
 /* ── Footer ─────────────────────────────────────────────────── */
 .modal-footer {
   display: flex;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-6);
+  gap: 8px;
+  padding: 10px 16px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
   justify-content: flex-end;

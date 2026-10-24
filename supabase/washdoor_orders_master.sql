@@ -5,9 +5,9 @@
 -- ==============================================================================
 
 -- 1. Create order number sequence
-create sequence if not exists public.order_number_seq start with 112026 increment by 1;
+create sequence if not exists public.order_number_seq start with 1 increment by 1;
 
--- 2. Create auto-generating order number function
+-- 2. Create auto-generating order number function (ORDER-00001 format)
 create or replace function public.generate_order_number()
 returns text
 language plpgsql
@@ -16,7 +16,7 @@ declare
   next_val bigint;
 begin
   next_val := nextval('public.order_number_seq');
-  return 'WD-' || next_val::text;
+  return 'ORDER-' || lpad(next_val::text, 5, '0');
 end;
 $$;
 
@@ -32,7 +32,7 @@ create table if not exists public.washdoor_orders_master (
   expected_delivery           timestamptz,
 
   -- Customer Identification & Contact
-  customer_id                 varchar(30) not null default 'CUST-0001',
+  customer_id                 varchar(30) not null default 'CUST-00001',
   customer_name               varchar(150) not null,
   mobile_number               varchar(10) not null check (mobile_number ~ '^[6-9]\d{9}$'),
   alternate_phone             varchar(10) check (alternate_phone is null or alternate_phone ~ '^[6-9]\d{9}$'),

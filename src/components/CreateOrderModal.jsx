@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import CustomerSearchPanel from './CustomerSearchPanel';
 import CustomerForm from './CustomerForm';
-import { createOrderWithCustomer } from '../services/customerService';
+import { createOrderWithCustomer, getNextOrderId, getNextCustomerId } from '../services/customerService';
 import { friendlySupabaseError } from '../utils/validation';
 
 export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, showToast }) {
@@ -12,12 +12,20 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
   const [view, setView] = useState('LOOKUP');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [nextOrderNumber, setNextOrderNumber] = useState('ORDER-00001');
+  const [nextCustomerId, setNextCustomerId] = useState('CUST-00001');
 
   useEffect(() => {
     if (isOpen) {
       setView('LOOKUP');
       setSelectedCustomer(null);
       setIsSubmitting(false);
+      getNextOrderId().then((num) => {
+        if (num) setNextOrderNumber(num);
+      });
+      getNextCustomerId().then((id) => {
+        if (id) setNextCustomerId(id);
+      });
     }
   }, [isOpen]);
 
@@ -75,11 +83,35 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
       return;
     }
 
-    const orderNumber = data?.order_number || `WD-${data?.order_id || 'NEW'}`;
+    const orderNumber = data?.order_number || (data?.order_id ? `ORDER-${data.order_id}` : 'ORDER-00001');
     showToast(`✅ Order ${orderNumber} created successfully!`);
-    onOrderSuccess();
+    
+    // Pass newly created order so Order Status Dialog opens automatically
+    const createdOrderPayload = {
+      id: orderNumber,
+      order_id: data?.order_id || orderNumber,
+      order_number: orderNumber,
+      order_type: orderType || 'walk-in',
+      preference: orderPreference || 'Standard',
+      preference_notes: orderPreferenceNotes || '',
+      status: 'Order in Progress',
+      progress: 25,
+      total_amount: 0.00,
+      customer: {
+        customer_name: customerData?.customer_name || 'Walk-In Customer',
+        mobile_number: customerData?.mobile_number || '',
+      },
+      customer_name: customerData?.customer_name || 'Walk-In Customer',
+      mobile_number: customerData?.mobile_number || '',
+    };
+
+    onOrderSuccess(createdOrderPayload);
     onClose();
   };
+
+  const activeCustomerId = selectedCustomer
+    ? (selectedCustomer.customerId || selectedCustomer.customer_code || selectedCustomer.id || nextCustomerId)
+    : nextCustomerId;
 
   return (
     <div
@@ -106,8 +138,17 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
               <path d="M9 16h6"></path>
             </svg>
           </div>
-          <div className="modal-title" id="modalTitle">
-            Create New Order
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            <div className="modal-title" id="modalTitle">
+              <span>Create New Order</span>
+            </div>
+            {view === 'FORM' && activeCustomerId && (
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <span className="cust-id-pill" style={{ fontSize: '11.5px', padding: '2px 8px' }}>
+                  {activeCustomerId}
+                </span>
+              </div>
+            )}
           </div>
           <button
             type="button"
@@ -133,6 +174,8 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
           <CustomerForm
             initialCustomer={selectedCustomer}
             initialOrderType="walk-in"
+            orderNumber={nextOrderNumber}
+            customerId={activeCustomerId}
             onBack={handleBackToLookup}
             onSubmit={handleFormSubmit}
             isSubmitting={isSubmitting}

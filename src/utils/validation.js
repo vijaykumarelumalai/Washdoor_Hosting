@@ -6,7 +6,7 @@ export function validateCustomer(data) {
 
   // Required: Customer name
   if (!data.customer_name || !data.customer_name.trim()) {
-    errors.customer_name = 'Customer name is required.';
+    errors.customer_name = 'Please enter a valid name.';
   }
 
   // Required: Mobile number (exactly 10 numeric digits)
@@ -79,9 +79,9 @@ export function friendlySupabaseError(error) {
 
 export function formatPhoneDisplay(phone) {
   if (!phone) return '';
-  const clean = phone.replace(/\D/g, '');
+  const clean = String(phone).replace(/\D/g, '');
   if (clean.length === 10) {
     return `+91 ${clean.slice(0, 5)} ${clean.slice(5)}`;
   }
-  return phone;
+  return String(phone);
 }

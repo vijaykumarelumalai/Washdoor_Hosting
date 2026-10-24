@@ -4,12 +4,24 @@
 import React, { useState } from 'react';
 import { validateCustomer } from '../utils/validation';
 
+const PRODUCT_SERVICES = [
+  { id: 'wp', name: 'Wash & Steam Press', icon: '👔' },
+  { id: 'wf', name: 'Wash & Fold', icon: '🧺' },
+  { id: 'dc', name: 'Dry Cleaning', icon: '🧥' },
+  { id: 'hl', name: 'Heavy Linens & Quilts', icon: '🛏️' },
+  { id: 'ex', name: 'Express 24H Service', icon: '⚡' },
+];
+
 export default function CustomerForm({
   initialCustomer = null,
   initialOrderType = 'walk-in',
+  orderNumber = null,
+  customerId = null,
   onBack,
   onSubmit,
   isSubmitting = false,
+  isOrderFlow = true,
+  submitLabel = null,
 }) {
   // Primary customer fields
   const [customerName, setCustomerName] = useState(initialCustomer?.customer_name || '');
@@ -19,31 +31,54 @@ export default function CustomerForm({
 
   // Order preferences & Intake method
   const [intakeMethod, setIntakeMethod] = useState(initialOrderType || 'walk-in');
-  const [orderPreference, setOrderPreference] = useState('');
-  const [orderPreferenceNotes, setOrderPreferenceNotes] = useState('');
+  const [orderPreference, setOrderPreference] = useState(
+    initialCustomer?.service_category || initialCustomer?.preference || 'Wash & Steam Press'
+  );
+  const [orderPreferenceNotes, setOrderPreferenceNotes] = useState(
+    initialCustomer?.preference_notes || initialCustomer?.order_notes || ''
+  );
 
-  // Expandable details state
+  // Product Card state (placed above Address Details & Contact)
+  const [productService, setProductService] = useState(
+    initialCustomer?.service_category || initialCustomer?.preference || 'Wash & Steam Press'
+  );
+  const [productGarmentType, setProductGarmentType] = useState(
+    initialCustomer?.product_garment_type || 'Standard Daily Wear (Shirts, Tops, Trousers)'
+  );
+  const [productItemCount, setProductItemCount] = useState(
+    Number(initialCustomer?.item_count || 1)
+  );
+  const [productWeight, setProductWeight] = useState(
+    initialCustomer?.product_weight || ''
+  );
+  const [productCareNotes, setProductCareNotes] = useState(
+    initialCustomer?.preference_notes || initialCustomer?.order_notes || ''
+  );
+
+  // Expandable details state (always hidden/collapsed by default, expanded manually)
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   // Communication preferences
   const [communicationPref, setCommunicationPref] = useState(
-    initialCustomer?.communication_pref || (initialCustomer?.dnd ? 'none' : '')
+    initialCustomer?.communication_pref || initialCustomer?.communicationPreference || (initialCustomer?.dnd ? 'None (DND)' : 'WhatsApp')
   );
-  const [communicationLang, setCommunicationLang] = useState(initialCustomer?.communication_lang || '');
+  const [communicationLang, setCommunicationLang] = useState(
+    initialCustomer?.communication_lang || initialCustomer?.preferredCommunicationLanguage || initialCustomer?.preferred_language || 'English'
+  );
   const [dnd, setDnd] = useState(initialCustomer?.dnd || false);
-  const [internalComments, setInternalComments] = useState(initialCustomer?.internal_comments || '');
+  const [internalComments, setInternalComments] = useState(initialCustomer?.internal_comments || initialCustomer?.notes || '');
 
   // Customer & Membership
-  const [defaultDiscount, setDefaultDiscount] = useState(initialCustomer?.default_discount || '');
+  const [defaultDiscount, setDefaultDiscount] = useState(initialCustomer?.default_discount ?? initialCustomer?.default_discount_pct ?? '');
   const [referralCode, setReferralCode] = useState(initialCustomer?.referral_code || '');
-  const [marketingSource, setMarketingSource] = useState(initialCustomer?.marketing_source || '');
+  const [marketingSource, setMarketingSource] = useState(initialCustomer?.marketing_source || 'Walk-in');
   const [membershipId, setMembershipId] = useState(initialCustomer?.membership_id || '');
 
   // Profile & Service settings
-  const [customerClassification, setCustomerClassification] = useState(initialCustomer?.customer_classification || 'regular');
-  const [customerStatus, setCustomerStatus] = useState(initialCustomer?.customer_status || 'active');
-  const [priceList, setPriceList] = useState(initialCustomer?.price_list || '');
-  const [serviceZone, setServiceZone] = useState(initialCustomer?.service_zone || '');
+  const [customerClassification, setCustomerClassification] = useState(initialCustomer?.customer_classification || 'Regular Customer');
+  const [customerStatus, setCustomerStatus] = useState(initialCustomer?.customer_status || 'Active');
+  const [priceList, setPriceList] = useState(initialCustomer?.price_list || 'Standard');
+  const [serviceZone, setServiceZone] = useState(initialCustomer?.service_zone || initialCustomer?.area_service_zone || 'Zone 1');
   const [creditLimit, setCreditLimit] = useState(initialCustomer?.credit_limit || '');
   const [anniversaryDate, setAnniversaryDate] = useState(initialCustomer?.anniversary_date || '');
   const [specialOccasion, setSpecialOccasion] = useState(initialCustomer?.special_occasion || '');
@@ -97,7 +132,7 @@ export default function CustomerForm({
       gst_number: gstNumber,
       company_name: companyName,
       tax_exemption: taxExemption,
-      notes: customerNotes,
+      notes: internalComments,
       communication_pref: communicationPref,
       communication_lang: communicationLang,
       dnd,
@@ -124,10 +159,18 @@ export default function CustomerForm({
 
     setErrors({});
     onSubmit({
-      customerData,
+      customerData: {
+        ...customerData,
+        customer_id: customerId || initialCustomer?.id || null,
+        service_category: productService,
+        item_count: productItemCount,
+        product_weight: productWeight,
+        product_garment_type: productGarmentType,
+        order_notes: productCareNotes || internalComments,
+      },
       orderType: intakeMethod,
-      orderPreference,
-      orderPreferenceNotes,
+      orderPreference: productService,
+      orderPreferenceNotes: productCareNotes,
       existingCustomerId: initialCustomer?.id || null,
     });
   };
@@ -137,13 +180,13 @@ export default function CustomerForm({
       {/* ── Primary Form Grid ── */}
       <div className="form-grid">
         <div className={`field ${errors.customer_name ? 'invalid' : ''}`} id="nameField">
-          <label htmlFor="fullName">Customer name *</label>
+          <label htmlFor="fullName">Name *</label>
           <input
             id="fullName"
             required
             maxLength={100}
             autoComplete="name"
-            placeholder="Enter full name"
+            placeholder="Enter name"
             value={customerName}
             onChange={(e) => {
               setCustomerName(e.target.value);
@@ -153,7 +196,7 @@ export default function CustomerForm({
             }}
           />
           <span className="field-error" id="nameError">
-            {errors.customer_name || 'Customer name is required.'}
+            {errors.customer_name || 'Please enter a valid name.'}
           </span>
         </div>
 
@@ -178,11 +221,11 @@ export default function CustomerForm({
         </div>
 
         <div className="field address-field">
-          <label htmlFor="addressInput">Street, Area (optional)</label>
+          <label htmlFor="addressInput">Address (optional)</label>
           <input
             id="addressInput"
             autoComplete="street-address"
-            placeholder="Street, area, city"
+            placeholder="Enter address, street, area, city"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
           />
@@ -190,43 +233,57 @@ export default function CustomerForm({
       </div>
 
       {/* ── Tax Exemption Row ── */}
-      <label className="tax-exemption-row" htmlFor="taxExemption">
-        <input
-          type="checkbox"
-          id="taxExemption"
-          name="taxExemption"
-          checked={taxExemption}
-          onChange={(e) => setTaxExemption(e.target.checked)}
-        />
-        <span>Tax Exemption (optional)</span>
+      <label className={`tax-exemption-row ${taxExemption ? 'active' : ''}`} htmlFor="taxExemption">
+        <span className={`custom-checkbox ${taxExemption ? 'checked' : ''}`}>
+          <input
+            type="checkbox"
+            id="taxExemption"
+            name="taxExemption"
+            checked={taxExemption}
+            onChange={(e) => setTaxExemption(e.target.checked)}
+          />
+          {taxExemption && (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          )}
+        </span>
+        <span className="tax-exemption-label">Tax Exemption</span>
+        {taxExemption && (
+          <span style={{ fontSize: '11px', color: '#ffd45c', background: '#3a300e', border: '1px solid #6b5717', padding: '1px 7px', borderRadius: '10px', marginLeft: '4px' }}>
+            Tax Exempt
+          </span>
+        )}
       </label>
 
-      {/* ── Intake Options ── */}
-      <div className="intake-options" role="group" aria-label="Order intake method">
-        <button
-          type="button"
-          className={`intake-option ${intakeMethod === 'walk-in' ? 'active' : ''}`}
-          onClick={() => setIntakeMethod('walk-in')}
-        >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
-            <circle cx="12" cy="5" r="3"></circle>
-            <path d="M12 8v8l-3 4"></path>
-            <path d="M12 14l3 4"></path>
-            <path d="M9 12l6-2"></path>
-          </svg>
-          Walk-In (Store Drop)
-        </button>
-        <button
-          type="button"
-          className={`intake-option ${intakeMethod === 'on-call' ? 'active' : ''}`}
-          onClick={() => setIntakeMethod('on-call')}
-        >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
-            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-          </svg>
-          On-Call (Pickup)
-        </button>
-      </div>
+      {/* ── Intake Options (only in Order flow) ── */}
+      {isOrderFlow && (
+        <div className="intake-options" role="group" aria-label="Order intake method">
+          <button
+            type="button"
+            className={`intake-option ${intakeMethod === 'walk-in' ? 'active' : ''}`}
+            onClick={() => setIntakeMethod('walk-in')}
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
+              <circle cx="12" cy="5" r="3"></circle>
+              <path d="M12 8v8l-3 4"></path>
+              <path d="M12 14l3 4"></path>
+              <path d="M9 12l6-2"></path>
+            </svg>
+            Walk-In (Store Drop)
+          </button>
+          <button
+            type="button"
+            className={`intake-option ${intakeMethod === 'on-call' ? 'active' : ''}`}
+            onClick={() => setIntakeMethod('on-call')}
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+            </svg>
+            On-Call (Pickup)
+          </button>
+        </div>
+      )}
 
       {/* ── Additional Customer Details (Collapsible) ── */}
       <section className={`details-card ${detailsOpen ? 'open' : ''}`} id="additionalDetails">
@@ -243,7 +300,7 @@ export default function CustomerForm({
             <line x1="9" y1="21" x2="9" y2="9"></line>
           </svg>
           <span className="details-label">
-            Additional Customer Details (GST, Company, Email, Notes)
+            Additional Customer Details
           </span>
           <span className="expand-label" id="expandLabel">
             {detailsOpen ? 'Hide' : 'Expand'}
@@ -254,25 +311,254 @@ export default function CustomerForm({
         {detailsOpen && (
           <div className="details-content" id="detailsContent">
             <div className="details-fields">
-              {/* Communication Preferences */}
+              {/* ── Product Card (above Address Details & Contact) ── */}
+              <div className="product-card-wrap">
+                <div className="product-card-header">
+                  <div className="product-card-title">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                      <line x1="12" y1="22.08" x2="12" y2="12" />
+                    </svg>
+                    <span>Product &amp; Services</span>
+                  </div>
+                  <span className="product-badge-tag">Service Package</span>
+                </div>
+
+                <div className="product-card-body">
+                  {/* Service Packages Selection */}
+                  <div className="product-services-grid">
+                    {PRODUCT_SERVICES.map((srv) => (
+                      <button
+                        key={srv.id}
+                        type="button"
+                        className={`product-service-card ${productService === srv.name ? 'selected' : ''}`}
+                        onClick={() => {
+                          setProductService(srv.name);
+                          setOrderPreference(srv.name);
+                        }}
+                      >
+                        <span className="srv-icon">{srv.icon}</span>
+                        <div className="srv-info">
+                          <span className="srv-name">{srv.name}</span>
+                        </div>
+                        {productService === srv.name && <span className="srv-check">✓</span>}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Garment Type & Count & Weight Grid */}
+                  <div className="product-inputs-grid">
+                    <div className="field">
+                      <label htmlFor="productGarmentType">Garment Category</label>
+                      <select
+                        id="productGarmentType"
+                        value={productGarmentType}
+                        onChange={(e) => setProductGarmentType(e.target.value)}
+                      >
+                        <option value="Standard Daily Wear (Shirts, Tops, Trousers)">Standard Daily Wear (Shirts, Tops, Trousers)</option>
+                        <option value="Premium Formals, Blazers & Suits">Premium Formals, Blazers & Suits</option>
+                        <option value="Silk, Sarees & Designer Wear">Silk, Sarees & Designer Wear</option>
+                        <option value="Bed Linen, Blankets & Quilts">Bed Linen, Blankets & Quilts</option>
+                        <option value="Curtains & Heavy Drapes">Curtains & Heavy Drapes</option>
+                        <option value="Delicate Wash / Woolens">Delicate Wash / Woolens</option>
+                      </select>
+                    </div>
+
+                    <div className="field">
+                      <label htmlFor="productItemCount">Quantity / Count</label>
+                      <div className="product-counter-wrap">
+                        <button
+                          type="button"
+                          className="product-counter-btn"
+                          onClick={() => setProductItemCount(Math.max(1, (productItemCount || 1) - 1))}
+                        >
+                          −
+                        </button>
+                        <input
+                          id="productItemCount"
+                          type="number"
+                          min="1"
+                          max="500"
+                          value={productItemCount}
+                          onChange={(e) => setProductItemCount(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                          className="product-counter-input"
+                        />
+                        <button
+                          type="button"
+                          className="product-counter-btn"
+                          onClick={() => setProductItemCount((productItemCount || 1) + 1)}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="field">
+                      <label htmlFor="productWeight">Weight (Approx Kg)</label>
+                      <input
+                        id="productWeight"
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        placeholder="e.g. 4.0 kg"
+                        value={productWeight}
+                        onChange={(e) => setProductWeight(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Care Instructions / Notes */}
+                  <div className="field" style={{ gridColumn: '1 / -1', marginTop: '6px' }}>
+                    <label htmlFor="productCareInstructions">Product Care &amp; Handling Notes</label>
+                    <input
+                      id="productCareInstructions"
+                      placeholder="e.g. Wooden hangers, light starch on shirts, gentle rinse for silks"
+                      value={productCareNotes}
+                      onChange={(e) => {
+                        setProductCareNotes(e.target.value);
+                        setOrderPreferenceNotes(e.target.value);
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 1. Address Details & Contact */}
+              <div className="details-section-title">Address Details &amp; Contact</div>
+
+              {/* 1. Alternate Phone No */}
+              <div className={`field ${errors.alternate_phone ? 'invalid' : ''}`} id="alternatePhoneField">
+                <label htmlFor="alternatePhone">Alternate Phone No (optional)</label>
+                <input
+                  id="alternatePhone"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]{10}"
+                  maxLength={10}
+                  placeholder="Enter 10-digit alternate number"
+                  value={alternatePhone}
+                  onChange={handleAlternatePhoneChange}
+                />
+                {errors.alternate_phone && (
+                  <span className="field-error">{errors.alternate_phone}</span>
+                )}
+              </div>
+
+              {/* 2. Email */}
+              <div className={`field ${errors.email ? 'invalid' : ''}`}>
+                <label htmlFor="customerEmail">Email (optional)</label>
+                <input
+                  id="customerEmail"
+                  type="email"
+                  placeholder="name@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+                {errors.email && <span className="field-error">{errors.email}</span>}
+              </div>
+
+              {/* 3. Date of Birth */}
+              <div className="field">
+                <label htmlFor="dob">Date of Birth (optional)</label>
+                <input
+                  id="dob"
+                  type="date"
+                  value={dob}
+                  onChange={(e) => setDob(e.target.value)}
+                />
+              </div>
+
+              {/* 4. GST Number */}
+              <div className="field">
+                <label htmlFor="gstNumber">GST Number (optional)</label>
+                <input
+                  id="gstNumber"
+                  placeholder="Enter GST number"
+                  value={gstNumber}
+                  onChange={(e) => setGstNumber(e.target.value)}
+                />
+              </div>
+
+              {/* 5. Company Name */}
+              <div className="field">
+                <label htmlFor="companyName">Company name (optional)</label>
+                <input
+                  id="companyName"
+                  placeholder="Enter company name"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                />
+              </div>
+
+              {/* 6. City */}
+              <div className="field">
+                <label htmlFor="city">City (optional)</label>
+                <input
+                  id="city"
+                  placeholder="Enter city"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                />
+              </div>
+
+              {/* 7. Pincode */}
+              <div className={`field ${errors.pincode ? 'invalid' : ''}`} id="pincodeField">
+                <label htmlFor="pincode">Pincode (optional)</label>
+                <input
+                  id="pincode"
+                  inputMode="numeric"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  placeholder="Enter 6-digit pincode"
+                  value={pincode}
+                  onChange={handlePincodeChange}
+                />
+                {errors.pincode && <span className="field-error">{errors.pincode}</span>}
+              </div>
+
+              {/* 8. Map Link */}
+              <div className={`field ${errors.map_link ? 'invalid' : ''}`}>
+                <label htmlFor="mapLink">Map Link (optional)</label>
+                <input
+                  id="mapLink"
+                  type="url"
+                  placeholder="https://maps.google.com/..."
+                  value={mapLink}
+                  onChange={(e) => setMapLink(e.target.value)}
+                />
+                {errors.map_link && <span className="field-error">{errors.map_link}</span>}
+              </div>
+
+              {/* 9. Internal Comments (staff only) */}
+              <div className="field" style={{ gridColumn: '1 / -1' }}>
+                <label htmlFor="internalComments">Internal Comments (staff only)</label>
+                <input
+                  id="internalComments"
+                  placeholder="VIP customer, fraud alert, handling notes…"
+                  value={internalComments}
+                  onChange={(e) => setInternalComments(e.target.value)}
+                />
+              </div>
+
+              {/* 2. Communication Preferences */}
               <div className="details-section-title">Communication Preferences</div>
               <div className="field">
-                <label htmlFor="communicationPreference">Communication Preference (optional)</label>
+                <label htmlFor="communicationPreference">Communication Preference</label>
                 <select
                   id="communicationPreference"
                   value={communicationPref}
                   onChange={(e) => {
                     const val = e.target.value;
                     setCommunicationPref(val);
-                    setDnd(val === 'none');
+                    setDnd(val === 'None (DND)' || val === 'none');
                   }}
                 >
-                  <option value="">Select communication method</option>
-                  <option value="sms">SMS</option>
-                  <option value="whatsapp">WhatsApp</option>
-                  <option value="email">Email</option>
-                  <option value="phone">Phone call</option>
-                  <option value="none">No communication (DND)</option>
+                  <option value="WhatsApp">WhatsApp</option>
+                  <option value="SMS">SMS</option>
+                  <option value="Email">Email</option>
+                  <option value="Phone call">Phone call</option>
+                  <option value="None (DND)">No communication (DND)</option>
                 </select>
               </div>
               <div className="field">
@@ -282,78 +568,17 @@ export default function CustomerForm({
                   value={communicationLang}
                   onChange={(e) => setCommunicationLang(e.target.value)}
                 >
-                  <option value="">Select language</option>
-                  <option value="en">English</option>
-                  <option value="ta">Tamil</option>
-                  <option value="hi">Hindi</option>
-                  <option value="te">Telugu</option>
-                  <option value="kn">Kannada</option>
-                  <option value="ml">Malayalam</option>
+                  <option value="English">English</option>
+                  <option value="Tamil">Tamil</option>
+                  <option value="Hindi">Hindi</option>
+                  <option value="Telugu">Telugu</option>
+                  <option value="Kannada">Kannada</option>
+                  <option value="Malayalam">Malayalam</option>
                 </select>
               </div>
-              <div className="field" style={{ gridColumn: '1 / -1' }}>
-                <label htmlFor="internalComments">Internal Comments (staff only)</label>
-                <textarea
-                  id="internalComments"
-                  placeholder="VIP customer, fraud alert, handling notes…"
-                  value={internalComments}
-                  onChange={(e) => setInternalComments(e.target.value)}
-                />
-              </div>
 
-              {/* Customer & Membership */}
-              <div className="details-section-title">Customer &amp; Membership</div>
-              <div className="field">
-                <label htmlFor="defaultDiscount">Default Discount (%)</label>
-                <input
-                  id="defaultDiscount"
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  placeholder="0"
-                  value={defaultDiscount}
-                  onChange={(e) => setDefaultDiscount(e.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="referralCode">Referral Code (optional)</label>
-                <input
-                  id="referralCode"
-                  placeholder="Enter referral code"
-                  value={referralCode}
-                  onChange={(e) => setReferralCode(e.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="marketingSource">Marketing Source (optional)</label>
-                <select
-                  id="marketingSource"
-                  value={marketingSource}
-                  onChange={(e) => setMarketingSource(e.target.value)}
-                >
-                  <option value="">Select source</option>
-                  <option value="Walk-in">Walk-in</option>
-                  <option value="Referral">Referral</option>
-                  <option value="Google">Google</option>
-                  <option value="Social media">Social media</option>
-                  <option value="Advertisement">Advertisement</option>
-                  <option value="WhatsApp">WhatsApp</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="membershipId">Membership ID (optional)</label>
-                <input
-                  id="membershipId"
-                  placeholder="Assigned membership ID"
-                  value={membershipId}
-                  onChange={(e) => setMembershipId(e.target.value)}
-                />
-              </div>
-
-              {/* Customer Profile & Service Settings */}
-              <div className="details-section-title">Customer Profile &amp; Service Settings</div>
+              {/* 3. Customer Profile & Service Settings */}
+              <div className="details-section-title">Profile &amp; Services Setting</div>
               <div className="field">
                 <label htmlFor="customerClassification">Customer Classification</label>
                 <select
@@ -361,10 +586,10 @@ export default function CustomerForm({
                   value={customerClassification}
                   onChange={(e) => setCustomerClassification(e.target.value)}
                 >
-                  <option value="regular">Regular Customer</option>
-                  <option value="vip">VIP Customer</option>
-                  <option value="fraud">Fraud / Review Required</option>
-                  <option value="corporate">Corporate Customer</option>
+                  <option value="Regular Customer">Regular Customer</option>
+                  <option value="VIP Customer">VIP Customer</option>
+                  <option value="Corporate Customer">Corporate Customer</option>
+                  <option value="Fraud / Review">Fraud / Review Required</option>
                 </select>
               </div>
               <div className="field">
@@ -374,25 +599,11 @@ export default function CustomerForm({
                   value={customerStatus}
                   onChange={(e) => setCustomerStatus(e.target.value)}
                 >
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                  <option value="archived">Archived</option>
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                  <option value="Archived">Archived</option>
                 </select>
                 <small>Historical orders and financial records should be retained when archiving.</small>
-              </div>
-              <div className="field">
-                <label htmlFor="priceList">Specific Price List</label>
-                <select
-                  id="priceList"
-                  value={priceList}
-                  onChange={(e) => setPriceList(e.target.value)}
-                >
-                  <option value="">Use default price list</option>
-                  <option value="standard">Standard</option>
-                  <option value="premium">Premium</option>
-                  <option value="corporate">Corporate</option>
-                  <option value="custom">Custom (configure in price lists)</option>
-                </select>
               </div>
               <div className="field">
                 <label htmlFor="serviceZone">Area Service Zone</label>
@@ -459,7 +670,58 @@ export default function CustomerForm({
                 />
               </div>
 
-              {/* Customer Insights (read-only) */}
+              {/* 4. Customer & Membership */}
+              <div className="details-section-title">Customer &amp; Membership</div>
+              <div className="field">
+                <label htmlFor="defaultDiscount">Default Discount (%)</label>
+                <input
+                  id="defaultDiscount"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  placeholder="0"
+                  value={defaultDiscount}
+                  onChange={(e) => setDefaultDiscount(e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="referralCode">Referral Code (optional)</label>
+                <input
+                  id="referralCode"
+                  placeholder="Enter referral code"
+                  value={referralCode}
+                  onChange={(e) => setReferralCode(e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="marketingSource">Marketing Source (optional)</label>
+                <select
+                  id="marketingSource"
+                  value={marketingSource}
+                  onChange={(e) => setMarketingSource(e.target.value)}
+                >
+                  <option value="">Select source</option>
+                  <option value="Walk-in">Walk-in</option>
+                  <option value="Referral">Referral</option>
+                  <option value="Google">Google</option>
+                  <option value="Social media">Social media</option>
+                  <option value="Advertisement">Advertisement</option>
+                  <option value="WhatsApp">WhatsApp</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="membershipId">Membership ID (optional)</label>
+                <input
+                  id="membershipId"
+                  placeholder="Assigned membership ID"
+                  value={membershipId}
+                  onChange={(e) => setMembershipId(e.target.value)}
+                />
+              </div>
+
+              {/* 5. Customer Insights (read-only) */}
               <div className="details-section-title">Customer Insights (read-only)</div>
               <div className="insights-grid">
                 <div className="insight-card">
@@ -497,7 +759,7 @@ export default function CustomerForm({
                 These values are computed live from customer orders, ledger, and wallet history.
               </p>
 
-              {/* Customer History (read-only) */}
+              {/* 6. Customer History (read-only) */}
               <div className="details-section-title">Customer History (read-only)</div>
               <div className="field">
                 <label htmlFor="orderHistory">Order History</label>
@@ -526,105 +788,6 @@ export default function CustomerForm({
                   value={initialCustomer ? `Tier: ${initialCustomer.tier || 'PLATINUM ELITE'} (Active)` : ''}
                 />
               </div>
-
-              {/* Contact & Address Details */}
-              <div className="details-section-title">Contact &amp; Address Details</div>
-              <div className={`field ${errors.alternate_phone ? 'invalid' : ''}`} id="alternatePhoneField">
-                <label htmlFor="alternatePhone">Alternate Phone No (optional)</label>
-                <input
-                  id="alternatePhone"
-                  type="tel"
-                  inputMode="numeric"
-                  pattern="[0-9]{10}"
-                  maxLength={10}
-                  placeholder="Enter 10-digit alternate number"
-                  value={alternatePhone}
-                  onChange={handleAlternatePhoneChange}
-                />
-                {errors.alternate_phone && (
-                  <span className="field-error">{errors.alternate_phone}</span>
-                )}
-              </div>
-              <div className="field">
-                <label htmlFor="gstNumber">GST Number (optional)</label>
-                <input
-                  id="gstNumber"
-                  placeholder="Enter GST number"
-                  value={gstNumber}
-                  onChange={(e) => setGstNumber(e.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="companyName">Company name (optional)</label>
-                <input
-                  id="companyName"
-                  placeholder="Enter company name"
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                />
-              </div>
-              <div className={`field ${errors.email ? 'invalid' : ''}`}>
-                <label htmlFor="customerEmail">Email (optional)</label>
-                <input
-                  id="customerEmail"
-                  type="email"
-                  placeholder="name@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-                {errors.email && <span className="field-error">{errors.email}</span>}
-              </div>
-              <div className="field">
-                <label htmlFor="city">City (optional)</label>
-                <input
-                  id="city"
-                  placeholder="Enter city"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                />
-              </div>
-              <div className={`field ${errors.pincode ? 'invalid' : ''}`} id="pincodeField">
-                <label htmlFor="pincode">Pincode (optional)</label>
-                <input
-                  id="pincode"
-                  inputMode="numeric"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  placeholder="Enter 6-digit pincode"
-                  value={pincode}
-                  onChange={handlePincodeChange}
-                />
-                {errors.pincode && <span className="field-error">{errors.pincode}</span>}
-              </div>
-              <div className="field">
-                <label htmlFor="dob">Date of Birth (optional)</label>
-                <input
-                  id="dob"
-                  type="date"
-                  value={dob}
-                  onChange={(e) => setDob(e.target.value)}
-                />
-              </div>
-              <div className={`field ${errors.map_link ? 'invalid' : ''}`}>
-                <label htmlFor="mapLink">Map Link (optional)</label>
-                <input
-                  id="mapLink"
-                  type="url"
-                  placeholder="https://maps.google.com/..."
-                  value={mapLink}
-                  onChange={(e) => setMapLink(e.target.value)}
-                />
-                {errors.map_link && <span className="field-error">{errors.map_link}</span>}
-              </div>
-              <div className="field">
-                <label htmlFor="customerNotes">Notes (optional)</label>
-                <textarea
-                  id="customerNotes"
-                  placeholder="Add any customer notes"
-                  value={customerNotes}
-                  onChange={(e) => setCustomerNotes(e.target.value)}
-                />
-              </div>
             </div>
           </div>
         )}
@@ -639,14 +802,16 @@ export default function CustomerForm({
           onClick={onBack}
           disabled={isSubmitting}
         >
-          Back
+          {isOrderFlow ? 'Back' : 'Cancel'}
         </button>
         <button
           type="submit"
           className="create"
           disabled={isSubmitting}
         >
-          {isSubmitting ? 'Saving Order…' : 'Save Order'}
+          {isSubmitting
+            ? (isOrderFlow ? 'Saving Order…' : 'Updating Customer…')
+            : (submitLabel || (isOrderFlow ? 'Save Order' : 'Update Customer Record'))}
         </button>
       </div>
     </form>
