@@ -5,8 +5,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import CreateOrderModal from './components/CreateOrderModal';
 import OrderStatusModal from './components/OrderStatusModal';
+import EditOrderModal from './components/EditOrderModal';
 import CustomerManagement from './components/CustomerManagement';
 import CustomerForm from './components/CustomerForm';
+import OrderReviewCard from './components/OrderReviewCard';
 import NoOrdersGraphic from './components/NoOrdersGraphic';
 import { getOrders, updateCustomer } from './services/customerService';
 import { isSupabaseConfigured } from './lib/supabaseClient';
@@ -68,13 +70,18 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
 
-  const handleOpenOrderStatus = (order) => {
+  const [statusModalViewBill, setStatusModalViewBill] = useState(false);
+  const [expandedOrderId, setExpandedOrderId] = useState(null);
+
+  const handleOpenOrderStatus = (order, viewBill = false) => {
     setSelectedStatusOrder(order);
+    setStatusModalViewBill(viewBill);
     setIsStatusModalOpen(true);
   };
 
   // Topbar dropdown states
-  const [activeDropdown, setActiveDropdown] = useState(null); // 'currency' | 'language' | 'admin' | null
+  const [activeDropdown, setActiveDropdown] = useState(null); // 'currency' | 'language' | 'admin' | 'sort' | null
+  const [sortBy, setSortBy] = useState('newest');
   const [currentCurrency, setCurrentCurrency] = useState(SAMPLE_CURRENCIES[0] || { symbol: '₹', code: 'IN', label: 'IN • ₹' });
   const [currentLanguage, setCurrentLanguage] = useState(SAMPLE_LANGUAGES[0] || { name: 'English', code: 'en' });
 
@@ -137,7 +144,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isModalOpen]);
 
-  // Filtered orders with defensive guard
+  // Filtered and sorted orders with defensive guard
   const safeOrders = Array.isArray(orders) ? orders : [];
   const filteredOrders = safeOrders.filter((o) => {
     if (!o) return false;
@@ -148,6 +155,17 @@ export default function App() {
     const custName = String(cust.customer_name || o.customer_name || '').toLowerCase();
     const phone = String(cust.mobile_number || o.mobile_number || '').toLowerCase();
     return orderNo.includes(term) || custName.includes(term) || phone.includes(term);
+  }).sort((a, b) => {
+    if (sortBy === 'oldest') {
+      return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+    }
+    if (sortBy === 'amount_high') {
+      return Number(b.total_amount || 0) - Number(a.total_amount || 0);
+    }
+    if (sortBy === 'amount_low') {
+      return Number(a.total_amount || 0) - Number(b.total_amount || 0);
+    }
+    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
   });
 
   return (
@@ -221,7 +239,23 @@ export default function App() {
           >
             <span>📍</span>
             <span>{currentCurrency.label}</span>
-            <span style={{ fontSize: '10px', marginLeft: '1px', opacity: 0.8 }}>⌄</span>
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{
+                transition: 'transform 0.2s ease',
+                transform: activeDropdown === 'currency' ? 'rotate(180deg)' : 'none',
+                opacity: 0.8,
+              }}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
           </button>
 
           {activeDropdown === 'currency' && (
@@ -261,7 +295,23 @@ export default function App() {
           >
             <span>🌐</span>
             <span>{currentLanguage.name}</span>
-            <span style={{ fontSize: '10px', marginLeft: '1px', opacity: 0.8 }}>⌄</span>
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{
+                transition: 'transform 0.2s ease',
+                transform: activeDropdown === 'language' ? 'rotate(180deg)' : 'none',
+                opacity: 0.8,
+              }}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
           </button>
 
           {activeDropdown === 'language' && (
@@ -288,51 +338,48 @@ export default function App() {
           )}
         </div>
 
-        {/* Admin Details Dropdown */}
+        {/* Admin Details Dropdown (Avatar Circle Only) */}
         <div className="top-pill-dropdown-wrap">
           <button
             type="button"
-            className={`top-pill ${activeDropdown === 'admin' ? 'active' : ''}`}
+            className={`top-admin-avatar-btn ${activeDropdown === 'admin' ? 'active' : ''}`}
             onClick={(e) => {
               e.stopPropagation();
               setActiveDropdown((prev) => (prev === 'admin' ? null : 'admin'));
             }}
-            style={{
-              padding: '4px 10px 4px 6px',
-              borderRadius: '22px',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}
-            title="Admin Profile"
+            title="Tenant / Admin: Store Administrator"
+            aria-label="Admin Avatar"
           >
-            <div
-              className="avatar"
-              style={{
-                width: '26px',
-                height: '26px',
-                fontSize: '12.5px',
-                fontWeight: '700',
-                background: 'linear-gradient(135deg, #7164ff, #4338ca)',
-                color: '#ffffff',
-                borderRadius: '50%',
-                display: 'grid',
-                placeItems: 'center',
-              }}
-            >
-              A
-            </div>
-            <span style={{ fontSize: '13px', fontWeight: '650', color: '#d8e0ed' }}>Admin</span>
-            <span style={{ fontSize: '10px', opacity: 0.8 }}>⌄</span>
+            A
           </button>
 
           {activeDropdown === 'admin' && (
-            <div className="top-pill-menu" style={{ minWidth: '210px' }}>
-              <div className="top-pill-menu-title">User Session</div>
-              <div style={{ padding: '8px 10px', fontSize: '12.5px', color: '#d2dfee', lineHeight: 1.4 }}>
-                <div style={{ fontWeight: '700', color: '#fff' }}>Store Administrator</div>
-                <div style={{ color: '#889bb6', fontSize: '11.5px', marginTop: '2px' }}>Branch: Ranipet Store #1</div>
+            <div className="top-pill-menu" style={{ minWidth: '220px', right: 0, left: 'auto' }}>
+              <div className="top-pill-menu-title">Admin Account</div>
+              <div style={{ padding: '8px 12px', fontSize: '12.5px', color: '#d2dfee', lineHeight: 1.5 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                  <div
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #6366f1, #4338ca)',
+                      display: 'grid',
+                      placeItems: 'center',
+                      fontWeight: '750',
+                      color: '#fff',
+                      fontSize: '13px',
+                      flexShrink: 0,
+                    }}
+                  >
+                    A
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: '700', color: '#fff' }}>Store Administrator</div>
+                    <div style={{ color: '#889bb6', fontSize: '11px' }}>admin@washdoor.in</div>
+                  </div>
+                </div>
+                <div style={{ color: '#889bb6', fontSize: '11.5px' }}>Branch: Ranipet Store #1</div>
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', marginTop: '6px', color: '#4ee2af', fontSize: '11.5px', fontWeight: '600' }}>
                   <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#4ee2af' }}></span>
                   Session Active
@@ -396,9 +443,6 @@ export default function App() {
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '14px', whiteSpace: 'nowrap' }}>
-                <span style={{ fontSize: '13px', color: '#90a4c0' }}>
-                  {filteredOrders.length} Order{filteredOrders.length === 1 ? '' : 's'} • Sort: <strong style={{ color: '#d8e4f5', fontWeight: '600' }}>Newest ⌄</strong>
-                </span>
                 <button
                   type="button"
                   className="secondary"
@@ -410,7 +454,21 @@ export default function App() {
                   }}
                   title="Reload orders from database"
                 >
-                  <span className={loadingOrders ? 'sync-spinner' : ''}>{loadingOrders ? '' : '↻'}</span>
+                  <svg
+                    className={loadingOrders ? 'sync-spinner' : ''}
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="23 4 23 10 17 10" />
+                    <polyline points="1 20 1 14 7 14" />
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                  </svg>
                   <span>{loadingOrders ? 'Syncing...' : 'Refresh'}</span>
                 </button>
               </div>
@@ -425,7 +483,11 @@ export default function App() {
                 </div>
                 {[1, 2, 3, 4].map((n) => (
                   <div key={n} className="skeleton-order-card">
-                    <span className="order-chevron" style={{ opacity: 0.2 }}>⌄</span>
+                    <span className="order-chevron" style={{ opacity: 0.2 }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                    </span>
                     <div className="skeleton-avatar skeleton-shimmer"></div>
                     <div className="skeleton-info-wrap">
                       <div className="skeleton-bar skeleton-bar-name skeleton-shimmer"></div>
@@ -433,7 +495,6 @@ export default function App() {
                       <div className="skeleton-bar skeleton-bar-type skeleton-shimmer"></div>
                       <div className="skeleton-bar skeleton-bar-phone skeleton-shimmer"></div>
                     </div>
-                    <div className="skeleton-amount skeleton-shimmer"></div>
                     <div className="skeleton-btn skeleton-shimmer"></div>
                   </div>
                 ))}
@@ -462,79 +523,21 @@ export default function App() {
                     <span>Syncing latest orders with Supabase…</span>
                   </div>
                 )}
-                {filteredOrders.map((o, idx) => {
-                  const cust = o.customer || {};
-                  const custName = cust.customer_name || 'Walk-in Customer';
-                  const phone = cust.mobile_number ? formatPhoneDisplay(cust.mobile_number) : '';
-                  const isOnCall = o.order_type === 'on-call';
-                  const avatarBg = AVATAR_COLORS[idx % AVATAR_COLORS.length];
-
-                  return (
-                    <div
-                      key={o.id}
-                      className="order-row-card"
-                      onClick={() => setEditingOrder(o)}
-                      style={{ cursor: 'pointer' }}
-                      title="Click to view & edit customer order"
-                    >
-                      <span className="order-chevron">⌄</span>
-
-                      {/* Avatar with person silhouette */}
-                      <div
-                        className="order-avatar-circle"
-                        style={{ backgroundColor: avatarBg }}
-                        title={custName}
-                      >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                        </svg>
-                      </div>
-
-                      {/* Single-row main content */}
-                      <div className="order-main-info">
-                        <span className="order-customer-name">{custName}</span>
-                        <span className="order-num-pill">
-                          {o.order_number || 'ORDER-00001'}
-                        </span>
-                        <span className="order-type-pill">
-                          {isOnCall ? '📞 On-Call' : '🚶 Walk-in'}
-                        </span>
-                        {phone && (
-                          <span className="order-phone-tag">
-                            📞 {phone}
-                          </span>
-                        )}
-                        {o.preference && (
-                          <span className="order-pref-tag">
-                            • [{o.preference}]
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Right-aligned Amount & Status */}
-                      <div className="order-amount-display">
-                        {(currentCurrency?.symbol || '₹')}{Number(o.total_amount || 0).toFixed(2)}
-                      </div>
-
-                      <button
-                        type="button"
-                        className={`order-status-pill ${
-                          o.status === 'Ready for Billing' ? 'ready' :
-                          o.status === 'Product Status' ? 'purple' : 'in-progress'
-                        }`}
-                        title={`Status: ${o.status || 'Order in Progress'} (${o.progress || 25}%) - Click to open status dialog`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenOrderStatus(o);
-                        }}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <span className="status-dot"></span>
-                        <span>Order Status</span>
-                      </button>
-                    </div>
-                  );
-                })}
+                {filteredOrders.map((o) => (
+                  <OrderReviewCard
+                    key={o.id}
+                    order={o}
+                    isExpanded={expandedOrderId === o.id}
+                    onToggleExpand={() => {
+                      setExpandedOrderId((prev) => (prev === o.id ? null : o.id));
+                    }}
+                    onEdit={(orderToEdit) => setEditingOrder(orderToEdit)}
+                    onOpenStatus={(orderStatus) => handleOpenOrderStatus(orderStatus, false)}
+                    onOpenBill={(orderBill) => handleOpenOrderStatus(orderBill, true)}
+                    showToast={showToast}
+                    currencySymbol={currentCurrency?.symbol || '₹'}
+                  />
+                ))}
               </div>
             )}
           </>
@@ -557,81 +560,27 @@ export default function App() {
       <OrderStatusModal
         isOpen={isStatusModalOpen}
         order={selectedStatusOrder}
+        initialViewBill={statusModalViewBill}
         onClose={() => {
           setIsStatusModalOpen(false);
           setSelectedStatusOrder(null);
+          setStatusModalViewBill(false);
         }}
         onOrderUpdated={loadOrders}
+        onEditOrder={(orderToEdit) => setEditingOrder(orderToEdit)}
         showToast={showToast}
         currencySymbol={currentCurrency.symbol}
       />
 
-      {/* ── Edit Order Modal (Exact same UI as Create New Order & Edit Customer) ── */}
-      {editingOrder && (
-        <div
-          className="overlay"
-          style={{ display: 'grid' }}
-          onClick={(e) => {
-            if (e.target.className === 'overlay') setEditingOrder(null);
-          }}
-        >
-          <div className="modal" style={{ width: '100%', maxWidth: '480px' }}>
-            <div className="modal-head">
-              <div className="modal-icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 20h9" />
-                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                </svg>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1, minWidth: 0 }}>
-                <div className="modal-title">Edit Order Record</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  <span className="cust-id-pill" style={{ fontSize: '11.5px', padding: '2px 8px' }}>
-                    {editingOrder.order_number || editingOrder.order_id}
-                  </span>
-                  <span style={{ fontSize: '12.5px', color: '#9aacc5', fontWeight: '550' }}>
-                    {editingOrder.customer?.customer_name || editingOrder.customer_name}
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="close"
-                onClick={() => setEditingOrder(null)}
-                aria-label="Close"
-              >
-                ×
-              </button>
-            </div>
-            <CustomerForm
-              initialCustomer={editingOrder.customer || {
-                customer_name: editingOrder.customer_name,
-                mobile_number: editingOrder.mobile_number,
-              }}
-              customerId={editingOrder.customer?.customerId || editingOrder.customer?.customer_id || editingOrder.customer_id}
-              initialOrderType={editingOrder.order_type}
-              isOrderFlow={true}
-              submitLabel="Update Order Record"
-              onBack={() => setEditingOrder(null)}
-              onSubmit={async ({ customerData, orderPreference, orderPreferenceNotes }) => {
-                const targetId = editingOrder.customer?.customerId || editingOrder.customer?.customer_id || editingOrder.order_number;
-                const { error } = await updateCustomer(targetId, {
-                  ...customerData,
-                  orderPreference,
-                  orderPreferenceNotes,
-                });
-                if (error) {
-                  showToast(`⚠️ ${error.message}`);
-                } else {
-                  showToast(`✓ Order ${editingOrder.order_number} updated successfully!`);
-                  setEditingOrder(null);
-                  loadOrders();
-                }
-              }}
-            />
-          </div>
-        </div>
-      )}
+      {/* ── Edit Order Modal (Interactive Product Catalog & Cart Dialog) ── */}
+      <EditOrderModal
+        isOpen={Boolean(editingOrder)}
+        order={editingOrder}
+        onClose={() => setEditingOrder(null)}
+        onOrderUpdated={loadOrders}
+        showToast={showToast}
+        currencySymbol={currentCurrency?.symbol || '₹'}
+      />
 
       {/* ── Global Toast ── */}
       <div className={`toast ${toastVisible ? 'show' : ''}`} id="toast" role="status">

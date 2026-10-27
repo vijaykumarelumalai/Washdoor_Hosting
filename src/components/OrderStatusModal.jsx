@@ -49,21 +49,20 @@ const STAGES = [
   {
     id: 3,
     status: 'Product Status',
-    percent: 90,
-    title: 'Product Status',
-    badge: '90% Completed',
-    shortDesc: 'Garments poly-wrapped, racked, and assembled. Bill ready for customer review.',
+    percent: 100,
+    title: 'Washing Completed (Product Status)',
+    badge: '100% Completed',
+    shortDesc: 'Washing completed, garments poly-wrapped, racked, and assembled. Bill ready for review.',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-        <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-        <line x1="12" y1="22.08" x2="12" y2="12" />
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+        <polyline points="22 4 12 14.01 9 11.01" />
       </svg>
     ),
     details: [
-      'Garments packaged on premium wooden hangers / folded',
-      'Stored in clean dispatch staging rack #04',
-      'Estimate slip & GST bill generated successfully',
+      'Garments washed, cleaned, and steam pressed',
+      'Quality inspection passed & 100% washing verified',
+      'Stored in clean dispatch staging rack & bill ready',
     ],
   },
 ];
@@ -71,8 +70,10 @@ const STAGES = [
 export default function OrderStatusModal({
   isOpen,
   order,
+  initialViewBill = false,
   onClose,
   onOrderUpdated,
+  onEditOrder,
   showToast,
   currencySymbol = '₹',
 }) {
@@ -87,7 +88,7 @@ export default function OrderStatusModal({
     const rawStatus = (order.status || '').trim().toLowerCase();
     const storedProgress = Number(order.progress || 0);
 
-    if (rawStatus.includes('product') || storedProgress >= 90) {
+    if (rawStatus.includes('product') || rawStatus.includes('completed') || storedProgress >= 90) {
       setCurrentStageId(3);
     } else if (rawStatus.includes('billing') || rawStatus.includes('ready for billing') || storedProgress >= 50) {
       setCurrentStageId(2);
@@ -95,8 +96,8 @@ export default function OrderStatusModal({
       // Default: 25% Order in Progress
       setCurrentStageId(1);
     }
-    setViewingBill(false);
-  }, [order, isOpen]);
+    setViewingBill(Boolean(initialViewBill));
+  }, [order, isOpen, initialViewBill]);
 
   // Handle ESC key to close
   useEffect(() => {
@@ -114,8 +115,51 @@ export default function OrderStatusModal({
   const orderNumber = order.order_number || order.order_id || 'ORDER-00001';
   const customerName = order.customer?.customer_name || order.customer_name || 'Walk-In Customer';
   const mobile = order.customer?.mobile_number || order.mobile_number || '';
-  const preference = order.preference || order.service_category || 'Standard';
+  const preference = order.preference || order.service_category || 'Wash & Steam Press';
   const totalAmount = Number(order.total_amount || 0);
+
+  const cust = order.customer || {};
+  const address = cust.address || cust.streetArea || order.address || 'Ranipet Central, Zone 1';
+  const weight = order.product_weight || '3.5';
+  const orderItems = order.customer_history?.items || order.items || [];
+  const itemCount = orderItems.length > 0
+    ? orderItems.reduce((acc, item) => acc + (Number(item.qty) || 1), 0)
+    : Number(order.item_count || 1);
+  const orderType = order.order_type || 'Walk-in';
+
+  // Tax Exemption status
+  const isTaxExempt = Boolean(
+    order.tax_exemption ||
+    order.customer?.tax_exemption ||
+    order.taxExemption ||
+    order.customer?.taxExemption
+  );
+
+  // Indian GST / Tax Invoicing calculation
+  let subtotal = 0;
+  let cgst = 0;
+  let sgst = 0;
+  let finalAmount = 0;
+
+  if (isTaxExempt) {
+    // When tax exemption is enabled: no CGST & SGST. Subtotal equals Grand Total.
+    subtotal = totalAmount > 0 ? totalAmount : 350.00;
+    cgst = 0;
+    sgst = 0;
+    finalAmount = subtotal;
+  } else {
+    // Standard 5% GST (2.5% CGST + 2.5% SGST)
+    if (totalAmount > 0) {
+      finalAmount = totalAmount;
+      subtotal = finalAmount / 1.05;
+    } else {
+      subtotal = 350.00;
+      finalAmount = 367.50;
+    }
+    const totalGst = finalAmount - subtotal;
+    cgst = totalGst / 2;
+    sgst = totalGst / 2;
+  }
 
   // Advance stage to the next step (strictly sequential: 1 -> 2 -> 3)
   const handleAdvanceStage = async () => {
@@ -160,14 +204,24 @@ export default function OrderStatusModal({
           <div className="status-header-icon-wrap">
             <span className="status-live-pulse-dot" />
             <div className="status-header-icon">
-              {currentStage.icon}
+              {viewingBill ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                  <polyline points="10 9 9 9 8 9" />
+                </svg>
+              ) : (
+                currentStage.icon
+              )}
             </div>
           </div>
 
           <div className="status-header-text">
             <div className="status-header-title-row">
               <h2 className="status-dynamic-title">
-                {currentStage.title} – {currentStage.percent}% Completed
+                {viewingBill ? 'Tax Invoice & Thermal Bill' : `${currentStage.title} – ${currentStage.percent}% Completed`}
               </h2>
             </div>
             <div className="status-order-meta-row">
@@ -195,62 +249,90 @@ export default function OrderStatusModal({
           </button>
         </div>
 
-        {/* ── Progress Bar & Percentage Bar ── */}
-        <div className="status-progress-section">
-          <div className="status-progress-meta-row">
-            <span className="status-progress-label">Overall Order Fulfillment</span>
-            <span className="status-progress-percentage-badge">
-              {currentStage.percent}% Complete
-            </span>
-          </div>
+        {/* ── Progress Bar & Percentage Bar (Streamlined: Hidden during Bill View to avoid redundancy) ── */}
+        {!viewingBill ? (
+          <div className="status-progress-section">
+            <div className="status-progress-meta-row">
+              <span className="status-progress-label">Overall Order Fulfillment</span>
+              <span className="status-progress-percentage-badge">
+                {currentStage.percent}% Complete
+              </span>
+            </div>
 
-          <div className="status-progress-track">
-            <div
-              className={`status-progress-fill stage-${currentStageId}`}
-              style={{ width: `${currentStage.percent}%` }}
-            >
-              <div className="status-progress-glow" />
+            <div className="status-progress-track">
+              <div
+                className={`status-progress-fill stage-${currentStageId}`}
+                style={{ width: `${currentStage.percent}%` }}
+              >
+                <div className="status-progress-glow" />
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="bill-breadcrumb-banner">
+            <div className="bill-breadcrumb-left">
+              <span className="bill-crumb-stage">Washing 100% Completed</span>
+              <span className="bill-crumb-arrow">›</span>
+              <span className="bill-crumb-active">Official Tax Bill & Thermal Slip</span>
+            </div>
+          </div>
+        )}
 
         {/* ── Modal Body: Stepper or Bill View ── */}
         <div className="status-modal-body">
           {viewingBill ? (
-            /* ── View Bill / Estimate Slip View (90% Stage) ── */
-            <div className="status-bill-view">
+            /* ── View Bill / Estimate Slip View (Thermal POS Style) ── */
+            <div className="status-bill-view" id="printable-tax-invoice">
+              {/* Thermal Bill Header */}
               <div className="bill-header-row">
-                <div>
-                  <span className="bill-kicker">WASHDOOR THERMAL BILL & ESTIMATE</span>
-                  <h3 className="bill-title">Tax Invoice #{orderNumber}</h3>
-                  <p className="bill-date">
-                    Generated: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                <div className="bill-brand-col">
+                  <div className="bill-brand-badge">WASHDOOR POS RECEIPT</div>
+                  <h3 className="bill-brand-name">WASHDOOR LAUNDRY</h3>
+                  <p className="bill-store-sub">
+                    Ranipet Central • Ph: +91 98765 43210 • GSTIN: 33AAAAW1234D1Z5
                   </p>
                 </div>
-                <div className="bill-badge-status">
-                  <span className="bill-status-pill">90% Product Status</span>
+                <div className="bill-invoice-meta-col">
+                  <div className="bill-status-pill">
+                    <span className="bill-status-dot" />
+                    100% WASH COMPLETED
+                  </div>
+                  <div className="bill-inv-num">Tax Invoice #{orderNumber}</div>
+                  <div className="bill-date">
+                    {new Date().toLocaleDateString('en-IN', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </div>
                 </div>
               </div>
 
+              {/* Customer Info Card */}
               <div className="bill-customer-card">
                 <div className="bill-info-grid">
-                  <div>
+                  <div className="bill-info-item">
                     <span className="bill-field-label">Customer Name</span>
                     <strong className="bill-field-val">{customerName}</strong>
                   </div>
-                  <div>
+                  <div className="bill-info-item">
                     <span className="bill-field-label">Phone</span>
                     <strong className="bill-field-val">{mobile ? formatPhoneDisplay(String(mobile)) : '—'}</strong>
                   </div>
-                  <div>
-                    <span className="bill-field-label">Order Type</span>
-                    <strong className="bill-field-val" style={{ textTransform: 'capitalize' }}>
-                      {order.order_type || 'Walk-in'}
+                  <div className="bill-info-item">
+                    <span className="bill-field-label">Delivery Address / Zone</span>
+                    <strong className="bill-field-val" title={address}>
+                      {address}
                     </strong>
                   </div>
-                  <div>
-                    <span className="bill-field-label">Service Tier</span>
-                    <strong className="bill-field-val">{preference}</strong>
+                  <div className="bill-info-item">
+                    <span className="bill-field-label">Service & Order Type</span>
+                    <strong className="bill-field-val" style={{ textTransform: 'capitalize' }}>
+                      {preference} • {orderType}
+                      {isTaxExempt && <span style={{ color: '#fbbf24', marginLeft: '4px', fontSize: '10.5px' }}>(Tax Exempt)</span>}
+                    </strong>
                   </div>
                 </div>
               </div>
@@ -260,77 +342,106 @@ export default function OrderStatusModal({
                 <table className="bill-table">
                   <thead>
                     <tr>
-                      <th>Service Description</th>
-                      <th>Qty / Weight</th>
-                      <th>Rate</th>
-                      <th style={{ textAlign: 'right' }}>Amount</th>
+                      <th style={{ width: '45%' }}>Service Description</th>
+                      <th style={{ width: '22%' }}>Batch / Wt</th>
+                      <th style={{ width: '15%' }}>Rate</th>
+                      <th style={{ width: '18%', textAlign: 'right' }}>Amount</th>
                     </tr>
                   </thead>
                   <tbody>
+                    {orderItems.length > 0 ? (
+                      orderItems.map((item, idx) => (
+                        <tr key={idx}>
+                          <td>
+                            <strong>{item.name}</strong>
+                            <span className="bill-item-sub">
+                              {item.serviceType || preference} • Care tagged &amp; inspect pass
+                            </span>
+                          </td>
+                          <td>
+                            <span className="bill-qty-pill">
+                              {item.qty} {item.qty === 1 ? 'pc' : 'pcs'}
+                            </span>
+                          </td>
+                          <td>{currencySymbol}{Number(item.rate || 0).toFixed(2)}</td>
+                          <td style={{ textAlign: 'right', fontWeight: '700', color: '#ffffff' }}>
+                            {currencySymbol}{Number(item.amount || ((item.rate || 0) * (item.qty || 1))).toFixed(2)}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td>
+                          <strong>{preference}</strong>
+                          <span className="bill-item-sub">
+                            Anti-bacterial hygiene wash, fabric softening, steam doll finish
+                          </span>
+                        </td>
+                        <td>
+                          <span className="bill-qty-pill">
+                            {weight} kg ({itemCount} {itemCount === 1 ? 'pc' : 'pcs'})
+                          </span>
+                        </td>
+                        <td>{currencySymbol}{subtotal.toFixed(2)}</td>
+                        <td style={{ textAlign: 'right', fontWeight: '700', color: '#ffffff' }}>
+                          {currencySymbol}{subtotal.toFixed(2)}
+                        </td>
+                      </tr>
+                    )}
                     <tr>
                       <td>
-                        <strong>Premium Laundry & Steam Press</strong>
-                        <span className="bill-item-sub">Wash, anti-bacterial hygiene rinse, steam doll finish</span>
+                        <strong>Garment Preservation Packaging</strong>
+                        <span className="bill-item-sub">
+                          Poly-bag seal garment dust & moisture barrier
+                        </span>
                       </td>
-                      <td>1 Batch</td>
-                      <td>{currencySymbol}{totalAmount > 0 ? (totalAmount * 0.95).toFixed(2) : '350.00'}</td>
-                      <td style={{ textAlign: 'right' }}>
-                        {currencySymbol}{totalAmount > 0 ? (totalAmount * 0.95).toFixed(2) : '350.00'}
-                      </td>
-                    </tr>
-                    <tr>
                       <td>
-                        <strong>Packaging & Quality Seal</strong>
-                        <span className="bill-item-sub">Poly-bag garment preservation hanger packaging</span>
+                        <span className="bill-qty-pill">1 Lot</span>
                       </td>
-                      <td>1</td>
-                      <td>{currencySymbol}0.00 (Included)</td>
-                      <td style={{ textAlign: 'right' }}>{currencySymbol}0.00</td>
+                      <td>{currencySymbol}0.00</td>
+                      <td style={{ textAlign: 'right', color: '#10b981', fontWeight: '600' }}>
+                        INCLUDED
+                      </td>
                     </tr>
                   </tbody>
                   <tfoot>
-                    <tr>
-                      <td colSpan="3" className="bill-calc-label">Subtotal</td>
+                    <tr className="bill-calc-row">
+                      <td colSpan="3" className="bill-calc-label">
+                        {isTaxExempt ? 'Subtotal' : 'Taxable Subtotal'}
+                      </td>
                       <td className="bill-calc-val">
-                        {currencySymbol}{totalAmount > 0 ? (totalAmount * 0.95).toFixed(2) : '350.00'}
+                        {currencySymbol}{subtotal.toFixed(2)}
                       </td>
                     </tr>
-                    <tr>
-                      <td colSpan="3" className="bill-calc-label">GST / Tax (5%)</td>
-                      <td className="bill-calc-val">
-                        {currencySymbol}{totalAmount > 0 ? (totalAmount * 0.05).toFixed(2) : '17.50'}
-                      </td>
-                    </tr>
+                    {!isTaxExempt && (
+                      <>
+                        <tr className="bill-calc-row">
+                          <td colSpan="3" className="bill-calc-label">CGST (2.5%)</td>
+                          <td className="bill-calc-val">
+                            {currencySymbol}{cgst.toFixed(2)}
+                          </td>
+                        </tr>
+                        <tr className="bill-calc-row">
+                          <td colSpan="3" className="bill-calc-label">SGST (2.5%)</td>
+                          <td className="bill-calc-val">
+                            {currencySymbol}{sgst.toFixed(2)}
+                          </td>
+                        </tr>
+                      </>
+                    )}
                     <tr className="bill-grand-total-row">
-                      <td colSpan="3">Grand Total Payable</td>
-                      <td style={{ textAlign: 'right' }}>
-                        {currencySymbol}{totalAmount > 0 ? totalAmount.toFixed(2) : '367.50'}
+                      <td colSpan="2">
+                        <span className="bill-grand-title">Grand Total Payable</span>
+                        <span className="bill-tax-inclusive-tag">
+                          {isTaxExempt ? '(Tax Exempted — 0% GST)' : '(Inclusive of 5% GST)'}
+                        </span>
+                      </td>
+                      <td colSpan="2" className="bill-grand-val">
+                        {currencySymbol}{finalAmount.toFixed(2)}
                       </td>
                     </tr>
                   </tfoot>
                 </table>
-              </div>
-
-              <div className="bill-actions-row">
-                <button
-                  type="button"
-                  className="status-btn-secondary"
-                  onClick={() => setViewingBill(false)}
-                >
-                  ← Back to Order Stages
-                </button>
-                <button
-                  type="button"
-                  className="status-btn-print"
-                  onClick={() => window.print()}
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="6 9 6 2 18 2 18 9" />
-                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                    <rect x="6" y="14" width="12" height="8" />
-                  </svg>
-                  Print Bill
-                </button>
               </div>
             </div>
           ) : (
@@ -414,21 +525,21 @@ export default function OrderStatusModal({
 
                           {s.id === 2 && (
                             <div className="action-hint">
-                              <span>Weighment & packaging verified. Advance to Product Status?</span>
+                              <span>Weighment & packaging verified. Mark Washing Completed (100%)?</span>
                               <button
                                 type="button"
                                 className="status-action-btn primary"
                                 onClick={handleAdvanceStage}
                                 disabled={updating}
                               >
-                                {updating ? 'Saving to Supabase…' : 'Update to Product Status (90%) →'}
+                                {updating ? 'Saving to Supabase…' : 'Mark Washing Completed (100%) →'}
                               </button>
                             </div>
                           )}
 
                           {s.id === 3 && (
                             <div className="action-hint">
-                              <span style={{ color: '#10b981' }}>✓ 90% Stage Reached. Product is packaged & ready for pickup/delivery.</span>
+                              <span style={{ color: '#10b981' }}>✓ 100% Washing Completed. Product is packaged & ready for delivery.</span>
                               <button
                                 type="button"
                                 className="status-action-btn bill-btn"
@@ -441,7 +552,7 @@ export default function OrderStatusModal({
                                   <line x1="16" y1="17" x2="8" y2="17" />
                                   <polyline points="10 9 9 9 8 9" />
                                 </svg>
-                                View Bill (90% Stage)
+                                View Bill (100% Completed)
                               </button>
                             </div>
                           )}
@@ -465,45 +576,97 @@ export default function OrderStatusModal({
           </div>
 
           <div className="status-footer-right">
-            {currentStageId === 3 && !viewingBill && (
-              <button
-                type="button"
-                className="status-footer-btn view-bill-special"
-                onClick={() => setViewingBill(true)}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                  <line x1="16" y1="13" x2="8" y2="13" />
-                </svg>
-                View Bill
-              </button>
-            )}
-
-            {currentStageId < 3 && (
-              <button
-                type="button"
-                className="status-footer-btn advance"
-                onClick={handleAdvanceStage}
-                disabled={updating}
-              >
-                {updating ? (
-                  'Saving…'
-                ) : currentStageId === 1 ? (
-                  'Update to Ready for Billing (50%) →'
-                ) : (
-                  'Update to Product Status (90%) →'
+            {viewingBill ? (
+              <>
+                <button
+                  type="button"
+                  className="status-footer-btn print-bill-action"
+                  onClick={() => window.print()}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 6 2 18 2 18 9" />
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                    <rect x="6" y="14" width="12" height="8" />
+                  </svg>
+                  Print Bill
+                </button>
+                <button
+                  type="button"
+                  className="status-footer-btn close-action"
+                  onClick={onClose}
+                >
+                  Close
+                </button>
+              </>
+            ) : (
+              <>
+                {currentStageId === 3 && (
+                  <button
+                    type="button"
+                    className="status-footer-btn view-bill-special"
+                    onClick={() => setViewingBill(true)}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                      <line x1="16" y1="13" x2="8" y2="13" />
+                    </svg>
+                    View Bill
+                  </button>
                 )}
-              </button>
-            )}
 
-            <button
-              type="button"
-              className="status-footer-btn close-action"
-              onClick={onClose}
-            >
-              Done
-            </button>
+                {currentStageId < 3 && (
+                  <button
+                    type="button"
+                    className="status-footer-btn advance"
+                    onClick={handleAdvanceStage}
+                    disabled={updating}
+                  >
+                    {updating ? (
+                      'Saving…'
+                    ) : currentStageId === 1 ? (
+                      'Update to Ready for Billing (50%) →'
+                    ) : (
+                      'Update to Product Status (90%) →'
+                    )}
+                  </button>
+                )}
+
+                {onEditOrder && (
+                  <button
+                    type="button"
+                    className="status-footer-btn"
+                    style={{
+                      background: '#f8fafc',
+                      color: '#334155',
+                      border: '1px solid #cbd5e1',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                    onClick={() => {
+                      onClose();
+                      onEditOrder(order);
+                    }}
+                    title="Open Product Selection & Cart Edit Dialog"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                    Edit Order &amp; Items
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className="status-footer-btn close-action"
+                  onClick={onClose}
+                >
+                  Done
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -48,8 +48,8 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
     showToast(`Customer selected: ${customer.customer_name}. Select intake method to proceed.`);
   };
 
-  const handleNewCustomer = () => {
-    setSelectedCustomer(null);
+  const handleNewCustomer = (prefillData = null) => {
+    setSelectedCustomer(prefillData && typeof prefillData === 'object' ? prefillData : null);
     setView('FORM');
   };
 
@@ -63,17 +63,25 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
     orderType,
     orderPreference,
     orderPreferenceNotes,
+    cartItems = [],
+    totalAmount = 0.00,
+    itemCount = 1,
     existingCustomerId,
   }) => {
     setIsSubmitting(true);
 
     const { data, error } = await createOrderWithCustomer({
       existingCustomerId,
-      customerData,
+      customerData: {
+        ...customerData,
+        item_count: itemCount,
+        total_amount: totalAmount,
+      },
       orderType,
       orderPreference,
       orderPreferenceNotes,
-      totalAmount: 0.00,
+      totalAmount: totalAmount,
+      items: cartItems,
     });
 
     setIsSubmitting(false);
@@ -96,10 +104,18 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
       preference_notes: orderPreferenceNotes || '',
       status: 'Order in Progress',
       progress: 25,
-      total_amount: 0.00,
+      total_amount: Number(totalAmount) || 0.00,
+      item_count: itemCount,
+      items: cartItems,
+      customer_history: {
+        items: cartItems,
+      },
+      tax_exemption: Boolean(customerData?.tax_exemption),
       customer: {
         customer_name: customerData?.customer_name || 'Walk-In Customer',
         mobile_number: customerData?.mobile_number || '',
+        tax_exemption: Boolean(customerData?.tax_exemption),
+        address: customerData?.address || '',
       },
       customer_name: customerData?.customer_name || 'Walk-In Customer',
       mobile_number: customerData?.mobile_number || '',
@@ -109,8 +125,8 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
     onClose();
   };
 
-  const activeCustomerId = selectedCustomer
-    ? (selectedCustomer.customerId || selectedCustomer.customer_code || selectedCustomer.id || nextCustomerId)
+  const activeCustomerId = (selectedCustomer && (selectedCustomer.customerId || selectedCustomer.customer_code || selectedCustomer.id))
+    ? (selectedCustomer.customerId || selectedCustomer.customer_code || selectedCustomer.id)
     : nextCustomerId;
 
   return (
@@ -176,6 +192,8 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
             initialOrderType="walk-in"
             orderNumber={nextOrderNumber}
             customerId={activeCustomerId}
+            isOrderFlow={true}
+            isEditOrder={false}
             onBack={handleBackToLookup}
             onSubmit={handleFormSubmit}
             isSubmitting={isSubmitting}

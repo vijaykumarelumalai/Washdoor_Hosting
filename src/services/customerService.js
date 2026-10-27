@@ -103,8 +103,13 @@ function mapMasterRowToOrder(row) {
   let progress = 25;
   if (rawStatus === 'Ready for Billing' || row.customer_history?.progress === 50) {
     progress = 50;
-  } else if (rawStatus === 'Product Status' || row.customer_history?.progress === 90) {
-    progress = 90;
+  } else if (
+    rawStatus === 'Product Status' ||
+    rawStatus === 'Completed' ||
+    rawStatus === 'Washing Completed' ||
+    row.customer_history?.progress >= 90
+  ) {
+    progress = 100;
   } else {
     progress = 25;
   }
@@ -119,6 +124,10 @@ function mapMasterRowToOrder(row) {
     status: rawStatus,
     progress: progress,
     total_amount: Number(row.total_amount || 0),
+    tax_exemption: Boolean(row.tax_exemption),
+    item_count: Number(row.item_count || (row.customer_history?.items?.reduce((s, i) => s + (Number(i.qty) || 1), 0)) || 1),
+    items: row.customer_history?.items || [],
+    customer_history: row.customer_history || {},
     created_at: row.created_at,
     customer: {
       id: custId,
@@ -126,6 +135,8 @@ function mapMasterRowToOrder(row) {
       customer_code: custId,
       customer_name: row.customer_name,
       customerName: row.customer_name,
+      country_code: '+91',
+      countryCode: '+91',
       mobile_number: row.mobile_number,
       mobileNumber: row.mobile_number,
       address: row.street_area,
@@ -195,12 +206,13 @@ export async function searchCustomers(query) {
       return { data: [], error };
     }
 
-    // Deduplicate unique customers by mobile_number or customer_id
+    // Deduplicate unique customer profiles strictly by customer_id
+    // This allows multiple distinct family profiles to share a contact number without auto-merging
     const seen = new Set();
     const uniqueCustomers = [];
     (data || []).forEach((r) => {
       const c = mapMasterRowToOrder(r).customer;
-      const key = c.mobile_number || c.customer_id;
+      const key = c.customer_id || c.customerId || c.id;
       if (key && !seen.has(key)) {
         seen.add(key);
         uniqueCustomers.push(c);
@@ -257,11 +269,12 @@ export async function getAllCustomers() {
       return { data: [], error };
     }
 
+    // Deduplicate unique customer profiles strictly by customer_id
     const seen = new Set();
     const uniqueCustomers = [];
     (data || []).forEach((r) => {
       const c = mapMasterRowToOrder(r).customer;
-      const key = c.mobile_number || c.customer_id;
+      const key = c.customer_id || c.customerId || c.id;
       if (key && !seen.has(key)) {
         seen.add(key);
         uniqueCustomers.push(c);
@@ -375,7 +388,9 @@ export async function updateCustomer(id, payload) {
     let query = supabase.from('washdoor_orders_master').update(updateObj);
 
     if (id) {
-      query = query.or(`customer_id.eq.${id},mobile_number.eq.${clean.mobile_number}`);
+      query = query.eq('customer_id', id);
+    } else if (clean.customer_id) {
+      query = query.eq('customer_id', clean.customer_id);
     } else if (clean.mobile_number) {
       query = query.eq('mobile_number', clean.mobile_number);
     }
@@ -418,6 +433,7 @@ export async function createOrderWithCustomer({
   orderPreference = '',
   orderPreferenceNotes = '',
   totalAmount = 0.00,
+  items = [],
 }) {
   const cleanCust = cleanPayload(customerData);
 
@@ -436,6 +452,10 @@ export async function createOrderWithCustomer({
     } else {
       finalCustId = await getNextCustomerId();
     }
+
+    const calculatedItemCount = (items && items.length > 0)
+      ? items.reduce((s, i) => s + (Number(i.qty) || 1), 0)
+      : (cleanCust.item_count ? Number(cleanCust.item_count) : 1);
 
     const masterInsert = {
       order_number: generatedOrderNumber,
@@ -459,7 +479,7 @@ export async function createOrderWithCustomer({
       internal_comments: cleanCust.internal_comments || null,
       order_notes: orderPreferenceNotes || cleanCust.notes || null,
       service_category: orderPreference || cleanCust.service_category || 'Wash & Steam Press',
-      item_count: cleanCust.item_count ? Number(cleanCust.item_count) : 1,
+      item_count: calculatedItemCount,
       customer_classification: cleanCust.customer_classification || 'Regular Customer',
       customer_status: 'Active',
       tier: cleanCust.tier || 'SILVER',
@@ -473,6 +493,10 @@ export async function createOrderWithCustomer({
       order_type: orderType || 'walk-in',
       order_status: 'Laundry In Progress',
       total_amount: Number(totalAmount) || 0.00,
+      customer_history: {
+        items: items || [],
+        created_at: new Date().toISOString(),
+      },
     };
 
     const { data: insertedMaster, error: insertMasterErr } = await supabase
@@ -545,11 +569,96 @@ export async function updateOrderStatus(orderIdentifier, newStatus, progressPerc
 }
 
 /**
- * Sanitizes form payload by turning empty strings into nulls
+ * Updates order details, cart items, customer contact, service type and pricing in Supabase washdoor_orders_master.
+ */
+export async function updateOrder(orderIdentifier, updatePayload = {}) {
+  if (!isSupabaseConfigured()) {
+    return { data: null, error: new Error('Supabase not configured') };
+  }
+
+  try {
+    const formattedId = orderIdentifier ? String(orderIdentifier).trim() : '';
+
+    const updateObj = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (updatePayload.totalAmount !== undefined && updatePayload.totalAmount !== null) {
+      updateObj.total_amount = Number(updatePayload.totalAmount);
+    }
+    if (updatePayload.itemCount !== undefined && updatePayload.itemCount !== null) {
+      updateObj.item_count = Number(updatePayload.itemCount);
+    }
+    if (updatePayload.serviceCategory) {
+      updateObj.service_category = updatePayload.serviceCategory;
+    }
+    if (updatePayload.orderNotes !== undefined) {
+      updateObj.order_notes = updatePayload.orderNotes || null;
+    }
+    if (updatePayload.customerName) {
+      updateObj.customer_name = updatePayload.customerName;
+    }
+    if (updatePayload.mobileNumber) {
+      const raw = String(updatePayload.mobileNumber).replace(/\D/g, '');
+      updateObj.mobile_number = raw.length === 12 && raw.startsWith('91') ? raw.slice(2) : raw.length === 11 && raw.startsWith('0') ? raw.slice(1) : raw;
+    }
+    if (updatePayload.alternatePhone !== undefined) {
+      const raw = String(updatePayload.alternatePhone || '').replace(/\D/g, '');
+      updateObj.alternate_phone = raw ? (raw.length === 12 && raw.startsWith('91') ? raw.slice(2) : raw.length === 11 && raw.startsWith('0') ? raw.slice(1) : raw) : null;
+    }
+    if (updatePayload.email !== undefined) {
+      updateObj.email = updatePayload.email || null;
+    }
+    if (updatePayload.address !== undefined) {
+      updateObj.street_area = updatePayload.address || null;
+    }
+    if (updatePayload.taxExemption !== undefined) {
+      updateObj.tax_exemption = Boolean(updatePayload.taxExemption);
+    }
+    if (updatePayload.status) {
+      updateObj.order_status = updatePayload.status;
+    }
+    if (updatePayload.items) {
+      updateObj.customer_history = {
+        items: updatePayload.items,
+        updated_at: new Date().toISOString(),
+      };
+    }
+
+    let query = supabase.from('washdoor_orders_master').update(updateObj);
+
+    if (formattedId.startsWith('ORDER-')) {
+      query = query.eq('order_number', formattedId);
+    } else {
+      query = query.or(`order_number.eq.${formattedId},order_id.eq.${formattedId}`);
+    }
+
+    const { data, error } = await query.select();
+    if (error) {
+      console.error('Supabase updateOrder error:', error);
+      return { data: null, error };
+    }
+    return { data, error: null };
+  } catch (err) {
+    console.error('updateOrder catch:', err);
+    return { data: null, error: err };
+  }
+}
+
+/**
+ * Sanitizes form payload by turning empty strings into nulls and standardizing numbers
  */
 function cleanPayload(obj) {
   if (!obj) return {};
   const cleaned = { ...obj };
+  if (cleaned.mobile_number) {
+    const raw = String(cleaned.mobile_number).replace(/\D/g, '');
+    cleaned.mobile_number = raw.length === 12 && raw.startsWith('91') ? raw.slice(2) : raw.length === 11 && raw.startsWith('0') ? raw.slice(1) : raw;
+  }
+  if (cleaned.alternate_phone) {
+    const rawAlt = String(cleaned.alternate_phone).replace(/\D/g, '');
+    cleaned.alternate_phone = rawAlt.length === 12 && rawAlt.startsWith('91') ? rawAlt.slice(2) : rawAlt.length === 11 && rawAlt.startsWith('0') ? rawAlt.slice(1) : rawAlt;
+  }
   Object.keys(cleaned).forEach((key) => {
     if (typeof cleaned[key] === 'string' && cleaned[key].trim() === '') {
       cleaned[key] = null;

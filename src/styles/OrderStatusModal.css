@@ -23,10 +23,10 @@
 .order-status-modal-content {
   background: #091322;
   border: 1px solid #1a2c47;
-  border-radius: 14px;
+  border-radius: 16px;
   width: 100%;
-  max-width: 470px;
-  max-height: 85vh;
+  max-width: 620px;
+  max-height: 88vh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.04);
@@ -493,180 +493,365 @@
   transform: translateY(-1px);
 }
 
-/* ── Bill Invoice View (90% Stage) ── */
+/* ── Bill Breadcrumb Navigation (Shown when viewing bill) ── */
+.bill-breadcrumb-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #081525;
+  border-bottom: 1px solid #142842;
+  font-size: 11px;
+}
+
+.bill-breadcrumb-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bill-crumb-stage {
+  color: #10b981;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bill-crumb-stage::before {
+  content: '✓';
+  font-size: 11px;
+}
+
+.bill-crumb-arrow {
+  color: #4b6282;
+  font-size: 13px;
+}
+
+.bill-crumb-active {
+  color: #e2eaf5;
+  font-weight: 700;
+}
+
+.bill-return-stage-link {
+  background: transparent;
+  border: 1px solid #1d3658;
+  color: #38bdf8;
+  font-size: 11px;
+  font-weight: 650;
+  padding: 3px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bill-return-stage-link:hover {
+  background: #0f243d;
+  color: #ffffff;
+  border-color: #38bdf8;
+}
+
+/* ── Bill Invoice View (Authentic POS / Thermal Aesthetic) ── */
 .status-bill-view {
-  background: #060e1a;
-  border: 1px solid #1a2f4c;
-  border-radius: 10px;
-  padding: 12px;
+  background: linear-gradient(180deg, #07111f 0%, #050b14 100%);
+  border: 1px solid #1c3252;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 30px rgba(0, 0, 0, 0.4);
+  position: relative;
 }
 
 .bill-header-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  border-bottom: 1px solid #14253d;
-  padding-bottom: 8px;
-  margin-bottom: 10px;
+  border-bottom: 1.5px dashed #1c3252;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  gap: 12px;
 }
 
-.bill-kicker {
-  font-size: 9.5px;
+.bill-brand-badge {
+  display: inline-block;
+  font-size: 9px;
   font-weight: 800;
-  color: #51b5ff;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
+  color: #38bdf8;
   text-transform: uppercase;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-bottom: 4px;
 }
 
-.bill-title {
-  margin: 2px 0;
-  font-size: 14.5px;
-  font-weight: 750;
+.bill-brand-name {
+  margin: 2px 0 3px 0;
+  font-size: 16px;
+  font-weight: 800;
   color: #ffffff;
+  letter-spacing: 0.02em;
 }
 
-.bill-date {
+.bill-store-sub {
   margin: 0;
   font-size: 10.5px;
-  color: #7289a6;
+  color: #7d93b0;
+  line-height: 1.35;
+}
+
+.bill-invoice-meta-col {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
 }
 
 .bill-status-pill {
   background: #062b1e;
   border: 1px solid #0d6d4a;
   color: #10b981;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 10.5px;
-  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.bill-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+  display: inline-block;
+}
+
+.bill-inv-num {
+  font-size: 13.5px;
+  font-weight: 750;
+  color: #ffffff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.bill-date {
+  margin: 0;
+  font-size: 10px;
+  color: #748ca8;
 }
 
 .bill-customer-card {
-  background: #091525;
-  border: 1px solid #142842;
-  border-radius: 8px;
-  padding: 8px 10px;
-  margin-bottom: 10px;
+  background: #091629;
+  border: 1px solid #162b47;
+  border-radius: 9px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
 }
 
 .bill-info-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.bill-info-item {
+  min-width: 0;
 }
 
 .bill-field-label {
   display: block;
   font-size: 9.5px;
-  color: #6a82a0;
+  font-weight: 700;
+  color: #5e7694;
   text-transform: uppercase;
-  margin-bottom: 2px;
+  letter-spacing: 0.05em;
+  margin-bottom: 3px;
 }
 
 .bill-field-val {
-  font-size: 11.5px;
+  display: block;
+  font-size: 12px;
   color: #e2eaf5;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bill-table-wrap {
   overflow-x: auto;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .bill-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: 11.5px;
 }
 
 .bill-table th {
-  background: #0a1728;
-  color: #8aa0be;
+  background: #0a182b;
+  color: #8fa8c9;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 750;
   text-transform: uppercase;
-  padding: 6px 8px;
-  border-bottom: 1px solid #162942;
+  letter-spacing: 0.05em;
+  padding: 8px 10px;
+  border-top: 1px solid #162c4a;
+  border-bottom: 1px solid #162c4a;
   text-align: left;
 }
 
 .bill-table td {
-  padding: 6px 8px;
-  border-bottom: 1px solid #112035;
-  color: #c4d3e5;
+  padding: 8px 10px;
+  border-bottom: 1px solid #102138;
+  color: #c5d5e8;
+  vertical-align: top;
+}
+
+.bill-qty-pill {
+  background: #0e223d;
+  border: 1px solid #1b385e;
+  color: #38bdf8;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  display: inline-block;
+  white-space: nowrap;
 }
 
 .bill-item-sub {
   display: block;
   font-size: 10px;
-  color: #6a83a3;
-  margin-top: 1px;
+  color: #6b84a3;
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+.bill-calc-row td {
+  padding: 4px 10px;
+  border-bottom: none;
 }
 
 .bill-calc-label {
   text-align: right;
+  font-size: 11px;
+  color: #7d95b5;
   font-weight: 600;
-  color: #7e95b3;
 }
 
 .bill-calc-val {
   text-align: right;
+  font-size: 11.5px;
+  color: #e2eaf5;
   font-weight: 700;
-  color: #ffffff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .bill-grand-total-row td {
-  border-top: 1.5px solid #203a5f;
+  border-top: 2px solid #203e68;
   border-bottom: none;
-  font-size: 13px;
-  font-weight: 800;
-  color: #38bdf8;
-  padding-top: 8px;
+  padding: 10px;
+  background: rgba(8, 121, 249, 0.06);
 }
 
-.bill-actions-row {
+.bill-grand-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffffff;
+  display: block;
+}
+
+.bill-tax-inclusive-tag {
+  font-size: 10px;
+  color: #10b981;
+  font-weight: 600;
+  display: block;
+  margin-top: 2px;
+}
+
+.bill-grand-val {
+  text-align: right;
+  font-size: 17px;
+  font-weight: 900;
+  color: #38bdf8;
+  letter-spacing: -0.01em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* ── Thermal Receipt Verification Strip & Barcode ── */
+.bill-verification-strip {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid #14253d;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1.5px dashed #1c3252;
 }
 
-.status-btn-secondary {
-  background: #0e1e33;
-  border: 1px solid #1c3558;
-  color: #c5d4e7;
-  padding: 5px 12px;
-  border-radius: 7px;
-  font-size: 11px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.status-btn-secondary:hover {
-  background: #142a47;
-  color: #fff;
-}
-
-.status-btn-print {
-  background: #0879f9;
-  border: none;
-  color: #fff;
-  padding: 5px 12px;
-  border-radius: 7px;
-  font-size: 11px;
-  font-weight: 650;
-  display: inline-flex;
+.bill-barcode-wrap {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 5px;
-  cursor: pointer;
-  transition: all 0.15s ease;
+  background: #040a13;
+  border: 1px solid #142844;
+  border-radius: 6px;
+  padding: 6px 10px;
+  flex-shrink: 0;
 }
 
-.status-btn-print:hover {
-  background: #1886ff;
+.bill-barcode-lines {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 2px;
+  font-size: 12px;
+  font-weight: 900;
+  color: #c4d6ed;
+  line-height: 1;
+  user-select: none;
+}
+
+.bill-barcode-text {
+  font-size: 8.5px;
+  color: #637b99;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  margin-top: 3px;
+}
+
+.bill-meta-notes {
+  flex: 1;
+  min-width: 0;
+}
+
+.bill-terminal-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  color: #7d93b0;
+  flex-wrap: wrap;
+  margin-bottom: 3px;
+}
+
+.bill-paid-tag {
+  color: #10b981;
+  background: #06241a;
+  border: 1px solid #0c573b;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 9.5px;
+}
+
+.bill-disclaimer {
+  margin: 0;
+  font-size: 10px;
+  color: #617997;
+  line-height: 1.35;
 }
 
 /* ── Dialog Footer ── */
@@ -744,6 +929,31 @@
   background: #10b981;
 }
 
+.status-footer-btn.print-bill-action {
+  background: #0879f9;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 10px rgba(8, 121, 249, 0.35);
+}
+
+.status-footer-btn.print-bill-action:hover {
+  background: #1a87ff;
+  transform: translateY(-1px);
+}
+
+.status-footer-btn.back-stages {
+  background: #0e1e33;
+  border: 1px solid #1c3558;
+  color: #c5d4e7;
+}
+
+.status-footer-btn.back-stages:hover {
+  background: #142a47;
+  color: #ffffff;
+}
+
 .status-footer-btn.close-action {
   background: #101c2e;
   border: 1px solid #1e334f;
@@ -775,5 +985,121 @@
     width: 100%;
     text-align: center;
     justify-content: center;
+  }
+  .bill-info-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .bill-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .bill-invoice-meta-col {
+    align-items: flex-start;
+    text-align: left;
+    margin-top: 6px;
+  }
+  .bill-verification-strip {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* ── Thermal & Paper Print Rules (@media print) ── */
+@media print {
+  /* Hide non-bill components during print */
+  body * {
+    visibility: hidden;
+  }
+
+  .status-bill-view,
+  .status-bill-view * {
+    visibility: visible;
+  }
+
+  .order-status-overlay {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  .order-status-modal-content {
+    box-shadow: none !important;
+    border: none !important;
+    max-height: none !important;
+    width: 100% !important;
+    background: transparent !important;
+  }
+
+  .status-modal-header,
+  .status-progress-section,
+  .bill-breadcrumb-banner,
+  .status-modal-footer {
+    display: none !important;
+  }
+
+  .status-bill-view {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 80mm !important; /* Ideal standard for thermal POS printer slips */
+    margin: 0 auto;
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: 1px solid #111111 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 10px !important;
+  }
+
+  .bill-brand-name,
+  .bill-inv-num,
+  .bill-field-val,
+  .bill-calc-val,
+  .bill-grand-title,
+  .bill-grand-val {
+    color: #000000 !important;
+  }
+
+  .bill-store-sub,
+  .bill-field-label,
+  .bill-item-sub,
+  .bill-calc-label,
+  .bill-disclaimer,
+  .bill-date,
+  .bill-terminal-meta {
+    color: #444444 !important;
+  }
+
+  .bill-customer-card,
+  .bill-table th,
+  .bill-table td,
+  .bill-barcode-wrap {
+    background: transparent !important;
+    border-color: #222222 !important;
+    color: #000000 !important;
+  }
+
+  .bill-header-row,
+  .bill-verification-strip {
+    border-color: #222222 !important;
+  }
+
+  .bill-brand-badge,
+  .bill-status-pill,
+  .bill-qty-pill,
+  .bill-paid-tag {
+    background: #f0f0f0 !important;
+    color: #000000 !important;
+    border: 1px solid #333333 !important;
+  }
+
+  .bill-status-dot {
+    background: #000000 !important;
+  }
+
+  .bill-grand-total-row td {
+    background: #eeeeee !important;
+    border-top: 2px solid #000000 !important;
   }
 }

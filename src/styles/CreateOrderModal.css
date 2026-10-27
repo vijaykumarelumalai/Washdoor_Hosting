@@ -23,9 +23,9 @@
 .modal {
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 16px;
   width: 100%;
-  max-width: 480px;
+  max-width: 820px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;

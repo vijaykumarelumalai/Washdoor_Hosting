@@ -1,5 +1,5 @@
 // src/lib/supabaseClient.js
-// Proxies to src/utils/supabase.ts for unified client access
+// Proxies to src/utils/supabase.js for unified client access
 
 export {
   supabase,
@@ -8,4 +8,4 @@ export {
   supabaseUrl,
   supabaseKey as supabaseAnonKey,
   supabaseConfigError as supabaseConfigurationError,
-} from '../utils/supabase';
+} from '../utils/supabase.js';

@@ -1,7 +1,7 @@
 // src/__tests__/validation.node.test.js
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateCustomer, friendlySupabaseError, formatPhoneDisplay } from '../utils/validation.js';
+import { validateCustomer, friendlySupabaseError, formatPhoneDisplay, formatDOB, parseDOBInput, normalizeMobileNumber } from '../utils/validation.js';
 import { formatOrderId, formatCustomerId } from '../services/customerService.js';
 
 test('formatOrderId generates canonical 5-digit padded order identifier starting with ORDER', () => {
@@ -131,4 +131,33 @@ test('friendlySupabaseError formats duplicate mobile and constraint errors', () 
 
 test('formatPhoneDisplay formats 10-digit numbers into standard readable form', () => {
   assert.equal(formatPhoneDisplay('9833290123'), '+91 98332 90123');
+  assert.equal(formatPhoneDisplay('+919833290123'), '+91 98332 90123');
+});
+
+test('normalizeMobileNumber strips non-digits and standardizes +91 and 0 prefixes to 10 digits', () => {
+  assert.equal(normalizeMobileNumber('9876543210'), '9876543210');
+  assert.equal(normalizeMobileNumber('+919876543210'), '9876543210');
+  assert.equal(normalizeMobileNumber('+91 98765 43210'), '9876543210');
+  assert.equal(normalizeMobileNumber('09876543210'), '9876543210');
+  assert.equal(normalizeMobileNumber(''), '');
+});
+
+test('validateCustomer accepts numbers with +91 country code and spaces', () => {
+  const withPrefix = {
+    customer_name: 'Ravi Kumar',
+    mobile_number: '+91 98765 43210',
+  };
+  assert.deepEqual(validateCustomer(withPrefix), {});
+});
+
+test('formatDOB formats ISO date to dd-mm-yyyy and handles falsy values', () => {
+  assert.equal(formatDOB('1990-05-15'), '15-05-1990');
+  assert.equal(formatDOB(''), '');
+  assert.equal(formatDOB(null), '');
+});
+
+test('parseDOBInput converts dd-mm-yyyy to ISO yyyy-mm-dd', () => {
+  assert.equal(parseDOBInput('15-05-1990'), '1990-05-15');
+  assert.equal(parseDOBInput('1990-05-15'), '1990-05-15');
+  assert.equal(parseDOBInput(''), '');
 });

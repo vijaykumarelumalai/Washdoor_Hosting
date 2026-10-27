@@ -1,24 +1,38 @@
 // src/utils/validation.js
 // Validation logic for Customer & Order data
 
+export function normalizeMobileNumber(phone) {
+  if (!phone) return '';
+  const digits = String(phone).replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return digits.slice(2);
+  }
+  if (digits.length === 11 && digits.startsWith('0')) {
+    return digits.slice(1);
+  }
+  return digits;
+}
+
 export function validateCustomer(data) {
   const errors = {};
 
   // Required: Customer name
   if (!data.customer_name || !data.customer_name.trim()) {
-    errors.customer_name = 'Please enter a valid name.';
+    errors.customer_name = 'Customer name is required.';
   }
 
-  // Required: Mobile number (exactly 10 numeric digits)
-  if (!data.mobile_number || !data.mobile_number.trim()) {
+  // Required: Mobile number (normalized to 10-digit national number with +91 country code)
+  const cleanMobile = normalizeMobileNumber(data.mobile_number);
+  if (!cleanMobile) {
     errors.mobile_number = 'Mobile number is required.';
-  } else if (!/^[0-9]{10}$/.test(data.mobile_number.trim())) {
+  } else if (!/^[0-9]{10}$/.test(cleanMobile)) {
     errors.mobile_number = 'Enter a valid 10-digit mobile number.';
   }
 
   // Optional: Alternate phone (exactly 10 numeric digits if provided)
   if (data.alternate_phone && data.alternate_phone.trim()) {
-    if (!/^[0-9]{10}$/.test(data.alternate_phone.trim())) {
+    const cleanAlt = normalizeMobileNumber(data.alternate_phone);
+    if (!/^[0-9]{10}$/.test(cleanAlt)) {
       errors.alternate_phone = 'Alternate phone number must contain exactly 10 digits.';
     }
   }
@@ -79,9 +93,36 @@ export function friendlySupabaseError(error) {
 
 export function formatPhoneDisplay(phone) {
   if (!phone) return '';
-  const clean = String(phone).replace(/\D/g, '');
+  const clean = normalizeMobileNumber(phone);
   if (clean.length === 10) {
     return `+91 ${clean.slice(0, 5)} ${clean.slice(5)}`;
   }
   return String(phone);
+}
+
+export function formatDOB(isoDate) {
+  if (!isoDate) return '';
+  const clean = String(isoDate).trim();
+  const parts = clean.split('-');
+  if (parts.length === 3) {
+    const [year, month, day] = parts;
+    return `${day.padStart(2, '0')}-${month.padStart(2, '0')}-${year}`;
+  }
+  return clean;
+}
+
+export function parseDOBInput(input) {
+  if (!input) return '';
+  const clean = String(input).trim();
+  if (/^\d{1,2}[-/.]\d{1,2}[-/.]\d{4}$/.test(clean)) {
+    const parts = clean.split(/[-/.]/);
+    const day = parts[0].padStart(2, '0');
+    const month = parts[1].padStart(2, '0');
+    const year = parts[2];
+    return `${year}-${month}-${day}`;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+    return clean;
+  }
+  return clean;
 }

@@ -1,10 +1,10 @@
-// src/utils/supabase.ts
+// src/utils/supabase.js
 // Reusable Supabase client reading VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 
 // Read environment variables (Vite import.meta.env with fallback to process.env)
-const getEnv = (key: string, fallbackKey?: string): string => {
+const getEnv = (key, fallbackKey) => {
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
     return String(import.meta.env[key]).trim();
   }
@@ -26,7 +26,7 @@ export const supabaseKey =
   getEnv('VITE_SUPABASE_ANON_KEY') ||
   getEnv('REACT_APP_SUPABASE_ANON_KEY');
 
-const isValidUrl = (url: string): boolean => {
+const isValidUrl = (url) => {
   if (!url || /YOUR_PROJECT_REF/i.test(url)) return false;
   try {
     const parsed = new URL(url);
@@ -41,7 +41,7 @@ export const hasValidCredentials =
   Boolean(supabaseKey) &&
   !/YOUR_PUBLISHABLE_KEY|YOUR_ANON_PUBLIC_KEY/i.test(supabaseKey);
 
-export const supabase: SupabaseClient | null = hasValidCredentials
+export const supabase = hasValidCredentials
   ? createClient(supabaseUrl, supabaseKey, {
       auth: {
         persistSession: true,
@@ -50,7 +50,7 @@ export const supabase: SupabaseClient | null = hasValidCredentials
     })
   : null;
 
-export const isSupabaseConfigured = (): boolean => Boolean(supabase);
+export const isSupabaseConfigured = () => Boolean(supabase);
 
 export const supabaseConfigError =
   'Supabase credentials required. Please set VITE_SUPABASE_PUBLISHABLE_KEY in .env.local to connect to your live project.';

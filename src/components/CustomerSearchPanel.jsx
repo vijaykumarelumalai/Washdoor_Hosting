@@ -116,21 +116,46 @@ export default function CustomerSearchPanel({ onSelect, onNewCustomer }) {
           <strong>
             Matching Customers ({results.length})
           </strong>
-          <span>ⓘ Click Select on any customer to create order</span>
         </div>
       )}
+
+      {/* ── Disambiguation Callout (when multiple profiles share a number) ── */}
+      {hasSearched && !loading && (() => {
+        const counts = {};
+        let sharedPhone = null;
+        for (const r of results) {
+          if (r.mobile_number) {
+            counts[r.mobile_number] = (counts[r.mobile_number] || 0) + 1;
+            if (counts[r.mobile_number] > 1) {
+              sharedPhone = r.mobile_number;
+              break;
+            }
+          }
+        }
+        if (!sharedPhone) return null;
+        return (
+          <div className="shared-family-callout">
+            <div className="shared-family-callout-text">
+              <strong>👥 Shared Household Phone: {formatPhoneDisplay(sharedPhone)}</strong>
+              <span>Multiple customer profiles share this contact number. Select the individual below or register another family member:</span>
+            </div>
+            <button
+              type="button"
+              className="shared-family-add-btn"
+              onClick={() => onNewCustomer && onNewCustomer({ mobile_number: sharedPhone })}
+            >
+              + Add Family Member
+            </button>
+          </div>
+        );
+      })()}
 
       {/* ── Customers List (Only shown when searched) ── */}
       {hasSearched && !loading && results.length > 0 && (
         <div className="customer-list" id="customerList">
           {results.map((c, index) => {
             const custId = c.customerId || c.customer_code || c.id || 'CUST-00001';
-            const intakeType = c.intakeType || c.intake_type || 'Walk-In';
-            const commPref = c.communicationPreference || c.communication_pref || 'WhatsApp';
-            const commLang = c.preferredCommunicationLanguage || 'English';
-            const discount = c.defaultDiscountPercentage ?? c.default_discount ?? 0;
-            const zone = c.areaServiceZone || 'Zone 1';
-            const isDnd = Boolean(c.doNotDisturb || c.dnd);
+            const isSharedNumber = results.filter((r) => r.mobile_number && r.mobile_number === c.mobile_number).length > 1;
 
             const initials = c.customer_name
               ? c.customer_name
@@ -151,28 +176,18 @@ export default function CustomerSearchPanel({ onSelect, onNewCustomer }) {
                     <span className="cust-id-pill" style={{ marginRight: '4px' }}>{custId}</span>
                     <span className="customer-name">{c.customer_name}</span>
                     <span className="phone">{formatPhoneDisplay(c.mobile_number)}</span>
-                    <span className="tier">{c.tier || 'SILVER'}</span>
-                    {c.membership_id && (
-                      <span style={{ fontSize: '11px', color: '#8a55ff', background: '#21133c', padding: '2px 7px', borderRadius: '10px' }}>
-                        💳 {c.membership_id}
+                    {isSharedNumber && (
+                      <span className="shared-family-tag" title="Multiple customer profiles share this contact number">
+                        👥 Shared Family
                       </span>
                     )}
+                    <span className="tier">{c.tier || 'SILVER'}</span>
                   </div>
 
                   <div className="address" style={{ marginTop: '5px' }}>
-                    ♧ {c.address || c.streetArea || 'Address not registered'}
+                    📍 {c.address || c.streetArea || 'Address not registered'}
                     {c.city ? `, ${c.city}` : ''}
                     {c.pincode ? ` - ${c.pincode}` : ''}
-                    {c.email && ` • ✉️ ${c.email}`}
-                  </div>
-
-                  {/* ── Badges Row ── */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
-                    <span className="badge-tag badge-intake">📥 {intakeType}</span>
-                    <span className="badge-tag badge-comm">💬 {commPref} ({commLang})</span>
-                    {isDnd && <span className="badge-tag badge-dnd">🔕 DND</span>}
-                    {discount > 0 && <span className="badge-tag badge-discount">🏷️ {discount}% Off</span>}
-                    <span className="badge-tag badge-zone">🗺️ {zone}</span>
                   </div>
                 </div>
                 <button
@@ -180,7 +195,11 @@ export default function CustomerSearchPanel({ onSelect, onNewCustomer }) {
                   className="select"
                   onClick={() => onSelect(c)}
                 >
-                  Select →
+                  <span>Select</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                    <polyline points="12 5 19 12 12 19"></polyline>
+                  </svg>
                 </button>
               </article>
             );

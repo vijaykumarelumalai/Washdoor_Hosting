@@ -3,6 +3,7 @@
 
 import React, { useState } from 'react';
 import { validateCustomer } from '../utils/validation';
+import ClothSelectionCart from './ClothSelectionCart';
 
 const PRODUCT_SERVICES = [
   { id: 'wp', name: 'Wash & Steam Press', icon: '👔' },
@@ -11,6 +12,25 @@ const PRODUCT_SERVICES = [
   { id: 'hl', name: 'Heavy Linens & Quilts', icon: '🛏️' },
   { id: 'ex', name: 'Express 24H Service', icon: '⚡' },
 ];
+
+function getAgeFromDOB(dobStr) {
+  if (!dobStr) return null;
+  const parts = String(dobStr).split('-');
+  if (parts.length !== 3) return null;
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  const birthDate = new Date(year, month, day);
+  if (isNaN(birthDate.getTime())) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age >= 0 && age <= 120 ? age : null;
+}
 
 export default function CustomerForm({
   initialCustomer = null,
@@ -21,8 +41,14 @@ export default function CustomerForm({
   onSubmit,
   isSubmitting = false,
   isOrderFlow = true,
+  isEditOrder = false,
   submitLabel = null,
 }) {
+  const isExistingCustomer = Boolean(
+    (initialCustomer && (initialCustomer.id || initialCustomer.customer_id || initialCustomer.customerId)) ||
+    isEditOrder
+  );
+
   // Primary customer fields
   const [customerName, setCustomerName] = useState(initialCustomer?.customer_name || '');
   const [mobileNumber, setMobileNumber] = useState(initialCustomer?.mobile_number || '');
@@ -54,6 +80,16 @@ export default function CustomerForm({
   const [productCareNotes, setProductCareNotes] = useState(
     initialCustomer?.preference_notes || initialCustomer?.order_notes || ''
   );
+
+  // Cart & Clothes Selection state
+  const [cartData, setCartData] = useState({
+    cart: initialCustomer?.customer_history?.items || initialCustomer?.items || [],
+    subtotal: 0,
+    gstAmount: 0,
+    grandTotal: 0,
+    totalItemCount: 1,
+    careNotes: initialCustomer?.preference_notes || initialCustomer?.order_notes || '',
+  });
 
   // Expandable details state (always hidden/collapsed by default, expanded manually)
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -92,6 +128,7 @@ export default function CustomerForm({
   const [city, setCity] = useState(initialCustomer?.city || '');
   const [pincode, setPincode] = useState(initialCustomer?.pincode || '');
   const [dob, setDob] = useState(initialCustomer?.date_of_birth || '');
+  const calculatedAge = getAgeFromDOB(dob);
   const [mapLink, setMapLink] = useState(initialCustomer?.map_link || '');
   const [customerNotes, setCustomerNotes] = useState(initialCustomer?.notes || '');
 
@@ -99,7 +136,13 @@ export default function CustomerForm({
   const [errors, setErrors] = useState({});
 
   const handleMobileChange = (e) => {
-    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+    let digits = e.target.value.replace(/\D/g, '');
+    if (digits.length === 12 && digits.startsWith('91')) {
+      digits = digits.slice(2);
+    } else if (digits.length === 11 && digits.startsWith('0')) {
+      digits = digits.slice(1);
+    }
+    const val = digits.slice(0, 10);
     setMobileNumber(val);
     if (val.length === 10) {
       setErrors((prev) => ({ ...prev, mobile_number: null }));
@@ -107,7 +150,13 @@ export default function CustomerForm({
   };
 
   const handleAlternatePhoneChange = (e) => {
-    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+    let digits = e.target.value.replace(/\D/g, '');
+    if (digits.length === 12 && digits.startsWith('91')) {
+      digits = digits.slice(2);
+    } else if (digits.length === 11 && digits.startsWith('0')) {
+      digits = digits.slice(1);
+    }
+    const val = digits.slice(0, 10);
     setAlternatePhone(val);
   };
 
@@ -116,11 +165,36 @@ export default function CustomerForm({
     setPincode(val);
   };
 
+  const [addressTag, setAddressTag] = useState(() => {
+    const raw = initialCustomer?.address || '';
+    if (raw.startsWith('Office:')) return 'Office';
+    if (raw.startsWith('Other:')) return 'Other';
+    return 'Home';
+  });
+
+  const handleSelectAddressTag = (tag) => {
+    setAddressTag(tag);
+    const clean = (address || '').replace(/^(Home|Office|Other):\s*/i, '');
+    setAddress(clean ? `${tag}: ${clean}` : `${tag}: `);
+    const addrEl = document.getElementById('addressInput');
+    if (addrEl) addrEl.focus();
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
 
+    // Conditional Address Requirement: Mandatory when On-Call (Pickup / Delivery) is chosen
+    if (intakeMethod === 'on-call' && (!address || !address.trim())) {
+      setErrors((prev) => ({ ...prev, address: 'Address is required for Pickup / Home Delivery orders.' }));
+      const addrEl = document.getElementById('addressInput');
+      if (addrEl) addrEl.focus();
+      return;
+    }
+
     const customerData = {
+      customer_id: initialCustomer?.customerId || initialCustomer?.customer_id || initialCustomer?.id,
       customer_name: customerName,
+      country_code: '+91',
       mobile_number: mobileNumber,
       alternate_phone: alternatePhone,
       address,
@@ -158,25 +232,73 @@ export default function CustomerForm({
     }
 
     setErrors({});
+
+    const cartItems = cartData?.cart || [];
+    const calculatedTotal = cartData?.grandTotal || 0;
+    const calculatedCount = cartData?.totalItemCount || productItemCount || 1;
+    const finalCareNotes = cartData?.careNotes || productCareNotes || orderPreferenceNotes;
+
+    const primaryService = cartItems.length > 0
+      ? (cartItems[0].serviceType ? `${cartItems[0].serviceType}` : productService)
+      : productService;
+
     onSubmit({
       customerData: {
         ...customerData,
         customer_id: customerId || initialCustomer?.id || null,
-        service_category: productService,
-        item_count: productItemCount,
+        service_category: primaryService,
+        item_count: calculatedCount,
         product_weight: productWeight,
         product_garment_type: productGarmentType,
-        order_notes: productCareNotes || internalComments,
+        order_notes: finalCareNotes || internalComments,
+        total_amount: calculatedTotal,
       },
       orderType: intakeMethod,
-      orderPreference: productService,
-      orderPreferenceNotes: productCareNotes,
+      orderPreference: primaryService,
+      orderPreferenceNotes: finalCareNotes,
+      cartItems: cartItems,
+      totalAmount: calculatedTotal,
+      itemCount: calculatedCount,
       existingCustomerId: initialCustomer?.id || null,
     });
   };
 
   return (
     <form className="new-form show" id="newCustomerForm" onSubmit={handleSubmit}>
+      {/* ── Financial Summary Strip (Ledger-Backed, Read-Only) ── */}
+      {isExistingCustomer && (
+        <div className="financial-summary-strip" aria-label="Customer Financial Summary">
+          <div className="financial-card due">
+            <span className="financial-label">Outstanding Due</span>
+            <strong className="financial-val due">
+              ₹{Number(initialCustomer?.outstanding_balance || initialCustomer?.outstandingBalance || 0).toFixed(2)}
+            </strong>
+            <span className="financial-sub">From unpaid orders</span>
+          </div>
+          <div className="financial-card advance">
+            <span className="financial-label">Available Advance</span>
+            <strong className="financial-val advance">
+              ₹{Number(initialCustomer?.available_advance || initialCustomer?.availableAdvance || 0).toFixed(2)}
+            </strong>
+            <span className="financial-sub">Active prepayments</span>
+          </div>
+          <div className="financial-card wallet">
+            <span className="financial-label">Wallet Credit</span>
+            <strong className="financial-val wallet">
+              ₹{Number(initialCustomer?.wallet_balance || initialCustomer?.walletBalance || 0).toFixed(2)}
+            </strong>
+            <span className="financial-sub">Store loyalty balance</span>
+          </div>
+          <div className="financial-card credit-limit">
+            <span className="financial-label">Credit Limit</span>
+            <strong className="financial-val credit">
+              ₹{Number(initialCustomer?.credit_limit || initialCustomer?.creditLimit || 0).toFixed(2)}
+            </strong>
+            <span className="financial-sub">Max allowed postpaid</span>
+          </div>
+        </div>
+      )}
+
       {/* ── Primary Form Grid ── */}
       <div className="form-grid">
         <div className={`field ${errors.customer_name ? 'invalid' : ''}`} id="nameField">
@@ -202,33 +324,81 @@ export default function CustomerForm({
 
         <div className={`field ${errors.mobile_number ? 'invalid' : ''}`} id="phoneField">
           <label htmlFor="phone">Mobile number *</label>
-          <input
-            id="phone"
-            required
-            type="tel"
-            inputMode="numeric"
-            pattern="[0-9]{10}"
-            minLength={10}
-            maxLength={10}
-            autoComplete="tel-national"
-            placeholder="Enter 10-digit mobile number"
-            value={mobileNumber}
-            onChange={handleMobileChange}
-          />
+          <div className="phone-input-wrap">
+            <span className="phone-country-code">+91</span>
+            <input
+              id="phone"
+              required
+              type="tel"
+              inputMode="numeric"
+              pattern="[0-9]{10}"
+              minLength={10}
+              maxLength={10}
+              autoComplete="tel-national"
+              placeholder="Enter 10-digit mobile number"
+              value={mobileNumber}
+              onChange={handleMobileChange}
+            />
+          </div>
           <span className="field-error" id="phoneError">
             {errors.mobile_number || 'Enter a valid 10-digit mobile number.'}
           </span>
         </div>
 
-        <div className="field address-field">
-          <label htmlFor="addressInput">Address (optional)</label>
+        <div className={`field address-field ${errors.address ? 'invalid' : ''}`} id="addressField">
+          <div className="address-label-row">
+            <label htmlFor="addressInput">
+              Address {intakeMethod === 'on-call' ? (
+                <span className="required-flag" style={{ color: '#f87171', fontWeight: '700' }}>* (Required for Pickup / Delivery)</span>
+              ) : (
+                '(optional)'
+              )}
+            </label>
+            <div className="address-tag-chips">
+              <button
+                type="button"
+                className={`address-tag-chip ${addressTag === 'Home' ? 'active' : ''}`}
+                onClick={() => handleSelectAddressTag('Home')}
+              >
+                🏠 Home
+              </button>
+              <button
+                type="button"
+                className={`address-tag-chip ${addressTag === 'Office' ? 'active' : ''}`}
+                onClick={() => handleSelectAddressTag('Office')}
+              >
+                🏢 Office
+              </button>
+              <button
+                type="button"
+                className={`address-tag-chip ${addressTag === 'Other' ? 'active' : ''}`}
+                onClick={() => handleSelectAddressTag('Other')}
+              >
+                📍 Other
+              </button>
+            </div>
+          </div>
           <input
             id="addressInput"
             autoComplete="street-address"
-            placeholder="Enter address, street, area, city"
+            placeholder={
+              intakeMethod === 'on-call'
+                ? 'Enter complete doorstep pickup / delivery address'
+                : 'Enter address, street, area, city (optional for walk-ins)'
+            }
             value={address}
-            onChange={(e) => setAddress(e.target.value)}
+            onChange={(e) => {
+              setAddress(e.target.value);
+              if (e.target.value.trim()) {
+                setErrors((prev) => ({ ...prev, address: null }));
+              }
+            }}
           />
+          {errors.address && (
+            <span className="field-error" id="addressError">
+              {errors.address}
+            </span>
+          )}
         </div>
       </div>
 
@@ -300,129 +470,32 @@ export default function CustomerForm({
             <line x1="9" y1="21" x2="9" y2="9"></line>
           </svg>
           <span className="details-label">
-            Additional Customer Details
+            {isOrderFlow ? 'Clothes Selection, Services & Additional Details' : 'Additional Customer Details'}
           </span>
           <span className="expand-label" id="expandLabel">
             {detailsOpen ? 'Hide' : 'Expand'}
           </span>
-          <span className="chevron" aria-hidden="true">⌄</span>
+          <span className="chevron" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </span>
         </button>
 
         {detailsOpen && (
           <div className="details-content" id="detailsContent">
             <div className="details-fields">
-              {/* ── Product Card (above Address Details & Contact) ── */}
-              <div className="product-card-wrap">
-                <div className="product-card-header">
-                  <div className="product-card-title">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                      <line x1="12" y1="22.08" x2="12" y2="12" />
-                    </svg>
-                    <span>Product &amp; Services</span>
-                  </div>
-                  <span className="product-badge-tag">Service Package</span>
+              {/* ── Cloth Selection & Cart Section (Inside Expanding Panel) ── */}
+              {isOrderFlow && (
+                <div style={{ gridColumn: '1 / -1', width: '100%' }}>
+                  <ClothSelectionCart
+                    initialCart={initialCustomer?.customer_history?.items || initialCustomer?.items || []}
+                    initialCareNotes={orderPreferenceNotes}
+                    isTaxExempt={Boolean(taxExemption)}
+                    onChange={(cData) => setCartData(cData)}
+                  />
                 </div>
-
-                <div className="product-card-body">
-                  {/* Service Packages Selection */}
-                  <div className="product-services-grid">
-                    {PRODUCT_SERVICES.map((srv) => (
-                      <button
-                        key={srv.id}
-                        type="button"
-                        className={`product-service-card ${productService === srv.name ? 'selected' : ''}`}
-                        onClick={() => {
-                          setProductService(srv.name);
-                          setOrderPreference(srv.name);
-                        }}
-                      >
-                        <span className="srv-icon">{srv.icon}</span>
-                        <div className="srv-info">
-                          <span className="srv-name">{srv.name}</span>
-                        </div>
-                        {productService === srv.name && <span className="srv-check">✓</span>}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Garment Type & Count & Weight Grid */}
-                  <div className="product-inputs-grid">
-                    <div className="field">
-                      <label htmlFor="productGarmentType">Garment Category</label>
-                      <select
-                        id="productGarmentType"
-                        value={productGarmentType}
-                        onChange={(e) => setProductGarmentType(e.target.value)}
-                      >
-                        <option value="Standard Daily Wear (Shirts, Tops, Trousers)">Standard Daily Wear (Shirts, Tops, Trousers)</option>
-                        <option value="Premium Formals, Blazers & Suits">Premium Formals, Blazers & Suits</option>
-                        <option value="Silk, Sarees & Designer Wear">Silk, Sarees & Designer Wear</option>
-                        <option value="Bed Linen, Blankets & Quilts">Bed Linen, Blankets & Quilts</option>
-                        <option value="Curtains & Heavy Drapes">Curtains & Heavy Drapes</option>
-                        <option value="Delicate Wash / Woolens">Delicate Wash / Woolens</option>
-                      </select>
-                    </div>
-
-                    <div className="field">
-                      <label htmlFor="productItemCount">Quantity / Count</label>
-                      <div className="product-counter-wrap">
-                        <button
-                          type="button"
-                          className="product-counter-btn"
-                          onClick={() => setProductItemCount(Math.max(1, (productItemCount || 1) - 1))}
-                        >
-                          −
-                        </button>
-                        <input
-                          id="productItemCount"
-                          type="number"
-                          min="1"
-                          max="500"
-                          value={productItemCount}
-                          onChange={(e) => setProductItemCount(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                          className="product-counter-input"
-                        />
-                        <button
-                          type="button"
-                          className="product-counter-btn"
-                          onClick={() => setProductItemCount((productItemCount || 1) + 1)}
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="field">
-                      <label htmlFor="productWeight">Weight (Approx Kg)</label>
-                      <input
-                        id="productWeight"
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        placeholder="e.g. 4.0 kg"
-                        value={productWeight}
-                        onChange={(e) => setProductWeight(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Care Instructions / Notes */}
-                  <div className="field" style={{ gridColumn: '1 / -1', marginTop: '6px' }}>
-                    <label htmlFor="productCareInstructions">Product Care &amp; Handling Notes</label>
-                    <input
-                      id="productCareInstructions"
-                      placeholder="e.g. Wooden hangers, light starch on shirts, gentle rinse for silks"
-                      value={productCareNotes}
-                      onChange={(e) => {
-                        setProductCareNotes(e.target.value);
-                        setOrderPreferenceNotes(e.target.value);
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
+              )}
 
               {/* 1. Address Details & Contact */}
               <div className="details-section-title">Address Details &amp; Contact</div>
@@ -458,15 +531,35 @@ export default function CustomerForm({
                 {errors.email && <span className="field-error">{errors.email}</span>}
               </div>
 
-              {/* 3. Date of Birth */}
+              {/* 3. Date of Birth (Normal Date Picker) */}
               <div className="field">
-                <label htmlFor="dob">Date of Birth (optional)</label>
+                <div className="dob-label-row">
+                  <label htmlFor="dob">Date of Birth (optional)</label>
+                  {calculatedAge !== null && (
+                    <span className="dob-age-pill" title="Calculated Customer Age">
+                      🎂 {calculatedAge} yrs old
+                    </span>
+                  )}
+                  {dob && (
+                    <button
+                      type="button"
+                      className="dob-clear-btn"
+                      onClick={() => setDob('')}
+                      title="Clear date of birth"
+                    >
+                      × Clear
+                    </button>
+                  )}
+                </div>
                 <input
-                  id="dob"
                   type="date"
+                  id="dob"
+                  max={new Date().toISOString().split('T')[0]}
+                  min="1920-01-01"
                   value={dob}
                   onChange={(e) => setDob(e.target.value)}
                 />
+                <small>Select date of birth from calendar. Used for birthday privileges.</small>
               </div>
 
               {/* 4. GST Number */}
@@ -603,7 +696,6 @@ export default function CustomerForm({
                   <option value="Inactive">Inactive</option>
                   <option value="Archived">Archived</option>
                 </select>
-                <small>Historical orders and financial records should be retained when archiving.</small>
               </div>
               <div className="field">
                 <label htmlFor="serviceZone">Area Service Zone</label>
@@ -618,56 +710,6 @@ export default function CustomerForm({
                   <option value="zone-3">Zone 3</option>
                   <option value="outside-zone">Outside service zone</option>
                 </select>
-                <small>Replace sample zones with configured delivery zones.</small>
-              </div>
-              <div className="field">
-                <label htmlFor="creditLimit">Credit Limit (₹)</label>
-                <input
-                  id="creditLimit"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={creditLimit}
-                  onChange={(e) => setCreditLimit(e.target.value)}
-                />
-                <small>Set only by authorized staff when postpaid credit is enabled.</small>
-              </div>
-              <div className="field">
-                <label htmlFor="customerIdDisplay">Customer ID</label>
-                <input
-                  id="customerIdDisplay"
-                  placeholder={initialCustomer?.id ? `ID #${initialCustomer.id}` : 'Assigned automatically by database'}
-                  disabled
-                />
-                <small>Stable ID generated by Supabase PostgreSQL; display-only.</small>
-              </div>
-              <div className="field">
-                <label htmlFor="anniversaryDate">Anniversary Date (optional)</label>
-                <input
-                  id="anniversaryDate"
-                  type="date"
-                  value={anniversaryDate}
-                  onChange={(e) => setAnniversaryDate(e.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="specialOccasion">Other Special Occasion (optional)</label>
-                <input
-                  id="specialOccasion"
-                  placeholder="e.g. birthday, occasion name"
-                  value={specialOccasion}
-                  onChange={(e) => setSpecialOccasion(e.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="specialOccasionDate">Special Occasion Date (optional)</label>
-                <input
-                  id="specialOccasionDate"
-                  type="date"
-                  value={specialOccasionDate}
-                  onChange={(e) => setSpecialOccasionDate(e.target.value)}
-                />
               </div>
 
               {/* 4. Customer & Membership */}
@@ -695,99 +737,91 @@ export default function CustomerForm({
                 />
               </div>
               <div className="field">
-                <label htmlFor="marketingSource">Marketing Source (optional)</label>
-                <select
-                  id="marketingSource"
-                  value={marketingSource}
-                  onChange={(e) => setMarketingSource(e.target.value)}
-                >
-                  <option value="">Select source</option>
-                  <option value="Walk-in">Walk-in</option>
-                  <option value="Referral">Referral</option>
-                  <option value="Google">Google</option>
-                  <option value="Social media">Social media</option>
-                  <option value="Advertisement">Advertisement</option>
-                  <option value="WhatsApp">WhatsApp</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="membershipId">Membership ID (optional)</label>
+                <label htmlFor="creditLimit">Credit Limit (₹)</label>
                 <input
-                  id="membershipId"
-                  placeholder="Assigned membership ID"
-                  value={membershipId}
-                  onChange={(e) => setMembershipId(e.target.value)}
+                  id="creditLimit"
+                  type="number"
+                  min="0"
+                  step="100"
+                  placeholder="0.00"
+                  value={creditLimit}
+                  onChange={(e) => setCreditLimit(e.target.value)}
                 />
+                <small>Approved credit limit for postpaid customer orders.</small>
               </div>
 
-              {/* 5. Customer Insights (read-only) */}
-              <div className="details-section-title">Customer Insights (read-only)</div>
-              <div className="insights-grid">
-                <div className="insight-card">
-                  <span className="insight-label">Customer-wise Sales</span>
-                  <span className="insight-value" id="customerSales">
-                    {initialCustomer ? '₹4,890.00' : '—'}
-                  </span>
-                </div>
-                <div className="insight-card">
-                  <span className="insight-label">Customer Due Report</span>
-                  <span className="insight-value" id="customerDue">
-                    {initialCustomer ? '₹0.00' : '—'}
-                  </span>
-                </div>
-                <div className="insight-card">
-                  <span className="insight-label">Customer Wallet</span>
-                  <span className="insight-value" id="customerWallet">
-                    {initialCustomer ? `₹${Number(initialCustomer.wallet_balance || 0).toFixed(0)}` : '—'}
-                  </span>
-                </div>
-                <div className="insight-card">
-                  <span className="insight-label">Last Visits</span>
-                  <span className="insight-value" id="customerLastVisit">
-                    {initialCustomer ? '3 days ago' : '—'}
-                  </span>
-                </div>
-                <div className="insight-card">
-                  <span className="insight-label">Order Frequency</span>
-                  <span className="insight-value" id="customerFrequency">
-                    {initialCustomer ? '3.2/month' : '—'}
-                  </span>
-                </div>
-              </div>
-              <p className="insight-note">
-                These values are computed live from customer orders, ledger, and wallet history.
-              </p>
+              {/* 5. Customer Insights & 6. Customer History (only shown for existing customers) */}
+              {isExistingCustomer && (
+                <>
+                  {/* 5. Customer Insights (read-only) */}
+                  <div className="details-section-title">Customer Insights (read-only)</div>
+                  <div className="insights-grid">
+                    <div className="insight-card">
+                      <span className="insight-label">Customer-wise Sales</span>
+                      <span className="insight-value" id="customerSales">
+                        {initialCustomer ? '₹4,890.00' : '—'}
+                      </span>
+                    </div>
+                    <div className="insight-card">
+                      <span className="insight-label">Customer Due Report</span>
+                      <span className="insight-value" id="customerDue">
+                        {initialCustomer ? '₹0.00' : '—'}
+                      </span>
+                    </div>
+                    <div className="insight-card">
+                      <span className="insight-label">Customer Wallet</span>
+                      <span className="insight-value" id="customerWallet">
+                        {initialCustomer ? `₹${Number(initialCustomer.wallet_balance || 0).toFixed(0)}` : '—'}
+                      </span>
+                    </div>
+                    <div className="insight-card">
+                      <span className="insight-label">Last Visits</span>
+                      <span className="insight-value" id="customerLastVisit">
+                        {initialCustomer ? '3 days ago' : '—'}
+                      </span>
+                    </div>
+                    <div className="insight-card">
+                      <span className="insight-label">Order Frequency</span>
+                      <span className="insight-value" id="customerFrequency">
+                        {initialCustomer ? '3.2/month' : '—'}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="insight-note">
+                    These values are computed live from customer orders, ledger, and wallet history.
+                  </p>
 
-              {/* 6. Customer History (read-only) */}
-              <div className="details-section-title">Customer History (read-only)</div>
-              <div className="field">
-                <label htmlFor="orderHistory">Order History</label>
-                <textarea
-                  id="orderHistory"
-                  readOnly
-                  placeholder="Customer orders, status, and payment position will appear here."
-                  value={initialCustomer ? `${initialCustomer.orders?.[0]?.count || 0} completed counter orders` : ''}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="complaintHistory">Complaint History</label>
-                <textarea
-                  id="complaintHistory"
-                  readOnly
-                  placeholder="Linked complaints and manual resolution notes will appear here."
-                  value={initialCustomer ? 'No active complaints logged.' : ''}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="activeMembership">Active Customer Plan / Membership</label>
-                <textarea
-                  id="activeMembership"
-                  readOnly
-                  placeholder="Plan, validity, and remaining entitlement will appear here."
-                  value={initialCustomer ? `Tier: ${initialCustomer.tier || 'PLATINUM ELITE'} (Active)` : ''}
-                />
-              </div>
+                  {/* 6. Customer History (read-only) */}
+                  <div className="details-section-title">Customer History (read-only)</div>
+                  <div className="field">
+                    <label htmlFor="orderHistory">Order History</label>
+                    <textarea
+                      id="orderHistory"
+                      readOnly
+                      placeholder="Customer orders, status, and payment position will appear here."
+                      value={initialCustomer ? `${initialCustomer.orders?.[0]?.count || 0} completed counter orders` : ''}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="complaintHistory">Complaint History</label>
+                    <textarea
+                      id="complaintHistory"
+                      readOnly
+                      placeholder="Linked complaints and manual resolution notes will appear here."
+                      value={initialCustomer ? 'No active complaints logged.' : ''}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="activeMembership">Active Customer Plan / Membership</label>
+                    <textarea
+                      id="activeMembership"
+                      readOnly
+                      placeholder="Plan, validity, and remaining entitlement will appear here."
+                      value={initialCustomer ? `Tier: ${initialCustomer.tier || 'PLATINUM ELITE'} (Active)` : ''}
+                    />
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
