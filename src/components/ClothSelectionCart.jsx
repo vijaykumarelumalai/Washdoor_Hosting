@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import ClothIllustration from './ClothIllustration';
+import { getProducts } from '../services/customerService';
 import '../styles/ClothSelectionCart.css';
 
 const CATALOG_ITEMS = [
@@ -36,11 +37,31 @@ export default function ClothSelectionCart({
 }) {
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [catalogItems, setCatalogItems] = useState(CATALOG_ITEMS);
 
   // Selected item in the detail card
   const [selectedProduct, setSelectedProduct] = useState(CATALOG_ITEMS[0]);
   const [selectedService, setSelectedService] = useState('Ironing');
   const [selectedQty, setSelectedQty] = useState(1);
+
+  // Load products from Supabase washdoor_products table
+  useEffect(() => {
+    let isMounted = true;
+    getProducts().then((res) => {
+      if (isMounted && res?.data && res.data.length > 0) {
+        setCatalogItems(res.data);
+        setSelectedProduct((prev) => {
+          if (!prev || prev.id === CATALOG_ITEMS[0].id) {
+            return res.data[0];
+          }
+          return res.data.find((p) => p.id === prev.id || p.name === prev.name) || res.data[0];
+        });
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Cart state
   const [cart, setCart] = useState(() => {
@@ -53,7 +74,7 @@ export default function ClothSelectionCart({
 
   // Filtered products list
   const filteredCatalog = useMemo(() => {
-    return CATALOG_ITEMS.filter((item) => {
+    return catalogItems.filter((item) => {
       const matchCat =
         activeCategory === 'All' ||
         item.category === activeCategory ||
@@ -64,7 +85,7 @@ export default function ClothSelectionCart({
         item.category.toLowerCase().includes(searchQuery.toLowerCase().trim());
       return matchCat && matchSearch;
     });
-  }, [activeCategory, searchQuery]);
+  }, [catalogItems, activeCategory, searchQuery]);
 
   // Price calculations
   const totalItemCount = useMemo(() => {
@@ -252,7 +273,7 @@ export default function ClothSelectionCart({
                     onClick={() => handleSelectProduct(prod)}
                   >
                     <div className="cloth-img-box">
-                      <ClothIllustration itemId={prod.id} size={46} />
+                      <ClothIllustration itemId={prod.id} size={38} />
                     </div>
                     <div className="cloth-item-name" title={prod.name}>
                       {prod.name}
@@ -288,19 +309,6 @@ export default function ClothSelectionCart({
                   </svg>
                   <span className="cloth-detail-title">Selected Item Details</span>
                 </div>
-                {cart.length > 0 && (
-                  <button
-                    type="button"
-                    className="cloth-clear-btn"
-                    onClick={handleClearCart}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                      <polyline points="3 6 5 6 21 6"></polyline>
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    </svg>
-                    <span>Clear Cart</span>
-                  </button>
-                )}
               </div>
 
               {/* Item row preview */}
@@ -321,9 +329,10 @@ export default function ClothSelectionCart({
 
               {/* Service & Qty Controls */}
               <div className="cloth-controls-row">
-                <div className="cloth-ctrl-group">
-                  <label className="cloth-ctrl-label">Service Type</label>
+                <div className="cloth-ctrl-group cloth-service-group">
+                  <label className="cloth-ctrl-label" htmlFor="clothServiceSelect">Service Type</label>
                   <select
+                    id="clothServiceSelect"
                     className="cloth-ctrl-select"
                     value={selectedService}
                     onChange={(e) => setSelectedService(e.target.value)}
@@ -336,13 +345,14 @@ export default function ClothSelectionCart({
                   </select>
                 </div>
 
-                <div className="cloth-ctrl-group">
+                <div className="cloth-ctrl-group cloth-qty-group">
                   <label className="cloth-ctrl-label">Quantity</label>
                   <div className="cloth-stepper">
                     <button
                       type="button"
                       className="cloth-step-btn"
                       onClick={() => setSelectedQty((q) => Math.max(1, q - 1))}
+                      aria-label="Decrease quantity"
                     >
                       −
                     </button>
@@ -351,6 +361,7 @@ export default function ClothSelectionCart({
                       type="button"
                       className="cloth-step-btn"
                       onClick={() => setSelectedQty((q) => q + 1)}
+                      aria-label="Increase quantity"
                     >
                       +
                     </button>
@@ -362,7 +373,7 @@ export default function ClothSelectionCart({
                   className="cloth-btn-add-cart"
                   onClick={handleAddToCart}
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
                     <circle cx="9" cy="21" r="1"></circle>
                     <circle cx="20" cy="21" r="1"></circle>
                     <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
@@ -382,6 +393,20 @@ export default function ClothSelectionCart({
                 </svg>
                 <span className="cloth-detail-title">Cart Items ({cart.length})</span>
               </div>
+              {cart.length > 0 && (
+                <button
+                  type="button"
+                  className="cloth-clear-btn"
+                  onClick={handleClearCart}
+                  title="Remove all items from cart"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                  <span>Clear Cart</span>
+                </button>
+              )}
             </div>
 
             {cart.length === 0 ? (
@@ -406,23 +431,23 @@ export default function ClothSelectionCart({
                       {currencySymbol} {item.rate}
                     </div>
 
-                    <div className="cloth-stepper" style={{ height: '28px' }}>
+                    <div className="cloth-stepper cloth-cart-stepper">
                       <button
                         type="button"
                         className="cloth-step-btn"
-                        style={{ width: '24px', fontSize: '12px' }}
                         onClick={() => handleCartQtyChange(idx, -1)}
+                        aria-label="Decrease quantity"
                       >
                         −
                       </button>
-                      <span className="cloth-step-val" style={{ width: '22px', fontSize: '11.5px' }}>
+                      <span className="cloth-step-val">
                         {item.qty}
                       </span>
                       <button
                         type="button"
                         className="cloth-step-btn"
-                        style={{ width: '24px', fontSize: '12px' }}
                         onClick={() => handleCartQtyChange(idx, 1)}
+                        aria-label="Increase quantity"
                       >
                         +
                       </button>
@@ -437,6 +462,7 @@ export default function ClothSelectionCart({
                       className="cloth-cart-del"
                       onClick={() => handleRemoveCartItem(idx)}
                       title="Remove item"
+                      aria-label="Remove item"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                         <polyline points="3 6 5 6 21 6"></polyline>

@@ -234,8 +234,10 @@ export default function CustomerForm({
     setErrors({});
 
     const cartItems = cartData?.cart || [];
-    const calculatedTotal = cartData?.grandTotal || 0;
-    const calculatedCount = cartData?.totalItemCount || productItemCount || 1;
+    const calculatedTotal = cartItems.length > 0 ? (cartData?.grandTotal || 0) : 0;
+    const calculatedCount = cartItems.length > 0
+      ? (cartData?.totalItemCount ?? cartItems.reduce((s, i) => s + (Number(i.qty) || 1), 0))
+      : 0;
     const finalCareNotes = cartData?.careNotes || productCareNotes || orderPreferenceNotes;
 
     const primaryService = cartItems.length > 0

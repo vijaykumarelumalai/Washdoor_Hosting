@@ -1,8 +1,261 @@
 // src/services/customerService.js
-// 100% Real Database Service connected to Supabase 'washdoor_orders_master'
-// Zero hardcoded mock customer data.
+// 100% Real Database Service connected to Supabase:
+// - 'washdoor_orders_master' (Orders and Customers master)
+// - 'washdoor_products' (Clothes products catalog)
+// - 'washdoor_order_items' (Line items per order)
 
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient.js';
+
+// Default fallback products matching the database seed
+export const DEFAULT_PRODUCTS = [
+  { id: 'shirt', item_code: 'CLOTH-01', name: 'Shirt', category: 'Men', price: 15, base_price: 15, unit: 'piece' },
+  { id: 'tshirt', item_code: 'CLOTH-02', name: 'T-Shirt', category: 'Men', price: 12, base_price: 12, unit: 'piece' },
+  { id: 'formal_pant', item_code: 'CLOTH-03', name: 'Formal Pant', category: 'Men', price: 20, base_price: 20, unit: 'piece' },
+  { id: 'jeans', item_code: 'CLOTH-04', name: 'Jeans', category: 'Men', price: 25, base_price: 25, unit: 'piece' },
+  { id: 'saree', item_code: 'CLOTH-05', name: 'Saree', category: 'Women', price: 60, base_price: 60, unit: 'piece' },
+  { id: 'towel', item_code: 'CLOTH-06', name: 'Towel', category: 'Home Linen', price: 15, base_price: 15, unit: 'piece' },
+  { id: 'chudidar', item_code: 'CLOTH-07', name: 'Chudidar / Salwar', category: 'Women', price: 35, base_price: 35, unit: 'piece' },
+  { id: 'kurti', item_code: 'CLOTH-08', name: 'Kurti', category: 'Women', price: 30, base_price: 30, unit: 'piece' },
+  { id: 'shorts', item_code: 'CLOTH-09', name: 'Shorts', category: 'Kids', secondaryCategory: 'Men', price: 15, base_price: 15, unit: 'piece' },
+  { id: 'bedsheet', item_code: 'CLOTH-10', name: 'Bedsheet', category: 'Home Linen', price: 50, base_price: 50, unit: 'piece' },
+  { id: 'pillow_cover', item_code: 'CLOTH-11', name: 'Pillow Cover', category: 'Home Linen', price: 10, base_price: 10, unit: 'piece' },
+  { id: 'jacket', item_code: 'CLOTH-12', name: 'Jacket', category: 'Men', secondaryCategory: 'Women', price: 50, base_price: 50, unit: 'piece' },
+  { id: 'blazer_suit', item_code: 'CLOTH-13', name: 'Blazer / Suit', category: 'Men', price: 100, base_price: 100, unit: 'piece' },
+  { id: 'sweater', item_code: 'CLOTH-14', name: 'Sweater', category: 'Men', secondaryCategory: 'Women', price: 40, base_price: 40, unit: 'piece' },
+  { id: 'cap', item_code: 'CLOTH-15', name: 'Cap', category: 'Accessories', secondaryCategory: 'Kids', price: 10, base_price: 10, unit: 'piece' },
+  { id: 'curtain', item_code: 'CLOTH-16', name: 'Curtain', category: 'Home Linen', price: 60, base_price: 60, unit: 'piece' },
+];
+
+/**
+ * Fetches all products from Supabase 'washdoor_products'.
+ * Falls back to DEFAULT_PRODUCTS if offline or empty.
+ */
+export async function getProducts() {
+  if (!isSupabaseConfigured()) {
+    return { data: DEFAULT_PRODUCTS, error: null };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('washdoor_products')
+      .select('*')
+      .order('display_order', { ascending: true });
+
+    if (error || !data || data.length === 0) {
+      if (error) console.warn('getProducts query warning:', error.message);
+      return { data: DEFAULT_PRODUCTS, error: null };
+    }
+
+    const products = data.map((row) => ({
+      id: row.item_code ? row.item_code.toLowerCase().replace(/[^a-z0-9]/g, '_') : row.name.toLowerCase().replace(/\s+/g, '_'),
+      product_id: row.product_id,
+      item_code: row.item_code,
+      name: row.name,
+      category: row.category || 'General',
+      secondaryCategory: row.secondary_category || undefined,
+      price: Number(row.base_price || 0),
+      base_price: Number(row.base_price || 0),
+      unit: row.unit || 'piece',
+      isActive: row.is_active,
+      displayOrder: row.display_order,
+    }));
+
+    return { data: products, error: null };
+  } catch (err) {
+    console.warn('getProducts catch fallback:', err);
+    return { data: DEFAULT_PRODUCTS, error: null };
+  }
+}
+
+/**
+ * Creates a new product in Supabase 'washdoor_products'.
+ */
+export async function createProduct(productData) {
+  if (!isSupabaseConfigured()) {
+    return { data: null, error: new Error('Supabase not configured') };
+  }
+
+  try {
+    const newCode = productData.item_code || `CLOTH-${Date.now().toString().slice(-4)}`;
+    const row = {
+      item_code: newCode,
+      name: productData.name,
+      category: productData.category || 'General',
+      secondary_category: productData.secondaryCategory || productData.secondary_category || null,
+      base_price: Number(productData.price || productData.base_price || 0),
+      unit: productData.unit || 'piece',
+      is_active: productData.is_active !== undefined ? Boolean(productData.is_active) : true,
+      display_order: Number(productData.display_order || productData.displayOrder || 99),
+    };
+
+    const { data, error } = await supabase
+      .from('washdoor_products')
+      .insert([row])
+      .select()
+      .single();
+
+    return { data, error };
+  } catch (err) {
+    return { data: null, error: err };
+  }
+}
+
+/**
+ * Updates a product in Supabase 'washdoor_products'.
+ */
+export async function updateProduct(identifier, updateData) {
+  if (!isSupabaseConfigured()) {
+    return { data: null, error: new Error('Supabase not configured') };
+  }
+
+  try {
+    const updateObj = {
+      updated_at: new Date().toISOString(),
+    };
+    if (updateData.name) updateObj.name = updateData.name;
+    if (updateData.category) updateObj.category = updateData.category;
+    if (updateData.secondaryCategory !== undefined) updateObj.secondary_category = updateData.secondaryCategory;
+    if (updateData.price !== undefined || updateData.base_price !== undefined) {
+      updateObj.base_price = Number(updateData.price ?? updateData.base_price);
+    }
+    if (updateData.unit) updateObj.unit = updateData.unit;
+    if (updateData.is_active !== undefined) updateObj.is_active = Boolean(updateData.is_active);
+    if (updateData.display_order !== undefined) updateObj.display_order = Number(updateData.display_order);
+
+    let query = supabase.from('washdoor_products').update(updateObj);
+    if (String(identifier).match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      query = query.eq('product_id', identifier);
+    } else {
+      query = query.eq('item_code', identifier);
+    }
+
+    const { data, error } = await query.select();
+    return { data, error };
+  } catch (err) {
+    return { data: null, error: err };
+  }
+}
+
+/**
+ * Deletes a product from Supabase 'washdoor_products'.
+ */
+export async function deleteProduct(identifier) {
+  if (!isSupabaseConfigured()) {
+    return { error: new Error('Supabase not configured') };
+  }
+
+  try {
+    let query = supabase.from('washdoor_products').delete();
+    if (String(identifier).match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      query = query.eq('product_id', identifier);
+    } else {
+      query = query.eq('item_code', identifier);
+    }
+    const { error } = await query;
+    return { error };
+  } catch (err) {
+    return { error: err };
+  }
+}
+
+/**
+ * Saves order line items to Supabase 'washdoor_order_items'.
+ * Replaces existing items for the order number to ensure synchronization.
+ */
+export async function saveOrderItems(orderNumber, items = []) {
+  if (!orderNumber || !isSupabaseConfigured()) {
+    return { data: [], error: null };
+  }
+
+  const cleanOrderNum = formatOrderId(orderNumber);
+
+  try {
+    // 1. Clear previous items for this order to prevent duplicates
+    await supabase
+      .from('washdoor_order_items')
+      .delete()
+      .eq('order_number', cleanOrderNum);
+
+    if (!items || items.length === 0) {
+      return { data: [], error: null };
+    }
+
+    // 2. Map items to washdoor_order_items schema
+    const rows = items.map((item) => {
+      const rate = Number(item.rate ?? item.price ?? 0);
+      const qty = Math.max(1, parseInt(item.qty || item.quantity || 1, 10));
+      const amount = Number(item.amount ?? (rate * qty));
+
+      return {
+        order_number: cleanOrderNum,
+        product_id: item.product_id || item.item_code || item.id || null,
+        product_name: item.product_name || item.name || 'Garment',
+        service_type: item.serviceType || item.service_type || 'Ironing',
+        rate: rate,
+        quantity: qty,
+        line_amount: amount,
+        care_instructions: item.careNotes || item.care_instructions || null,
+      };
+    });
+
+    const { data, error } = await supabase
+      .from('washdoor_order_items')
+      .insert(rows)
+      .select();
+
+    if (error) {
+      console.warn('saveOrderItems insert error:', error.message);
+      return { data: null, error };
+    }
+
+    return { data, error: null };
+  } catch (err) {
+    console.error('saveOrderItems exception:', err);
+    return { data: null, error: err };
+  }
+}
+
+/**
+ * Fetches order line items from Supabase 'washdoor_order_items'.
+ */
+export async function getOrderItems(orderNumber) {
+  if (!orderNumber || !isSupabaseConfigured()) {
+    return { data: [], error: null };
+  }
+
+  const cleanOrderNum = formatOrderId(orderNumber);
+
+  try {
+    const { data, error } = await supabase
+      .from('washdoor_order_items')
+      .select('*')
+      .eq('order_number', cleanOrderNum)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.warn('getOrderItems query error:', error.message);
+      return { data: [], error };
+    }
+
+    const items = (data || []).map((row, idx) => ({
+      id: row.product_id || `item-${idx + 1}`,
+      name: row.product_name,
+      serviceType: row.service_type,
+      rate: Number(row.rate),
+      qty: Number(row.quantity),
+      amount: Number(row.line_amount),
+      careNotes: row.care_instructions || '',
+      tag: `TAG-G${String(idx + 1).padStart(2, '0')}`,
+      item_id: row.item_id,
+      order_number: row.order_number,
+    }));
+
+    return { data: items, error: null };
+  } catch (err) {
+    console.error('getOrderItems error:', err);
+    return { data: [], error: err };
+  }
+}
 
 // Helper to format any Customer ID into canonical CUST-00001 (5-digit padded) format
 export function formatCustomerId(id) {
@@ -125,7 +378,9 @@ function mapMasterRowToOrder(row) {
     progress: progress,
     total_amount: Number(row.total_amount || 0),
     tax_exemption: Boolean(row.tax_exemption),
-    item_count: Number(row.item_count || (row.customer_history?.items?.reduce((s, i) => s + (Number(i.qty) || 1), 0)) || 1),
+    item_count: row.customer_history?.items && row.customer_history.items.length > 0
+      ? row.customer_history.items.reduce((s, i) => s + (Number(i.qty) || 1), 0)
+      : (row.item_count !== undefined && row.item_count !== null ? Number(row.item_count) : 0),
     items: row.customer_history?.items || [],
     customer_history: row.customer_history || {},
     created_at: row.created_at,
@@ -455,7 +710,7 @@ export async function createOrderWithCustomer({
 
     const calculatedItemCount = (items && items.length > 0)
       ? items.reduce((s, i) => s + (Number(i.qty) || 1), 0)
-      : (cleanCust.item_count ? Number(cleanCust.item_count) : 1);
+      : (cleanCust.item_count !== undefined && cleanCust.item_count !== null ? Number(cleanCust.item_count) : 0);
 
     const masterInsert = {
       order_number: generatedOrderNumber,
@@ -506,6 +761,15 @@ export async function createOrderWithCustomer({
       .single();
 
     if (!insertMasterErr && insertedMaster) {
+      // Synchronize item records to washdoor_order_items table
+      if (items && Array.isArray(items) && items.length > 0) {
+        try {
+          await saveOrderItems(insertedMaster.order_number, items);
+        } catch (itemErr) {
+          console.warn('saveOrderItems async note:', itemErr);
+        }
+      }
+
       return {
         data: {
           order_id: insertedMaster.order_id,
@@ -627,7 +891,7 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
 
     let query = supabase.from('washdoor_orders_master').update(updateObj);
 
-    if (formattedId.startsWith('ORDER-')) {
+    if (formattedId.startsWith('ORDER-') || formattedId.startsWith('WD-')) {
       query = query.eq('order_number', formattedId);
     } else {
       query = query.or(`order_number.eq.${formattedId},order_id.eq.${formattedId}`);
@@ -638,6 +902,47 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       console.error('Supabase updateOrder error:', error);
       return { data: null, error };
     }
+
+    // Synchronize item records to washdoor_order_items table
+    if (updatePayload.items && Array.isArray(updatePayload.items)) {
+      try {
+        await saveOrderItems(formattedId, updatePayload.items);
+      } catch (itemErr) {
+        console.warn('saveOrderItems update note:', itemErr);
+      }
+    }
+
+    // Instant local cache sync
+    try {
+      const cachedRaw = localStorage.getItem('washdoor_orders_cache');
+      if (cachedRaw) {
+        const cachedList = JSON.parse(cachedRaw);
+        const updatedList = cachedList.map((o) => {
+          if (o.order_number === formattedId || o.id === formattedId || o.order_id === formattedId) {
+            return {
+              ...o,
+              total_amount: updatePayload.totalAmount !== undefined ? updatePayload.totalAmount : o.total_amount,
+              item_count: updatePayload.itemCount !== undefined ? updatePayload.itemCount : o.item_count,
+              preference: updatePayload.serviceCategory || o.preference,
+              service_category: updatePayload.serviceCategory || o.service_category,
+              preference_notes: updatePayload.orderNotes !== undefined ? updatePayload.orderNotes : o.preference_notes,
+              customer_name: updatePayload.customerName || o.customer_name,
+              mobile_number: updatePayload.mobileNumber || o.mobile_number,
+              items: updatePayload.items || o.items,
+              customer_history: {
+                ...(o.customer_history || {}),
+                items: updatePayload.items || o.customer_history?.items || [],
+              },
+            };
+          }
+          return o;
+        });
+        localStorage.setItem('washdoor_orders_cache', JSON.stringify(updatedList));
+      }
+    } catch (cacheErr) {
+      console.warn('Cache sync error:', cacheErr);
+    }
+
     return { data, error: null };
   } catch (err) {
     console.error('updateOrder catch:', err);

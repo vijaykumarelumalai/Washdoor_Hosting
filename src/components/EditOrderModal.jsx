@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import ClothIllustration from './ClothIllustration';
-import { updateOrder, searchCustomers } from '../services/customerService';
+import { updateOrder, searchCustomers, getProducts } from '../services/customerService';
 import { normalizeMobileNumber, formatPhoneDisplay } from '../utils/validation';
 import '../styles/EditOrderModal.css';
 
@@ -40,6 +40,20 @@ export default function EditOrderModal({
   // Filter state
   const [activeCategory, setActiveCategory] = useState('All Items');
   const [searchQuery, setSearchQuery] = useState('');
+  const [catalogItems, setCatalogItems] = useState(PRODUCT_CATALOG);
+
+  // Load products from Supabase washdoor_products table
+  useEffect(() => {
+    let isMounted = true;
+    getProducts().then((res) => {
+      if (isMounted && res?.data && res.data.length > 0) {
+        setCatalogItems(res.data);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Cart state
   const [cart, setCart] = useState([]);
@@ -133,7 +147,7 @@ export default function EditOrderModal({
 
   // Filtered Products Catalog
   const filteredProducts = useMemo(() => {
-    return PRODUCT_CATALOG.filter((item) => {
+    return catalogItems.filter((item) => {
       const matchesCategory =
         activeCategory === 'All Items' ||
         item.category === activeCategory ||
@@ -144,7 +158,7 @@ export default function EditOrderModal({
         item.category.toLowerCase().includes(searchQuery.toLowerCase().trim());
       return matchesCategory && matchesSearch;
     });
-  }, [activeCategory, searchQuery]);
+  }, [catalogItems, activeCategory, searchQuery]);
 
   // Cart operations
   const handleAddToCart = (product) => {

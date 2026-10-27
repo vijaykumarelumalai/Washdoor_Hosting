@@ -2,7 +2,7 @@
 // Detailed Expandable Order Review Card matching Washdoor dark Apple-grade aesthetic
 // Displays: 1. Cloth & Tag Details, 2. Delivery & Rider, 3. Instructions & Log, 4. Workflow Pipeline
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { formatPhoneDisplay } from '../utils/validation';
 
 export default function OrderReviewCard({
@@ -27,16 +27,21 @@ export default function OrderReviewCard({
   const [assignedRider, setAssignedRider] = useState('-- Unassigned --');
   const [staffNote, setStaffNote] = useState('');
   const [logNotes, setLogNotes] = useState(
-    order.preference_notes || order.order_notes || 'Auto-booked via Counter POS intake. Doorstep pickup & steam press requested.'
+    order.preference_notes || order.order_notes || 'Instruction log carried here!'
   );
+
+  useEffect(() => {
+    setLogNotes(order.preference_notes || order.order_notes || 'Instruction log carried here!');
+  }, [order.preference_notes, order.order_notes]);
 
   // Garment breakdown
   const weight = order.product_weight || '3.5';
   const preference = order.preference || 'Wash & Steam Press';
   const orderItems = order.customer_history?.items || order.items || [];
-  const itemCount = orderItems.length > 0
+  const hasItems = Array.isArray(orderItems) && orderItems.length > 0;
+  const itemCount = hasItems
     ? orderItems.reduce((acc, item) => acc + (Number(item.qty) || 1), 0)
-    : Number(order.item_count || 2);
+    : 0;
   const totalAmount = Number(order.total_amount || 0);
 
   // Workflow pipeline & badge status:
@@ -172,7 +177,9 @@ export default function OrderReviewCard({
           <div className="review-panel-card">
             <div className="review-panel-head">
               <span className="review-panel-title">⚖️ 1. Cloth &amp; Tag Details</span>
-              <span className="review-badge-purple">{itemCount} pcs</span>
+              <span className={`review-badge-purple ${!hasItems ? 'review-badge-muted' : ''}`}>
+                {itemCount} pcs
+              </span>
             </div>
 
             <div className="review-info-row">
@@ -187,46 +194,54 @@ export default function OrderReviewCard({
             </div>
 
             <div className="review-subhead-label">GARMENT TAGS:</div>
-            <div className="review-garment-tags-list">
-              {orderItems.length > 0 ? (
-                orderItems.map((item, idx) => (
-                  <div key={item.id || idx} className="review-garment-tag-item">
-                    <span className="review-tag-code">TAG-G{String(idx + 1).padStart(2, '0')}</span>
-                    <span className="review-tag-name">
-                      {item.name} {item.serviceType ? `(${item.serviceType})` : ''} × {item.qty}
-                    </span>
-                    <span className="review-tag-price">
-                      {currencySymbol}{Number(item.amount || (item.rate * item.qty)).toFixed(0)}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <>
-                  <div className="review-garment-tag-item">
-                    <span className="review-tag-code">TAG-G01</span>
-                    <span className="review-tag-name">Formal Shirt</span>
-                    <span className="review-tag-price">{currencySymbol}120</span>
-                  </div>
-                  <div className="review-garment-tag-item">
-                    <span className="review-tag-code">TAG-G02</span>
-                    <span className="review-tag-name">Silk Kurta / Trouser</span>
-                    <span className="review-tag-price">{currencySymbol}280</span>
-                  </div>
-                </>
-              )}
-            </div>
 
-            <button
-              type="button"
-              className="review-btn-secondary"
-              onClick={() => onEdit(order)}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-              </svg>
-              <span>Edit Clothes &amp; Tags (Pop-up)</span>
-            </button>
+            {hasItems ? (
+              <>
+                <div className="review-garment-tags-list">
+                  {orderItems.map((item, idx) => (
+                    <div key={item.id || idx} className="review-garment-tag-item">
+                      <span className="review-tag-code">TAG-G{String(idx + 1).padStart(2, '0')}</span>
+                      <span className="review-tag-name">
+                        {item.name} {item.serviceType ? `(${item.serviceType})` : ''} × {item.qty}
+                      </span>
+                      <span className="review-tag-price">
+                        {currencySymbol}{Number(item.amount || (item.rate * item.qty)).toFixed(0)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  className="review-btn-secondary"
+                  onClick={() => onEdit(order)}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                  </svg>
+                  <span>Edit Clothes &amp; Tags (Pop-up)</span>
+                </button>
+              </>
+            ) : (
+              <div className="review-empty-tags-box">
+                <div className="review-empty-tags-msg">
+                  <span style={{ fontSize: '15px' }}>🏷️</span>
+                  <span>No clothes or tags selected yet</span>
+                </div>
+                <button
+                  type="button"
+                  className="review-btn-add-tags"
+                  onClick={() => onEdit(order)}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  <span>+ Add Clothes &amp; Tags (Pop-up)</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Card 2: Delivery & Rider */}

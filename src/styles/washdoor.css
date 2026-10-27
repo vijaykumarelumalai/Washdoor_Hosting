@@ -820,6 +820,63 @@ h1 {
   color: #ffffff;
 }
 
+/* Empty Tag State for Card 1 (When No Products Selected) */
+.review-empty-tags-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #060e1b;
+  border: 1px dashed #1c2e48;
+  border-radius: 10px;
+  padding: 14px 12px;
+  text-align: center;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.review-empty-tags-msg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #8da2be;
+  font-weight: 500;
+}
+
+.review-btn-add-tags {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #0d2347;
+  border: 1.5px solid #0284c7;
+  color: #38bdf8;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.25);
+}
+
+.review-btn-add-tags:hover {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #38bdf8;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.45);
+  transform: translateY(-1px);
+}
+
+.review-badge-muted {
+  background: #151e30 !important;
+  color: #64748b !important;
+  border-color: #223046 !important;
+}
+
 /* Card 2 Specifics */
 .review-address-box {
   display: flex;
@@ -1201,15 +1258,33 @@ h1 {
   overflow-y: auto;
   overflow-x: hidden;
   margin: auto;
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: thin !important;
+  scrollbar-color: #2b3d5b transparent !important;
 }
 
+/* ── Custom Sleek Thin Scrollbar for Modal ── */
 .modal::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Brave, Opera */
-  width: 0;
-  height: 0;
-  background: transparent;
+  display: block !important;
+  width: 5px !important;
+}
+
+.modal::-webkit-scrollbar-track {
+  background: transparent !important;
+  margin: 10px 0 !important;
+}
+
+.modal::-webkit-scrollbar-thumb {
+  background: #2b3d5b !important;
+  border-radius: 10px !important;
+  transition: background 0.2s ease !important;
+}
+
+.modal::-webkit-scrollbar-thumb:hover {
+  background: #4f6b94 !important;
+}
+
+.modal::-webkit-scrollbar-thumb:active {
+  background: #6366f1 !important;
 }
 
 /* ── Hide default browser scrollbars globally ── */

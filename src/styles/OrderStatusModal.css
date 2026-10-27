@@ -1,44 +1,46 @@
 /* src/styles/OrderStatusModal.css */
-/* Compact Styles for Laundry Order Status Dialog (25% -> 50% -> 90%) */
+/* Order Status Dialog matching media_1793093899381_35b99f08.jpg */
 
 .order-status-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(2, 7, 16, 0.78);
+  background: rgba(3, 7, 18, 0.78);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 14px;
+  padding: 16px;
   z-index: 2000;
-  animation: overlayFadeIn 0.16s ease;
+  animation: statusOverlayFade 0.18s ease;
 }
 
-@keyframes overlayFadeIn {
+@keyframes statusOverlayFade {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
-.order-status-modal-content {
-  background: #091322;
-  border: 1px solid #1a2c47;
-  border-radius: 16px;
+.status-modal-card {
+  background: #08101d;
+  border: 1px solid #16243b;
+  border-radius: 22px;
   width: 100%;
-  max-width: 620px;
-  max-height: 88vh;
+  max-width: 600px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.04);
-  animation: modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  animation: statusCardZoom 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
-  color: #cdd9e8;
+  color: #f1f5f9;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  padding: 22px 24px 18px 24px;
+  box-sizing: border-box;
 }
 
-@keyframes modalScaleIn {
+@keyframes statusCardZoom {
   from {
     opacity: 0;
-    transform: translateY(12px) scale(0.98);
+    transform: translateY(10px) scale(0.98);
   }
   to {
     opacity: 1;
@@ -46,1060 +48,603 @@
   }
 }
 
-/* ── Dynamic Header ── */
-.status-modal-header {
+/* ── Top Header Bar ── */
+.status-top-bar {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 16px;
-  border-bottom: 1px solid #16263e;
-  background: #07101c;
-  flex-shrink: 0;
-  position: relative;
-}
-
-.status-header-icon-wrap {
-  position: relative;
-  flex-shrink: 0;
-}
-
-.status-header-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, #093461 0%, #06203d 100%);
-  border: 1px solid #115293;
-  color: #38bdf8;
-  box-shadow: 0 2px 10px rgba(6, 182, 212, 0.18);
-  font-size: 15px;
-}
-
-.status-live-pulse-dot {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #00e5ff;
-  box-shadow: 0 0 6px #00e5ff;
-  border: 1.5px solid #07101c;
-  animation: statusPulse 2s infinite ease-in-out;
-}
-
-@keyframes statusPulse {
-  0% { transform: scale(0.95); opacity: 0.8; }
-  50% { transform: scale(1.3); opacity: 1; box-shadow: 0 0 10px #00e5ff; }
-  100% { transform: scale(0.95); opacity: 0.8; }
-}
-
-.status-header-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.status-dynamic-title {
-  font-size: 14px;
-  font-weight: 750;
-  color: #ffffff;
-  margin: 0;
-  letter-spacing: -0.01em;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.status-order-meta-row {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 2px;
-  font-size: 11px;
-  color: #7d93b0;
-  flex-wrap: wrap;
-}
-
-.status-order-pill {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: #0d2645;
-  border: 1px solid #1c4b82;
-  color: #51b5ff;
-}
-
-.status-customer-name {
-  font-weight: 650;
-  color: #dfe7f5;
-}
-
-.status-phone-tag {
-  color: #8da4c4;
-}
-
-.status-pref-tag {
-  color: #38bdf8;
-  font-size: 10.5px;
-}
-
-.status-meta-separator {
-  color: #3b4e68;
-}
-
-.status-close-btn {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: #798da6;
-  font-size: 18px;
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  line-height: 1;
-  transition: all 0.15s ease;
-  margin-left: auto;
-}
-
-.status-close-btn:hover {
-  background: #142236;
-  color: #ffffff;
-}
-
-/* ── Progress Bar Section ── */
-.status-progress-section {
-  padding: 8px 16px;
-  background: #081424;
-  border-bottom: 1px solid #14243a;
-}
-
-.status-progress-meta-row {
-  display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 5px;
+  margin-bottom: 20px;
 }
 
-.status-progress-label {
-  font-size: 10.5px;
-  font-weight: 650;
-  color: #8ba1bd;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+.status-top-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
-.status-progress-percentage-badge {
-  font-size: 11px;
-  font-weight: 750;
+.status-brand-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #0c2340;
+  border: 1.5px solid #0284c7;
   color: #38bdf8;
-  background: #092a47;
-  border: 1px solid #134e80;
-  padding: 1px 7px;
-  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 0 14px rgba(2, 132, 199, 0.25);
 }
 
-.status-progress-track {
-  height: 5px;
-  background: #0e1c2e;
-  border: 1px solid #182c47;
-  border-radius: 999px;
-  overflow: hidden;
-  position: relative;
-}
-
-.status-progress-fill {
-  height: 100%;
-  border-radius: 999px;
-  transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-  position: relative;
-  background: linear-gradient(90deg, #0879f9 0%, #00d2ff 100%);
-  box-shadow: 0 0 10px rgba(0, 210, 255, 0.45);
-}
-
-.status-progress-fill.stage-1 {
-  background: linear-gradient(90deg, #0879f9 0%, #38bdf8 100%);
-}
-
-.status-progress-fill.stage-2 {
-  background: linear-gradient(90deg, #0879f9 0%, #f59e0b 100%);
-  box-shadow: 0 0 10px rgba(245, 158, 11, 0.35);
-}
-
-.status-progress-fill.stage-3 {
-  background: linear-gradient(90deg, #0879f9 0%, #10b981 70%, #00e5ff 100%);
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.45);
-}
-
-/* ── Modal Body ── */
-.status-modal-body {
-  padding: 12px 16px;
-  overflow-y: auto;
-  max-height: calc(85vh - 140px);
-}
-
-.status-modal-body::-webkit-scrollbar {
-  width: 5px;
-}
-.status-modal-body::-webkit-scrollbar-thumb {
-  background: #1b2d47;
-  border-radius: 5px;
-}
-
-/* ── Stepper List & Cards ── */
-.status-stepper-list {
+.status-meta-column {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 4px;
 }
 
-.status-stage-card {
+.status-main-title {
+  font-size: 20px;
+  font-weight: 750;
+  color: #ffffff;
+  letter-spacing: -0.3px;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.status-meta-tags-row {
   display: flex;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: #091526;
-  border: 1px solid #162740;
-  transition: all 0.2s ease;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: #cbd5e1;
 }
 
-.status-stage-card.current {
-  background: #0b1a30;
-  border-color: #0093dd;
-  box-shadow: 0 0 14px rgba(0, 147, 221, 0.14);
+.status-order-id-pill {
+  background: #0c2a52;
+  color: #38bdf8;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.3px;
 }
 
-.status-stage-card.completed {
-  background: #081320;
-  border-color: #1a3d2e;
+.status-meta-divider {
+  color: #334155;
+  font-weight: 300;
 }
 
-.status-stage-card.pending {
-  opacity: 0.5;
-  background: #07101b;
-  border-color: #122033;
+.status-meta-text {
+  display: flex;
+  align-items: center;
+  color: #cbd5e1;
+  font-weight: 500;
 }
 
-/* Node indicator col */
-.stage-node-col {
+.status-close-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.status-close-icon-btn:hover {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+}
+
+/* ── Content Body ── */
+.status-content-body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Stepper Container ── */
+.status-stepper-container {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.status-nodes-track {
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: 32px;
+  padding-top: 14px;
   flex-shrink: 0;
-  width: 22px;
 }
 
-.stage-node-circle {
-  width: 22px;
-  height: 22px;
+.status-node-dot {
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 10.5px;
+  background: #142236;
+  color: #64748b;
+  font-size: 13px;
   font-weight: 750;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.2s ease;
 }
 
-.stage-node-circle.current {
-  background: #0879f9;
-  color: #fff;
-  border: 1.5px solid #38bdf8;
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+.status-node-dot.completed {
+  background: #10b981;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
 }
 
-.stage-node-circle.completed {
-  background: #0b3d2c;
-  color: #10b981;
-  border: 1.5px solid #10b981;
+.status-node-dot.active {
+  background: #0284c7;
+  color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.25), 0 0 12px rgba(2, 132, 199, 0.4);
 }
 
-.stage-node-circle.pending {
-  background: #0e1c2e;
-  color: #5d728e;
-  border: 1.5px solid #1a2e47;
+.status-track-line {
+  width: 3px;
+  height: 44px;
+  background: #16253b;
+  margin: 3px 0;
+  border-radius: 99px;
+  transition: background 0.2s ease;
 }
 
-.stage-connector-line {
-  width: 2px;
-  flex: 1;
-  min-height: 24px;
-  background: #14243a;
-  margin-top: 4px;
-  border-radius: 1px;
-}
-
-.stage-connector-line.active {
+.status-track-line.completed {
   background: #10b981;
 }
 
-/* Stage Content */
-.stage-content-col {
+/* Stage Cards Column */
+.status-cards-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.status-stage-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid #16253b;
+  background: #091526;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.status-stage-item.completed {
+  background: rgba(6, 78, 59, 0.15);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.status-stage-item.active {
+  background: #081d38;
+  border: 2px solid #0284c7;
+  box-shadow: 0 0 18px rgba(2, 132, 199, 0.2);
+}
+
+.status-item-icon-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.status-item-icon-box.box {
+  background: #0a2e2b;
+  color: #34d399;
+}
+
+.status-item-icon-box.iron {
+  background: #0c3563;
+  color: #38bdf8;
+}
+
+.status-item-icon-box.bag {
+  background: #142236;
+  color: #64748b;
+}
+
+.status-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   flex: 1;
   min-width: 0;
 }
 
-.stage-heading-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 2px;
+.status-item-title {
+  font-size: 15px;
+  font-weight: 750;
+  color: #ffffff;
+  margin: 0;
+  letter-spacing: -0.2px;
 }
 
-.stage-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 7px;
+.status-item-sub {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 0;
 }
 
-.stage-title {
-  font-size: 13px;
+.status-item-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  flex-shrink: 0;
+}
+
+.status-item-badge.completed {
+  background: #064e3b;
+  color: #34d399;
+}
+
+.status-item-badge.current {
+  background: #0369a1;
+  color: #e0f2fe;
+}
+
+.status-item-badge.pending {
+  background: #1a273c;
+  color: #64748b;
+}
+
+/* ── Notice / Info Box ── */
+.status-notice-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #08192e;
+  border: 1px solid #162f52;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+}
+
+.status-notice-icon {
+  color: #38bdf8;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.status-notice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.status-notice-title {
+  font-size: 13.5px;
   font-weight: 750;
   color: #ffffff;
   margin: 0;
 }
 
-.stage-state-pill {
-  font-size: 9.5px;
-  font-weight: 650;
-  padding: 1px 6px;
-  border-radius: 8px;
+.status-notice-desc {
+  font-size: 11.5px;
+  color: #94a3b8;
+  line-height: 1.45;
+  margin: 0;
 }
 
-.stage-state-pill.completed {
-  background: #08291b;
-  color: #10b981;
-  border: 1px solid #115e3c;
-}
-
-.stage-state-pill.current {
-  background: #072a47;
-  color: #38bdf8;
-  border: 1px solid #0093dd;
-}
-
-.stage-state-pill.pending {
-  background: #0d1a29;
-  color: #637895;
-  border: 1px solid #172a40;
-}
-
-.stage-percentage-tag {
-  font-size: 11px;
-  font-weight: 700;
-  color: #8fa5c2;
-}
-
-.stage-short-desc {
-  font-size: 11px;
-  color: #8aa0bc;
-  margin: 2px 0 6px 0;
-  line-height: 1.35;
-}
-
-.stage-checklist {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  background: rgba(0, 0, 0, 0.18);
-  border: 1px solid #14243a;
-  border-radius: 6px;
-  padding: 5px 8px;
-  margin-bottom: 6px;
-}
-
-.stage-check-item {
+/* ── Actions Row ── */
+.status-actions-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: #9ab0cc;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
-.stage-check-item .check-icon.checked {
-  color: #10b981;
-  font-weight: 800;
-}
-
-.stage-check-item .check-icon.current {
-  color: #38bdf8;
-  font-weight: 800;
-}
-
-.stage-check-item .check-icon.pending {
-  color: #4b607d;
-}
-
-/* Stage Action Callout */
-.stage-action-box {
-  margin-top: 6px;
-  padding: 6px 10px;
-  background: #08172c;
-  border: 1px dashed #1a385f;
-  border-radius: 8px;
-}
-
-.action-hint {
+.status-btn-edit-order {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  font-size: 11px;
-  color: #adc2dc;
-  flex-wrap: wrap;
-}
-
-.status-action-btn {
-  padding: 5px 12px;
-  border-radius: 7px;
-  font-size: 11px;
-  font-weight: 700;
+  padding: 11px 20px;
+  font-size: 13px;
+  font-weight: 650;
+  color: #ffffff;
+  background: #0b182b;
+  border: 1px solid #1e3352;
+  border-radius: 10px;
   cursor: pointer;
-  border: none;
   transition: all 0.15s ease;
   white-space: nowrap;
 }
 
-.status-action-btn.primary {
-  background: #0879f9;
+.status-btn-edit-order:hover {
+  background: #142642;
+  border-color: #274b7a;
+}
+
+.status-btn-primary-action {
+  flex: 1.6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 24px;
+  font-size: 13.5px;
+  font-weight: 750;
   color: #ffffff;
-  box-shadow: 0 2px 10px rgba(8, 121, 249, 0.35);
+  background: #0284c7;
+  border: 1px solid #0369a1;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+  transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
-.status-action-btn.primary:hover:not(:disabled) {
-  background: #1a87ff;
-  transform: translateY(-1px);
+.status-btn-primary-action:hover {
+  background: #0369a1;
+  box-shadow: 0 6px 18px rgba(2, 132, 199, 0.45);
 }
 
-.status-action-btn.primary:disabled {
-  opacity: 0.5;
+.status-btn-primary-action:disabled {
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
-.status-action-btn.bill-btn {
-  background: #059669;
-  color: #ffffff;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  box-shadow: 0 2px 10px rgba(5, 150, 105, 0.35);
-}
-
-.status-action-btn.bill-btn:hover {
-  background: #10b981;
-  transform: translateY(-1px);
-}
-
-/* ── Bill Breadcrumb Navigation (Shown when viewing bill) ── */
-.bill-breadcrumb-banner {
+/* ── Footer Strip ── */
+.status-footer-strip {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 16px;
-  background: #081525;
-  border-bottom: 1px solid #142842;
-  font-size: 11px;
+  padding-top: 12px;
+  border-top: 1px solid #142236;
 }
 
-.bill-breadcrumb-left {
+.status-saved-badge {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 550;
 }
 
-.bill-crumb-stage {
-  color: #10b981;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+.status-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
 }
 
-.bill-crumb-stage::before {
-  content: '✓';
-  font-size: 11px;
-}
-
-.bill-crumb-arrow {
-  color: #4b6282;
-  font-size: 13px;
-}
-
-.bill-crumb-active {
-  color: #e2eaf5;
-  font-weight: 700;
-}
-
-.bill-return-stage-link {
-  background: transparent;
-  border: 1px solid #1d3658;
-  color: #38bdf8;
-  font-size: 11px;
+.status-btn-done {
+  padding: 6px 18px;
+  font-size: 12.5px;
   font-weight: 650;
-  padding: 3px 9px;
-  border-radius: 6px;
+  color: #f1f5f9;
+  background: #0c182a;
+  border: 1px solid #1a2c47;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.bill-return-stage-link:hover {
-  background: #0f243d;
-  color: #ffffff;
-  border-color: #38bdf8;
+.status-btn-done:hover {
+  background: #13243d;
+  border-color: #254068;
 }
 
-/* ── Bill Invoice View (Authentic POS / Thermal Aesthetic) ── */
+/* ── Bill View Styling ── */
+.status-bill-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bill-top-back-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.bill-back-btn {
+  background: transparent;
+  border: none;
+  color: #38bdf8;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bill-badge {
+  font-size: 11.5px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
 .status-bill-view {
-  background: linear-gradient(180deg, #07111f 0%, #050b14 100%);
-  border: 1px solid #1c3252;
-  border-radius: 12px;
+  background: #070e1a;
+  border: 1px solid #16253b;
+  border-radius: 14px;
   padding: 16px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 30px rgba(0, 0, 0, 0.4);
-  position: relative;
+  max-height: 480px;
+  overflow-y: auto;
 }
 
 .bill-header-row {
   display: flex;
-  align-items: flex-start;
   justify-content: space-between;
-  border-bottom: 1.5px dashed #1c3252;
+  border-bottom: 1px dashed #1a2c47;
   padding-bottom: 12px;
   margin-bottom: 12px;
-  gap: 12px;
 }
 
 .bill-brand-badge {
-  display: inline-block;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
+  font-size: 10px;
   color: #38bdf8;
-  text-transform: uppercase;
-  background: rgba(56, 189, 248, 0.1);
-  border: 1px solid rgba(56, 189, 248, 0.25);
-  padding: 2px 6px;
-  border-radius: 4px;
-  margin-bottom: 4px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
 }
 
 .bill-brand-name {
-  margin: 2px 0 3px 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   color: #ffffff;
-  letter-spacing: 0.02em;
+  margin: 2px 0;
 }
 
 .bill-store-sub {
+  font-size: 11px;
+  color: #64748b;
   margin: 0;
-  font-size: 10.5px;
-  color: #7d93b0;
-  line-height: 1.35;
 }
 
 .bill-invoice-meta-col {
   text-align: right;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 3px;
+  gap: 2px;
 }
 
 .bill-status-pill {
-  background: #062b1e;
-  border: 1px solid #0d6d4a;
+  font-size: 10.5px;
+  font-weight: 750;
   color: #10b981;
-  padding: 3px 9px;
-  border-radius: 12px;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.03em;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
+  justify-content: flex-end;
 }
 
 .bill-status-dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: #10b981;
-  box-shadow: 0 0 6px #10b981;
-  display: inline-block;
 }
 
 .bill-inv-num {
-  font-size: 13.5px;
-  font-weight: 750;
-  color: #ffffff;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: #f1f5f9;
+  font-weight: 600;
 }
 
 .bill-date {
-  margin: 0;
-  font-size: 10px;
-  color: #748ca8;
+  font-size: 10.5px;
+  color: #64748b;
 }
 
 .bill-customer-card {
-  background: #091629;
-  border: 1px solid #162b47;
-  border-radius: 9px;
+  background: #0b172a;
+  border-radius: 10px;
   padding: 10px 12px;
   margin-bottom: 12px;
 }
 
 .bill-info-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-}
-
-.bill-info-item {
-  min-width: 0;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
 }
 
 .bill-field-label {
+  font-size: 10.5px;
+  color: #64748b;
   display: block;
-  font-size: 9.5px;
-  font-weight: 700;
-  color: #5e7694;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 3px;
 }
 
 .bill-field-val {
-  display: block;
   font-size: 12px;
-  color: #e2eaf5;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: #ffffff;
 }
 
 .bill-table-wrap {
-  overflow-x: auto;
-  margin-bottom: 12px;
+  width: 100%;
 }
 
 .bill-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11.5px;
 }
 
 .bill-table th {
-  background: #0a182b;
-  color: #8fa8c9;
-  font-size: 10px;
-  font-weight: 750;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 8px 10px;
-  border-top: 1px solid #162c4a;
-  border-bottom: 1px solid #162c4a;
+  font-size: 10.5px;
+  color: #64748b;
   text-align: left;
+  border-bottom: 1px solid #16253b;
+  padding: 6px 4px;
 }
 
 .bill-table td {
-  padding: 8px 10px;
-  border-bottom: 1px solid #102138;
-  color: #c5d5e8;
-  vertical-align: top;
-}
-
-.bill-qty-pill {
-  background: #0e223d;
-  border: 1px solid #1b385e;
-  color: #38bdf8;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 7px;
-  border-radius: 6px;
-  display: inline-block;
-  white-space: nowrap;
+  font-size: 11.5px;
+  color: #cbd5e1;
+  padding: 8px 4px;
+  border-bottom: 1px solid #0f1c30;
 }
 
 .bill-item-sub {
   display: block;
   font-size: 10px;
-  color: #6b84a3;
-  margin-top: 2px;
-  line-height: 1.35;
+  color: #64748b;
+}
+
+.bill-qty-pill {
+  font-size: 10.5px;
+  background: #142236;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #94a3b8;
 }
 
 .bill-calc-row td {
-  padding: 4px 10px;
-  border-bottom: none;
+  padding: 4px;
+  border: none;
 }
 
 .bill-calc-label {
   text-align: right;
-  font-size: 11px;
-  color: #7d95b5;
-  font-weight: 600;
+  color: #64748b;
 }
 
 .bill-calc-val {
   text-align: right;
-  font-size: 11.5px;
-  color: #e2eaf5;
-  font-weight: 700;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #cbd5e1;
 }
 
-.bill-grand-total-row td {
-  border-top: 2px solid #203e68;
-  border-bottom: none;
-  padding: 10px;
-  background: rgba(8, 121, 249, 0.06);
+.bill-total-row td {
+  padding: 8px 4px;
+  border-top: 1px dashed #1e3352;
 }
 
-.bill-grand-title {
-  font-size: 13px;
-  font-weight: 800;
-  color: #ffffff;
-  display: block;
-}
-
-.bill-tax-inclusive-tag {
-  font-size: 10px;
-  color: #10b981;
-  font-weight: 600;
-  display: block;
-  margin-top: 2px;
-}
-
-.bill-grand-val {
+.bill-total-label {
   text-align: right;
-  font-size: 17px;
-  font-weight: 900;
+  font-weight: 800;
   color: #38bdf8;
-  letter-spacing: -0.01em;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-/* ── Thermal Receipt Verification Strip & Barcode ── */
-.bill-verification-strip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1.5px dashed #1c3252;
-}
-
-.bill-barcode-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  background: #040a13;
-  border: 1px solid #142844;
-  border-radius: 6px;
-  padding: 6px 10px;
-  flex-shrink: 0;
-}
-
-.bill-barcode-lines {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  letter-spacing: 2px;
   font-size: 12px;
-  font-weight: 900;
-  color: #c4d6ed;
-  line-height: 1;
-  user-select: none;
 }
 
-.bill-barcode-text {
-  font-size: 8.5px;
-  color: #637b99;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  margin-top: 3px;
+.bill-total-val {
+  text-align: right;
+  font-weight: 800;
+  color: #38bdf8;
+  font-size: 14px;
 }
 
-.bill-meta-notes {
-  flex: 1;
-  min-width: 0;
-}
-
-.bill-terminal-meta {
+.bill-bottom-actions {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 10.5px;
-  color: #7d93b0;
-  flex-wrap: wrap;
-  margin-bottom: 3px;
-}
-
-.bill-paid-tag {
-  color: #10b981;
-  background: #06241a;
-  border: 1px solid #0c573b;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 9.5px;
-}
-
-.bill-disclaimer {
-  margin: 0;
-  font-size: 10px;
-  color: #617997;
-  line-height: 1.35;
-}
-
-/* ── Dialog Footer ── */
-.status-modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 9px 16px;
-  background: #07101b;
-  border-top: 1px solid #14243a;
-  flex-shrink: 0;
-}
-
-.status-saved-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 10.5px;
-  color: #10b981;
-  background: #062217;
-  border: 1px solid #0c5338;
-  padding: 2px 7px;
-  border-radius: 10px;
-}
-
-.saved-indicator {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #10b981;
-  box-shadow: 0 0 5px #10b981;
-}
-
-.status-footer-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.status-footer-btn {
-  padding: 6px 14px;
-  border-radius: 8px;
-  font-size: 11.5px;
-  font-weight: 700;
-  cursor: pointer;
-  border: none;
-  transition: all 0.15s ease;
-}
-
-.status-footer-btn.advance {
-  background: #0879f9;
-  color: #ffffff;
-  box-shadow: 0 2px 10px rgba(8, 121, 249, 0.35);
-}
-
-.status-footer-btn.advance:hover:not(:disabled) {
-  background: #1a87ff;
-}
-
-.status-footer-btn.advance:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.status-footer-btn.view-bill-special {
-  background: #059669;
-  color: #ffffff;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  box-shadow: 0 2px 10px rgba(5, 150, 105, 0.3);
-}
-
-.status-footer-btn.view-bill-special:hover {
-  background: #10b981;
-}
-
-.status-footer-btn.print-bill-action {
-  background: #0879f9;
-  color: #ffffff;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  box-shadow: 0 2px 10px rgba(8, 121, 249, 0.35);
-}
-
-.status-footer-btn.print-bill-action:hover {
-  background: #1a87ff;
-  transform: translateY(-1px);
-}
-
-.status-footer-btn.back-stages {
-  background: #0e1e33;
-  border: 1px solid #1c3558;
-  color: #c5d4e7;
-}
-
-.status-footer-btn.back-stages:hover {
-  background: #142a47;
-  color: #ffffff;
-}
-
-.status-footer-btn.close-action {
-  background: #101c2e;
-  border: 1px solid #1e334f;
-  color: #c7d5e6;
-}
-
-.status-footer-btn.close-action:hover {
-  background: #172740;
-  color: #ffffff;
-}
-
-@media (max-width: 600px) {
-  .order-status-modal-content {
-    max-height: 94vh;
-    border-radius: 12px;
-  }
-  .status-modal-header,
-  .status-progress-section,
-  .status-modal-body,
-  .status-modal-footer {
-    padding-left: 12px;
-    padding-right: 12px;
-  }
-  .action-hint {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .status-action-btn {
-    width: 100%;
-    text-align: center;
-    justify-content: center;
-  }
-  .bill-info-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .bill-header-row {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .bill-invoice-meta-col {
-    align-items: flex-start;
-    text-align: left;
-    margin-top: 6px;
-  }
-  .bill-verification-strip {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-}
-
-/* ── Thermal & Paper Print Rules (@media print) ── */
-@media print {
-  /* Hide non-bill components during print */
-  body * {
-    visibility: hidden;
-  }
-
-  .status-bill-view,
-  .status-bill-view * {
-    visibility: visible;
-  }
-
-  .order-status-overlay {
-    position: static !important;
-    background: transparent !important;
-    padding: 0 !important;
-  }
-
-  .order-status-modal-content {
-    box-shadow: none !important;
-    border: none !important;
-    max-height: none !important;
-    width: 100% !important;
-    background: transparent !important;
-  }
-
-  .status-modal-header,
-  .status-progress-section,
-  .bill-breadcrumb-banner,
-  .status-modal-footer {
-    display: none !important;
-  }
-
-  .status-bill-view {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100% !important;
-    max-width: 80mm !important; /* Ideal standard for thermal POS printer slips */
-    margin: 0 auto;
-    background: #ffffff !important;
-    color: #000000 !important;
-    border: 1px solid #111111 !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    padding: 10px !important;
-  }
-
-  .bill-brand-name,
-  .bill-inv-num,
-  .bill-field-val,
-  .bill-calc-val,
-  .bill-grand-title,
-  .bill-grand-val {
-    color: #000000 !important;
-  }
-
-  .bill-store-sub,
-  .bill-field-label,
-  .bill-item-sub,
-  .bill-calc-label,
-  .bill-disclaimer,
-  .bill-date,
-  .bill-terminal-meta {
-    color: #444444 !important;
-  }
-
-  .bill-customer-card,
-  .bill-table th,
-  .bill-table td,
-  .bill-barcode-wrap {
-    background: transparent !important;
-    border-color: #222222 !important;
-    color: #000000 !important;
-  }
-
-  .bill-header-row,
-  .bill-verification-strip {
-    border-color: #222222 !important;
-  }
-
-  .bill-brand-badge,
-  .bill-status-pill,
-  .bill-qty-pill,
-  .bill-paid-tag {
-    background: #f0f0f0 !important;
-    color: #000000 !important;
-    border: 1px solid #333333 !important;
-  }
-
-  .bill-status-dot {
-    background: #000000 !important;
-  }
-
-  .bill-grand-total-row td {
-    background: #eeeeee !important;
-    border-top: 2px solid #000000 !important;
-  }
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
 }
