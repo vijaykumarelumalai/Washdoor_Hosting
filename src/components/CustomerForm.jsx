@@ -132,6 +132,39 @@ export default function CustomerForm({
   const [mapLink, setMapLink] = useState(initialCustomer?.map_link || '');
   const [customerNotes, setCustomerNotes] = useState(initialCustomer?.notes || '');
 
+  // Address Details & Additional Addresses state
+  const [addressLine1, setAddressLine1] = useState(initialCustomer?.address || '');
+  const [additionalAddresses, setAdditionalAddresses] = useState(
+    Array.isArray(initialCustomer?.additional_addresses) ? initialCustomer.additional_addresses : []
+  );
+  const [addressDetailsOpen, setAddressDetailsOpen] = useState(true);
+  const [businessDetailsOpen, setBusinessDetailsOpen] = useState(true);
+
+  const handleAddAdditionalAddress = () => {
+    setAdditionalAddresses((prev) => [
+      ...prev,
+      {
+        id: Date.now() + Math.random(),
+        addressLine: '',
+        city: '',
+        pincode: '',
+        mapLink: '',
+        altPhone: '',
+        email: '',
+      },
+    ]);
+  };
+
+  const handleRemoveAdditionalAddress = (id) => {
+    setAdditionalAddresses((prev) => prev.filter((addr) => addr.id !== id));
+  };
+
+  const handleAdditionalAddressChange = (id, field, value) => {
+    setAdditionalAddresses((prev) =>
+      prev.map((addr) => (addr.id === id ? { ...addr, [field]: value } : addr))
+    );
+  };
+
   // Validation errors
   const [errors, setErrors] = useState({});
 
@@ -197,7 +230,8 @@ export default function CustomerForm({
       country_code: '+91',
       mobile_number: mobileNumber,
       alternate_phone: alternatePhone,
-      address,
+      address: addressLine1 || address,
+      additional_addresses: additionalAddresses,
       city,
       pincode,
       date_of_birth: dob,
@@ -499,141 +533,500 @@ export default function CustomerForm({
                 </div>
               )}
 
-              {/* 1. Address Details & Contact */}
-              <div className="details-section-title">Address Details &amp; Contact</div>
+              {/* ── 1. Address Details Card (Collapsible) ── */}
+              <div className="addr-section-card">
+                <div className="addr-card-header">
+                  <div className="addr-card-title">
+                    <span className="addr-card-title-icon">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                        <circle cx="12" cy="10" r="3"></circle>
+                      </svg>
+                    </span>
+                    <span>Address Details</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="addr-card-toggle"
+                    onClick={() => setAddressDetailsOpen(!addressDetailsOpen)}
+                    aria-label="Toggle Address Details"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{
+                        transform: addressDetailsOpen ? 'rotate(0deg)' : 'rotate(180deg)',
+                        transition: 'transform 0.2s ease',
+                      }}
+                    >
+                      <polyline points="18 15 12 9 6 15"></polyline>
+                    </svg>
+                  </button>
+                </div>
 
-              {/* 1. Alternate Phone No */}
-              <div className={`field ${errors.alternate_phone ? 'invalid' : ''}`} id="alternatePhoneField">
-                <label htmlFor="alternatePhone">Alternate Phone No (optional)</label>
-                <input
-                  id="alternatePhone"
-                  type="tel"
-                  inputMode="numeric"
-                  pattern="[0-9]{10}"
-                  maxLength={10}
-                  placeholder="Enter 10-digit alternate number"
-                  value={alternatePhone}
-                  onChange={handleAlternatePhoneChange}
-                />
-                {errors.alternate_phone && (
-                  <span className="field-error">{errors.alternate_phone}</span>
+                {addressDetailsOpen && (
+                  <>
+                    <div className="addr-fields-grid">
+                      {/* Address Line */}
+                      <div className="addr-field-group">
+                        <label className="addr-field-label" htmlFor="addrLine1">
+                          Address Line
+                        </label>
+                        <div className="addr-input-wrap">
+                          <span className="addr-input-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                              <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                            </svg>
+                          </span>
+                          <input
+                            id="addrLine1"
+                            className="addr-input"
+                            placeholder="Enter address line"
+                            value={addressLine1}
+                            onChange={(e) => {
+                              setAddressLine1(e.target.value);
+                              setAddress(e.target.value);
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* City */}
+                      <div className="addr-field-group">
+                        <label className="addr-field-label" htmlFor="addrCity1">
+                          City
+                        </label>
+                        <div className="addr-input-wrap">
+                          <span className="addr-input-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+                              <line x1="9" y1="6" x2="9" y2="6.01"></line>
+                              <line x1="15" y1="6" x2="15" y2="6.01"></line>
+                              <line x1="9" y1="10" x2="9" y2="10.01"></line>
+                              <line x1="15" y1="10" x2="15" y2="10.01"></line>
+                              <line x1="9" y1="14" x2="9" y2="14.01"></line>
+                              <line x1="15" y1="14" x2="15" y2="14.01"></line>
+                              <line x1="9" y1="18" x2="15" y2="18"></line>
+                            </svg>
+                          </span>
+                          <input
+                            id="addrCity1"
+                            className="addr-input"
+                            placeholder="Enter city"
+                            value={city}
+                            onChange={(e) => setCity(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Pincode */}
+                      <div className="addr-field-group">
+                        <label className="addr-field-label" htmlFor="addrPincode1">
+                          Pincode
+                        </label>
+                        <div className="addr-input-wrap">
+                          <span className="addr-input-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                              <circle cx="12" cy="10" r="3"></circle>
+                            </svg>
+                          </span>
+                          <input
+                            id="addrPincode1"
+                            className="addr-input"
+                            inputMode="numeric"
+                            maxLength={6}
+                            placeholder="Enter 6-digit pincode"
+                            value={pincode}
+                            onChange={handlePincodeChange}
+                          />
+                        </div>
+                        {errors.pincode && <span className="field-error">{errors.pincode}</span>}
+                      </div>
+
+                      {/* Map Link */}
+                      <div className="addr-field-group">
+                        <label className="addr-field-label" htmlFor="addrMapLink1">
+                          Map Link
+                        </label>
+                        <div className="addr-input-wrap">
+                          <span className="addr-input-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                            </svg>
+                          </span>
+                          <input
+                            id="addrMapLink1"
+                            className="addr-input"
+                            type="url"
+                            placeholder="https://maps.google.com/..."
+                            value={mapLink}
+                            onChange={(e) => setMapLink(e.target.value)}
+                          />
+                        </div>
+                        {errors.map_link && <span className="field-error">{errors.map_link}</span>}
+                      </div>
+
+                      {/* Alternative Phone No. */}
+                      <div className="addr-field-group">
+                        <label className="addr-field-label" htmlFor="addrAltPhone1">
+                          Alternative Phone No.
+                        </label>
+                        <div className="addr-input-wrap">
+                          <span className="addr-input-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                            </svg>
+                          </span>
+                          <input
+                            id="addrAltPhone1"
+                            className="addr-input"
+                            type="tel"
+                            inputMode="numeric"
+                            maxLength={10}
+                            placeholder="Enter 10-digit number"
+                            value={alternatePhone}
+                            onChange={handleAlternatePhoneChange}
+                          />
+                        </div>
+                        {errors.alternate_phone && <span className="field-error">{errors.alternate_phone}</span>}
+                      </div>
+
+                      {/* Email */}
+                      <div className="addr-field-group">
+                        <label className="addr-field-label" htmlFor="addrEmail1">
+                          Email
+                        </label>
+                        <div className="addr-input-wrap">
+                          <span className="addr-input-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                              <polyline points="22,6 12,13 2,6"></polyline>
+                            </svg>
+                          </span>
+                          <input
+                            id="addrEmail1"
+                            className="addr-input"
+                            type="email"
+                            placeholder="name@example.com"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                          />
+                        </div>
+                        {errors.email && <span className="field-error">{errors.email}</span>}
+                      </div>
+
+                      {/* Date of Birth */}
+                      <div className="addr-field-group">
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <label className="addr-field-label" htmlFor="dob">Date of Birth</label>
+                          {calculatedAge !== null && (
+                            <span className="dob-age-pill" style={{ fontSize: '11px', padding: '1px 6px' }} title="Calculated Customer Age">
+                              🎂 {calculatedAge} yrs old
+                            </span>
+                          )}
+                        </div>
+                        <div className="addr-input-wrap">
+                          <span className="addr-input-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                              <line x1="16" y1="2" x2="16" y2="6"></line>
+                              <line x1="8" y1="2" x2="8" y2="6"></line>
+                              <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                          </span>
+                          <input
+                            type="date"
+                            className="addr-input"
+                            id="dob"
+                            max={new Date().toISOString().split('T')[0]}
+                            min="1920-01-01"
+                            value={dob}
+                            onChange={(e) => setDob(e.target.value)}
+                            style={{ colorScheme: 'dark' }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* + Add Additional Address Button */}
+                    <div className="addr-add-btn-wrap">
+                      <button
+                        type="button"
+                        className="addr-add-btn"
+                        onClick={handleAddAdditionalAddress}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="12" y1="5" x2="12" y2="19"></line>
+                          <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <span>Add Additional Address</span>
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
 
-              {/* 2. Email */}
-              <div className={`field ${errors.email ? 'invalid' : ''}`}>
-                <label htmlFor="customerEmail">Email (optional)</label>
-                <input
-                  id="customerEmail"
-                  type="email"
-                  placeholder="name@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-                {errors.email && <span className="field-error">{errors.email}</span>}
-              </div>
+              {/* ── 2. Additional Address Card(s) (Dynamic 1, 2, 3, 5+) ── */}
+              {additionalAddresses.map((addr, idx) => {
+                const num = idx + 2;
+                return (
+                  <div key={addr.id} className="addr-section-card additional-addr">
+                    <div className="addr-card-header">
+                      <div className="addr-card-title">
+                        <span className="addr-card-title-icon">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                            <circle cx="12" cy="10" r="3"></circle>
+                          </svg>
+                        </span>
+                        <span>Additional Address</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="addr-card-remove-btn"
+                        onClick={() => handleRemoveAdditionalAddress(addr.id)}
+                        title="Remove this additional address"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"></polyline>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                        <span>Remove</span>
+                      </button>
+                    </div>
 
-              {/* 3. Date of Birth (Normal Date Picker) */}
-              <div className="field">
-                <div className="dob-label-row">
-                  <label htmlFor="dob">Date of Birth (optional)</label>
-                  {calculatedAge !== null && (
-                    <span className="dob-age-pill" title="Calculated Customer Age">
-                      🎂 {calculatedAge} yrs old
+                    <div className="addr-fields-grid">
+                      {/* Address Line N */}
+                      <div className="addr-field-group">
+                        <label className="addr-field-label">Address Line {num}</label>
+                        <div className="addr-input-wrap">
+                          <span className="addr-input-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                              <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                            </svg>
+                          </span>
+                          <input
+                            className="addr-input"
+                            placeholder={`Enter address line ${num}`}
+                            value={addr.addressLine || ''}
+                            onChange={(e) => handleAdditionalAddressChange(addr.id, 'addressLine', e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {/* City N */}
+                      <div className="addr-field-group">
+                        <label className="addr-field-label">City {num}</label>
+                        <div className="addr-input-wrap">
+                          <span className="addr-input-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+                              <line x1="9" y1="6" x2="9" y2="6.01"></line>
+                              <line x1="15" y1="6" x2="15" y2="6.01"></line>
+                              <line x1="9" y1="10" x2="9" y2="10.01"></line>
+                              <line x1="15" y1="10" x2="15" y2="10.01"></line>
+                              <line x1="9" y1="14" x2="9" y2="14.01"></line>
+                              <line x1="15" y1="14" x2="15" y2="14.01"></line>
+                              <line x1="9" y1="18" x2="15" y2="18"></line>
+                            </svg>
+                          </span>
+                          <input
+                            className="addr-input"
+                            placeholder={`Enter city ${num}`}
+                            value={addr.city || ''}
+                            onChange={(e) => handleAdditionalAddressChange(addr.id, 'city', e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Pincode N */}
+                      <div className="addr-field-group">
+                        <label className="addr-field-label">Pincode {num}</label>
+                        <div className="addr-input-wrap">
+                          <span className="addr-input-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                              <circle cx="12" cy="10" r="3"></circle>
+                            </svg>
+                          </span>
+                          <input
+                            className="addr-input"
+                            inputMode="numeric"
+                            maxLength={6}
+                            placeholder={`Enter 6-digit pincode ${num}`}
+                            value={addr.pincode || ''}
+                            onChange={(e) => handleAdditionalAddressChange(addr.id, 'pincode', e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Map Link N */}
+                      <div className="addr-field-group">
+                        <label className="addr-field-label">Map Link {num}</label>
+                        <div className="addr-input-wrap">
+                          <span className="addr-input-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                            </svg>
+                          </span>
+                          <input
+                            className="addr-input"
+                            type="url"
+                            placeholder="https://maps.google.com/..."
+                            value={addr.mapLink || ''}
+                            onChange={(e) => handleAdditionalAddressChange(addr.id, 'mapLink', e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Alternative Phone No. N */}
+                      <div className="addr-field-group">
+                        <label className="addr-field-label">Alternative Phone No. {num}</label>
+                        <div className="addr-input-wrap">
+                          <span className="addr-input-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                            </svg>
+                          </span>
+                          <input
+                            className="addr-input"
+                            type="tel"
+                            inputMode="numeric"
+                            maxLength={10}
+                            placeholder="Enter 10-digit number"
+                            value={addr.altPhone || ''}
+                            onChange={(e) => handleAdditionalAddressChange(addr.id, 'altPhone', e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Additional Email N */}
+                      <div className="addr-field-group">
+                        <label className="addr-field-label">Additional Email {num}</label>
+                        <div className="addr-input-wrap">
+                          <span className="addr-input-icon">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                              <polyline points="22,6 12,13 2,6"></polyline>
+                            </svg>
+                          </span>
+                          <input
+                            className="addr-input"
+                            type="email"
+                            placeholder="name@example.com"
+                            value={addr.email || ''}
+                            onChange={(e) => handleAdditionalAddressChange(addr.id, 'email', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* ── 3. Business Details Card ── */}
+              <div className="addr-section-card">
+                <div className="addr-card-header">
+                  <div className="addr-card-title">
+                    <span className="addr-card-title-icon">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+                        <line x1="9" y1="6" x2="9" y2="6.01"></line>
+                        <line x1="15" y1="6" x2="15" y2="6.01"></line>
+                        <line x1="9" y1="10" x2="9" y2="10.01"></line>
+                        <line x1="15" y1="10" x2="15" y2="10.01"></line>
+                        <line x1="9" y1="14" x2="9" y2="14.01"></line>
+                        <line x1="15" y1="14" x2="15" y2="14.01"></line>
+                        <line x1="9" y1="18" x2="15" y2="18"></line>
+                      </svg>
                     </span>
-                  )}
-                  {dob && (
-                    <button
-                      type="button"
-                      className="dob-clear-btn"
-                      onClick={() => setDob('')}
-                      title="Clear date of birth"
+                    <span>Business Details</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="addr-card-toggle"
+                    onClick={() => setBusinessDetailsOpen(!businessDetailsOpen)}
+                    aria-label="Toggle Business Details"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{
+                        transform: businessDetailsOpen ? 'rotate(0deg)' : 'rotate(180deg)',
+                        transition: 'transform 0.2s ease',
+                      }}
                     >
-                      × Clear
-                    </button>
-                  )}
+                      <polyline points="18 15 12 9 6 15"></polyline>
+                    </svg>
+                  </button>
                 </div>
-                <input
-                  type="date"
-                  id="dob"
-                  max={new Date().toISOString().split('T')[0]}
-                  min="1920-01-01"
-                  value={dob}
-                  onChange={(e) => setDob(e.target.value)}
-                />
-                <small>Select date of birth from calendar. Used for birthday privileges.</small>
-              </div>
 
-              {/* 4. GST Number */}
-              <div className="field">
-                <label htmlFor="gstNumber">GST Number (optional)</label>
-                <input
-                  id="gstNumber"
-                  placeholder="Enter GST number"
-                  value={gstNumber}
-                  onChange={(e) => setGstNumber(e.target.value)}
-                />
-              </div>
+                {businessDetailsOpen && (
+                  <div className="addr-fields-grid">
+                    {/* Company Name */}
+                    <div className="addr-field-group">
+                      <label className="addr-field-label" htmlFor="businessCompanyName">Company Name</label>
+                      <div className="addr-input-wrap">
+                        <span className="addr-input-icon">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+                            <line x1="9" y1="6" x2="9" y2="6.01"></line>
+                            <line x1="15" y1="6" x2="15" y2="6.01"></line>
+                            <line x1="9" y1="10" x2="9" y2="10.01"></line>
+                            <line x1="15" y1="10" x2="15" y2="10.01"></line>
+                            <line x1="9" y1="14" x2="9" y2="14.01"></line>
+                            <line x1="15" y1="14" x2="15" y2="14.01"></line>
+                            <line x1="9" y1="18" x2="15" y2="18"></line>
+                          </svg>
+                        </span>
+                        <input
+                          id="businessCompanyName"
+                          className="addr-input"
+                          placeholder="Enter company name"
+                          value={companyName}
+                          onChange={(e) => setCompanyName(e.target.value)}
+                        />
+                      </div>
+                    </div>
 
-              {/* 5. Company Name */}
-              <div className="field">
-                <label htmlFor="companyName">Company name (optional)</label>
-                <input
-                  id="companyName"
-                  placeholder="Enter company name"
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                />
-              </div>
-
-              {/* 6. City */}
-              <div className="field">
-                <label htmlFor="city">City (optional)</label>
-                <input
-                  id="city"
-                  placeholder="Enter city"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                />
-              </div>
-
-              {/* 7. Pincode */}
-              <div className={`field ${errors.pincode ? 'invalid' : ''}`} id="pincodeField">
-                <label htmlFor="pincode">Pincode (optional)</label>
-                <input
-                  id="pincode"
-                  inputMode="numeric"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  placeholder="Enter 6-digit pincode"
-                  value={pincode}
-                  onChange={handlePincodeChange}
-                />
-                {errors.pincode && <span className="field-error">{errors.pincode}</span>}
-              </div>
-
-              {/* 8. Map Link */}
-              <div className={`field ${errors.map_link ? 'invalid' : ''}`}>
-                <label htmlFor="mapLink">Map Link (optional)</label>
-                <input
-                  id="mapLink"
-                  type="url"
-                  placeholder="https://maps.google.com/..."
-                  value={mapLink}
-                  onChange={(e) => setMapLink(e.target.value)}
-                />
-                {errors.map_link && <span className="field-error">{errors.map_link}</span>}
-              </div>
-
-              {/* 9. Internal Comments (staff only) */}
-              <div className="field" style={{ gridColumn: '1 / -1' }}>
-                <label htmlFor="internalComments">Internal Comments (staff only)</label>
-                <input
-                  id="internalComments"
-                  placeholder="VIP customer, fraud alert, handling notes…"
-                  value={internalComments}
-                  onChange={(e) => setInternalComments(e.target.value)}
-                />
+                    {/* GST Number */}
+                    <div className="addr-field-group">
+                      <label className="addr-field-label" htmlFor="businessGstNumber">GST Number</label>
+                      <div className="addr-input-wrap">
+                        <span className="addr-input-icon">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+                            <line x1="2" y1="10" x2="22" y2="10"></line>
+                          </svg>
+                        </span>
+                        <input
+                          id="businessGstNumber"
+                          className="addr-input"
+                          placeholder="Enter GST number"
+                          value={gstNumber}
+                          onChange={(e) => setGstNumber(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 2. Communication Preferences */}
@@ -670,6 +1063,15 @@ export default function CustomerForm({
                   <option value="Kannada">Kannada</option>
                   <option value="Malayalam">Malayalam</option>
                 </select>
+              </div>
+              <div className="field" style={{ gridColumn: '1 / -1' }}>
+                <label htmlFor="internalComments">Internal Comments (staff only)</label>
+                <input
+                  id="internalComments"
+                  placeholder="VIP customer, fraud alert, handling notes…"
+                  value={internalComments}
+                  onChange={(e) => setInternalComments(e.target.value)}
+                />
               </div>
 
               {/* 3. Customer Profile & Service Settings */}

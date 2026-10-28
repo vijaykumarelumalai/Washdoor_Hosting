@@ -156,7 +156,7 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
             <div className="modal-title" id="modalTitle">
-              <span>Create New Order</span>
+              <span>Create New Customer &amp; Order</span>
             </div>
             {view === 'FORM' && activeCustomerId && (
               <div style={{ display: 'flex', alignItems: 'center' }}>

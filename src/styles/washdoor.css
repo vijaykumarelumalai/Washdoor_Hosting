@@ -2032,6 +2032,186 @@ select option {
   cursor: pointer;
 }
 
+/* ── Address & Business Details Section Cards ── */
+.addr-section-card {
+  grid-column: 1 / -1;
+  width: 100%;
+  background: rgba(11, 20, 36, 0.85);
+  border: 1px solid #1c2c44;
+  border-radius: 12px;
+  padding: 16px 18px 18px;
+  margin-top: 10px;
+  box-sizing: border-box;
+}
+
+.addr-section-card.additional-addr {
+  background: rgba(9, 17, 32, 0.9);
+  border: 1px dashed #2b3d5b;
+  margin-top: 12px;
+}
+
+.addr-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 14px;
+}
+
+.addr-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 650;
+  color: #dbe4f0;
+  letter-spacing: -0.01em;
+}
+
+.addr-card-title-icon {
+  color: #6366f1;
+  display: inline-flex;
+  align-items: center;
+}
+
+.addr-card-toggle {
+  background: transparent;
+  border: none;
+  color: #7d93b2;
+  cursor: pointer;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  transition: color 0.15s ease;
+}
+
+.addr-card-toggle:hover {
+  color: #ffffff;
+}
+
+.addr-card-remove-btn {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.addr-card-remove-btn:hover {
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.addr-fields-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 14px;
+}
+
+@media (max-width: 640px) {
+  .addr-fields-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.addr-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.addr-field-label {
+  font-size: 12px;
+  font-weight: 550;
+  color: #cbd7e6;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.addr-required-star {
+  color: #ef4444;
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+.addr-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.addr-input-icon {
+  position: absolute;
+  left: 12px;
+  color: #6b7f99;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.addr-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: #08111e;
+  border: 1px solid #1a2a42;
+  border-radius: 8px;
+  padding: 9px 12px 9px 38px;
+  color: #f1f5f9;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.addr-input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+}
+
+.addr-input::placeholder {
+  color: #4f637f;
+}
+
+.addr-add-btn-wrap {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  grid-column: 1 / -1;
+}
+
+.addr-add-btn {
+  background: #4f46e5;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.addr-add-btn:hover {
+  background: #4338ca;
+}
+
+.addr-add-btn:active {
+  transform: scale(0.98);
+}
+
 /* ── Phone Country Code & Number Input Styling ── */
 .phone-input-wrap {
   display: flex;

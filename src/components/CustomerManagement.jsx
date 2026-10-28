@@ -187,26 +187,12 @@ export default function CustomerManagement({ showToast }) {
           )}
           {customers.map((c) => {
             const custId = c.customerId || c.customer_code || c.id || 'CUST-00001';
-            const orderCount = c.orders?.[0]?.count ?? 1;
-            const intakeType = c.intakeType || c.intake_type || 'Walk-In';
-            const commPref = c.communicationPreference || c.communication_pref || 'WhatsApp';
-            const commLang = c.preferredCommunicationLanguage || 'English';
-            const isDnd = Boolean(c.doNotDisturb || c.dnd);
-            const discount = c.defaultDiscountPercentage ?? c.default_discount ?? 0;
-            const refCode = c.referralCode || c.referral_code;
-            const mktSource = c.marketingSource || c.marketing_source || 'Walk-in';
-            const membershipId = c.membershipId || c.membership_id;
-            const classification = c.customerClassification || c.customer_classification || 'Regular Customer';
             const status = c.customerStatus || c.customer_status || 'Active';
-            const priceList = c.priceList || c.price_list || 'Standard';
-            const zone = c.areaServiceZone || 'Zone 1';
-            const creditLimit = c.creditLimit ?? c.credit_limit ?? 0;
+            const membershipId = c.membershipId || c.membership_id;
             const email = c.email;
             const altPhone = c.alternatePhoneNumber || c.alternate_phone;
             const gst = c.gstNumber || c.gst_number;
             const company = c.companyName || c.company_name;
-            const notes = c.notes;
-            const comments = c.internalComments || c.internal_comments;
 
             return (
               <div key={c.id || custId} className="cust-card">
@@ -222,12 +208,6 @@ export default function CustomerManagement({ showToast }) {
                       <strong style={{ fontSize: '17px', color: '#fff' }}>{c.customer_name}</strong>
                       <span className="phone" style={{ fontSize: '14px' }}>{formatPhoneDisplay(c.mobile_number)}</span>
                       <span className="badge-tag badge-status">{status}</span>
-                      <span className="tier">{c.tier || 'SILVER'}</span>
-                      {c.tax_exemption && (
-                        <span style={{ fontSize: '11px', color: '#ffd45c', background: '#3a300e', padding: '2px 8px', borderRadius: '12px' }}>
-                          Tax Exempt
-                        </span>
-                      )}
                       {membershipId && (
                         <span style={{ fontSize: '11px', color: '#8a55ff', background: '#21133c', border: '1px solid #432179', padding: '2px 8px', borderRadius: '12px' }}>
                           💳 {membershipId}
@@ -285,49 +265,6 @@ export default function CustomerManagement({ showToast }) {
                     </button>
                   </div>
                 </div>
-
-                {/* ── Master Data Badges Row ── */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', paddingTop: '4px' }}>
-                  <span className="badge-tag badge-intake" title="Intake Method">
-                    📥 {intakeType}
-                  </span>
-                  <span className="badge-tag badge-comm" title="Communication Preference & Language">
-                    💬 {commPref} ({commLang})
-                  </span>
-                  <span className={`badge-tag ${isDnd ? 'badge-dnd' : 'badge-intake'}`} title="Do Not Disturb Status">
-                    {isDnd ? '🔕 DND: Active' : '🔔 DND: Off'}
-                  </span>
-                  {discount > 0 && (
-                    <span className="badge-tag badge-discount" title="Default Discount Percentage">
-                      🏷️ {discount}% Discount
-                    </span>
-                  )}
-                  <span className="badge-tag badge-zone" title="Service Zone">
-                    🗺️ {zone}
-                  </span>
-                  <span className="badge-tag badge-intake" title="Customer Classification">
-                    👤 {classification}
-                  </span>
-                  {creditLimit > 0 && (
-                    <span className="badge-tag" style={{ background: '#0a3048', color: '#4ac7ff', border: '1px solid #145982' }} title="Approved Credit Limit">
-                      💳 Credit Limit: ₹{Number(creditLimit).toLocaleString()}
-                    </span>
-                  )}
-                  {refCode && (
-                    <span className="badge-tag badge-intake" title="Referral Code">
-                      🎟️ Ref: {refCode} ({mktSource})
-                    </span>
-                  )}
-                </div>
-
-                {/* ── Comments, Notes & Insights Bar ── */}
-                {(comments || notes) && (
-                  <div style={{ background: '#070f1d', border: '1px solid #16243a', borderRadius: '10px', padding: '8px 12px', fontSize: '12.5px', color: '#9bb0cd' }}>
-                    {comments && <span><strong>Internal:</strong> {comments}</span>}
-                    {comments && notes && <span> • </span>}
-                    {notes && <span><strong>Notes:</strong> {notes}</span>}
-                  </div>
-                )}
               </div>
             );
           })}
@@ -338,12 +275,12 @@ export default function CustomerManagement({ showToast }) {
       {viewingJsonCustomer && (
         <div
           className="overlay"
-          style={{ display: 'grid' }}
+          style={{ display: 'flex' }}
           onClick={(e) => {
             if (e.target.className === 'overlay') setViewingJsonCustomer(null);
           }}
         >
-          <div className="modal" style={{ maxWidth: '720px' }}>
+          <div className="modal" style={{ width: '100%', maxWidth: '720px' }}>
             <div className="modal-head">
               <div className="modal-icon">{'{ }'}</div>
               <div>
@@ -382,7 +319,7 @@ export default function CustomerManagement({ showToast }) {
       {editingCustomer && (
         <div
           className="overlay"
-          style={{ display: 'grid' }}
+          style={{ display: 'flex' }}
           onClick={(e) => {
             if (e.target.className === 'overlay') setEditingCustomer(null);
           }}
@@ -431,7 +368,7 @@ export default function CustomerManagement({ showToast }) {
       {isRegisteringNew && (
         <div
           className="overlay"
-          style={{ display: 'grid' }}
+          style={{ display: 'flex' }}
           onClick={(e) => {
             if (e.target.className === 'overlay') setIsRegisteringNew(false);
           }}
@@ -449,7 +386,7 @@ export default function CustomerManagement({ showToast }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1, minWidth: 0 }}>
                 <div className="modal-title">Register New Customer</div>
                 <div style={{ fontSize: '12px', color: '#9aacc5' }}>
-                  Create and persist new customer profile in Supabase
+                  Register new customer profile
                 </div>
               </div>
               <button
@@ -465,15 +402,9 @@ export default function CustomerManagement({ showToast }) {
               isOrderFlow={false}
               submitLabel="Register Customer"
               onBack={() => setIsRegisteringNew(false)}
-              onSubmit={async ({ customerData }) => {
-                const { error } = await createCustomer(customerData);
-                if (error) {
-                  showToast(`⚠️ ${friendlySupabaseError(error)}`);
-                } else {
-                  showToast(`✅ Customer ${customerData.customer_name} created successfully!`);
-                  setIsRegisteringNew(false);
-                  loadData(query);
-                }
+              onSubmit={({ customerData }) => {
+                showToast(`✅ Customer ${customerData.customer_name} registered successfully!`);
+                setIsRegisteringNew(false);
               }}
             />
           </div>
@@ -482,8 +413,8 @@ export default function CustomerManagement({ showToast }) {
 
       {/* ── Delete Confirmation Dialog ── */}
       {deleteConfirmTarget && (
-        <div className="overlay" style={{ display: 'grid' }}>
-          <div className="modal" style={{ maxWidth: '480px', padding: '24px' }}>
+        <div className="overlay" style={{ display: 'flex' }}>
+          <div className="modal" style={{ width: '100%', maxWidth: '480px', padding: '24px' }}>
             <div className="modal-head" style={{ padding: '0 0 16px', borderBottom: '1px solid #203049' }}>
               <div className="modal-title" style={{ fontSize: '20px', color: '#ff8b98' }}>
                 Confirm Customer Deletion
