@@ -648,3 +648,132 @@
   gap: 10px;
   margin-top: 12px;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   ── Light Theme Adaptations for Order Status Modal ───────────
+   ═══════════════════════════════════════════════════════════════ */
+
+body.light-theme .order-status-overlay,
+[data-theme="light"] .order-status-overlay {
+  background: rgba(15, 23, 42, 0.55) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+body.light-theme .status-modal-card,
+[data-theme="light"] .status-modal-card {
+  background: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.12) !important;
+}
+
+body.light-theme .status-main-title,
+[data-theme="light"] .status-main-title {
+  color: #0f172a !important;
+}
+
+body.light-theme .status-order-id-pill,
+[data-theme="light"] .status-order-id-pill {
+  background: #eff6ff !important;
+  border-color: #bfdbfe !important;
+  color: #2563eb !important;
+}
+
+body.light-theme .status-meta-text,
+[data-theme="light"] .status-meta-text {
+  color: #64748b !important;
+}
+
+body.light-theme .status-close-icon-btn,
+[data-theme="light"] .status-close-icon-btn {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
+}
+
+body.light-theme .status-close-icon-btn:hover,
+[data-theme="light"] .status-close-icon-btn:hover {
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+body.light-theme .status-stage-item,
+[data-theme="light"] .status-stage-item {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+body.light-theme .status-stage-item:hover,
+[data-theme="light"] .status-stage-item:hover {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+}
+
+body.light-theme .status-stage-item.completed,
+[data-theme="light"] .status-stage-item.completed {
+  background: #f0fdf4 !important;
+  border-color: #bbf7d0 !important;
+}
+
+body.light-theme .status-stage-item.active,
+[data-theme="light"] .status-stage-item.active {
+  background: #eff6ff !important;
+  border-color: #93c5fd !important;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.12) !important;
+}
+
+body.light-theme .status-stage-title,
+[data-theme="light"] .status-stage-title {
+  color: #0f172a !important;
+}
+
+body.light-theme .status-stage-desc,
+[data-theme="light"] .status-stage-desc {
+  color: #64748b !important;
+}
+
+body.light-theme .status-bottom-actions,
+[data-theme="light"] .status-bottom-actions {
+  border-top-color: #f1f5f9 !important;
+}
+
+body.light-theme .bill-container,
+[data-theme="light"] .bill-container {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+body.light-theme .bill-table th,
+[data-theme="light"] .bill-table th {
+  color: #64748b !important;
+  border-bottom-color: #e2e8f0 !important;
+}
+
+body.light-theme .bill-table td,
+[data-theme="light"] .bill-table td {
+  color: #0f172a !important;
+  border-bottom-color: #f1f5f9 !important;
+}
+
+body.light-theme .bill-qty-pill,
+[data-theme="light"] .bill-qty-pill {
+  background: #e2e8f0 !important;
+  color: #334155 !important;
+}
+
+body.light-theme .bill-calc-val,
+[data-theme="light"] .bill-calc-val {
+  color: #0f172a !important;
+}
+
+body.light-theme .bill-total-row td,
+[data-theme="light"] .bill-total-row td {
+  border-top-color: #cbd5e1 !important;
+}
+
+body.light-theme .bill-total-label,
+body.light-theme .bill-total-val,
+[data-theme="light"] .bill-total-label,
+[data-theme="light"] .bill-total-val {
+  color: #2563eb !important;
+}

@@ -84,13 +84,7 @@ export default function EditOrderModal({
     } else if (order.items && Array.isArray(order.items) && order.items.length > 0) {
       setCart(order.items);
     } else {
-      // Default sample items matching mockup: Shirt(2), Jeans(1), Towel(1), Bedsheet(1)
-      setCart([
-        { id: 'shirt', name: 'Shirt', rate: 15, qty: 2, amount: 30 },
-        { id: 'jeans', name: 'Jeans', rate: 25, qty: 1, amount: 25 },
-        { id: 'towel', name: 'Towel', rate: 15, qty: 1, amount: 15 },
-        { id: 'bedsheet', name: 'Bedsheet', rate: 50, qty: 1, amount: 50 },
-      ]);
+      setCart([]);
     }
 
     // Special instructions
@@ -140,7 +134,8 @@ export default function EditOrderModal({
     }
     const timer = setTimeout(async () => {
       const results = await searchCustomers(customerSearch.trim());
-      setCustomerResults(results.slice(0, 5));
+      const list = Array.isArray(results) ? results : (results?.data || []);
+      setCustomerResults(list.slice(0, 5));
     }, 250);
     return () => clearTimeout(timer);
   }, [customerSearch]);

@@ -54,17 +54,20 @@ export default function CustomerSearchPanel({ onSelect, onNewCustomer }) {
       {/* ── Search Row ── */}
       <div className="search-row">
         <div className="search-wrap">
-          <span className="search-icon">⌕</span>
+          <svg className="search-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
           <input
             ref={inputRef}
             className="search"
             id="customerSearch"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by phone number, customer name and customer id…"
+            placeholder="Search by phone number, customer name or customer ID..."
             autoComplete="off"
             autoFocus
-            style={{ paddingRight: query ? '50px' : '18px' }}
+            style={{ paddingLeft: '40px', paddingRight: query ? '46px' : '16px' }}
           />
           {query && (
             <button
@@ -84,7 +87,11 @@ export default function CustomerSearchPanel({ onSelect, onNewCustomer }) {
           id="newCustomer"
           onClick={onNewCustomer}
         >
-          ♙ New Customer <span className="key">2B</span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <span>New Customer</span>
         </button>
       </div>
 

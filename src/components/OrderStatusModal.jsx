@@ -83,7 +83,7 @@ export default function OrderStatusModal({
   const totalAmount = Number(order.total_amount || 0);
 
   const cust = order.customer || {};
-  const address = cust.address || cust.streetArea || order.address || 'Ranipet Central, Zone 1';
+  const address = cust.address || cust.streetArea || order.address || 'Address not registered';
   const orderItems = order.customer_history?.items || order.items || [];
   const itemCount = orderItems.length > 0
     ? orderItems.reduce((acc, item) => acc + (Number(item.qty) || 1), 0)

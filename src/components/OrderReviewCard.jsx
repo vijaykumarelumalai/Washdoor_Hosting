@@ -18,8 +18,8 @@ export default function OrderReviewCard({
   const cust = order.customer || {};
   const custName = cust.customer_name || order.customer_name || 'Walk-in Customer';
   const phone = cust.mobile_number || order.mobile_number || '';
-  const address = cust.address || cust.streetArea || order.address || 'Address not registered, Ranipet';
-  const zone = cust.area_service_zone || cust.areaServiceZone || 'Ranipet Zone 1';
+  const address = cust.address || cust.streetArea || order.address || 'Address not registered';
+  const zone = cust.area_service_zone || cust.areaServiceZone || 'Zone 1';
   const orderNum = order.order_number || (order.id ? `ORDER-${order.id}` : 'ORDER-00001');
   const orderType = order.order_type || 'walk-in';
 
@@ -27,15 +27,15 @@ export default function OrderReviewCard({
   const [assignedRider, setAssignedRider] = useState('-- Unassigned --');
   const [staffNote, setStaffNote] = useState('');
   const [logNotes, setLogNotes] = useState(
-    order.preference_notes || order.order_notes || 'Instruction log carried here!'
+    order.preference_notes || order.order_notes || ''
   );
 
   useEffect(() => {
-    setLogNotes(order.preference_notes || order.order_notes || 'Instruction log carried here!');
+    setLogNotes(order.preference_notes || order.order_notes || '');
   }, [order.preference_notes, order.order_notes]);
 
   // Garment breakdown
-  const weight = order.product_weight || '3.5';
+  const weight = order.product_weight || '0';
   const preference = order.preference || 'Wash & Steam Press';
   const orderItems = order.customer_history?.items || order.items || [];
   const hasItems = Array.isArray(orderItems) && orderItems.length > 0;

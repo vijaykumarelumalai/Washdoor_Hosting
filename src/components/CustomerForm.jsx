@@ -135,24 +135,33 @@ export default function CustomerForm({
   // Address Details & Additional Addresses state
   const [addressLine1, setAddressLine1] = useState(initialCustomer?.address || '');
   const [additionalAddresses, setAdditionalAddresses] = useState(
-    Array.isArray(initialCustomer?.additional_addresses) ? initialCustomer.additional_addresses : []
+    Array.isArray(initialCustomer?.additional_addresses)
+      ? initialCustomer.additional_addresses
+      : (Array.isArray(initialCustomer?.additionalAddresses) ? initialCustomer.additionalAddresses : [])
   );
   const [addressDetailsOpen, setAddressDetailsOpen] = useState(true);
   const [businessDetailsOpen, setBusinessDetailsOpen] = useState(true);
 
+  const MAX_ADDITIONAL_ADDRESSES = 5;
+
   const handleAddAdditionalAddress = () => {
-    setAdditionalAddresses((prev) => [
-      ...prev,
-      {
-        id: Date.now() + Math.random(),
-        addressLine: '',
-        city: '',
-        pincode: '',
-        mapLink: '',
-        altPhone: '',
-        email: '',
-      },
-    ]);
+    setAdditionalAddresses((prev) => {
+      if (prev.length >= MAX_ADDITIONAL_ADDRESSES) {
+        return prev;
+      }
+      return [
+        ...prev,
+        {
+          id: Date.now() + Math.random(),
+          addressLine: '',
+          city: '',
+          pincode: '',
+          mapLink: '',
+          altPhone: '',
+          email: '',
+        },
+      ];
+    });
   };
 
   const handleRemoveAdditionalAddress = (id) => {
@@ -457,7 +466,7 @@ export default function CustomerForm({
         </span>
         <span className="tax-exemption-label">Tax Exemption</span>
         {taxExemption && (
-          <span style={{ fontSize: '11px', color: '#ffd45c', background: '#3a300e', border: '1px solid #6b5717', padding: '1px 7px', borderRadius: '10px', marginLeft: '4px' }}>
+          <span className="tax-exemption-badge">
             Tax Exempt
           </span>
         )}
@@ -752,24 +761,38 @@ export default function CustomerForm({
                             min="1920-01-01"
                             value={dob}
                             onChange={(e) => setDob(e.target.value)}
-                            style={{ colorScheme: 'dark' }}
                           />
                         </div>
                       </div>
                     </div>
 
-                    {/* + Add Additional Address Button */}
+                    {/* + Add Additional Address Button (Max Limit: 5) */}
                     <div className="addr-add-btn-wrap">
                       <button
                         type="button"
                         className="addr-add-btn"
                         onClick={handleAddAdditionalAddress}
+                        disabled={additionalAddresses.length >= MAX_ADDITIONAL_ADDRESSES}
+                        style={
+                          additionalAddresses.length >= MAX_ADDITIONAL_ADDRESSES
+                            ? { opacity: 0.55, cursor: 'not-allowed', pointerEvents: 'none' }
+                            : {}
+                        }
+                        title={
+                          additionalAddresses.length >= MAX_ADDITIONAL_ADDRESSES
+                            ? 'Maximum limit of 5 additional addresses reached'
+                            : 'Add another additional address'
+                        }
                       >
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <line x1="12" y1="5" x2="12" y2="19"></line>
                           <line x1="5" y1="12" x2="19" y2="12"></line>
                         </svg>
-                        <span>Add Additional Address</span>
+                        <span>
+                          {additionalAddresses.length >= MAX_ADDITIONAL_ADDRESSES
+                            ? 'Additional Address Limit Reached (Max 5)'
+                            : `Add Additional Address (${additionalAddresses.length}/5)`}
+                        </span>
                       </button>
                     </div>
                   </>

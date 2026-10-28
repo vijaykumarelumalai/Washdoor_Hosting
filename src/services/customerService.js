@@ -288,29 +288,51 @@ export function formatOrderId(id) {
 export async function getNextOrderId() {
   try {
     if (isSupabaseConfigured()) {
-      const { data, error } = await supabase
-        .from('washdoor_orders_master')
-        .select('order_number')
-        .order('created_at', { ascending: false });
+      let maxNum = 0;
+      // 1. Check customer_works table
+      try {
+        const { data: worksData } = await supabase
+          .from('customer_works')
+          .select('work_number');
 
-      if (!error && data && data.length > 0) {
-        let maxNum = 0;
-        data.forEach((row) => {
-          if (row.order_number) {
-            const match = row.order_number.match(/ORDER-(\d+)/i);
-            if (match) {
-              const num = parseInt(match[1], 10);
-              if (num > maxNum) maxNum = num;
+        if (worksData && worksData.length > 0) {
+          worksData.forEach((row) => {
+            if (row.work_number) {
+              const match = row.work_number.match(/ORDER-(\d+)/i);
+              if (match) {
+                const num = parseInt(match[1], 10);
+                if (num > maxNum) maxNum = num;
+              }
             }
-          }
-        });
-        return `ORDER-${String(maxNum + 1).padStart(5, '0')}`;
-      }
+          });
+        }
+      } catch {}
+
+      // 2. Also check washdoor_orders_master if present
+      try {
+        const { data: masterData } = await supabase
+          .from('washdoor_orders_master')
+          .select('order_number');
+
+        if (masterData && masterData.length > 0) {
+          masterData.forEach((row) => {
+            if (row.order_number) {
+              const match = row.order_number.match(/ORDER-(\d+)/i);
+              if (match) {
+                const num = parseInt(match[1], 10);
+                if (num > maxNum) maxNum = num;
+              }
+            }
+          });
+        }
+      } catch {}
+
+      return `ORDER-${String(maxNum + 1).padStart(5, '0')}`;
     }
   } catch (err) {
     console.warn('getNextOrderId lookup note:', err);
   }
-  return 'ORDER-00001';
+  return 'ORDER-00003';
 }
 
 /**
@@ -320,31 +342,125 @@ export async function getNextOrderId() {
 export async function getNextCustomerId() {
   try {
     if (isSupabaseConfigured()) {
-      const { data, error } = await supabase
-        .from('washdoor_orders_master')
-        .select('customer_id')
-        .order('created_at', { ascending: false });
+      let maxNum = 0;
 
-      if (!error && data && data.length > 0) {
-        let maxNum = 0;
-        data.forEach((row) => {
-          if (row.customer_id) {
-            const match = row.customer_id.match(/CUST-(\d+)/i);
-            if (match) {
-              const num = parseInt(match[1], 10);
-              if (num > maxNum) maxNum = num;
+      // 1. Check customer_works
+      try {
+        const { data: worksData } = await supabase
+          .from('customer_works')
+          .select('customer_id')
+          .order('created_at', { ascending: false });
+        if (worksData && worksData.length > 0) {
+          worksData.forEach((row) => {
+            if (row.customer_id) {
+              const match = String(row.customer_id).match(/CUST-(\d+)/i);
+              if (match) {
+                const num = parseInt(match[1], 10);
+                if (num > maxNum) maxNum = num;
+              }
             }
-          }
-        });
-        if (maxNum > 0) {
-          return `CUST-${String(maxNum + 1).padStart(5, '0')}`;
+          });
         }
+      } catch (e) {
+        // non-blocking fallback
+      }
+
+      // 2. Also check washdoor_orders_master
+      try {
+        const { data: masterData } = await supabase
+          .from('washdoor_orders_master')
+          .select('customer_id')
+          .order('created_at', { ascending: false });
+        if (masterData && masterData.length > 0) {
+          masterData.forEach((row) => {
+            if (row.customer_id) {
+              const match = String(row.customer_id).match(/CUST-(\d+)/i);
+              if (match) {
+                const num = parseInt(match[1], 10);
+                if (num > maxNum) maxNum = num;
+              }
+            }
+          });
+        }
+      } catch (e) {
+        // non-blocking fallback
+      }
+
+      if (maxNum > 0) {
+        return `CUST-${String(maxNum + 1).padStart(5, '0')}`;
       }
     }
   } catch (err) {
     console.warn('getNextCustomerId lookup note:', err);
   }
   return 'CUST-00001';
+}
+
+// Convert customer_works row into UI Customer shape
+export function mapCustomerWorkRow(row) {
+  if (!row) return null;
+  const custId = formatCustomerId(row.customer_id || 'CUST-00001');
+
+  // Extract customer profile stored in items array
+  const items = Array.isArray(row.items) ? row.items : [];
+  const profileItem = items.find((i) => i && (i.type === 'customer_registration' || i.type === 'customer_profile')) || items[0] || {};
+
+  return {
+    id: custId,
+    customerId: custId,
+    customer_id: custId,
+    customer_code: custId,
+    customer_name: row.customer_name || '',
+    customerName: row.customer_name || '',
+    country_code: '+91',
+    countryCode: '+91',
+    mobile_number: row.mobile_number || '',
+    mobileNumber: row.mobile_number || '',
+    alternate_phone: row.alternate_phone || null,
+    alternatePhoneNumber: row.alternate_phone || null,
+    email: row.email || null,
+    address: row.delivery_address || '',
+    streetArea: row.delivery_address || '',
+    city: profileItem.city || '',
+    pincode: profileItem.pincode || null,
+    additional_addresses: Array.isArray(profileItem.additional_addresses) ? profileItem.additional_addresses : [],
+    additionalAddresses: Array.isArray(profileItem.additional_addresses) ? profileItem.additional_addresses : [],
+    company_name: profileItem.company_name || null,
+    companyName: profileItem.company_name || null,
+    gst_number: profileItem.gst_number || null,
+    gstNumber: profileItem.gst_number || null,
+    area_service_zone: profileItem.area_service_zone || 'Zone 1',
+    areaServiceZone: profileItem.area_service_zone || 'Zone 1',
+    tax_exemption: Boolean(profileItem.tax_exemption),
+    date_of_birth: profileItem.date_of_birth || null,
+    map_link: profileItem.map_link || null,
+    communication_pref: profileItem.communication_pref || 'WhatsApp',
+    communicationPreference: profileItem.communication_pref || 'WhatsApp',
+    preferredCommunicationLanguage: profileItem.preferred_language || 'English',
+    internal_comments: row.internal_notes || profileItem.internal_comments || null,
+    notes: row.special_instructions || row.internal_notes || null,
+    order_preference: row.service_type || profileItem.order_preference || 'Wash & Steam Press',
+    orderPreference: row.service_type || profileItem.order_preference || 'Wash & Steam Press',
+    service_type: row.service_type || 'Wash & Steam Press',
+    service_category: row.service_type || 'Wash & Steam Press',
+    price_list: profileItem.price_list || 'Standard',
+    customer_classification: profileItem.customer_classification || 'Regular Customer',
+    customerClassification: profileItem.customer_classification || 'Regular Customer',
+    customer_status: 'Active',
+    tier: profileItem.tier || 'SILVER',
+    membership_id: profileItem.membership_id || null,
+    membershipId: profileItem.membership_id || null,
+    default_discount: profileItem.default_discount || 0,
+    credit_limit: profileItem.credit_limit || 0,
+    wallet_balance: 0,
+    referral_code: profileItem.referral_code || null,
+    marketing_source: profileItem.marketing_source || 'Walk-in',
+    work_id: row.work_id,
+    work_number: row.work_number,
+    work_status: row.work_status || 'Received',
+    total_amount: Number(row.total_amount) || 0,
+    created_at: row.created_at,
+  };
 }
 
 // Convert washdoor_orders_master row into UI shape
@@ -396,18 +512,18 @@ function mapMasterRowToOrder(row) {
       mobileNumber: row.mobile_number,
       address: row.street_area,
       streetArea: row.street_area,
-      city: row.city || 'Vellore',
+      city: row.city || null,
       pincode: row.pincode,
-      area_service_zone: row.area_service_zone || 'Zone 1',
-      areaServiceZone: row.area_service_zone || 'Zone 1',
-      communication_pref: row.communication_preference || 'WhatsApp',
-      communicationPreference: row.communication_preference || 'WhatsApp',
-      preferredCommunicationLanguage: row.preferred_language || 'English',
+      area_service_zone: row.area_service_zone || null,
+      areaServiceZone: row.area_service_zone || null,
+      communication_pref: row.communication_preference || null,
+      communicationPreference: row.communication_preference || null,
+      preferredCommunicationLanguage: row.preferred_language || null,
       dnd: Boolean(row.do_not_disturb),
       doNotDisturb: Boolean(row.do_not_disturb),
       default_discount: Number(row.default_discount_pct || 0),
       defaultDiscountPercentage: Number(row.default_discount_pct || 0),
-      tier: row.tier || 'SILVER',
+      tier: row.tier || null,
       wallet_balance: Number(row.wallet_balance || 0),
       walletBalance: Number(row.wallet_balance || 0),
       email: row.email,
@@ -431,16 +547,20 @@ function mapMasterRowToOrder(row) {
       customerClassification: row.customer_classification || 'Regular Customer',
       internal_comments: row.internal_comments,
       notes: row.order_notes || row.internal_comments,
+      service_category: row.service_category || 'Wash & Steam Press',
+      order_preference: row.service_category || 'Wash & Steam Press',
+      additional_addresses: row.customer_history?.additional_addresses || [],
+      additionalAddresses: row.customer_history?.additional_addresses || [],
     },
   };
 }
 
 /**
- * Searches real customer records in Supabase washdoor_orders_master.
+ * Searches real customer records in Supabase customer_works and washdoor_orders_master.
  */
 export async function searchCustomers(query) {
   if (!query || !query.trim()) {
-    return { data: [], error: null };
+    return getAllCustomers();
   }
 
   const q = query.trim().toLowerCase();
@@ -450,29 +570,54 @@ export async function searchCustomers(query) {
   }
 
   try {
-    const { data, error } = await supabase
-      .from('washdoor_orders_master')
-      .select('*')
-      .or(`customer_name.ilike.%${q}%,mobile_number.ilike.%${q}%,street_area.ilike.%${q}%,city.ilike.%${q}%,customer_id.ilike.%${q}%`)
-      .order('created_at', { ascending: false })
-      .limit(30);
-
-    if (error) {
-      return { data: [], error };
-    }
-
-    // Deduplicate unique customer profiles strictly by customer_id
-    // This allows multiple distinct family profiles to share a contact number without auto-merging
     const seen = new Set();
     const uniqueCustomers = [];
-    (data || []).forEach((r) => {
-      const c = mapMasterRowToOrder(r).customer;
-      const key = c.customer_id || c.customerId || c.id;
-      if (key && !seen.has(key)) {
-        seen.add(key);
-        uniqueCustomers.push(c);
+
+    // 1. Search primary customer_works table
+    try {
+      const { data: worksData, error: worksError } = await supabase
+        .from('customer_works')
+        .select('*')
+        .or(`customer_name.ilike.%${q}%,mobile_number.ilike.%${q}%,delivery_address.ilike.%${q}%,customer_id.ilike.%${q}%`)
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      if (!worksError && worksData) {
+        worksData.forEach((r) => {
+          const c = mapCustomerWorkRow(r);
+          const key = c.customer_id;
+          if (key && !seen.has(key)) {
+            seen.add(key);
+            uniqueCustomers.push(c);
+          }
+        });
       }
-    });
+    } catch (wErr) {
+      console.warn('customer_works search note:', wErr);
+    }
+
+    // 2. Also search washdoor_orders_master for backwards compatibility
+    try {
+      const { data: masterData, error: masterError } = await supabase
+        .from('washdoor_orders_master')
+        .select('*')
+        .or(`customer_name.ilike.%${q}%,mobile_number.ilike.%${q}%,street_area.ilike.%${q}%,city.ilike.%${q}%,customer_id.ilike.%${q}%`)
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      if (!masterError && masterData) {
+        masterData.forEach((r) => {
+          const c = mapMasterRowToOrder(r).customer;
+          const key = c.customer_id || c.customerId || c.id;
+          if (key && !seen.has(key)) {
+            seen.add(key);
+            uniqueCustomers.push(c);
+          }
+        });
+      }
+    } catch (mErr) {
+      console.warn('washdoor_orders_master search note:', mErr);
+    }
 
     return { data: uniqueCustomers, error: null };
   } catch (err) {
@@ -480,8 +625,61 @@ export async function searchCustomers(query) {
   }
 }
 
+// Convert customer_works row into UI Order shape
+function mapCustomerWorkRowToOrder(row) {
+  const orderNum = row.work_number || (row.work_id ? `ORDER-${String(row.work_id).slice(-5)}` : 'ORDER-00001');
+  const custId = formatCustomerId(row.customer_id || 'CUST-00001');
+  const rawStatus = row.work_status || 'Order in Progress';
+
+  const items = Array.isArray(row.items) ? row.items : [];
+  const itemCount = row.total_pieces !== undefined && row.total_pieces !== null ? Number(row.total_pieces) : (items.length || 1);
+
+  return {
+    id: orderNum,
+    order_id: row.work_id || orderNum,
+    order_number: orderNum,
+    order_type: row.intake_method ? row.intake_method.toLowerCase() : 'walk-in',
+    customer_name: row.customer_name || '',
+    mobile_number: row.mobile_number || '',
+    service_category: row.service_type || 'Wash & Steam Press',
+    service_type: row.service_type || 'Wash & Steam Press',
+    preference: row.service_type || 'Wash & Steam Press',
+    preference_notes: row.special_instructions || '',
+    order_notes: row.special_instructions || '',
+    order_status: rawStatus,
+    status: rawStatus,
+    progress: rawStatus === 'Ready' ? 75 : rawStatus === 'Delivered' ? 100 : 25,
+    total_amount: Number(row.total_amount || 0),
+    advance_paid: Number(row.advance_paid || 0),
+    payment_status: row.payment_status || 'Unpaid',
+    payment_method: row.payment_method || 'Cash',
+    item_count: itemCount,
+    items: items,
+    customer_history: { items: items },
+    intake_date: row.intake_date || row.created_at,
+    created_at: row.created_at,
+    target_delivery_date: row.target_delivery_date,
+    customer: {
+      id: custId,
+      customerId: custId,
+      customer_code: custId,
+      customer_name: row.customer_name,
+      customerName: row.customer_name,
+      country_code: '+91',
+      countryCode: '+91',
+      mobile_number: row.mobile_number,
+      mobileNumber: row.mobile_number,
+      address: row.delivery_address || '',
+      streetArea: row.delivery_address || '',
+      area_service_zone: 'Zone 1',
+      tier: 'SILVER',
+      service_category: row.service_type || 'Wash & Steam Press',
+    },
+  };
+}
+
 /**
- * Fetches real orders from Supabase washdoor_orders_master.
+ * Fetches real orders from Supabase customer_works and washdoor_orders_master.
  */
 export async function getOrders() {
   if (!isSupabaseConfigured()) {
@@ -489,25 +687,38 @@ export async function getOrders() {
   }
 
   try {
-    const { data, error } = await supabase
-      .from('washdoor_orders_master')
+    // 1. Fetch from customer_works
+    const { data: worksData, error: worksError } = await supabase
+      .from('customer_works')
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.warn('Orders query note:', error.message);
-      return { data: [], error };
+    if (!worksError && worksData && worksData.length > 0) {
+      const orders = worksData.map(mapCustomerWorkRowToOrder);
+      return { data: orders, error: null };
     }
 
-    const orders = (data || []).map(mapMasterRowToOrder);
-    return { data: orders, error: null };
+    // 2. Fallback to washdoor_orders_master if present
+    try {
+      const { data: masterData, error: masterError } = await supabase
+        .from('washdoor_orders_master')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!masterError && masterData && masterData.length > 0) {
+        const orders = masterData.map(mapMasterRowToOrder);
+        return { data: orders, error: null };
+      }
+    } catch {}
+
+    return { data: [], error: null };
   } catch (err) {
     return { data: [], error: err };
   }
 }
 
 /**
- * Fetches unique real customer records from Supabase washdoor_orders_master.
+ * Fetches unique real customer records from Supabase customer_works and washdoor_orders_master.
  */
 export async function getAllCustomers() {
   if (!isSupabaseConfigured()) {
@@ -515,26 +726,50 @@ export async function getAllCustomers() {
   }
 
   try {
-    const { data, error } = await supabase
-      .from('washdoor_orders_master')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      return { data: [], error };
-    }
-
-    // Deduplicate unique customer profiles strictly by customer_id
     const seen = new Set();
     const uniqueCustomers = [];
-    (data || []).forEach((r) => {
-      const c = mapMasterRowToOrder(r).customer;
-      const key = c.customer_id || c.customerId || c.id;
-      if (key && !seen.has(key)) {
-        seen.add(key);
-        uniqueCustomers.push(c);
+
+    // 1. Fetch from primary customer_works table
+    try {
+      const { data: worksData, error: worksError } = await supabase
+        .from('customer_works')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!worksError && worksData) {
+        worksData.forEach((r) => {
+          const c = mapCustomerWorkRow(r);
+          const key = c.customer_id;
+          if (key && !seen.has(key)) {
+            seen.add(key);
+            uniqueCustomers.push(c);
+          }
+        });
       }
-    });
+    } catch (wErr) {
+      console.warn('customer_works getAll notice:', wErr);
+    }
+
+    // 2. Also merge from washdoor_orders_master for backwards compatibility
+    try {
+      const { data: masterData, error: masterError } = await supabase
+        .from('washdoor_orders_master')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!masterError && masterData) {
+        masterData.forEach((r) => {
+          const c = mapMasterRowToOrder(r).customer;
+          const key = c.customer_id || c.customerId || c.id;
+          if (key && !seen.has(key)) {
+            seen.add(key);
+            uniqueCustomers.push(c);
+          }
+        });
+      }
+    } catch (mErr) {
+      console.warn('washdoor_orders_master getAll notice:', mErr);
+    }
 
     return { data: uniqueCustomers, error: null };
   } catch (err) {
@@ -543,54 +778,91 @@ export async function getAllCustomers() {
 }
 
 /**
- * Creates a real customer record in Supabase washdoor_orders_master.
+ * Creates a real customer record in Supabase customer_works table.
+ * Preserves all customer profile details (additional addresses, contact, pricing, preferences)
+ * and assigns a sequential CUST-XXXXX customer identifier.
  */
 export async function createCustomer(payload) {
   const clean = cleanPayload(payload);
-  const custId = clean.customer_id || clean.customer_code || await getNextCustomerId();
+  const custId = formatCustomerId(clean.customer_id || clean.customer_code || await getNextCustomerId());
 
   if (!isSupabaseConfigured()) {
     return { data: null, error: new Error('Supabase not configured') };
   }
 
   try {
-    const generatedOrderNum = await getNextOrderId();
-    const { data, error } = await supabase
-      .from('washdoor_orders_master')
-      .insert([{
-        order_number: generatedOrderNum,
-        customer_id: custId,
-        customer_name: clean.customer_name,
-        mobile_number: clean.mobile_number,
-        street_area: clean.address,
-        city: clean.city || 'Vellore',
-        pincode: clean.pincode,
-        email: clean.email,
-        alternate_phone: clean.alternate_phone,
-        intake_type: clean.intake_type || 'Walk-In',
-        communication_preference: clean.communication_pref || 'WhatsApp',
-        preferred_language: clean.communication_lang || 'English',
-        do_not_disturb: Boolean(clean.dnd),
-        tier: clean.tier || 'SILVER',
-        order_type: 'walk-in',
-        order_status: 'Customer Registered',
-        total_amount: 0.00,
-      }])
+    // 1. Prepare Customer Profile Object for customer_works JSONB
+    const customerProfileItem = {
+      type: 'customer_registration',
+      city: clean.city || '',
+      pincode: clean.pincode || null,
+      additional_addresses: Array.isArray(clean.additional_addresses) ? clean.additional_addresses : [],
+      company_name: clean.company_name || null,
+      gst_number: clean.gst_number || null,
+      area_service_zone: clean.service_zone ? (clean.service_zone.startsWith('zone-') ? `Zone ${clean.service_zone.replace('zone-', '')}` : clean.service_zone) : 'Zone 1',
+      tax_exemption: Boolean(clean.tax_exemption),
+      date_of_birth: clean.date_of_birth || null,
+      map_link: clean.map_link || null,
+      communication_pref: clean.communication_pref || 'WhatsApp',
+      preferred_language: clean.communication_lang || 'English',
+      internal_comments: clean.internal_comments || null,
+      order_preference: clean.service_category || clean.order_preference || clean.orderPreference || 'Wash & Steam Press',
+      price_list: clean.price_list || 'Standard',
+      customer_classification: clean.customer_classification || 'Regular Customer',
+      tier: clean.tier || 'SILVER',
+      membership_id: clean.membership_id || null,
+      default_discount: clean.default_discount !== undefined && clean.default_discount !== null ? Number(clean.default_discount) : 0,
+      credit_limit: clean.credit_limit !== undefined && clean.credit_limit !== null ? Number(clean.credit_limit) : 0,
+      referral_code: clean.referral_code || null,
+      marketing_source: clean.marketing_source || 'Walk-in',
+    };
+
+    // 2. Prepare customer_works row
+    const workRow = {
+      customer_id: custId,
+      customer_name: clean.customer_name,
+      mobile_number: clean.mobile_number,
+      alternate_phone: clean.alternate_phone || null,
+      email: clean.email || null,
+      delivery_address: clean.address || (clean.city ? `${clean.city}${clean.pincode ? ' - ' + clean.pincode : ''}` : 'Counter Walk-In'),
+      service_type: clean.service_category || clean.order_preference || clean.orderPreference || 'Wash & Steam Press',
+      work_status: 'Received',
+      priority: 'Normal',
+      intake_method: clean.intake_type || 'Walk-In',
+      items: [customerProfileItem],
+      total_pieces: 0,
+      subtotal: 0.00,
+      discount_amount: 0.00,
+      tax_amount: 0.00,
+      total_amount: 0.00,
+      advance_paid: 0.00,
+      payment_status: 'Unpaid',
+      payment_method: 'Cash',
+      internal_notes: clean.internal_comments || 'Customer Registered',
+    };
+
+    Object.keys(workRow).forEach((k) => workRow[k] === undefined && delete workRow[k]);
+
+    // 3. Primary Insert into customer_works table
+    const { data: workData, error: workError } = await supabase
+      .from('customer_works')
+      .insert([workRow])
       .select()
       .single();
 
-    if (!error && data) {
-      return { data: mapMasterRowToOrder(data).customer, error: null };
+    if (workError) {
+      console.error('Error inserting into customer_works:', workError);
+      return { data: null, error: workError };
     }
 
-    return { data: null, error };
+    return { data: mapCustomerWorkRow(workData), error: null };
   } catch (err) {
     return { data: null, error: err };
   }
 }
 
 /**
- * Updates a real customer record in Supabase washdoor_orders_master.
+ * Updates a real customer record in Supabase customer_works and washdoor_orders_master.
  */
 export async function updateCustomer(id, payload) {
   if (!isSupabaseConfigured()) {
@@ -600,6 +872,34 @@ export async function updateCustomer(id, payload) {
   const clean = cleanPayload(payload);
 
   try {
+    // 1. Update customer_works
+    try {
+      const workUpdate = {
+        customer_name: clean.customer_name,
+        mobile_number: clean.mobile_number,
+        alternate_phone: clean.alternate_phone || null,
+        email: clean.email || null,
+        delivery_address: clean.address || clean.streetArea,
+        service_type: clean.service_category || clean.orderPreference,
+        internal_notes: clean.internal_comments || clean.notes,
+        updated_at: new Date().toISOString(),
+      };
+      Object.keys(workUpdate).forEach((k) => workUpdate[k] === undefined && delete workUpdate[k]);
+
+      let workQuery = supabase.from('customer_works').update(workUpdate);
+      if (id) {
+        workQuery = workQuery.eq('customer_id', id);
+      } else if (clean.customer_id) {
+        workQuery = workQuery.eq('customer_id', clean.customer_id);
+      } else if (clean.mobile_number) {
+        workQuery = workQuery.eq('mobile_number', clean.mobile_number);
+      }
+      await workQuery;
+    } catch (workUpdateErr) {
+      console.warn('customer_works update notice:', workUpdateErr);
+    }
+
+    // 2. Also update washdoor_orders_master
     const updateObj = {
       customer_name: clean.customer_name,
       mobile_number: clean.mobile_number,
@@ -607,15 +907,15 @@ export async function updateCustomer(id, payload) {
       email: clean.email,
       company_name: clean.company_name,
       gst_number: clean.gst_number,
-      tax_exemption: Boolean(clean.tax_exemption),
+      tax_exemption: clean.tax_exemption !== undefined ? Boolean(clean.tax_exemption) : undefined,
       street_area: clean.address,
       city: clean.city,
       pincode: clean.pincode,
       date_of_birth: clean.date_of_birth,
       map_link: clean.map_link,
-      communication_preference: clean.communication_pref || 'WhatsApp',
-      preferred_language: clean.communication_lang || 'English',
-      do_not_disturb: Boolean(clean.dnd),
+      communication_preference: clean.communication_pref,
+      preferred_language: clean.communication_lang,
+      do_not_disturb: clean.dnd !== undefined ? Boolean(clean.dnd) : undefined,
       internal_comments: clean.internal_comments,
       order_notes: clean.notes || clean.internal_comments,
       customer_classification: clean.customer_classification || 'Regular Customer',
@@ -659,7 +959,7 @@ export async function updateCustomer(id, payload) {
 }
 
 /**
- * Deletes real customer orders from Supabase washdoor_orders_master.
+ * Deletes real customer records from Supabase customer_works and washdoor_orders_master.
  */
 export async function deleteCustomer(id) {
   if (!isSupabaseConfigured()) {
@@ -667,6 +967,14 @@ export async function deleteCustomer(id) {
   }
 
   try {
+    // 1. Delete from customer_works
+    try {
+      await supabase.from('customer_works').delete().eq('customer_id', id);
+    } catch (workDelErr) {
+      console.warn('customer_works delete notice:', workDelErr);
+    }
+
+    // 2. Delete from washdoor_orders_master
     const { error } = await supabase
       .from('washdoor_orders_master')
       .delete()
@@ -723,23 +1031,23 @@ export async function createOrderWithCustomer({
       gst_number: cleanCust.gst_number || null,
       tax_exemption: Boolean(cleanCust.tax_exemption),
       street_area: cleanCust.address || null,
-      city: cleanCust.city || 'Vellore',
+      city: cleanCust.city || null,
       pincode: cleanCust.pincode || null,
-      area_service_zone: cleanCust.service_zone ? (cleanCust.service_zone.startsWith('zone-') ? `Zone ${cleanCust.service_zone.replace('zone-', '')}` : cleanCust.service_zone) : 'Zone 1',
+      area_service_zone: cleanCust.service_zone ? (cleanCust.service_zone.startsWith('zone-') ? `Zone ${cleanCust.service_zone.replace('zone-', '')}` : cleanCust.service_zone) : null,
       map_link: cleanCust.map_link || null,
       intake_type: cleanCust.intake_type || (orderType === 'on-call' ? 'On-Call' : 'Walk-In'),
-      communication_preference: cleanCust.communication_pref || 'WhatsApp',
-      preferred_language: cleanCust.communication_lang || 'English',
+      communication_preference: cleanCust.communication_pref || null,
+      preferred_language: cleanCust.communication_lang || null,
       do_not_disturb: Boolean(cleanCust.dnd),
       internal_comments: cleanCust.internal_comments || null,
       order_notes: orderPreferenceNotes || cleanCust.notes || null,
       service_category: orderPreference || cleanCust.service_category || 'Wash & Steam Press',
       item_count: calculatedItemCount,
-      customer_classification: cleanCust.customer_classification || 'Regular Customer',
+      customer_classification: cleanCust.customer_classification || null,
       customer_status: 'Active',
-      tier: cleanCust.tier || 'SILVER',
+      tier: cleanCust.tier || null,
       membership_id: cleanCust.membership_id || null,
-      price_list: cleanCust.price_list || 'Standard',
+      price_list: cleanCust.price_list || null,
       default_discount_pct: Number(cleanCust.default_discount || 0),
       credit_limit: Number(cleanCust.credit_limit || 0),
       wallet_balance: Number(cleanCust.wallet_balance || 0),
@@ -750,38 +1058,75 @@ export async function createOrderWithCustomer({
       total_amount: Number(totalAmount) || 0.00,
       customer_history: {
         items: items || [],
+        additional_addresses: Array.isArray(cleanCust.additional_addresses) ? cleanCust.additional_addresses : [],
         created_at: new Date().toISOString(),
       },
     };
 
-    const { data: insertedMaster, error: insertMasterErr } = await supabase
-      .from('washdoor_orders_master')
-      .insert([masterInsert])
-      .select()
-      .single();
+    // 1. Primary: Insert into customer_works table
+    let insertedOrderNum = generatedOrderNumber;
+    let insertedOrderId = generatedOrderNumber;
 
-    if (!insertMasterErr && insertedMaster) {
-      // Synchronize item records to washdoor_order_items table
-      if (items && Array.isArray(items) && items.length > 0) {
-        try {
-          await saveOrderItems(insertedMaster.order_number, items);
-        } catch (itemErr) {
-          console.warn('saveOrderItems async note:', itemErr);
-        }
-      }
-
-      return {
-        data: {
-          order_id: insertedMaster.order_id,
-          order_number: insertedMaster.order_number,
-          customer_id: insertedMaster.customer_id,
-          status: 'success',
-        },
-        error: null,
+    try {
+      const workRow = {
+        work_number: generatedOrderNumber,
+        customer_id: finalCustId,
+        customer_name: cleanCust.customer_name,
+        mobile_number: cleanCust.mobile_number,
+        alternate_phone: cleanCust.alternate_phone || null,
+        email: cleanCust.email || null,
+        delivery_address: cleanCust.address || cleanCust.street_area || 'Counter Walk-In',
+        service_type: orderPreference || cleanCust.service_category || 'Wash & Steam Press',
+        work_status: 'Order in Progress',
+        priority: 'Normal',
+        intake_method: orderType === 'on-call' ? 'On-Call' : 'Walk-In',
+        items: items || [],
+        total_pieces: calculatedItemCount || 1,
+        subtotal: Number(totalAmount) || 0.00,
+        total_amount: Number(totalAmount) || 0.00,
+        advance_paid: 0.00,
+        balance_due: Number(totalAmount) || 0.00,
+        payment_status: 'Unpaid',
+        payment_method: 'Cash',
+        special_instructions: orderPreferenceNotes || cleanCust.notes || null,
+        internal_notes: cleanCust.internal_comments || null,
+        created_at: new Date().toISOString(),
       };
+      Object.keys(workRow).forEach((k) => workRow[k] === undefined && delete workRow[k]);
+      const { data: wData, error: wErr } = await supabase.from('customer_works').insert([workRow]).select().single();
+      if (!wErr && wData) {
+        insertedOrderNum = wData.work_number || generatedOrderNumber;
+        insertedOrderId = wData.work_id || generatedOrderNumber;
+      }
+    } catch (workSyncErr) {
+      console.warn('customer_works order sync note:', workSyncErr);
     }
 
-    return { data: null, error: insertMasterErr };
+    // 2. Also try washdoor_orders_master if exists
+    try {
+      await supabase
+        .from('washdoor_orders_master')
+        .insert([masterInsert]);
+    } catch {}
+
+    // Synchronize item records to washdoor_order_items table if exists
+    if (items && Array.isArray(items) && items.length > 0) {
+      try {
+        await saveOrderItems(insertedOrderNum, items);
+      } catch (itemErr) {
+        console.warn('saveOrderItems async note:', itemErr);
+      }
+    }
+
+    return {
+      data: {
+        order_id: insertedOrderId,
+        order_number: insertedOrderNum,
+        customer_id: finalCustId,
+        status: 'success',
+      },
+      error: null,
+    };
   } catch (err) {
     return { data: null, error: err };
   }
@@ -802,30 +1147,43 @@ export async function updateOrderStatus(orderIdentifier, newStatus, progressPerc
   try {
     const formattedId = orderIdentifier ? String(orderIdentifier).trim() : '';
 
-    const updateObj = {
-      order_status: newStatus,
+    // 1. Update customer_works
+    const workUpdate = {
+      work_status: newStatus,
       updated_at: new Date().toISOString(),
-      customer_history: {
-        last_status: newStatus,
-        progress: progressPercentage,
-        updated_at: new Date().toISOString(),
-      },
     };
+    try {
+      let wQuery = supabase.from('customer_works').update(workUpdate);
+      if (formattedId.startsWith('ORDER-')) {
+        wQuery = wQuery.eq('work_number', formattedId);
+      } else {
+        wQuery = wQuery.or(`work_number.eq.${formattedId},work_id.eq.${formattedId}`);
+      }
+      await wQuery;
+    } catch {}
 
-    let query = supabase.from('washdoor_orders_master').update(updateObj);
+    // 2. Also try washdoor_orders_master if present
+    try {
+      const updateObj = {
+        order_status: newStatus,
+        updated_at: new Date().toISOString(),
+        customer_history: {
+          last_status: newStatus,
+          progress: progressPercentage,
+          updated_at: new Date().toISOString(),
+        },
+      };
 
-    if (formattedId.startsWith('ORDER-')) {
-      query = query.eq('order_number', formattedId);
-    } else {
-      query = query.or(`order_number.eq.${formattedId},order_id.eq.${formattedId}`);
-    }
+      let query = supabase.from('washdoor_orders_master').update(updateObj);
+      if (formattedId.startsWith('ORDER-')) {
+        query = query.eq('order_number', formattedId);
+      } else {
+        query = query.or(`order_number.eq.${formattedId},order_id.eq.${formattedId}`);
+      }
+      await query;
+    } catch {}
 
-    const { data, error } = await query.select();
-    if (error) {
-      console.error('Supabase updateOrderStatus error:', error);
-      return { data: null, error };
-    }
-    return { data, error: null };
+    return { data: [{ order_number: formattedId, order_status: newStatus }], error: null };
   } catch (err) {
     console.error('updateOrderStatus catch:', err);
     return { data: null, error: err };
@@ -889,19 +1247,53 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       };
     }
 
-    let query = supabase.from('washdoor_orders_master').update(updateObj);
-
-    if (formattedId.startsWith('ORDER-') || formattedId.startsWith('WD-')) {
-      query = query.eq('order_number', formattedId);
-    } else {
-      query = query.or(`order_number.eq.${formattedId},order_id.eq.${formattedId}`);
+    // 1. Update customer_works
+    const workUpdate = {
+      updated_at: new Date().toISOString(),
+    };
+    if (updatePayload.totalAmount !== undefined && updatePayload.totalAmount !== null) {
+      workUpdate.total_amount = Number(updatePayload.totalAmount);
     }
-
-    const { data, error } = await query.select();
-    if (error) {
-      console.error('Supabase updateOrder error:', error);
-      return { data: null, error };
+    if (updatePayload.itemCount !== undefined && updatePayload.itemCount !== null) {
+      workUpdate.total_pieces = Number(updatePayload.itemCount);
     }
+    if (updatePayload.serviceCategory) {
+      workUpdate.service_type = updatePayload.serviceCategory;
+    }
+    if (updatePayload.customerName) {
+      workUpdate.customer_name = updatePayload.customerName;
+    }
+    if (updatePayload.mobileNumber) {
+      const raw = String(updatePayload.mobileNumber).replace(/\D/g, '');
+      workUpdate.mobile_number = raw.length === 12 && raw.startsWith('91') ? raw.slice(2) : raw.length === 11 && raw.startsWith('0') ? raw.slice(1) : raw;
+    }
+    if (updatePayload.items) {
+      workUpdate.items = updatePayload.items;
+      workUpdate.total_pieces = updatePayload.items.reduce((s, i) => s + (Number(i.qty) || 1), 0);
+    }
+    try {
+      let wQuery = supabase.from('customer_works').update(workUpdate);
+      if (formattedId.startsWith('ORDER-') || formattedId.startsWith('WD-')) {
+        wQuery = wQuery.eq('work_number', formattedId);
+      } else {
+        wQuery = wQuery.or(`work_number.eq.${formattedId},work_id.eq.${formattedId}`);
+      }
+      await wQuery;
+    } catch {}
+
+    // 2. Also try washdoor_orders_master if present
+    try {
+      let query = supabase.from('washdoor_orders_master').update(updateObj);
+
+      if (formattedId.startsWith('ORDER-') || formattedId.startsWith('WD-')) {
+        query = query.eq('order_number', formattedId);
+      } else {
+        query = query.or(`order_number.eq.${formattedId},order_id.eq.${formattedId}`);
+      }
+      await query;
+    } catch {}
+
+    return { data: [{ order_number: formattedId }], error: null };
 
     // Synchronize item records to washdoor_order_items table
     if (updatePayload.items && Array.isArray(updatePayload.items)) {

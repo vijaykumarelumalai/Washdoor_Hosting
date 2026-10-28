@@ -13,6 +13,30 @@ export function normalizeMobileNumber(phone) {
   return digits;
 }
 
+/**
+ * Checks if a search query string is formatted strictly as a mobile number.
+ * Rejects any query containing alphabetic text or symbols.
+ */
+export function isMobileNumberQuery(query) {
+  if (!query || typeof query !== 'string') return false;
+  const trimmed = query.trim();
+  if (!trimmed) return false;
+
+  // Must only contain digits, optional leading '+', spaces, or hyphens
+  if (!/^\+?[\d\s-]+$/.test(trimmed)) {
+    return false;
+  }
+
+  const digits = trimmed.replace(/\D/g, '');
+  const clean = digits.length === 12 && digits.startsWith('91')
+    ? digits.slice(2)
+    : digits.length === 11 && digits.startsWith('0')
+    ? digits.slice(1)
+    : digits;
+
+  return clean.length === 10;
+}
+
 export function validateCustomer(data) {
   const errors = {};
 
@@ -125,4 +149,23 @@ export function parseDOBInput(input) {
     return clean;
   }
   return clean;
+}
+
+export function getAgeFromDOB(dobStr) {
+  if (!dobStr) return null;
+  const parts = String(dobStr).split('-');
+  if (parts.length !== 3) return null;
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  const birthDate = new Date(year, month, day);
+  if (isNaN(birthDate.getTime())) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age >= 0 && age <= 120 ? age : null;
 }

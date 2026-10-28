@@ -1,7 +1,7 @@
 // src/__tests__/validation.node.test.js
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateCustomer, friendlySupabaseError, formatPhoneDisplay, formatDOB, parseDOBInput, normalizeMobileNumber } from '../utils/validation.js';
+import { validateCustomer, friendlySupabaseError, formatPhoneDisplay, formatDOB, parseDOBInput, normalizeMobileNumber, isMobileNumberQuery, getAgeFromDOB } from '../utils/validation.js';
 import { formatOrderId, formatCustomerId } from '../services/customerService.js';
 
 test('formatOrderId generates canonical 5-digit padded order identifier starting with ORDER', () => {
@@ -160,4 +160,38 @@ test('parseDOBInput converts dd-mm-yyyy to ISO yyyy-mm-dd', () => {
   assert.equal(parseDOBInput('15-05-1990'), '1990-05-15');
   assert.equal(parseDOBInput('1990-05-15'), '1990-05-15');
   assert.equal(parseDOBInput(''), '');
+});
+
+test('isMobileNumberQuery accepts only authentic 10-digit mobile numbers and rejects text and symbols', () => {
+  // Valid mobile formats
+  assert.equal(isMobileNumberQuery('9876543210'), true);
+  assert.equal(isMobileNumberQuery('+91 9876543210'), true);
+  assert.equal(isMobileNumberQuery('+91 98765 43210'), true);
+  assert.equal(isMobileNumberQuery('09876543210'), true);
+  assert.equal(isMobileNumberQuery('98765-43210'), true);
+
+  // Text queries (like in user screenshot) -> must be false
+  assert.equal(isMobileNumberQuery('ujhfds'), false);
+  assert.equal(isMobileNumberQuery('John Doe'), false);
+  assert.equal(isMobileNumberQuery('Ramesh'), false);
+
+  // Symbols and mixed queries -> must be false
+  assert.equal(isMobileNumberQuery('@#$%^'), false);
+  assert.equal(isMobileNumberQuery('98765ujhfds'), false);
+  assert.equal(isMobileNumberQuery('phone#9876543210'), false);
+  assert.equal(isMobileNumberQuery(''), false);
+  assert.equal(isMobileNumberQuery('   '), false);
+  assert.equal(isMobileNumberQuery('12345'), false); // too short
+  assert.equal(isMobileNumberQuery('123456789012345'), false); // too long
+});
+
+test('getAgeFromDOB calculates valid age from ISO date string', () => {
+  assert.equal(getAgeFromDOB(''), null);
+  assert.equal(getAgeFromDOB(null), null);
+  assert.equal(getAgeFromDOB('invalid-date'), null);
+  // Calculate expected age dynamically
+  const birthYear = 2000;
+  const today = new Date();
+  const expectedAge = today.getFullYear() - birthYear - (today.getMonth() < 0 || (today.getMonth() === 0 && today.getDate() < 1) ? 1 : 0);
+  assert.equal(getAgeFromDOB('2000-01-01'), expectedAge);
 });

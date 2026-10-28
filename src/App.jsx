@@ -1,18 +1,14 @@
 // src/App.jsx
-// Washdoor POS & Counter Intake Application
-// Matching washdoor_create_order_updated.html layout and aesthetics
+// Washdoor POS & Customer Management Application
 
 import React, { useState, useEffect, useCallback } from 'react';
+import CustomerManagement from './components/CustomerManagement';
+import POSModule from './components/POSModule';
 import CreateOrderModal from './components/CreateOrderModal';
 import OrderStatusModal from './components/OrderStatusModal';
 import EditOrderModal from './components/EditOrderModal';
-import CustomerManagement from './components/CustomerManagement';
-import CustomerForm from './components/CustomerForm';
-import OrderReviewCard from './components/OrderReviewCard';
-import NoOrdersGraphic from './components/NoOrdersGraphic';
-import { getOrders, updateCustomer } from './services/customerService';
+import { getOrders } from './services/customerService';
 import { isSupabaseConfigured } from './lib/supabaseClient';
-import { formatPhoneDisplay } from './utils/validation';
 import './styles/OrderStatusModal.css';
 
 const SAMPLE_CURRENCIES = [
@@ -38,23 +34,15 @@ const SAMPLE_LANGUAGES = [
   { code: 'es', name: 'Spanish', native: 'Español' },
 ];
 
-const AVATAR_COLORS = [
-  '#1d72fe', // vibrant blue
-  '#7c3aed', // purple
-  '#10b981', // green
-  '#f97316', // orange
-  '#ec4899', // pink
-  '#06b6d4', // cyan
-  '#8b5cf6', // violet
-];
-
 export default function App() {
-  const [activeTab, setActiveTab] = useState('orders');
+  const [activeTab, setActiveTab] = useState('pos');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedStatusOrder, setSelectedStatusOrder] = useState(null);
   const [editingOrder, setEditingOrder] = useState(null);
-  // Stale-while-revalidate: instant local cache for 0ms load time
+  const [statusModalViewBill, setStatusModalViewBill] = useState(false);
+
+  // Orders state with cache support
   const [orders, setOrders] = useState(() => {
     try {
       const cached = localStorage.getItem('washdoor_orders_cache');
@@ -66,24 +54,46 @@ export default function App() {
     }
   });
   const [loadingOrders, setLoadingOrders] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+
   const [toastMessage, setToastMessage] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
 
-  const [statusModalViewBill, setStatusModalViewBill] = useState(false);
-  const [expandedOrderId, setExpandedOrderId] = useState(null);
-
-  const handleOpenOrderStatus = (order, viewBill = false) => {
-    setSelectedStatusOrder(order);
-    setStatusModalViewBill(viewBill);
-    setIsStatusModalOpen(true);
-  };
-
   // Topbar dropdown states
-  const [activeDropdown, setActiveDropdown] = useState(null); // 'currency' | 'language' | 'admin' | 'sort' | null
-  const [sortBy, setSortBy] = useState('newest');
+  const [activeDropdown, setActiveDropdown] = useState(null); // 'currency' | 'language' | 'admin' | null
   const [currentCurrency, setCurrentCurrency] = useState(SAMPLE_CURRENCIES[0] || { symbol: '₹', code: 'IN', label: 'IN • ₹' });
   const [currentLanguage, setCurrentLanguage] = useState(SAMPLE_LANGUAGES[0] || { name: 'English', code: 'en' });
+
+  // Theme State: 'light' (default matching screenshot) | 'dark'
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem('washdoor_theme') || 'light';
+    } catch {
+      return 'light';
+    }
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    document.body.setAttribute('data-theme', theme);
+    if (theme === 'light') {
+      document.body.classList.add('light-theme');
+      document.body.classList.remove('dark-theme');
+    } else {
+      document.body.classList.add('dark-theme');
+      document.body.classList.remove('light-theme');
+    }
+    try {
+      localStorage.setItem('washdoor_theme', theme);
+    } catch {}
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => {
+      const next = prev === 'dark' ? 'light' : 'dark';
+      showToast(next === 'light' ? '☀️ Switched to Light Theme' : '🌙 Switched to Dark Theme');
+      return next;
+    });
+  };
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -129,6 +139,12 @@ export default function App() {
     loadOrders();
   }, [loadOrders]);
 
+  const handleOpenOrderStatus = (order, viewBill = false) => {
+    setSelectedStatusOrder(order);
+    setStatusModalViewBill(viewBill);
+    setIsStatusModalOpen(true);
+  };
+
   // Keyboard shortcut: Press 'N' or 'n' to open Create Order
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -143,30 +159,6 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isModalOpen]);
-
-  // Filtered and sorted orders with defensive guard
-  const safeOrders = Array.isArray(orders) ? orders : [];
-  const filteredOrders = safeOrders.filter((o) => {
-    if (!o) return false;
-    if (!searchTerm.trim()) return true;
-    const term = searchTerm.toLowerCase();
-    const orderNo = String(o.order_number || (o.id ? `ORDER-${o.id}` : '')).toLowerCase();
-    const cust = o.customer || {};
-    const custName = String(cust.customer_name || o.customer_name || '').toLowerCase();
-    const phone = String(cust.mobile_number || o.mobile_number || '').toLowerCase();
-    return orderNo.includes(term) || custName.includes(term) || phone.includes(term);
-  }).sort((a, b) => {
-    if (sortBy === 'oldest') {
-      return new Date(a.created_at || 0) - new Date(b.created_at || 0);
-    }
-    if (sortBy === 'amount_high') {
-      return Number(b.total_amount || 0) - Number(a.total_amount || 0);
-    }
-    if (sortBy === 'amount_low') {
-      return Number(a.total_amount || 0) - Number(b.total_amount || 0);
-    }
-    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
-  });
 
   return (
     <div className="app">
@@ -338,6 +330,48 @@ export default function App() {
           )}
         </div>
 
+        {/* Dark / Light Theme Toggle Button */}
+        <button
+          type="button"
+          className="top-pill theme-toggle-btn"
+          onClick={toggleTheme}
+          title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+          aria-label="Toggle theme"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            cursor: 'pointer',
+            padding: '6px 12px',
+            fontSize: '12.5px',
+            fontWeight: '600',
+          }}
+        >
+          {theme === 'dark' ? (
+            <>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#facc15" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+              </svg>
+              <span>Light Mode</span>
+            </>
+          ) : (
+            <>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+              <span>Dark Mode</span>
+            </>
+          )}
+        </button>
+
         {/* Admin Details Dropdown (Avatar Circle Only) */}
         <div className="top-pill-dropdown-wrap">
           <button
@@ -390,157 +424,53 @@ export default function App() {
         </div>
       </header>
 
-      {/* ── Sidebar ── */}
+      {/* ── Sidebar: Customers & POS ── */}
       <aside className="sidebar">
-        <button
-          type="button"
-          className={`nav ${activeTab === 'orders' ? 'active' : ''}`}
-          onClick={() => setActiveTab('orders')}
-        >
-          <span>▣</span> Orders
-        </button>
+        {/* 1. Customers */}
         <button
           type="button"
           className={`nav ${activeTab === 'customers' ? 'active' : ''}`}
           onClick={() => setActiveTab('customers')}
+          title="Customer Records & Master Data"
         >
-          <span>👤</span> Customers
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          Customers
+        </button>
+
+        {/* 2. POS */}
+        <button
+          type="button"
+          className={`nav ${activeTab === 'pos' ? 'active' : ''}`}
+          onClick={() => setActiveTab('pos')}
+          title="Orders & Point of Sale Intake Register"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <path d="M16 10a4 4 0 0 1-8 0"></path>
+          </svg>
+          POS
         </button>
       </aside>
 
       {/* ── Main Content ── */}
       <main className="main">
-        {activeTab === 'orders' ? (
-          <>
-            <div className="page-head">
-              <div>
-                <h1>Orders &amp; Counter Intake</h1>
-                <div className="muted">Unified counter POS intake, dispatch, and order management</div>
-              </div>
-              <button
-                type="button"
-                className="create"
-                id="openCreate"
-                onClick={() => setIsModalOpen(true)}
-              >
-                ＋ Create Order <span className="key" style={{ background: '#7668ff' }}>N</span>
-              </button>
-            </div>
-
-            {/* ── Toolbar ── */}
-            <div className="toolbar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
-              <div className="toolbar-search-wrap">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7185a1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                </svg>
-                <input
-                  type="text"
-                  placeholder="Search by name / phone / Order ID..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', whiteSpace: 'nowrap' }}>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={loadingOrders}
-                  style={{ padding: '7px 14px', fontSize: '12.5px', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                  onClick={() => {
-                    loadOrders();
-                    showToast('↻ Syncing orders with Supabase...');
-                  }}
-                  title="Reload orders from database"
-                >
-                  <svg
-                    className={loadingOrders ? 'sync-spinner' : ''}
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polyline points="23 4 23 10 17 10" />
-                    <polyline points="1 20 1 14 7 14" />
-                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                  </svg>
-                  <span>{loadingOrders ? 'Syncing...' : 'Refresh'}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* ── Orders List with Skeleton Loader ── */}
-            {loadingOrders && filteredOrders.length === 0 ? (
-              <div className="orders">
-                <div className="syncing-banner">
-                  <span className="sync-spinner"></span>
-                  <span>Connecting to Supabase cloud and fetching live orders…</span>
-                </div>
-                {[1, 2, 3, 4].map((n) => (
-                  <div key={n} className="skeleton-order-card">
-                    <span className="order-chevron" style={{ opacity: 0.2 }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="9 18 15 12 9 6" />
-                      </svg>
-                    </span>
-                    <div className="skeleton-avatar skeleton-shimmer"></div>
-                    <div className="skeleton-info-wrap">
-                      <div className="skeleton-bar skeleton-bar-name skeleton-shimmer"></div>
-                      <div className="skeleton-bar skeleton-bar-pill skeleton-shimmer"></div>
-                      <div className="skeleton-bar skeleton-bar-type skeleton-shimmer"></div>
-                      <div className="skeleton-bar skeleton-bar-phone skeleton-shimmer"></div>
-                    </div>
-                    <div className="skeleton-btn skeleton-shimmer"></div>
-                  </div>
-                ))}
-              </div>
-            ) : filteredOrders.length === 0 ? (
-              <div className="empty-orders-container">
-                <NoOrdersGraphic />
-                <h2 className="empty-orders-title">No orders yet</h2>
-                <p className="empty-orders-desc">
-                  Create your first order to start tracking customer items, payments, and delivery.
-                </p>
-                <button
-                  type="button"
-                  className="create"
-                  style={{ marginTop: '16px' }}
-                  onClick={() => setIsModalOpen(true)}
-                >
-                  ＋ Create Order <span className="key" style={{ background: '#7668ff' }}>N</span>
-                </button>
-              </div>
-            ) : (
-              <div className="orders">
-                {loadingOrders && (
-                  <div className="syncing-banner" style={{ margin: '0 0 6px 0', alignSelf: 'flex-start' }}>
-                    <span className="sync-spinner"></span>
-                    <span>Syncing latest orders with Supabase…</span>
-                  </div>
-                )}
-                {filteredOrders.map((o) => (
-                  <OrderReviewCard
-                    key={o.id}
-                    order={o}
-                    isExpanded={expandedOrderId === o.id}
-                    onToggleExpand={() => {
-                      setExpandedOrderId((prev) => (prev === o.id ? null : o.id));
-                    }}
-                    onEdit={(orderToEdit) => setEditingOrder(orderToEdit)}
-                    onOpenStatus={(orderStatus) => handleOpenOrderStatus(orderStatus, false)}
-                    onOpenBill={(orderBill) => handleOpenOrderStatus(orderBill, true)}
-                    showToast={showToast}
-                    currencySymbol={currentCurrency?.symbol || '₹'}
-                  />
-                ))}
-              </div>
-            )}
-          </>
+        {activeTab === 'pos' ? (
+          <POSModule
+            orders={orders}
+            loadingOrders={loadingOrders}
+            onRefreshOrders={loadOrders}
+            onCreateOrder={() => setIsModalOpen(true)}
+            currencySymbol={currentCurrency?.symbol || '₹'}
+            showToast={showToast}
+            onOpenOrderStatus={handleOpenOrderStatus}
+            onEditOrder={(orderToEdit) => setEditingOrder(orderToEdit)}
+            onOrderCreated={loadOrders}
+            onNavigateTab={setActiveTab}
+          />
         ) : (
           <CustomerManagement showToast={showToast} />
         )}

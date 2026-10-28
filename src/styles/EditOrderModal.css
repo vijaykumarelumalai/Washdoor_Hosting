@@ -873,3 +873,50 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   ── Light Theme Adaptations for Edit Order Modal ────────────
+   ═══════════════════════════════════════════════════════════════ */
+
+body.light-theme .edit-order-overlay,
+[data-theme="light"] .edit-order-overlay {
+  background: rgba(15, 23, 42, 0.55) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+body.light-theme .edit-order-modal,
+[data-theme="light"] .edit-order-modal {
+  background: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.12) !important;
+}
+
+body.light-theme .pos-header-bar,
+[data-theme="light"] .pos-header-bar {
+  background: #f8fafc !important;
+  border-bottom: 1.5px solid #e2e8f0 !important;
+}
+
+body.light-theme .pos-title-text,
+[data-theme="light"] .pos-title-text {
+  color: #0f172a !important;
+}
+
+body.light-theme .pos-subtitle-text,
+[data-theme="light"] .pos-subtitle-text {
+  color: #64748b !important;
+}
+
+body.light-theme .pos-btn-hold,
+[data-theme="light"] .pos-btn-hold {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #334155 !important;
+}
+
+body.light-theme .pos-btn-hold:hover,
+[data-theme="light"] .pos-btn-hold:hover {
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
+}
