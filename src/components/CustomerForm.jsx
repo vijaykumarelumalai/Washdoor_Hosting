@@ -245,6 +245,7 @@ export default function CustomerForm({
       communication_lang: communicationLang,
       dnd,
       internal_comments: internalComments,
+      order_preference: orderPreference,
       default_discount: defaultDiscount,
       referral_code: referralCode,
       marketing_source: marketingSource,
@@ -1118,6 +1119,59 @@ export default function CustomerForm({
 
               {/* 4. Customer & Membership */}
               <div className="details-section-title">Customer &amp; Membership</div>
+              <div className="field">
+                <label htmlFor="membershipId">Membership ID (optional)</label>
+                <input
+                  id="membershipId"
+                  placeholder="e.g. MEM-00001"
+                  value={membershipId}
+                  onChange={(e) => setMembershipId(e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="priceList">Specific Price List</label>
+                <select
+                  id="priceList"
+                  value={priceList}
+                  onChange={(e) => setPriceList(e.target.value)}
+                >
+                  <option value="Standard">Standard</option>
+                  <option value="Premium">Premium</option>
+                  <option value="Wholesale">Wholesale</option>
+                  <option value="Corporate">Corporate</option>
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="orderPreferenceSelect">Order Preference</label>
+                <select
+                  id="orderPreferenceSelect"
+                  value={orderPreference}
+                  onChange={(e) => {
+                    setOrderPreference(e.target.value);
+                    setProductService(e.target.value);
+                  }}
+                >
+                  <option value="Wash & Steam Press">Wash &amp; Steam Press</option>
+                  <option value="Wash & Fold">Wash &amp; Fold</option>
+                  <option value="Dry Cleaning">Dry Cleaning</option>
+                  <option value="Heavy Linens & Quilts">Heavy Linens &amp; Quilts</option>
+                  <option value="Express 24H Service">Express 24H Service</option>
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="marketingSource">Marketing Source</label>
+                <select
+                  id="marketingSource"
+                  value={marketingSource}
+                  onChange={(e) => setMarketingSource(e.target.value)}
+                >
+                  <option value="Walk-in">Walk-in</option>
+                  <option value="Google">Google</option>
+                  <option value="Instagram">Instagram</option>
+                  <option value="Word of Mouth">Word of Mouth</option>
+                  <option value="Pamphlet">Pamphlet</option>
+                </select>
+              </div>
               <div className="field">
                 <label htmlFor="defaultDiscount">Default Discount (%)</label>
                 <input

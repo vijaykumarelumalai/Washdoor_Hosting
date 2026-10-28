@@ -188,7 +188,7 @@ export default function CustomerManagement({ showToast }) {
           {customers.map((c) => {
             const custId = c.customerId || c.customer_code || c.id || 'CUST-00001';
             const status = c.customerStatus || c.customer_status || 'Active';
-            const membershipId = c.membershipId || c.membership_id;
+            const displayMembershipId = c.membershipId || c.membership_id || `MEM-${(String(custId).match(/\d+/) ? String(custId).match(/\d+/)[0] : '1').padStart(5, '0')}`;
             const email = c.email;
             const altPhone = c.alternatePhoneNumber || c.alternate_phone;
             const gst = c.gstNumber || c.gst_number;
@@ -208,11 +208,9 @@ export default function CustomerManagement({ showToast }) {
                       <strong style={{ fontSize: '17px', color: '#fff' }}>{c.customer_name}</strong>
                       <span className="phone" style={{ fontSize: '14px' }}>{formatPhoneDisplay(c.mobile_number)}</span>
                       <span className="badge-tag badge-status">{status}</span>
-                      {membershipId && (
-                        <span style={{ fontSize: '11px', color: '#8a55ff', background: '#21133c', border: '1px solid #432179', padding: '2px 8px', borderRadius: '12px' }}>
-                          💳 {membershipId}
-                        </span>
-                      )}
+                      <span style={{ fontSize: '11px', color: '#a78bfa', background: '#21133c', border: '1px solid #432179', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>
+                        💳 {displayMembershipId}
+                      </span>
                     </div>
 
                     {/* ── Subtitle: Contact Details & Location ── */}
