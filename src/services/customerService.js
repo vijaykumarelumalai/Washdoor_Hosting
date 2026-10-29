@@ -5,6 +5,7 @@
 // - 'washdoor_order_items' (Line items per order)
 
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient.js';
+import masterOrders from '../data/masterOrders.json';
 
 // Default fallback products matching the database seed
 export const DEFAULT_PRODUCTS = [
@@ -679,11 +680,24 @@ function mapCustomerWorkRowToOrder(row) {
 }
 
 /**
+ * Helper to determine if a customer_works row is purely a Customer Master registration
+ * and not an actual service/laundry order.
+ */
+export function isCustomerRegistrationRecord(row) {
+  if (!row) return false;
+  if (row.internal_notes === 'Customer Registered') return true;
+  if (Array.isArray(row.items) && row.items.length === 1 && row.items[0]?.type === 'customer_registration') return true;
+  if (Number(row.total_pieces || 0) === 0 && Number(row.total_amount || 0) === 0) return true;
+  return false;
+}
+
+/**
  * Fetches real orders from Supabase customer_works and washdoor_orders_master.
+ * Excludes pure customer master registration records and merges master sample records.
  */
 export async function getOrders() {
   if (!isSupabaseConfigured()) {
-    return { data: [], error: null };
+    return { data: masterOrders, error: null };
   }
 
   try {
@@ -694,8 +708,12 @@ export async function getOrders() {
       .order('created_at', { ascending: false });
 
     if (!worksError && worksData && worksData.length > 0) {
-      const orders = worksData.map(mapCustomerWorkRowToOrder);
-      return { data: orders, error: null };
+      // Exclude customer master registrations: only real orders with pieces/services
+      const realOrdersData = worksData.filter((row) => !isCustomerRegistrationRecord(row));
+      const orders = realOrdersData.map(mapCustomerWorkRowToOrder);
+      const existingIds = new Set(orders.map((o) => o.order_number || o.id));
+      const combined = [...orders, ...masterOrders.filter((m) => !existingIds.has(m.order_number) && !existingIds.has(m.id))];
+      return { data: combined, error: null };
     }
 
     // 2. Fallback to washdoor_orders_master if present
@@ -707,13 +725,15 @@ export async function getOrders() {
 
       if (!masterError && masterData && masterData.length > 0) {
         const orders = masterData.map(mapMasterRowToOrder);
-        return { data: orders, error: null };
+        const existingIds = new Set(orders.map((o) => o.order_number || o.id));
+        const combined = [...orders, ...masterOrders.filter((m) => !existingIds.has(m.order_number) && !existingIds.has(m.id))];
+        return { data: combined, error: null };
       }
     } catch {}
 
-    return { data: [], error: null };
+    return { data: masterOrders, error: null };
   } catch (err) {
-    return { data: [], error: err };
+    return { data: masterOrders, error: null };
   }
 }
 

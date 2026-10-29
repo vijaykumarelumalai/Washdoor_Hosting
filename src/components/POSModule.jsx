@@ -40,6 +40,16 @@ const DEFAULT_PRODUCTS = [
 const CATEGORIES = ['All Items', 'Men', 'Women', 'Kids', 'Home Linen', 'Accessories'];
 const SERVICE_OPTIONS = ['Wash & Steam Press', 'Wash & Fold', 'Dry Cleaning', 'Steam Press Only', 'Heavy Linens'];
 
+export function normalizeOrderStatus(raw) {
+  const s = String(raw || '').trim().toLowerCase();
+  if (s.includes('cancel')) return 'Cancelled';
+  if (s.includes('deliver') || s.includes('complete')) return 'Delivered';
+  if (s.includes('ready') || s.includes('billing')) return 'Ready';
+  if (s.includes('progress') || s.includes('wash') || s.includes('iron') || s.includes('process')) return 'In Progress';
+  if (s.includes('receive') || s.includes('intake') || s.includes('new') || s.includes('overdue')) return 'Received';
+  return 'In Progress';
+}
+
 export default function POSModule({
   orders = [],
   loadingOrders = false,
@@ -51,6 +61,7 @@ export default function POSModule({
   onEditOrder,
   onOrderCreated,
   onNavigateTab,
+  onUpdateOrder,
 }) {
   // Top Header, Search Toolbar & Status Tab State (matching reference mockup)
   const [topSearchQuery, setTopSearchQuery] = useState('');
@@ -61,6 +72,126 @@ export default function POSModule({
   const [posViewMode, setPosViewMode] = useState('orders'); // 'orders' | 'intake'
   const [orderDisplayLayout, setOrderDisplayLayout] = useState('table'); // 'table' | 'cards'
   const [expandedOrderId, setExpandedOrderId] = useState(null);
+  const [expandedServicesOrderId, setExpandedServicesOrderId] = useState(null);
+
+  // Inline/Popup Order Edit Modal State (List View Fields, Read-Only when Ready)
+  const [editingOrderRecord, setEditingOrderRecord] = useState(null);
+  const [editFormData, setEditFormData] = useState(null);
+
+  const handleOpenEditModal = (ord) => {
+    // If clicking on already open order, toggle close
+    if (editingOrderRecord && (editingOrderRecord.id === ord.id || editingOrderRecord.order_number === ord.order_number)) {
+      setEditingOrderRecord(null);
+      setEditFormData(null);
+      return;
+    }
+
+    const custName = ord.customer_name || ord.customer?.customer_name || '';
+    const phone = ord.formatted_mobile || formatPhoneDisplay(ord.mobile_number || ord.customer?.mobile_number) || ord.mobile_number || '';
+    const custAddress = ord.address || ord.delivery_address || ord.customer?.address || '';
+    const currentStatus = normalizeOrderStatus(ord.order_status || ord.status || 'Received');
+    const srv = ord.service_category || ord.service_type || ord.preference || 'Wash & Steam Press';
+    const capturedDateStr = ord.captured_date || (ord.created_at ? new Date(ord.created_at).toISOString().slice(0, 10) : '2026-10-28');
+    const capturedTimeStr = ord.captured_time || '10:15 AM';
+    const orderTypeStr = ord.order_type || 'Walk-in';
+    const expectedDeliveryStr = ord.expected_delivery || '30 Oct 2026, 05:00 PM';
+    const pickupDeliveryStr = ord.pickup_delivery || '--------';
+    const commentsStr = ord.comments || ord.preference_notes || ord.special_instructions || ord.notes || 'Customer requested light starch for shirts.';
+    const totalAmount = Number(ord.total_amount || 0);
+    const advancePaid = Number(ord.advance_paid || 0);
+    const balanceDue = Number(ord.balance_due !== undefined ? ord.balance_due : Math.max(0, totalAmount - advancePaid));
+    const paymentStatus = ord.payment_status || (balanceDue <= 0 ? 'Paid' : advancePaid > 0 ? 'Partially Paid' : 'Unpaid');
+
+    setEditingOrderRecord(ord);
+    setEditFormData({
+      id: ord.id || ord.order_number,
+      order_number: ord.order_number || ord.order_id || ord.id,
+      customer_name: custName,
+      mobile_number: phone,
+      address: custAddress,
+      service_category: srv,
+      status: currentStatus,
+      order_status: currentStatus,
+      captured_date: capturedDateStr,
+      captured_time: capturedTimeStr,
+      order_type: orderTypeStr,
+      expected_delivery: expectedDeliveryStr,
+      pickup_delivery: pickupDeliveryStr,
+      comments: commentsStr,
+      total_amount: totalAmount,
+      advance_paid: advancePaid,
+      balance_due: balanceDue,
+      payment_status: paymentStatus,
+      rawOrder: ord,
+    });
+  };
+
+  const handleSaveOrderEdit = (e) => {
+    e?.preventDefault();
+    if (!editFormData || !editingOrderRecord) return;
+
+    const isOrderReady = normalizeOrderStatus(editFormData.status || editFormData.order_status) === 'Ready';
+    if (isOrderReady) {
+      showToast?.('ℹ️ Order is in "Ready" status — fields are locked in Read-Only mode');
+      setEditingOrderRecord(null);
+      setEditFormData(null);
+      return;
+    }
+
+    const updatedOrder = {
+      ...editingOrderRecord,
+      customer_name: editFormData.customer_name,
+      mobile_number: editFormData.mobile_number,
+      address: editFormData.address,
+      service_category: editFormData.service_category,
+      status: editFormData.status,
+      order_status: editFormData.status,
+      captured_date: editFormData.captured_date,
+      captured_time: editFormData.captured_time,
+      order_type: editFormData.order_type,
+      expected_delivery: editFormData.expected_delivery,
+      pickup_delivery: editFormData.pickup_delivery,
+      comments: editFormData.comments,
+      special_instructions: editFormData.comments,
+      notes: editFormData.comments,
+      total_amount: Number(editFormData.total_amount || 0),
+      advance_paid: Number(editFormData.advance_paid || 0),
+      balance_due: Number(editFormData.total_amount || 0) - Number(editFormData.advance_paid || 0),
+      payment_status: editFormData.payment_status,
+      customer: {
+        ...(editingOrderRecord.customer || {}),
+        customer_name: editFormData.customer_name,
+        mobile_number: editFormData.mobile_number,
+        address: editFormData.address,
+      },
+    };
+
+    if (onUpdateOrder) {
+      onUpdateOrder(updatedOrder);
+    } else {
+      try {
+        const cached = localStorage.getItem('washdoor_orders_cache');
+        if (cached) {
+          const list = JSON.parse(cached);
+          const nextList = list.map((o) => (o.id === updatedOrder.id || o.order_number === updatedOrder.order_number) ? updatedOrder : o);
+          localStorage.setItem('washdoor_orders_cache', JSON.stringify(nextList));
+        }
+      } catch {}
+      onOrderCreated?.(updatedOrder);
+    }
+
+    showToast?.(`✅ Order ${updatedOrder.order_number || updatedOrder.id} updated successfully!`);
+    setEditingOrderRecord(null);
+    setEditFormData(null);
+  };
+
+  // Graphical Action Modal States
+  const [scheduleOrderTarget, setScheduleOrderTarget] = useState(null);
+  const [assignDriverTarget, setAssignDriverTarget] = useState(null);
+  const [scheduleType, setScheduleType] = useState('Delivery');
+  const [scheduleDate, setScheduleDate] = useState('2026-10-30');
+  const [scheduleSlot, setScheduleSlot] = useState('Evening (04:00 PM - 07:00 PM)');
+  const [selectedDriver, setSelectedDriver] = useState('Ramesh Kumar (Van #1 • Zone 1)');
 
   // Catalog State
   const [catalogItems, setCatalogItems] = useState(DEFAULT_PRODUCTS);
@@ -154,7 +285,7 @@ export default function POSModule({
     return () => document.removeEventListener('click', handleOutsideClick);
   }, []);
 
-  // Compute live counts for Status Filter Pills (matching user mockup)
+  // Compute live counts for Status Filter Pills (Received, In Progress, Ready, Delivered, Cancelled)
   const statusCounts = useMemo(() => {
     const counts = {
       all: orders.length,
@@ -165,26 +296,12 @@ export default function POSModule({
       cancelled: 0,
     };
     orders.forEach((o) => {
-      const s = String(o.order_status || o.status || '').toLowerCase();
-      if (s === 'received') {
-        counts.received++;
-      } else if (
-        s.includes('progress') ||
-        s.includes('registered') ||
-        s.includes('wash') ||
-        s.includes('press') ||
-        s.includes('clean')
-      ) {
-        counts.inProgress++;
-      } else if (s.includes('ready')) {
-        counts.ready++;
-      } else if (s.includes('delivered')) {
-        counts.delivered++;
-      } else if (s.includes('cancel')) {
-        counts.cancelled++;
-      } else {
-        counts.inProgress++;
-      }
+      const norm = normalizeOrderStatus(o.order_status || o.status);
+      if (norm === 'Received') counts.received++;
+      else if (norm === 'In Progress') counts.inProgress++;
+      else if (norm === 'Ready') counts.ready++;
+      else if (norm === 'Delivered') counts.delivered++;
+      else if (norm === 'Cancelled') counts.cancelled++;
     });
     return counts;
   }, [orders]);
@@ -204,21 +321,10 @@ export default function POSModule({
   // Full filtered list of orders for the Orders List view
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
-      // 1. Status Filter
-      if (activeStatusTab !== 'All') {
-        const s = String(o.order_status || o.status || '').toLowerCase();
-        if (activeStatusTab === 'Received' && s !== 'received') return false;
-        if (
-          activeStatusTab === 'In Progress' &&
-          !s.includes('progress') &&
-          !s.includes('registered') &&
-          !s.includes('wash') &&
-          !s.includes('press') &&
-          !s.includes('clean')
-        ) return false;
-        if (activeStatusTab === 'Ready' && !s.includes('ready')) return false;
-        if (activeStatusTab === 'Delivered' && !s.includes('delivered')) return false;
-        if (activeStatusTab === 'Cancelled' && !s.includes('cancel')) return false;
+      // 1. Status Filter (Only All Orders, Received, In Progress, Ready, Delivered, Cancelled)
+      if (activeStatusTab !== 'All' && activeStatusTab !== 'All Orders') {
+        const norm = normalizeOrderStatus(o.order_status || o.status);
+        if (norm !== activeStatusTab) return false;
       }
 
       // 2. Search Filter
@@ -531,165 +637,113 @@ export default function POSModule({
   return (
     <div className="pos-module-container">
       {/* ── Screen Top Header: Orders & POS (Matching Reference Mockup) ── */}
-      <div className="pos-screen-header">
-        <div>
-          <h1 className="pos-screen-title">Orders &amp; POS</h1>
-          <div className="pos-screen-subtitle">Create new order, search and manage orders</div>
+      <div className="pos-screen-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '20px', marginBottom: '14px', flexWrap: 'wrap' }}>
+        <div style={{ flexShrink: 0 }}>
+          <h1 className="pos-screen-title" style={{ fontSize: '24px', fontWeight: 800, margin: '0 0 3px', color: '#0f172a' }}>Orders &amp; POS</h1>
+          <div className="pos-screen-subtitle" style={{ fontSize: '13px', color: '#64748b' }}>Create new order, search and manage all laundry orders.</div>
         </div>
-        <button
-          type="button"
-          className="pos-create-order-btn"
-          id="posCreateOrderBtn"
-          onClick={() => {
-            if (onCreateOrder) onCreateOrder();
-            else {
-              handleResetRegister();
-              setPosViewMode('intake');
-            }
-          }}
-          title="Create new order (Press N)"
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          <span>Create Order</span>
-          <span className="pos-key-badge">N</span>
-        </button>
-      </div>
 
-      {/* ── POS Search Toolbar (Search Bar + Filters + Date Range + Refresh) ── */}
-      <div className="pos-toolbar-row">
-        <div className="pos-search-input-wrap">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#687e9c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
-          <input
-            type="text"
-            className="pos-search-input toolbar-search-input"
-            placeholder="Search by order ID, customer name or mobile number..."
-            value={topSearchQuery}
-            onChange={(e) => setTopSearchQuery(e.target.value)}
-          />
-          {topSearchQuery && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, justifyContent: 'flex-end', flexWrap: 'wrap', minWidth: '320px' }}>
+          {/* Top Search Bar */}
+          <div className="pos-search-input-wrap" style={{ flex: 1, minWidth: '340px' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input
+              type="text"
+              className="pos-search-input toolbar-search-input"
+              placeholder="Search by Order ID, customer name or mobile number..."
+              value={topSearchQuery}
+              onChange={(e) => setTopSearchQuery(e.target.value)}
+            />
+            {topSearchQuery && (
+              <button
+                type="button"
+                className="pos-search-clear-btn"
+                onClick={() => setTopSearchQuery('')}
+                title="Clear search"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Date Range Dropdown */}
+          <div className="pos-filter-dropdown-container">
             <button
               type="button"
-              className="pos-search-clear-btn"
-              onClick={() => setTopSearchQuery('')}
-              title="Clear search"
+              className={`pos-toolbar-btn ${activeTopDropdown === 'date' ? 'active' : ''}`}
+              onClick={() => setActiveTopDropdown((prev) => (prev === 'date' ? null : 'date'))}
+              style={{ whiteSpace: 'nowrap', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '8px 12px', color: '#334155', fontWeight: 600, fontSize: '12.5px' }}
             >
-              ✕
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+              <span>{dateFilter === 'All Time' ? '28 Oct 2026 - 28 Oct 2026' : dateFilter}</span>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
             </button>
-          )}
-        </div>
+            {activeTopDropdown === 'date' && (
+              <div className="pos-dropdown-menu">
+                <div className="pos-dropdown-header" style={{ fontSize: '11px', padding: '4px 10px 6px', fontWeight: 700, textTransform: 'uppercase' }}>
+                  Select Range
+                </div>
+                {['All Time', '28 Oct 2026 - 28 Oct 2026', 'Today', 'Yesterday', 'Last 7 Days', 'This Month'].map((rng) => (
+                  <button
+                    key={rng}
+                    type="button"
+                    className={`pos-dropdown-item ${dateFilter === rng ? 'active' : ''}`}
+                    onClick={() => {
+                      setDateFilter(rng);
+                      setActiveTopDropdown(null);
+                    }}
+                  >
+                    <span>{rng}</span>
+                    {dateFilter === rng && <span>✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
-        {/* Filters Dropdown */}
-        <div className="pos-filter-dropdown-container">
+          {/* Create Order Button */}
           <button
             type="button"
-            className={`pos-toolbar-btn ${activeTopDropdown === 'filters' ? 'active' : ''}`}
-            onClick={() => setActiveTopDropdown((prev) => (prev === 'filters' ? null : 'filters'))}
+            className="pos-create-order-btn"
+            id="posCreateOrderBtn"
+            onClick={() => {
+              if (onCreateOrder) onCreateOrder();
+              else {
+                handleResetRegister();
+                setPosViewMode('intake');
+              }
+            }}
+            title="Create new order (Press N)"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '9px 18px',
+              background: '#2563eb',
+              color: '#ffffff',
+              borderRadius: '8px',
+              fontWeight: 700,
+              fontSize: '13px',
+              border: 'none',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap'
+            }}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-            </svg>
-            <span>Filters</span>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
+            <span style={{ fontSize: '16px', lineHeight: 1 }}>＋</span>
+            <span>Create Order</span>
+            <span className="pos-key-badge" style={{ background: '#1d4ed8', color: '#fff', padding: '1px 6px', borderRadius: '4px', fontSize: '11px' }}>N</span>
           </button>
-          {activeTopDropdown === 'filters' && (
-            <div className="pos-dropdown-menu">
-              <div className="pos-dropdown-header" style={{ fontSize: '11px', padding: '4px 10px 6px', fontWeight: 700, textTransform: 'uppercase' }}>
-                Service Category
-              </div>
-              {['All Services', 'Wash & Steam Press', 'Wash & Fold', 'Dry Cleaning', 'Steam Press Only'].map((srv) => (
-                <button
-                  key={srv}
-                  type="button"
-                  className={`pos-dropdown-item ${serviceFilter === srv ? 'active' : ''}`}
-                  onClick={() => {
-                    setServiceFilter(srv);
-                    setActiveTopDropdown(null);
-                  }}
-                >
-                  <span>{srv}</span>
-                  {serviceFilter === srv && <span>✓</span>}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
-
-        {/* Date Range Dropdown */}
-        <div className="pos-filter-dropdown-container">
-          <button
-            type="button"
-            className={`pos-toolbar-btn ${activeTopDropdown === 'date' ? 'active' : ''}`}
-            onClick={() => setActiveTopDropdown((prev) => (prev === 'date' ? null : 'date'))}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="16" y1="2" x2="16" y2="6"></line>
-              <line x1="8" y1="2" x2="8" y2="6"></line>
-              <line x1="3" y1="10" x2="21" y2="10"></line>
-            </svg>
-            <span>Date Range</span>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
-          </button>
-          {activeTopDropdown === 'date' && (
-            <div className="pos-dropdown-menu">
-              <div className="pos-dropdown-header" style={{ fontSize: '11px', padding: '4px 10px 6px', fontWeight: 700, textTransform: 'uppercase' }}>
-                Select Range
-              </div>
-              {['All Time', 'Today', 'Yesterday', 'Last 7 Days', 'This Month'].map((rng) => (
-                <button
-                  key={rng}
-                  type="button"
-                  className={`pos-dropdown-item ${dateFilter === rng ? 'active' : ''}`}
-                  onClick={() => {
-                    setDateFilter(rng);
-                    setActiveTopDropdown(null);
-                  }}
-                >
-                  <span>{rng}</span>
-                  {dateFilter === rng && <span>✓</span>}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Refresh Button */}
-        <button
-          type="button"
-          className="pos-toolbar-icon-btn"
-          disabled={loadingOrders}
-          onClick={() => {
-            onRefreshOrders?.();
-            showToast?.('↻ Syncing orders with Supabase...');
-          }}
-          title="Reload records from Supabase"
-        >
-          <svg
-            className={loadingOrders ? 'sync-spinner' : ''}
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polyline points="23 4 23 10 17 10"></polyline>
-            <polyline points="1 20 1 14 7 14"></polyline>
-            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-          </svg>
-        </button>
 
         {/* Floating Top Search Results */}
         {topSearchQuery && matchingTopOrders.length > 0 && (
@@ -723,93 +777,160 @@ export default function POSModule({
         )}
       </div>
 
-      {/* ── Status Filter Pills Bar (Matching Reference Mockup) ── */}
-      <div className="pos-status-pills-bar">
-        <button
-          type="button"
-          className={`pos-status-pill ${activeStatusTab === 'All' ? 'active' : ''}`}
-          onClick={() => {
-            setActiveStatusTab('All');
-            setPosViewMode('orders');
-          }}
-        >
-          <span>All</span>
-          <span className="pos-status-pill-count">{statusCounts.all}</span>
-          {activeStatusTab === 'All' && <span className="pos-pill-active-line" />}
-        </button>
+      {/* ── Status Filter Pills Row (with Filters & Refresh on right) ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        <div className="pos-status-pills-bar" style={{ margin: 0 }}>
+          <button
+            type="button"
+            className={`pos-status-pill ${activeStatusTab === 'All' || activeStatusTab === 'All Orders' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveStatusTab('All');
+              setPosViewMode('orders');
+            }}
+          >
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#fff', display: 'inline-block' }}></span>
+            <span>All Orders</span>
+            <span className="pos-status-pill-count">{statusCounts.all}</span>
+          </button>
 
-        <button
-          type="button"
-          className={`pos-status-pill ${activeStatusTab === 'Received' ? 'active' : ''}`}
-          onClick={() => {
-            setActiveStatusTab('Received');
-            setPosViewMode('orders');
-          }}
-        >
-          <span className="pos-status-dot dot-received"></span>
-          <span>Received</span>
-          <span className="pos-status-pill-count">{statusCounts.received}</span>
-          {activeStatusTab === 'Received' && <span className="pos-pill-active-line" />}
-        </button>
+          <button
+            type="button"
+            className={`pos-status-pill ${activeStatusTab === 'Received' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveStatusTab('Received');
+              setPosViewMode('orders');
+            }}
+          >
+            <span className="pos-status-dot dot-received" style={{ background: '#2563eb' }}></span>
+            <span>Received</span>
+            <span className="pos-status-pill-count">{statusCounts.received}</span>
+          </button>
 
-        <button
-          type="button"
-          className={`pos-status-pill ${activeStatusTab === 'In Progress' ? 'active' : ''}`}
-          onClick={() => {
-            setActiveStatusTab('In Progress');
-            setPosViewMode('orders');
-          }}
-        >
-          <span className="pos-status-dot dot-progress"></span>
-          <span>In Progress</span>
-          <span className="pos-status-pill-count">{statusCounts.inProgress}</span>
-          {activeStatusTab === 'In Progress' && <span className="pos-pill-active-line" />}
-        </button>
+          <button
+            type="button"
+            className={`pos-status-pill ${activeStatusTab === 'In Progress' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveStatusTab('In Progress');
+              setPosViewMode('orders');
+            }}
+          >
+            <span className="pos-status-dot dot-progress" style={{ background: '#f59e0b' }}></span>
+            <span>In Progress</span>
+            <span className="pos-status-pill-count">{statusCounts.inProgress}</span>
+          </button>
 
-        <button
-          type="button"
-          className={`pos-status-pill ${activeStatusTab === 'Ready' ? 'active' : ''}`}
-          onClick={() => {
-            setActiveStatusTab('Ready');
-            setPosViewMode('orders');
-          }}
-        >
-          <span className="pos-status-dot dot-ready"></span>
-          <span>Ready</span>
-          <span className="pos-status-pill-count">{statusCounts.ready}</span>
-          {activeStatusTab === 'Ready' && <span className="pos-pill-active-line" />}
-        </button>
+          <button
+            type="button"
+            className={`pos-status-pill ${activeStatusTab === 'Ready' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveStatusTab('Ready');
+              setPosViewMode('orders');
+            }}
+          >
+            <span className="pos-status-dot dot-ready" style={{ background: '#10b981' }}></span>
+            <span>Ready</span>
+            <span className="pos-status-pill-count">{statusCounts.ready}</span>
+          </button>
 
-        <button
-          type="button"
-          className={`pos-status-pill ${activeStatusTab === 'Delivered' ? 'active' : ''}`}
-          onClick={() => {
-            setActiveStatusTab('Delivered');
-            setPosViewMode('orders');
-          }}
-        >
-          <span className="pos-status-dot dot-delivered"></span>
-          <span>Delivered</span>
-          <span className="pos-status-pill-count">{statusCounts.delivered}</span>
-          {activeStatusTab === 'Delivered' && <span className="pos-pill-active-line" />}
-        </button>
+          <button
+            type="button"
+            className={`pos-status-pill ${activeStatusTab === 'Delivered' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveStatusTab('Delivered');
+              setPosViewMode('orders');
+            }}
+          >
+            <span className="pos-status-dot dot-delivered" style={{ background: '#0284c7' }}></span>
+            <span>Delivered</span>
+            <span className="pos-status-pill-count">{statusCounts.delivered}</span>
+          </button>
 
-        <button
-          type="button"
-          className={`pos-status-pill ${activeStatusTab === 'Cancelled' ? 'active' : ''}`}
-          onClick={() => {
-            setActiveStatusTab('Cancelled');
-            setPosViewMode('orders');
-          }}
-        >
-          <span className="pos-status-dot dot-cancelled"></span>
-          <span>Cancelled</span>
-          <span className="pos-status-pill-count">{statusCounts.cancelled}</span>
-          {activeStatusTab === 'Cancelled' && <span className="pos-pill-active-line" />}
-        </button>
+          <button
+            type="button"
+            className={`pos-status-pill ${activeStatusTab === 'Cancelled' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveStatusTab('Cancelled');
+              setPosViewMode('orders');
+            }}
+          >
+            <span className="pos-status-dot dot-cancelled" style={{ background: '#ef4444' }}></span>
+            <span>Cancelled</span>
+            <span className="pos-status-pill-count">{statusCounts.cancelled}</span>
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Filters Dropdown */}
+          <div className="pos-filter-dropdown-container">
+            <button
+              type="button"
+              className={`pos-toolbar-btn ${activeTopDropdown === 'filters' ? 'active' : ''}`}
+              onClick={() => setActiveTopDropdown((prev) => (prev === 'filters' ? null : 'filters'))}
+              style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '8px 14px', color: '#334155', fontWeight: 600, fontSize: '12.5px' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+              </svg>
+              <span>Filters</span>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            {activeTopDropdown === 'filters' && (
+              <div className="pos-dropdown-menu">
+                <div className="pos-dropdown-header" style={{ fontSize: '11px', padding: '4px 10px 6px', fontWeight: 700, textTransform: 'uppercase' }}>
+                  Service Category
+                </div>
+                {['All Services', 'Normal Wash', 'Wash & Steam Press', 'Wash & Fold', 'Dry Cleaning', 'Heavy Linens & Quilts', 'Express 24H Service'].map((srv) => (
+                  <button
+                    key={srv}
+                    type="button"
+                    className={`pos-dropdown-item ${serviceFilter === srv ? 'active' : ''}`}
+                    onClick={() => {
+                      setServiceFilter(srv);
+                      setActiveTopDropdown(null);
+                    }}
+                  >
+                    <span>{srv}</span>
+                    {serviceFilter === srv && <span>✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Refresh Button */}
+          <button
+            type="button"
+            className="pos-toolbar-icon-btn"
+            disabled={loadingOrders}
+            onClick={() => {
+              onRefreshOrders?.();
+              showToast?.('↻ Syncing orders...');
+            }}
+            title="Reload records"
+            style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '8px 10px' }}
+          >
+            <svg
+              className={loadingOrders ? 'sync-spinner' : ''}
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+          </button>
+        </div>
       </div>
 
-      {/* ── POS View Switcher & Action Bar (Matching Reference Mockup) ── */}
+      {/* Hidden / Commented Out as requested:
       <div className="pos-workstation-bar">
         <div className="pos-view-switch-tabs">
           <button
@@ -899,6 +1020,7 @@ export default function POSModule({
           </button>
         </div>
       </div>
+      */}
 
       {posViewMode === 'orders' ? (
         <div className="pos-orders-view-wrap">
@@ -941,13 +1063,6 @@ export default function POSModule({
                   ? `There are currently 0 orders under the "${activeStatusTab}" status.`
                   : 'Start taking orders to see customer items, bills, and workflow status here.'}
               </p>
-              <button
-                type="button"
-                className="pos-empty-take-order-btn"
-                onClick={() => setPosViewMode('intake')}
-              >
-                <span>＋</span> Take New Order (Press N)
-              </button>
             </div>
           ) : (
             <>
@@ -981,165 +1096,846 @@ export default function POSModule({
                   <table className="pos-orders-table">
                     <thead>
                       <tr>
-                        <th>ORDER TICKET</th>
-                        <th>CUSTOMER</th>
-                        <th>GARMENTS &amp; SERVICE</th>
-                        <th>DELIVERY TARGET</th>
-                        <th>AMOUNT &amp; BALANCE</th>
-                        <th>WORKFLOW STATUS</th>
-                        <th style={{ textAlign: 'right', paddingRight: '18px' }}>ACTIONS</th>
+                        <th>Order ID</th>
+                        <th>Customer (Name &amp; Number)</th>
+                        <th>Address</th>
+                        <th>Services Allocated</th>
+                        <th>Status</th>
+                        <th>Order Details (Captured Time)</th>
+                        <th>Pickup &amp; Delivery</th>
+                        <th style={{ textAlign: 'right', paddingRight: '24px' }}>Bill</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredOrders.map((ord) => {
                         const custName = ord.customer_name || ord.customer?.customer_name || 'Walk-in Customer';
-                        const phone = ord.mobile_number || ord.customer?.mobile_number || '';
-                        const orderNum = ord.order_number || (ord.id ? `ORDER-${ord.id}` : 'ORDER-00001');
+                        const phone = ord.formatted_mobile || formatPhoneDisplay(ord.mobile_number || ord.customer?.mobile_number) || '—';
+                        const orderNum = ord.order_number || ord.order_id || (ord.id ? `ORD${String(ord.id).replace(/\D/g, '').padStart(5, '0')}` : 'ORD00001');
+                        const custAddress = ord.address || ord.delivery_address || ord.customer?.address || ord.customer?.streetArea || 'Counter Walk-In';
                         const items = ord.customer_history?.items || ord.items || [];
                         const itemCount = Array.isArray(items) && items.length > 0
                           ? items.reduce((acc, it) => acc + (Number(it.qty) || 1), 0)
                           : (ord.item_count || 1);
-                        const srv = ord.service_category || ord.service_type || ord.preference || 'Wash & Steam Press';
-                        const amt = Number(ord.total_amount || 0);
-                        const advance = Number(ord.advance_paid || 0);
-                        const balDue = Math.max(0, amt - advance);
-                        const payStatus = ord.payment_status || (balDue <= 0 && amt > 0 ? 'PAID' : 'UNPAID');
-                        const workStatus = ord.order_status || ord.status || 'Order in Progress';
+                        const srv = ord.service_category || ord.service_type || ord.preference || 'Normal Wash';
+                        const workStatus = normalizeOrderStatus(ord.order_status || ord.status || 'Received');
 
-                        let statusPillClass = 'dot-progress';
-                        const sLower = workStatus.toLowerCase();
-                        if (sLower === 'received') statusPillClass = 'dot-received';
-                        else if (sLower.includes('ready')) statusPillClass = 'dot-ready';
-                        else if (sLower.includes('delivered')) statusPillClass = 'dot-delivered';
-                        else if (sLower.includes('cancel')) statusPillClass = 'dot-cancelled';
+                        // Services Allocated list
+                        const servicesAllocated = ord.services_allocated || (
+                          Array.isArray(items) && items.length > 0
+                            ? items.map((it) => ({
+                                name: it.service || it.name || srv,
+                                count: Number(it.qty) || 1,
+                                icon: '👕',
+                              }))
+                            : [{ name: srv, count: itemCount, icon: '👕' }]
+                        );
+
+                        // Status colors & style (Only Received, In Progress, Ready, Delivered, Cancelled)
+                        let statusBg = '#eff6ff';
+                        let statusColor = '#1d4ed8';
+                        let statusBorder = '#bfdbfe';
+                        let statusDotColor = '#2563eb';
+                        let accentColor = ord.accent_color || '#2563eb';
+
+                        if (workStatus === 'In Progress') {
+                          statusBg = '#fef3c7';
+                          statusColor = '#b45309';
+                          statusBorder = '#fde68a';
+                          statusDotColor = '#f59e0b';
+                          accentColor = ord.accent_color || '#f59e0b';
+                        } else if (workStatus === 'Ready') {
+                          statusBg = '#dcfce7';
+                          statusColor = '#15803d';
+                          statusBorder = '#bbf7d0';
+                          statusDotColor = '#10b981';
+                          accentColor = ord.accent_color || '#10b981';
+                        } else if (workStatus === 'Delivered') {
+                          statusBg = '#e0f2fe';
+                          statusColor = '#0369a1';
+                          statusBorder = '#bae6fd';
+                          statusDotColor = '#0284c7';
+                          accentColor = ord.accent_color || '#0284c7';
+                        } else if (workStatus === 'Cancelled') {
+                          statusBg = '#fee2e2';
+                          statusColor = '#b91c1c';
+                          statusBorder = '#fecaca';
+                          statusDotColor = '#ef4444';
+                          accentColor = ord.accent_color || '#ef4444';
+                        }
+
+                        // Order capture date & details
+                        const capturedDateStr = ord.captured_date || (ord.created_at ? new Date(ord.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '28 Oct 2026');
+                        const capturedTimeStr = ord.captured_time || (ord.created_at ? new Date(ord.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '10:15 AM');
+                        const orderCapturedStr = ord.order_captured || `${capturedDateStr}, ${capturedTimeStr}`;
+                        const orderTypeStr = ord.order_type || 'Walk-in';
+                        const expectedDeliveryStr = ord.expected_delivery || (ord.target_delivery_date ? new Date(ord.target_delivery_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '30 Oct 2026, 05:00 PM');
+                        const pickupDeliveryStr = ord.pickup_delivery || '--------';
+
+                        // Avatar palette for customer graphical badges
+                        const avatarPalette = [
+                          { bg: '#dbeafe', color: '#1d4ed8' }, // Blue
+                          { bg: '#ffedd5', color: '#ea580c' }, // Orange
+                          { bg: '#f3e8ff', color: '#9333ea' }, // Purple
+                          { bg: '#dcfce7', color: '#16a34a' }, // Green
+                          { bg: '#e0f2fe', color: '#0284c7' }, // Sky
+                          { bg: '#fce7f3', color: '#db2777' }, // Pink
+                        ];
+                        const charCodeSum = (ord.id || ord.order_number || custName).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+                        const avatarTheme = avatarPalette[Math.abs(charCodeSum) % avatarPalette.length];
+
+                        const isDeliveryType = orderTypeStr.toLowerCase().includes('home') || orderTypeStr.toLowerCase().includes('delivery');
+                        const isEditingThisOrder = Boolean(
+                          editingOrderRecord &&
+                          (editingOrderRecord.id === ord.id || editingOrderRecord.order_number === ord.order_number)
+                        );
+                        const isOrderReady = normalizeOrderStatus(ord.order_status || ord.status) === 'Ready';
 
                         return (
-                          <tr key={ord.id || ord.order_number} className="pos-order-row">
-                            {/* 1. Ticket Number */}
-                            <td>
-                              <div className="pos-ticket-cell">
+                          <React.Fragment key={ord.id || ord.order_number}>
+                            <tr
+                              className={`pos-order-row ${isEditingThisOrder ? 'pos-order-row-editing' : ''}`}
+                              style={isEditingThisOrder ? { background: '#f8fafc' } : {}}
+                            >
+                            {/* 1. Order ID (with Calendar, Clock, and Type Pill) */}
+                            <td style={{ borderLeft: `4px solid ${accentColor}`, paddingLeft: '14px', verticalAlign: 'top', paddingTop: '14px' }}>
+                              <div className="pos-ticket-cell" style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                                 <span
                                   className="pos-ticket-num"
                                   onClick={() => onOpenOrderStatus?.(ord, true)}
                                   title="Click to view printable bill"
-                                  style={{ cursor: 'pointer', fontWeight: 700 }}
+                                  style={{ cursor: 'pointer', fontWeight: 800, fontSize: '13.5px', color: '#2563eb' }}
                                 >
                                   {orderNum}
                                 </span>
-                                <span className="pos-ticket-date" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
-                                  {ord.created_at ? ord.created_at.replace(/^(\d{4})-(\d{2})-(\d{2})T/, '$3T') : 'Today'}
-                                </span>
-                              </div>
-                            </td>
-
-                            {/* 2. Customer */}
-                            <td>
-                              <div className="pos-cust-cell">
-                                <span className="pos-cust-name" style={{ fontWeight: 700 }}>{custName}</span>
-                                <span className="pos-cust-phone">{formatPhoneDisplay(phone) || 'No phone'}</span>
-                              </div>
-                            </td>
-
-                            {/* 3. Garments & Service */}
-                            <td>
-                              <div className="pos-service-cell">
-                                <span className="pos-service-tag">{srv}</span>
-                                <span className="pos-pieces-sub">{itemCount} piece{itemCount !== 1 ? 's' : ''}</span>
-                              </div>
-                            </td>
-
-                            {/* 4. Delivery Target */}
-                            <td>
-                              <div className="pos-date-cell">
-                                <span className="pos-delivery-date" style={{ fontWeight: 600 }}>Standard 48H</span>
-                                <span className="pos-delivery-sub">Target Delivery</span>
-                              </div>
-                            </td>
-
-                            {/* 5. Amount & Payment */}
-                            <td>
-                              <div className="pos-amt-cell">
-                                <span className="pos-amt-val">{currencySymbol}{amt.toFixed(2)}</span>
-                                <span className="pos-pay-badge pay-unpaid" style={{
-                                  background: payStatus.toUpperCase() === 'PAID' ? '#dcfce7' : '#fef3c7',
-                                  color: payStatus.toUpperCase() === 'PAID' ? '#15803d' : '#d97706',
-                                  border: payStatus.toUpperCase() === 'PAID' ? '1px solid #bbf7d0' : '1px solid #fde68a',
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', color: '#64748b' }}>
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                    <line x1="16" y1="2" x2="16" y2="6" />
+                                    <line x1="8" y1="2" x2="8" y2="6" />
+                                    <line x1="3" y1="10" x2="21" y2="10" />
+                                  </svg>
+                                  <span>{capturedDateStr}</span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: '#94a3b8' }}>
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <polyline points="12 6 12 12 16 14" />
+                                  </svg>
+                                  <span>{capturedTimeStr}</span>
+                                </div>
+                                <div style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  padding: '2px 7px',
                                   borderRadius: '4px',
-                                  fontSize: '10.5px',
-                                  fontWeight: 700,
-                                  padding: '1px 6px',
-                                  width: 'fit-content'
+                                  fontSize: '11px',
+                                  fontWeight: 650,
+                                  width: 'fit-content',
+                                  marginTop: '2px',
+                                  background: isDeliveryType ? '#dcfce7' : '#eff6ff',
+                                  color: isDeliveryType ? '#15803d' : '#2563eb',
+                                  border: isDeliveryType ? '1px solid #bbf7d0' : '1px solid #bfdbfe'
                                 }}>
-                                  {payStatus.toUpperCase()}
-                                </span>
+                                  <span>{isDeliveryType ? '🚚' : '＋'}</span>
+                                  <span>{orderTypeStr}</span>
+                                </div>
                               </div>
                             </td>
 
-                            {/* 6. Workflow Status */}
-                            <td>
-                              <div className="pos-status-badge-wrap" style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                padding: '4px 10px',
-                                borderRadius: '16px',
-                                fontSize: '12px',
-                                fontWeight: 600
-                              }}>
-                                <span className={`pos-status-dot ${statusPillClass}`}></span>
-                                <span className="pos-status-text">{workStatus}</span>
-                              </div>
-                            </td>
-
-                            {/* 7. Actions */}
-                            <td style={{ textAlign: 'right', paddingRight: '16px' }}>
-                              <div className="pos-row-actions">
-                                <button
-                                  type="button"
-                                  className="pos-table-action-btn btn-bill"
-                                  onClick={() => onOpenOrderStatus?.(ord, true)}
-                                  title="View & Print Bill / Invoice"
-                                >
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                    <polyline points="14 2 14 8 20 8"></polyline>
-                                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                                    <polyline points="10 9 9 9 8 9"></polyline>
+                            {/* 2. Customer (Avatar Circle, Name & Number) */}
+                            <td style={{ verticalAlign: 'top', paddingTop: '14px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{
+                                  width: '34px',
+                                  height: '34px',
+                                  borderRadius: '50%',
+                                  background: avatarTheme.bg,
+                                  color: avatarTheme.color,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                  boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+                                }}>
+                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="12" cy="7" r="4"></circle>
                                   </svg>
-                                  <span>Bill</span>
-                                </button>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                  <div style={{ fontWeight: 750, color: '#0f172a', fontSize: '13.5px' }}>
+                                    {custName}
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#475569' }}>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                                    </svg>
+                                    <span>{phone}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* 3. Address (Red Map Pin & Text) */}
+                            <td style={{ maxWidth: '210px', verticalAlign: 'top', paddingTop: '14px' }}>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '7px', fontSize: '12px', color: '#475569', lineHeight: 1.45 }}>
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="#ef4444" stroke="#dc2626" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
+                                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                  <circle cx="12" cy="10" r="3" fill="#ffffff"></circle>
+                                </svg>
+                                <span>{custAddress}</span>
+                              </div>
+                            </td>
+
+                            {/* 4. Services Allocated (Visual chips & counts) */}
+                            <td style={{ verticalAlign: 'top', paddingTop: '14px' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                {servicesAllocated.slice(0, 3).map((srvItem, sIdx) => (
+                                  <div key={sIdx} style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '8px',
+                                    background: '#f8fafc',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '6px',
+                                    padding: '3px 8px',
+                                    fontSize: '12px',
+                                    color: '#1e293b',
+                                    width: 'fit-content',
+                                    whiteSpace: 'nowrap'
+                                  }}>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                      <span>{srvItem.icon || '👕'}</span>
+                                      <span>{srvItem.name}</span>
+                                    </span>
+                                    <span style={{ fontWeight: 700, color: '#2563eb', background: '#dbeafe', padding: '1px 6px', borderRadius: '4px', fontSize: '11px' }}>
+                                      {srvItem.count}
+                                    </span>
+                                  </div>
+                                ))}
+                                {servicesAllocated.length > 3 && (
+                                  <span style={{
+                                    fontSize: '11px',
+                                    fontWeight: 700,
+                                    color: '#2563eb',
+                                    background: '#eff6ff',
+                                    border: '1px solid #bfdbfe',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    width: 'fit-content'
+                                  }}>
+                                    +{servicesAllocated.length - 3} more
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* 5. Status (Icon badge & processing subtext) */}
+                            <td style={{ verticalAlign: 'top', paddingTop: '14px' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
+                                <div style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  padding: '4px 10px',
+                                  borderRadius: '16px',
+                                  fontSize: '12px',
+                                  fontWeight: 700,
+                                  background: statusBg,
+                                  color: statusColor,
+                                  border: `1px solid ${statusBorder}`
+                                }}>
+                                  <span style={{
+                                    width: '14px',
+                                    height: '14px',
+                                    borderRadius: '50%',
+                                    background: statusDotColor,
+                                    color: '#ffffff',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '9px',
+                                    fontWeight: 800
+                                  }}>
+                                    {workStatus === 'In Progress' ? '⏱' : workStatus === 'Cancelled' ? '✕' : '✓'}
+                                  </span>
+                                  <span>{workStatus}</span>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* 6. Order Details (Captured Time) */}
+                            <td style={{ verticalAlign: 'top', paddingTop: '14px' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', color: '#475569' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                  <span>Order Captured: {orderCapturedStr}</span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                                  <span>Order Type : {orderTypeStr}</span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                  <span>Expected Delivery: {expectedDeliveryStr}</span>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* 7. Pickup & Delivery (Van graphic card + Action Buttons) */}
+                            <td style={{ verticalAlign: 'middle', padding: '10px 14px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'center' }}>
+                                {/* Delivery Van Graphic Card */}
+                                <div style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: '3px',
+                                  background: '#f8fafc',
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: '8px',
+                                  padding: '7px 8px',
+                                  width: '74px',
+                                  flexShrink: 0
+                                }}>
+                                  <div style={{
+                                    width: '26px',
+                                    height: '26px',
+                                    borderRadius: '6px',
+                                    background: '#eff6ff',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                  }}>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <rect x="1" y="3" width="15" height="13"></rect>
+                                      <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                                      <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                                      <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                                    </svg>
+                                  </div>
+                                  <span style={{ fontSize: '9.5px', fontWeight: 650, color: '#64748b', textAlign: 'center', lineHeight: 1.1 }}>
+                                    {pickupDeliveryStr && pickupDeliveryStr !== '--------' ? pickupDeliveryStr : 'Not Scheduled'}
+                                  </span>
+                                </div>
+
+                                {/* Stacked Schedule & Assign Driver Buttons */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'stretch', width: '116px' }}>
+                                  <button
+                                    type="button"
+                                    className="pos-pickup-btn pos-schedule-btn"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setScheduleOrderTarget(ord);
+                                    }}
+                                    title={`Schedule Pickup/Delivery for ${orderNum}`}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      gap: '5px',
+                                      padding: '5px 10px',
+                                      borderRadius: '6px',
+                                      border: '1.5px solid #3b82f6',
+                                      background: '#ffffff',
+                                      color: '#2563eb',
+                                      fontWeight: 650,
+                                      fontSize: '12px',
+                                      cursor: 'pointer',
+                                      whiteSpace: 'nowrap',
+                                      boxShadow: '0 1px 2px rgba(59, 130, 246, 0.08)',
+                                      transition: 'all 0.15s ease'
+                                    }}
+                                  >
+                                    <span style={{ fontSize: '13px', fontWeight: 800 }}>＋</span>
+                                    <span>Schedule</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="pos-pickup-btn pos-driver-btn"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setAssignDriverTarget(ord);
+                                    }}
+                                    title={`Assign Driver for ${orderNum}`}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      gap: '5px',
+                                      padding: '5px 10px',
+                                      borderRadius: '6px',
+                                      border: '1.5px solid #3b82f6',
+                                      background: '#ffffff',
+                                      color: '#2563eb',
+                                      fontWeight: 650,
+                                      fontSize: '12px',
+                                      cursor: 'pointer',
+                                      whiteSpace: 'nowrap',
+                                      boxShadow: '0 1px 2px rgba(59, 130, 246, 0.08)',
+                                      transition: 'all 0.15s ease'
+                                    }}
+                                  >
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                                      <circle cx="9" cy="7" r="4"></circle>
+                                      <line x1="19" y1="8" x2="19" y2="14"></line>
+                                      <line x1="22" y1="11" x2="16" y2="11"></line>
+                                    </svg>
+                                    <span>Assign Driver</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* 8. Bill / Actions (Bill + Edit stacked + More icon) */}
+                            <td style={{ textAlign: 'right', paddingRight: '16px', verticalAlign: 'middle' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
+                                  <button
+                                    type="button"
+                                    className="pos-table-action-btn btn-bill"
+                                    onClick={() => onOpenOrderStatus?.(ord, true)}
+                                    title="View & Print Bill / Invoice"
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      gap: '5px',
+                                      padding: '5px 12px',
+                                      width: '82px',
+                                      borderRadius: '6px',
+                                      border: '1.5px solid #7c3aed',
+                                      background: '#f5f3ff',
+                                      color: '#6d28d9',
+                                      fontWeight: 650,
+                                      fontSize: '12px',
+                                      cursor: 'pointer',
+                                      boxShadow: '0 1px 2px rgba(124, 58, 237, 0.08)',
+                                      transition: 'all 0.15s ease'
+                                    }}
+                                  >
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                      <polyline points="14 2 14 8 20 8"></polyline>
+                                      <line x1="16" y1="13" x2="8" y2="13"></line>
+                                      <line x1="16" y1="17" x2="8" y2="17"></line>
+                                    </svg>
+                                    <span>Bill</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className={`pos-table-action-btn btn-edit-order ${isEditingThisOrder ? 'active-edit-btn' : ''}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenEditModal(ord);
+                                    }}
+                                    title={isEditingThisOrder ? `Close Edit for ${orderNum}` : `Edit Order ${orderNum}`}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      gap: '5px',
+                                      padding: '5px 12px',
+                                      width: '82px',
+                                      borderRadius: '6px',
+                                      border: isEditingThisOrder ? '1.5px solid #2563eb' : '1.5px solid #cbd5e1',
+                                      background: isEditingThisOrder ? '#eff6ff' : '#ffffff',
+                                      color: isEditingThisOrder ? '#2563eb' : '#334155',
+                                      fontWeight: 650,
+                                      fontSize: '12px',
+                                      cursor: 'pointer',
+                                      boxShadow: isEditingThisOrder ? '0 1px 3px rgba(37, 99, 235, 0.2)' : '0 1px 2px rgba(0, 0, 0, 0.04)',
+                                      transition: 'all 0.15s ease'
+                                    }}
+                                  >
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                    </svg>
+                                    <span>{isEditingThisOrder ? 'Close' : 'Edit'}</span>
+                                  </button>
+                                </div>
 
                                 <button
                                   type="button"
-                                  className="pos-table-action-btn btn-status"
                                   onClick={() => onOpenOrderStatus?.(ord, false)}
-                                  title="Update Workflow Pipeline Status"
+                                  title="More Actions"
+                                  style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: '#64748b',
+                                    cursor: 'pointer',
+                                    padding: '4px',
+                                    fontSize: '18px',
+                                    lineHeight: 1
+                                  }}
                                 >
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                                    <polyline points="23 4 23 10 17 10"></polyline>
-                                    <polyline points="1 20 1 14 7 14"></polyline>
-                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                                  </svg>
-                                  <span>Status</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  className="pos-table-action-btn btn-edit"
-                                  onClick={() => onEditOrder?.(ord)}
-                                  title="Edit Order"
-                                >
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                                    <path d="M11 4H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                                  </svg>
+                                  ⋮
                                 </button>
                               </div>
                             </td>
                           </tr>
-                        );
-                      })}
+
+                          {/* ── Inline Edit Dropdown Accordion Row ── */}
+                          {isEditingThisOrder && editFormData && (
+                            <tr key={`${orderNum}_edit_dropdown_card`} className="pos-edit-dropdown-row">
+                              <td colSpan={8} style={{ padding: '0 16px 16px 16px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                                <div
+                                  className="pos-inline-edit-card"
+                                  style={{
+                                    background: '#ffffff',
+                                    borderRadius: '10px',
+                                    border: '1.5px solid #3b82f6',
+                                    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.08)',
+                                    padding: '16px 20px',
+                                    margin: '4px 0 6px 0',
+                                    position: 'relative'
+                                  }}
+                                >
+                                  {/* Card Header */}
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      borderBottom: '1px solid #e2e8f0',
+                                      paddingBottom: '12px',
+                                      marginBottom: '16px'
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                      </svg>
+                                      <span style={{ fontSize: '15px', fontWeight: 700, color: '#1d4ed8' }}>
+                                        Edit Order — {editFormData.order_number}
+                                      </span>
+                                      {isOrderReady && (
+                                        <span
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            background: '#fef3c7',
+                                            color: '#92400e',
+                                            fontSize: '11px',
+                                            fontWeight: 700,
+                                            padding: '2px 8px',
+                                            borderRadius: '12px',
+                                            border: '1px solid #fde68a'
+                                          }}
+                                        >
+                                          🔒 Read-Only (Ready)
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingOrderRecord(null);
+                                        setEditFormData(null);
+                                      }}
+                                      title="Collapse Edit Form"
+                                      style={{
+                                        background: '#f1f5f9',
+                                        border: '1px solid #cbd5e1',
+                                        borderRadius: '6px',
+                                        width: '28px',
+                                        height: '28px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        color: '#475569',
+                                        fontSize: '13px',
+                                        fontWeight: 700,
+                                        transition: 'all 0.15s ease'
+                                      }}
+                                      onMouseOver={(e) => { e.currentTarget.style.background = '#e2e8f0'; }}
+                                      onMouseOut={(e) => { e.currentTarget.style.background = '#f1f5f9'; }}
+                                    >
+                                      ▲
+                                    </button>
+                                  </div>
+
+                                  {/* Read-only Alert banner if status is Ready */}
+                                  {isOrderReady && (
+                                    <div
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        background: '#fef9c3',
+                                        color: '#854d0e',
+                                        border: '1px solid #fef08a',
+                                        borderRadius: '6px',
+                                        padding: '8px 12px',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        marginBottom: '14px'
+                                      }}
+                                    >
+                                      <span>ℹ️</span>
+                                      <span>This order has reached <strong>Ready</strong> status. Fields are locked in read-only mode to prevent unintended modifications.</span>
+                                    </div>
+                                  )}
+
+                                  {/* Form Body */}
+                                  <form onSubmit={handleSaveOrderEdit}>
+                                    {/* Row 1: 3 columns: Customer Name *, Mobile Number *, Address * */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '14px' }}>
+                                      <div>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
+                                          Customer Name <span style={{ color: '#ef4444' }}>*</span>
+                                        </label>
+                                        <input
+                                          type="text"
+                                          disabled={isOrderReady}
+                                          value={editFormData.customer_name || ''}
+                                          onChange={(e) => setEditFormData({ ...editFormData, customer_name: e.target.value })}
+                                          required
+                                          style={{
+                                            width: '100%',
+                                            boxSizing: 'border-box',
+                                            padding: '7px 10px',
+                                            fontSize: '13px',
+                                            borderRadius: '6px',
+                                            border: '1px solid #cbd5e1',
+                                            background: isOrderReady ? '#f8fafc' : '#ffffff',
+                                            color: '#1e293b',
+                                            outline: 'none'
+                                          }}
+                                        />
+                                      </div>
+
+                                      <div>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
+                                          Mobile Number <span style={{ color: '#ef4444' }}>*</span>
+                                        </label>
+                                        <input
+                                          type="text"
+                                          disabled={isOrderReady}
+                                          value={editFormData.mobile_number || ''}
+                                          onChange={(e) => setEditFormData({ ...editFormData, mobile_number: e.target.value })}
+                                          required
+                                          style={{
+                                            width: '100%',
+                                            boxSizing: 'border-box',
+                                            padding: '7px 10px',
+                                            fontSize: '13px',
+                                            borderRadius: '6px',
+                                            border: '1px solid #cbd5e1',
+                                            background: isOrderReady ? '#f8fafc' : '#ffffff',
+                                            color: '#1e293b',
+                                            outline: 'none'
+                                          }}
+                                        />
+                                      </div>
+
+                                      <div>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
+                                          Address <span style={{ color: '#ef4444' }}>*</span>
+                                        </label>
+                                        <input
+                                          type="text"
+                                          disabled={isOrderReady}
+                                          value={editFormData.address || ''}
+                                          onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
+                                          required
+                                          style={{
+                                            width: '100%',
+                                            boxSizing: 'border-box',
+                                            padding: '7px 10px',
+                                            fontSize: '13px',
+                                            borderRadius: '6px',
+                                            border: '1px solid #cbd5e1',
+                                            background: isOrderReady ? '#f8fafc' : '#ffffff',
+                                            color: '#1e293b',
+                                            outline: 'none'
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+
+                                    {/* Row 2: 3 columns: Status *, Order Type *, Expected Delivery * */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '14px' }}>
+                                      <div>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
+                                          Status <span style={{ color: '#ef4444' }}>*</span>
+                                        </label>
+                                        <select
+                                          disabled={isOrderReady}
+                                          value={normalizeOrderStatus(editFormData.status || editFormData.order_status)}
+                                          onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value, order_status: e.target.value })}
+                                          style={{
+                                            width: '100%',
+                                            boxSizing: 'border-box',
+                                            padding: '7px 10px',
+                                            fontSize: '13px',
+                                            borderRadius: '6px',
+                                            border: '1px solid #cbd5e1',
+                                            background: isOrderReady ? '#f8fafc' : '#ffffff',
+                                            color: '#1e293b',
+                                            outline: 'none'
+                                          }}
+                                        >
+                                          <option value="Received">Received</option>
+                                          <option value="In Progress">In Progress</option>
+                                          <option value="Ready">Ready</option>
+                                          <option value="Delivered">Delivered</option>
+                                          <option value="Cancelled">Cancelled</option>
+                                        </select>
+                                      </div>
+
+                                      <div>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
+                                          Order Type <span style={{ color: '#ef4444' }}>*</span>
+                                        </label>
+                                        <select
+                                          disabled={isOrderReady}
+                                          value={editFormData.order_type || 'Walk-in'}
+                                          onChange={(e) => setEditFormData({ ...editFormData, order_type: e.target.value })}
+                                          style={{
+                                            width: '100%',
+                                            boxSizing: 'border-box',
+                                            padding: '7px 10px',
+                                            fontSize: '13px',
+                                            borderRadius: '6px',
+                                            border: '1px solid #cbd5e1',
+                                            background: isOrderReady ? '#f8fafc' : '#ffffff',
+                                            color: '#1e293b',
+                                            outline: 'none'
+                                          }}
+                                        >
+                                          <option value="Walk-in">Walk-in</option>
+                                          <option value="Home Delivery">Home Delivery</option>
+                                          <option value="Express 24H">Express 24H</option>
+                                        </select>
+                                      </div>
+
+                                      <div>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
+                                          Expected Delivery <span style={{ color: '#ef4444' }}>*</span>
+                                        </label>
+                                        <div style={{ position: 'relative' }}>
+                                          <input
+                                            type="text"
+                                            disabled={isOrderReady}
+                                            value={editFormData.expected_delivery || ''}
+                                            onChange={(e) => setEditFormData({ ...editFormData, expected_delivery: e.target.value })}
+                                            placeholder="e.g. 30 Oct 2026, 05:00 PM"
+                                            required
+                                            style={{
+                                              width: '100%',
+                                              boxSizing: 'border-box',
+                                              padding: '7px 10px 7px 32px',
+                                              fontSize: '13px',
+                                              borderRadius: '6px',
+                                              border: '1px solid #cbd5e1',
+                                              background: isOrderReady ? '#f8fafc' : '#ffffff',
+                                              color: '#1e293b',
+                                              outline: 'none'
+                                            }}
+                                          />
+                                          <svg
+                                            width="14"
+                                            height="14"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="#64748b"
+                                            strokeWidth="2"
+                                            style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+                                          >
+                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                            <line x1="16" y1="2" x2="16" y2="6" />
+                                            <line x1="8" y1="2" x2="8" y2="6" />
+                                            <line x1="3" y1="10" x2="21" y2="10" />
+                                          </svg>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Row 3: Comments (textarea) */}
+                                    <div style={{ marginBottom: '16px' }}>
+                                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
+                                        Comments
+                                      </label>
+                                      <textarea
+                                        rows={2}
+                                        disabled={isOrderReady}
+                                        value={editFormData.comments || ''}
+                                        onChange={(e) => setEditFormData({ ...editFormData, comments: e.target.value })}
+                                        placeholder="Customer special notes, delicate fabric instructions, or delivery directions..."
+                                        style={{
+                                          width: '100%',
+                                          boxSizing: 'border-box',
+                                          padding: '8px 10px',
+                                          fontSize: '13px',
+                                          borderRadius: '6px',
+                                          border: '1px solid #cbd5e1',
+                                          background: isOrderReady ? '#f8fafc' : '#ffffff',
+                                          color: '#1e293b',
+                                          outline: 'none',
+                                          resize: 'vertical'
+                                        }}
+                                      />
+                                    </div>
+
+                                    {/* Row 4: Actions bottom right */}
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px' }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingOrderRecord(null);
+                                          setEditFormData(null);
+                                        }}
+                                        style={{
+                                          padding: '7px 18px',
+                                          borderRadius: '6px',
+                                          border: '1px solid #cbd5e1',
+                                          background: '#ffffff',
+                                          color: '#475569',
+                                          fontSize: '13px',
+                                          fontWeight: 600,
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        type="submit"
+                                        disabled={isOrderReady}
+                                        style={{
+                                          padding: '7px 20px',
+                                          borderRadius: '6px',
+                                          border: 'none',
+                                          background: isOrderReady ? '#94a3b8' : '#2563eb',
+                                          color: '#ffffff',
+                                          fontSize: '13px',
+                                          fontWeight: 650,
+                                          cursor: isOrderReady ? 'not-allowed' : 'pointer',
+                                          boxShadow: isOrderReady ? 'none' : '0 2px 6px rgba(37, 99, 235, 0.3)'
+                                        }}
+                                      >
+                                        {isOrderReady ? '🔒 Read-Only (Ready)' : 'Save Changes'}
+                                      </button>
+                                    </div>
+                                  </form>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
                     </tbody>
                   </table>
                 </div>
@@ -1688,6 +2484,269 @@ export default function POSModule({
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Schedule Pickup / Delivery Modal ── */}
+      {scheduleOrderTarget && (
+        <div className="pos-held-modal-backdrop" onClick={() => setScheduleOrderTarget(null)}>
+          <div
+            className="pos-held-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '440px', padding: '22px', background: '#0b172a', border: '1px solid #1e3a5f', borderRadius: '16px', color: '#f1f5f9' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', borderBottom: '1px solid #1e293b', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 750, fontSize: '15px', color: '#f8fafc' }}>
+                <span style={{ fontSize: '18px' }}>📅</span>
+                <span>Schedule Pickup / Delivery</span>
+              </div>
+              <button
+                type="button"
+                className="pos-cart-del-btn"
+                onClick={() => setScheduleOrderTarget(null)}
+                style={{ fontSize: '16px', color: '#94a3b8' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ background: '#030b15', padding: '10px 14px', borderRadius: '8px', border: '1px solid #17253d', marginBottom: '16px' }}>
+              <div style={{ fontWeight: 700, fontSize: '13px', color: '#38bdf8' }}>
+                {scheduleOrderTarget.order_number || scheduleOrderTarget.order_id || 'ORDER'}
+              </div>
+              <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '2px' }}>
+                {scheduleOrderTarget.customer_name || scheduleOrderTarget.customer?.customer_name} • {scheduleOrderTarget.mobile_number || scheduleOrderTarget.customer?.mobile_number}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#94a3b8', marginBottom: '6px' }}>
+                  SCHEDULE TYPE
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {['Pickup', 'Delivery'].map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setScheduleType(type)}
+                      style={{
+                        flex: 1,
+                        padding: '8px',
+                        borderRadius: '8px',
+                        border: scheduleType === type ? '1.5px solid #3b82f6' : '1px solid #1e293b',
+                        background: scheduleType === type ? '#1d4ed8' : '#0f172a',
+                        color: '#fff',
+                        fontWeight: 650,
+                        fontSize: '13px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {type === 'Pickup' ? '📦 Pickup' : '🚚 Delivery'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#94a3b8', marginBottom: '6px' }}>
+                  SCHEDULED DATE
+                </label>
+                <input
+                  type="date"
+                  value={scheduleDate}
+                  onChange={(e) => setScheduleDate(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #1e293b',
+                    background: '#040b17',
+                    color: '#f8fafc',
+                    fontSize: '13px'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#94a3b8', marginBottom: '6px' }}>
+                  TIME SLOT
+                </label>
+                <select
+                  value={scheduleSlot}
+                  onChange={(e) => setScheduleSlot(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #1e293b',
+                    background: '#040b17',
+                    color: '#f8fafc',
+                    fontSize: '13px'
+                  }}
+                >
+                  <option value="Morning (09:00 AM - 12:00 PM)">Morning (09:00 AM - 12:00 PM)</option>
+                  <option value="Afternoon (01:00 PM - 04:00 PM)">Afternoon (01:00 PM - 04:00 PM)</option>
+                  <option value="Evening (04:00 PM - 07:00 PM)">Evening (04:00 PM - 07:00 PM)</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setScheduleOrderTarget(null)}
+                  style={{
+                    flex: 1,
+                    padding: '9px',
+                    borderRadius: '8px',
+                    border: '1px solid #334155',
+                    background: 'transparent',
+                    color: '#94a3b8',
+                    fontWeight: 650,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    showToast?.(`✅ ${scheduleType} scheduled for ${scheduleDate} (${scheduleSlot.split(' ')[0]})`);
+                    setScheduleOrderTarget(null);
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '9px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: '#2563eb',
+                    color: '#fff',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Confirm Schedule
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Assign Driver Modal ── */}
+      {assignDriverTarget && (
+        <div className="pos-held-modal-backdrop" onClick={() => setAssignDriverTarget(null)}>
+          <div
+            className="pos-held-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '440px', padding: '22px', background: '#0b172a', border: '1px solid #1e3a5f', borderRadius: '16px', color: '#f1f5f9' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', borderBottom: '1px solid #1e293b', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 750, fontSize: '15px', color: '#f8fafc' }}>
+                <span style={{ fontSize: '18px' }}>👤</span>
+                <span>Assign Driver &amp; Route</span>
+              </div>
+              <button
+                type="button"
+                className="pos-cart-del-btn"
+                onClick={() => setAssignDriverTarget(null)}
+                style={{ fontSize: '16px', color: '#94a3b8' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ background: '#030b15', padding: '10px 14px', borderRadius: '8px', border: '1px solid #17253d', marginBottom: '16px' }}>
+              <div style={{ fontWeight: 700, fontSize: '13px', color: '#38bdf8' }}>
+                {assignDriverTarget.order_number || assignDriverTarget.order_id || 'ORDER'}
+              </div>
+              <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '2px' }}>
+                Customer: {assignDriverTarget.customer_name || assignDriverTarget.customer?.customer_name}
+              </div>
+              <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '2px' }}>
+                📍 {assignDriverTarget.address || 'Katpadi, Vellore'}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#94a3b8', marginBottom: '8px' }}>
+                  AVAILABLE DRIVERS &amp; FLEET
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {[
+                    { name: 'Ramesh Kumar', vehicle: 'Van #1 • Zone 1', zone: 'Katpadi & Vellore North' },
+                    { name: 'Vignesh S', vehicle: 'Bike #3 • Express', zone: 'Sathuvachari & City Central' },
+                    { name: 'Murugan P', vehicle: 'Van #2 • Zone 2', zone: 'Ranipet & Arcot Road' },
+                    { name: 'Suresh K', vehicle: 'Van #4 • Zone 3', zone: 'Officers Line & Gandhi Road' },
+                  ].map((drv) => {
+                    const val = `${drv.name} (${drv.vehicle})`;
+                    const isSelected = selectedDriver.includes(drv.name);
+                    return (
+                      <div
+                        key={drv.name}
+                        onClick={() => setSelectedDriver(val)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '10px 12px',
+                          borderRadius: '8px',
+                          border: isSelected ? '1.5px solid #3b82f6' : '1px solid #1e293b',
+                          background: isSelected ? '#1e293b' : '#040b17',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 650, fontSize: '13px', color: '#f8fafc' }}>{drv.name}</div>
+                          <div style={{ fontSize: '11px', color: '#94a3b8' }}>{drv.vehicle} • {drv.zone}</div>
+                        </div>
+                        {isSelected && <span style={{ color: '#38bdf8', fontWeight: 700 }}>✓</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setAssignDriverTarget(null)}
+                  style={{
+                    flex: 1,
+                    padding: '9px',
+                    borderRadius: '8px',
+                    border: '1px solid #334155',
+                    background: 'transparent',
+                    color: '#94a3b8',
+                    fontWeight: 650,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    showToast?.(`👤 ${selectedDriver} assigned to Order ${assignDriverTarget.order_number || assignDriverTarget.order_id}`);
+                    setAssignDriverTarget(null);
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '9px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: '#2563eb',
+                    color: '#fff',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Confirm Assignment
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

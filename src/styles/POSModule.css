@@ -83,14 +83,14 @@
 
 .pos-search-input-wrap {
   flex: 1;
-  min-width: 280px;
+  min-width: 340px;
   height: 44px;
   display: flex;
   align-items: center;
   background: #081527;
   border: 1.5px solid #1c2e4a;
   border-radius: 12px;
-  padding: 0 14px;
+  padding: 0 16px;
   gap: 10px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -1959,5 +1959,74 @@ body.light-theme .pos-empty-sub,
 [data-theme="light"] .pos-empty-sub {
   color: #64748b !important;
 }
+
+/* ── Pickup & Delivery Action Buttons ── */
+.pos-pickup-btn {
+  transition: all 0.16s ease;
+}
+
+.pos-pickup-btn:hover {
+  background: #eff6ff !important;
+  border-color: #1d4ed8 !important;
+  color: #1d4ed8 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(37, 99, 235, 0.15) !important;
+}
+
+.pos-pickup-btn:active {
+  transform: translateY(0);
+}
+
+/* ── Table Action Edit Button ── */
+.btn-edit-order {
+  transition: all 0.16s ease;
+}
+
+.btn-edit-order:hover {
+  background: #f8fafc !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+}
+
+.btn-edit-order:active {
+  transform: translateY(0);
+}
+
+.btn-edit-order.active-edit-btn {
+  background: #eff6ff !important;
+  border-color: #2563eb !important;
+  color: #2563eb !important;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.25) !important;
+}
+
+/* ── Inline Edit Accordion Dropdown Card ── */
+.pos-edit-dropdown-row {
+  animation: posEditFadeDown 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes posEditFadeDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.pos-order-row-editing {
+  background-color: #f8fafc !important;
+}
+
+.pos-inline-edit-card input:focus,
+.pos-inline-edit-card select:focus,
+.pos-inline-edit-card textarea:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18) !important;
+}
+
 
 

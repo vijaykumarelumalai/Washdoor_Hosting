@@ -8,6 +8,7 @@ import CreateOrderModal from './components/CreateOrderModal';
 import OrderStatusModal from './components/OrderStatusModal';
 import EditOrderModal from './components/EditOrderModal';
 import { getOrders } from './services/customerService';
+import masterOrders from './data/masterOrders.json';
 import { isSupabaseConfigured } from './lib/supabaseClient';
 import './styles/OrderStatusModal.css';
 
@@ -42,16 +43,28 @@ export default function App() {
   const [editingOrder, setEditingOrder] = useState(null);
   const [statusModalViewBill, setStatusModalViewBill] = useState(false);
 
-  // Orders state with cache support
+  // Orders state with cache support and master orders default
   const [orders, setOrders] = useState(() => {
     try {
       const cached = localStorage.getItem('washdoor_orders_cache');
-      if (!cached) return [];
-      const parsed = JSON.parse(cached);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length >= masterOrders.length) {
+          // Normalize any legacy status tags from cache
+          return parsed.map((o) => {
+            const s = String(o.order_status || o.status || '').toLowerCase();
+            let norm = 'In Progress';
+            if (s.includes('cancel')) norm = 'Cancelled';
+            else if (s.includes('deliver') || s.includes('complete')) norm = 'Delivered';
+            else if (s.includes('ready') || s.includes('billing')) norm = 'Ready';
+            else if (s.includes('receive') || s.includes('intake') || s.includes('overdue')) norm = 'Received';
+            else if (s.includes('progress') || s.includes('wash')) norm = 'In Progress';
+            return { ...o, status: norm, order_status: norm };
+          });
+        }
+      }
+    } catch {}
+    return masterOrders;
   });
   const [loadingOrders, setLoadingOrders] = useState(false);
 
@@ -144,6 +157,18 @@ export default function App() {
     setStatusModalViewBill(viewBill);
     setIsStatusModalOpen(true);
   };
+
+  const handleUpdateOrderRecord = useCallback((updatedOrder) => {
+    setOrders((prev) => {
+      const next = prev.map((o) =>
+        (o.id === updatedOrder.id || o.order_number === updatedOrder.order_number) ? updatedOrder : o
+      );
+      try {
+        localStorage.setItem('washdoor_orders_cache', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
 
   // Keyboard shortcut: Press 'N' or 'n' to open Create Order
   useEffect(() => {
@@ -265,7 +290,7 @@ export default function App() {
                   }}
                 >
                   <span>{cur.name}</span>
-                  <span style={{ fontWeight: '700', color: currentCurrency.code === cur.code ? '#5bb3ff' : '#94a7c1' }}>
+                  <span className="top-pill-item-symbol">
                     {cur.symbol}
                   </span>
                 </button>
@@ -321,7 +346,7 @@ export default function App() {
                   }}
                 >
                   <span>{lang.name}</span>
-                  <span style={{ fontSize: '12px', color: currentLanguage.code === lang.code ? '#5bb3ff' : '#7d91ae' }}>
+                  <span className="top-pill-item-native">
                     {lang.native}
                   </span>
                 </button>
@@ -388,34 +413,21 @@ export default function App() {
           </button>
 
           {activeDropdown === 'admin' && (
-            <div className="top-pill-menu" style={{ minWidth: '220px', right: 0, left: 'auto' }}>
+            <div className="top-pill-menu top-admin-dropdown" style={{ minWidth: '220px', right: 0, left: 'auto' }}>
               <div className="top-pill-menu-title">Admin Account</div>
-              <div style={{ padding: '8px 12px', fontSize: '12.5px', color: '#d2dfee', lineHeight: 1.5 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                  <div
-                    style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '50%',
-                      background: 'linear-gradient(135deg, #6366f1, #4338ca)',
-                      display: 'grid',
-                      placeItems: 'center',
-                      fontWeight: '750',
-                      color: '#fff',
-                      fontSize: '13px',
-                      flexShrink: 0,
-                    }}
-                  >
+              <div className="top-admin-details">
+                <div className="top-admin-user-row">
+                  <div className="top-admin-avatar-small">
                     A
                   </div>
-                  <div>
-                    <div style={{ fontWeight: '700', color: '#fff' }}>Store Administrator</div>
-                    <div style={{ color: '#889bb6', fontSize: '11px' }}>admin@washdoor.in</div>
+                  <div className="top-admin-user-info">
+                    <div className="top-admin-user-name">Store Administrator</div>
+                    <div className="top-admin-user-email">admin@washdoor.in</div>
                   </div>
                 </div>
-                <div style={{ color: '#889bb6', fontSize: '11.5px' }}>Branch: Ranipet Store #1</div>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', marginTop: '6px', color: '#4ee2af', fontSize: '11.5px', fontWeight: '600' }}>
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#4ee2af' }}></span>
+                <div className="top-admin-branch">Branch: Ranipet Store #1</div>
+                <div className="top-admin-status">
+                  <span className="top-admin-status-dot"></span>
                   Session Active
                 </div>
               </div>
@@ -424,9 +436,24 @@ export default function App() {
         </div>
       </header>
 
-      {/* ── Sidebar: Customers & POS ── */}
+      {/* ── Sidebar: Orders & POS, Customers ── */}
       <aside className="sidebar">
-        {/* 1. Customers */}
+        <button
+          type="button"
+          className={`nav ${activeTab === 'pos' ? 'active' : ''}`}
+          onClick={() => setActiveTab('pos')}
+          title="Orders & POS Intake Register"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+          Orders &amp; POS
+        </button>
+
         <button
           type="button"
           className={`nav ${activeTab === 'customers' ? 'active' : ''}`}
@@ -438,21 +465,6 @@ export default function App() {
             <circle cx="12" cy="7" r="4"></circle>
           </svg>
           Customers
-        </button>
-
-        {/* 2. POS */}
-        <button
-          type="button"
-          className={`nav ${activeTab === 'pos' ? 'active' : ''}`}
-          onClick={() => setActiveTab('pos')}
-          title="Orders & Point of Sale Intake Register"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-            <line x1="3" y1="6" x2="21" y2="6"></line>
-            <path d="M16 10a4 4 0 0 1-8 0"></path>
-          </svg>
-          POS
         </button>
       </aside>
 
@@ -470,6 +482,7 @@ export default function App() {
             onEditOrder={(orderToEdit) => setEditingOrder(orderToEdit)}
             onOrderCreated={loadOrders}
             onNavigateTab={setActiveTab}
+            onUpdateOrder={handleUpdateOrderRecord}
           />
         ) : (
           <CustomerManagement showToast={showToast} />

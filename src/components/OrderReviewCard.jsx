@@ -44,30 +44,34 @@ export default function OrderReviewCard({
     : 0;
   const totalAmount = Number(order.total_amount || 0);
 
-  // Workflow pipeline & badge status:
-  // 1. Laundry In Progress — 25% (In Progress)
-  // 2. Laundry Ready — 50% (Ready for Billing)
-  // 3. Laundry Completed — 100% (Laundry Complete / Product Status)
+  // Workflow pipeline & badge status (Received, In Progress, Ready, Delivered, Cancelled)
   const progress = Number(order.progress || 25);
-  const rawStatus = (order.status || '').trim().toLowerCase();
-  const isComplete = progress >= 90 || rawStatus.includes('product') || rawStatus.includes('complete');
-  const isReady = !isComplete && (progress >= 50 || rawStatus.includes('ready') || rawStatus.includes('billing'));
+  const rawStatus = (order.order_status || order.status || '').trim().toLowerCase();
 
   let activePipelineStage = 1;
-  let statusBadgeLabel = 'Laundry In Progress';
+  let statusBadgeLabel = 'In Progress';
   let statusBadgeClass = 'in-progress';
-  let statusPercentage = 25;
+  let statusPercentage = 30;
 
-  if (isComplete) {
+  if (rawStatus.includes('cancel')) {
+    statusBadgeLabel = 'Cancelled';
+    statusBadgeClass = 'cancelled';
+    statusPercentage = 0;
+  } else if (rawStatus.includes('deliver') || rawStatus.includes('complete') || progress >= 90) {
     activePipelineStage = 3;
-    statusBadgeLabel = 'Laundry Completed';
-    statusBadgeClass = 'completed purple';
+    statusBadgeLabel = 'Delivered';
+    statusBadgeClass = 'delivered';
     statusPercentage = 100;
-  } else if (isReady) {
+  } else if (rawStatus.includes('ready') || rawStatus.includes('billing') || progress >= 50) {
     activePipelineStage = 2;
-    statusBadgeLabel = 'Laundry Ready';
+    statusBadgeLabel = 'Ready';
     statusBadgeClass = 'ready';
-    statusPercentage = 50;
+    statusPercentage = 75;
+  } else if (rawStatus.includes('receive') || rawStatus.includes('intake')) {
+    activePipelineStage = 1;
+    statusBadgeLabel = 'Received';
+    statusBadgeClass = 'received';
+    statusPercentage = 15;
   }
 
   const handleSaveStaffNote = (e) => {
