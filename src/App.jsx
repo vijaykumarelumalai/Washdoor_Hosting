@@ -153,8 +153,12 @@ export default function App() {
   }, [loadOrders]);
 
   const handleOpenOrderStatus = (order, viewBill = false) => {
+    if (viewBill) {
+      showToast('bill viewed!');
+      return;
+    }
     setSelectedStatusOrder(order);
-    setStatusModalViewBill(viewBill);
+    setStatusModalViewBill(false);
     setIsStatusModalOpen(true);
   };
 

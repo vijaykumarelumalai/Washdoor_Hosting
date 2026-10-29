@@ -2001,6 +2001,37 @@ body.light-theme .pos-empty-sub,
   box-shadow: 0 1px 4px rgba(37, 99, 235, 0.25) !important;
 }
 
+/* ── Table Action Side Button (under Edit) ── */
+.btn-side-action {
+  transition: all 0.16s ease;
+}
+
+.btn-side-action:hover {
+  background: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+}
+
+.btn-side-action:active {
+  transform: translateY(0);
+}
+
+[data-theme="dark"] .btn-side-action,
+body:not(.light-theme) .btn-side-action {
+  background: #0b172a !important;
+  border-color: #1e3352 !important;
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .btn-side-action:hover,
+body:not(.light-theme) .btn-side-action:hover {
+  background: #13243d !important;
+  border-color: #38bdf8 !important;
+  color: #f1f5f9 !important;
+}
+
 /* ── Inline Edit Accordion Dropdown Card ── */
 .pos-edit-dropdown-row {
   animation: posEditFadeDown 0.22s cubic-bezier(0.16, 1, 0.3, 1);
@@ -2027,6 +2058,37 @@ body.light-theme .pos-empty-sub,
   border-color: #3b82f6 !important;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18) !important;
 }
+
+/* ── Visible Scroller for Cloth Selection & Catalog in POS & Orders ── */
+.pos-cloth-catalog-scroller {
+  overflow-y: scroll !important;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #2563eb #f1f5f9;
+  scroll-behavior: smooth;
+}
+
+.pos-cloth-catalog-scroller::-webkit-scrollbar {
+  width: 8px !important;
+  display: block !important;
+}
+
+.pos-cloth-catalog-scroller::-webkit-scrollbar-track {
+  background: #f1f5f9 !important;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.pos-cloth-catalog-scroller::-webkit-scrollbar-thumb {
+  background: #2563eb !important;
+  border-radius: 6px;
+  border: 2px solid #f1f5f9;
+}
+
+.pos-cloth-catalog-scroller::-webkit-scrollbar-thumb:hover {
+  background: #1d4ed8 !important;
+}
+
 
 
 
