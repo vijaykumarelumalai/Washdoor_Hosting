@@ -7,11 +7,11 @@ const env = (typeof import.meta !== 'undefined' && import.meta.env)
   ? import.meta.env
   : (typeof process !== 'undefined' ? process.env : {});
 
-export const supabaseUrl = env.VITE_SUPABASE_URL || 'https://eunguuboxwbblioljwmy.supabase.co';
+export const supabaseUrl = env.VITE_SUPABASE_URL || 'https://bpnruunbdxxwadtrswao.supabase.co';
 export const supabaseKey =
   env.VITE_SUPABASE_ANON_KEY ||
   env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-  'sb_publishable_1KlTK1twn4UDAAQKqs_x4A_05ZVl5Nt';
+  'sb_publishable_Rtq6GiRcraUJ2J5QByB9UQ_7QcRyX1Y';
 
 export const supabase = createClient(
   supabaseUrl,

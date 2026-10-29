@@ -892,87 +892,81 @@ export async function updateCustomer(id, payload) {
   const clean = cleanPayload(payload);
 
   try {
-    // 1. Update customer_works
-    try {
-      const workUpdate = {
-        customer_name: clean.customer_name,
-        mobile_number: clean.mobile_number,
-        alternate_phone: clean.alternate_phone || null,
-        email: clean.email || null,
-        delivery_address: clean.address || clean.streetArea,
-        service_type: clean.service_category || clean.orderPreference,
-        internal_notes: clean.internal_comments || clean.notes,
-        updated_at: new Date().toISOString(),
-      };
-      Object.keys(workUpdate).forEach((k) => workUpdate[k] === undefined && delete workUpdate[k]);
-
-      let workQuery = supabase.from('customer_works').update(workUpdate);
-      if (id) {
-        workQuery = workQuery.eq('customer_id', id);
-      } else if (clean.customer_id) {
-        workQuery = workQuery.eq('customer_id', clean.customer_id);
-      } else if (clean.mobile_number) {
-        workQuery = workQuery.eq('mobile_number', clean.mobile_number);
-      }
-      await workQuery;
-    } catch (workUpdateErr) {
-      console.warn('customer_works update notice:', workUpdateErr);
-    }
-
-    // 2. Also update washdoor_orders_master
-    const updateObj = {
+    // 1. Primary: Update customer_works
+    const workUpdate = {
       customer_name: clean.customer_name,
       mobile_number: clean.mobile_number,
-      alternate_phone: clean.alternate_phone,
-      email: clean.email,
-      company_name: clean.company_name,
-      gst_number: clean.gst_number,
-      tax_exemption: clean.tax_exemption !== undefined ? Boolean(clean.tax_exemption) : undefined,
-      street_area: clean.address,
-      city: clean.city,
-      pincode: clean.pincode,
-      date_of_birth: clean.date_of_birth,
-      map_link: clean.map_link,
-      communication_preference: clean.communication_pref,
-      preferred_language: clean.communication_lang,
-      do_not_disturb: clean.dnd !== undefined ? Boolean(clean.dnd) : undefined,
-      internal_comments: clean.internal_comments,
-      order_notes: clean.notes || clean.internal_comments,
-      customer_classification: clean.customer_classification || 'Regular Customer',
-      customer_status: clean.customer_status || 'Active',
-      price_list: clean.price_list || 'Standard',
-      area_service_zone: clean.service_zone ? (clean.service_zone.startsWith('zone-') ? `Zone ${clean.service_zone.replace('zone-', '')}` : clean.service_zone) : undefined,
-      default_discount_pct: clean.default_discount !== undefined && clean.default_discount !== null ? Number(clean.default_discount) : undefined,
-      credit_limit: clean.credit_limit !== undefined && clean.credit_limit !== null ? Number(clean.credit_limit) : undefined,
-      membership_id: clean.membership_id,
-      referral_code: clean.referral_code,
-      marketing_source: clean.marketing_source,
-      anniversary_date: clean.anniversary_date,
-      special_occasion: clean.special_occasion,
-      special_occasion_date: clean.special_occasion_date,
-      tier: clean.tier || 'SILVER',
-      service_category: clean.service_category || clean.orderPreference,
-      item_count: clean.item_count !== undefined && clean.item_count !== null ? Number(clean.item_count) : undefined,
-      order_notes: clean.order_notes || clean.notes || clean.internal_comments,
+      alternate_phone: clean.alternate_phone || null,
+      email: clean.email || null,
+      delivery_address: clean.address || clean.streetArea,
+      service_type: clean.service_category || clean.orderPreference,
+      internal_notes: clean.internal_comments || clean.notes,
       updated_at: new Date().toISOString(),
     };
+    Object.keys(workUpdate).forEach((k) => workUpdate[k] === undefined && delete workUpdate[k]);
 
-    // Remove undefined properties
-    Object.keys(updateObj).forEach((k) => updateObj[k] === undefined && delete updateObj[k]);
-
-    let query = supabase.from('washdoor_orders_master').update(updateObj);
-
+    let workQuery = supabase.from('customer_works').update(workUpdate);
     if (id) {
-      query = query.eq('customer_id', id);
+      workQuery = workQuery.eq('customer_id', id);
     } else if (clean.customer_id) {
-      query = query.eq('customer_id', clean.customer_id);
+      workQuery = workQuery.eq('customer_id', clean.customer_id);
     } else if (clean.mobile_number) {
-      query = query.eq('mobile_number', clean.mobile_number);
+      workQuery = workQuery.eq('mobile_number', clean.mobile_number);
+    }
+    const { data: workData, error: workError } = await workQuery.select();
+
+    // 2. Best-effort sync to washdoor_orders_master if present (optional legacy table)
+    try {
+      const updateObj = {
+        customer_name: clean.customer_name,
+        mobile_number: clean.mobile_number,
+        alternate_phone: clean.alternate_phone,
+        email: clean.email,
+        company_name: clean.company_name,
+        gst_number: clean.gst_number,
+        tax_exemption: clean.tax_exemption !== undefined ? Boolean(clean.tax_exemption) : undefined,
+        street_area: clean.address,
+        city: clean.city,
+        pincode: clean.pincode,
+        date_of_birth: clean.date_of_birth,
+        map_link: clean.map_link,
+        communication_preference: clean.communication_pref,
+        preferred_language: clean.communication_lang,
+        do_not_disturb: clean.dnd !== undefined ? Boolean(clean.dnd) : undefined,
+        internal_comments: clean.internal_comments,
+        order_notes: clean.notes || clean.internal_comments,
+        customer_classification: clean.customer_classification || 'Regular Customer',
+        customer_status: clean.customer_status || 'Active',
+        price_list: clean.price_list || 'Standard',
+        area_service_zone: clean.service_zone ? (clean.service_zone.startsWith('zone-') ? `Zone ${clean.service_zone.replace('zone-', '')}` : clean.service_zone) : undefined,
+        default_discount_pct: clean.default_discount !== undefined && clean.default_discount !== null ? Number(clean.default_discount) : undefined,
+        credit_limit: clean.credit_limit !== undefined && clean.credit_limit !== null ? Number(clean.credit_limit) : undefined,
+        membership_id: clean.membership_id,
+        referral_code: clean.referral_code,
+        marketing_source: clean.marketing_source,
+        anniversary_date: clean.anniversary_date,
+        special_occasion: clean.special_occasion,
+        special_occasion_date: clean.special_occasion_date,
+        tier: clean.tier || 'SILVER',
+        service_category: clean.service_category || clean.orderPreference,
+        item_count: clean.item_count !== undefined && clean.item_count !== null ? Number(clean.item_count) : undefined,
+        updated_at: new Date().toISOString(),
+      };
+      Object.keys(updateObj).forEach((k) => updateObj[k] === undefined && delete updateObj[k]);
+
+      let mQuery = supabase.from('washdoor_orders_master').update(updateObj);
+      if (id) mQuery = mQuery.eq('customer_id', id);
+      else if (clean.customer_id) mQuery = mQuery.eq('customer_id', clean.customer_id);
+      else if (clean.mobile_number) mQuery = mQuery.eq('mobile_number', clean.mobile_number);
+      await mQuery;
+    } catch {
+      // washdoor_orders_master is optional; ignored if not present
     }
 
-    const { data, error } = await query.select();
-
-    return { data, error };
+    if (workError) {
+      return { data: null, error: workError };
+    }
+    return { data: workData, error: null };
   } catch (err) {
     return { data: null, error: err };
   }
@@ -987,20 +981,20 @@ export async function deleteCustomer(id) {
   }
 
   try {
-    // 1. Delete from customer_works
+    // 1. Primary: Delete from customer_works
+    const { error: workErr } = await supabase.from('customer_works').delete().eq('customer_id', id);
+
+    // 2. Best-effort delete from washdoor_orders_master if exists
     try {
-      await supabase.from('customer_works').delete().eq('customer_id', id);
-    } catch (workDelErr) {
-      console.warn('customer_works delete notice:', workDelErr);
+      await supabase
+        .from('washdoor_orders_master')
+        .delete()
+        .eq('customer_id', id);
+    } catch {
+      // washdoor_orders_master is optional; ignored if not present
     }
 
-    // 2. Delete from washdoor_orders_master
-    const { error } = await supabase
-      .from('washdoor_orders_master')
-      .delete()
-      .eq('customer_id', id);
-
-    return { error };
+    return { error: workErr };
   } catch (err) {
     return { error: err };
   }
