@@ -203,7 +203,7 @@ export default function App() {
 
         {isSupabaseConfigured() ? (
           <a
-            href="https://supabase.com/dashboard/project/eunguuboxwbblioljwmy/editor/17680?schema=public&sort=customer_id:asc"
+            href="https://supabase.com/dashboard/project/bpnruunbdxxwadtrswao/editor/17640?schema=public"
             target="_blank"
             rel="noopener noreferrer"
             className="top-pill"
@@ -223,7 +223,7 @@ export default function App() {
           </a>
         ) : (
           <a
-            href="https://supabase.com/dashboard/project/eunguuboxwbblioljwmy/editor/17680?schema=public&sort=customer_id:asc"
+            href="https://supabase.com/dashboard/project/bpnruunbdxxwadtrswao/editor/17640?schema=public"
             target="_blank"
             rel="noopener noreferrer"
             className="top-pill"
