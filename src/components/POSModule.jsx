@@ -1352,7 +1352,7 @@ export default function POSModule({
                       {filteredOrders.map((ord) => {
                         const custName = ord.customer_name || ord.customer?.customer_name || 'Walk-in Customer';
                         const phone = ord.formatted_mobile || formatPhoneDisplay(ord.mobile_number || ord.customer?.mobile_number) || '—';
-                        const orderNum = ord.order_number || ord.order_id || (ord.id ? `ORD${String(ord.id).replace(/\D/g, '').padStart(5, '0')}` : 'ORD00001');
+                        const orderNum = ord.order_number || ord.order_id || ord.work_number || (ord.id ? String(ord.id) : '—');
                         const custAddress = ord.address || ord.delivery_address || ord.customer?.address || ord.customer?.streetArea || 'Counter Walk-In';
                         const items = ord.customer_history?.items || ord.items || [];
                         const itemCount = Array.isArray(items) && items.length > 0
@@ -3653,7 +3653,7 @@ export default function POSModule({
                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '14px' }}>
                                              <div>
                                                <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
-                                                 {editFormData.customer_name || 'Rahul Kumar'}
+                                                 {editFormData.customer_name || 'Customer'}
                                                </div>
                                                <div style={{ fontSize: '12px', color: '#64748b' }}>
                                                  📱 +91 {editFormData.mobile_number || '9876543210'} • {editFormData.address || 'MG Road, Vellore'}

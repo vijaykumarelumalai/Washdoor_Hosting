@@ -8,7 +8,6 @@ import CreateOrderModal from './components/CreateOrderModal';
 import OrderStatusModal from './components/OrderStatusModal';
 import EditOrderModal from './components/EditOrderModal';
 import { getOrders, updateOrderInSupabase } from './services/customerService';
-import masterOrders from './data/masterOrders.json';
 import { isSupabaseConfigured } from './lib/supabaseClient';
 import './styles/OrderStatusModal.css';
 
@@ -44,15 +43,19 @@ export default function App() {
   const [statusModalViewBill, setStatusModalViewBill] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Orders state with cache support and master orders default
+  // Orders state with cache support (authentically loaded from database, no hardcoded mock records)
   const [orders, setOrders] = useState(() => {
     try {
       const cached = localStorage.getItem('washdoor_orders_cache');
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length >= masterOrders.length) {
-          // Normalize any legacy status tags from cache
-          return parsed.map((o) => {
+        if (Array.isArray(parsed)) {
+          // Filter out any legacy hardcoded mock order IDs (ORD00001 - ORD00010)
+          const realOnly = parsed.filter((o) => {
+            const num = String(o.order_number || o.id || o.order_id || '');
+            return !num.match(/^ORD0{3,4}\d$/);
+          });
+          return realOnly.map((o) => {
             const s = String(o.order_status || o.status || '').toLowerCase();
             let norm = 'In Progress';
             if (s.includes('cancel')) norm = 'Cancelled';
@@ -65,7 +68,7 @@ export default function App() {
         }
       }
     } catch {}
-    return masterOrders;
+    return [];
   });
   const [loadingOrders, setLoadingOrders] = useState(false);
 

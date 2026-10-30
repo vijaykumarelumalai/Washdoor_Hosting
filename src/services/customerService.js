@@ -5,7 +5,6 @@
 // - 'washdoor_order_items' (Line items per order)
 
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient.js';
-import masterOrders from '../data/masterOrders.json' with { type: 'json' };
 
 // Default fallback products matching the database seed
 export const DEFAULT_PRODUCTS = [
@@ -693,11 +692,12 @@ export function isCustomerRegistrationRecord(row) {
 
 /**
  * Fetches real orders from Supabase customer_works and washdoor_orders_master.
- * Excludes pure customer master registration records and merges master sample records.
+ * Excludes pure customer master registration records.
+ * Returns only authentic database orders (no hardcoded mock records).
  */
 export async function getOrders() {
   if (!isSupabaseConfigured()) {
-    return { data: masterOrders, error: null };
+    return { data: [], error: null };
   }
 
   try {
@@ -711,9 +711,7 @@ export async function getOrders() {
       // Exclude customer master registrations: only real orders with pieces/services
       const realOrdersData = worksData.filter((row) => !isCustomerRegistrationRecord(row));
       const orders = realOrdersData.map(mapCustomerWorkRowToOrder);
-      const existingIds = new Set(orders.map((o) => o.order_number || o.id));
-      const combined = [...orders, ...masterOrders.filter((m) => !existingIds.has(m.order_number) && !existingIds.has(m.id))];
-      return { data: combined, error: null };
+      return { data: orders, error: null };
     }
 
     // 2. Fallback to washdoor_orders_master if present
@@ -725,15 +723,14 @@ export async function getOrders() {
 
       if (!masterError && masterData && masterData.length > 0) {
         const orders = masterData.map(mapMasterRowToOrder);
-        const existingIds = new Set(orders.map((o) => o.order_number || o.id));
-        const combined = [...orders, ...masterOrders.filter((m) => !existingIds.has(m.order_number) && !existingIds.has(m.id))];
-        return { data: combined, error: null };
+        return { data: orders, error: null };
       }
     } catch {}
 
-    return { data: masterOrders, error: null };
+    return { data: [], error: null };
   } catch (err) {
-    return { data: masterOrders, error: null };
+    console.warn('getOrders catch:', err);
+    return { data: [], error: err };
   }
 }
 

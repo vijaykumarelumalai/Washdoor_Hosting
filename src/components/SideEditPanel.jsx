@@ -48,16 +48,16 @@ export default function SideEditPanel({
   if (!isOpen) return null;
 
   // Extract order defaults
-  const initialOrderNum = order?.order_number || order?.order_id || 'ORD00001';
-  const initialCustName = order?.customer_name || order?.customer?.customer_name || 'Rahul Kumar';
-  const initialPhone = order?.mobile_number || order?.customer?.mobile_number || '+91 98765 43210';
+  const initialOrderNum = order?.order_number || order?.order_id || order?.work_number || '—';
+  const initialCustName = order?.customer_name || order?.customer?.customer_name || '';
+  const initialPhone = order?.mobile_number || order?.customer?.mobile_number || '';
   const initialAltPhone = order?.alternate_phone || order?.customer?.alternate_phone || '';
-  const initialEmail = order?.email || order?.customer?.email || 'rahul.kumar@gmail.com';
-  const initialAddress = order?.address || order?.customer?.address || '12, MG Road, Vellore, Tamil Nadu 632001';
+  const initialEmail = order?.email || order?.customer?.email || '';
+  const initialAddress = order?.address || order?.delivery_address || order?.customer?.address || '';
   const initialStatus = order?.status || order?.order_status || 'In Progress';
   const initialOrderType = order?.order_type || 'Walk-in';
-  const initialExpectedDelivery = order?.expected_delivery || '30 Oct 2026, 05:00 PM';
-  const initialComments = order?.comments || order?.order_notes || 'Customer requested light starch for shirts.';
+  const initialExpectedDelivery = order?.expected_delivery || '';
+  const initialComments = order?.comments || order?.order_notes || order?.special_instructions || '';
 
   // 1. Customer & Order Info Form State (Editable)
   const [customerName, setCustomerName] = useState(initialCustName);
