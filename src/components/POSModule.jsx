@@ -301,6 +301,12 @@ export default function POSModule({
       advance_paid: advancePaid,
       balance_due: balanceDue,
       payment_status: paymentStatus,
+      assigned_driver: ord.assigned_driver || '',
+      assigned_driver_full: ord.assigned_driver_full || '',
+      pickup_status: ord.pickup_status || '',
+      assigned_for_pickup: Boolean(ord.assigned_for_pickup),
+      audit_logs: ord.audit_logs || ord.logs || [],
+      logs: ord.logs || ord.audit_logs || [],
       rawOrder: ord,
     });
   };
@@ -406,6 +412,12 @@ export default function POSModule({
         photos: editInspectionPhotos,
         photosCount: editInspectionPhotos.length,
       },
+      assigned_driver: editFormData.assigned_driver || editingOrderRecord.assigned_driver,
+      assigned_driver_full: editFormData.assigned_driver_full || editingOrderRecord.assigned_driver_full,
+      pickup_status: editFormData.pickup_status || editingOrderRecord.pickup_status,
+      assigned_for_pickup: editFormData.assigned_for_pickup || editingOrderRecord.assigned_for_pickup,
+      audit_logs: editFormData.audit_logs || editingOrderRecord.audit_logs || [],
+      logs: editFormData.logs || editingOrderRecord.logs || [],
     };
 
     if (onUpdateOrder) {
@@ -1341,6 +1353,11 @@ export default function POSModule({
                         const orderTypeLower = (ord.order_type || '').toLowerCase();
                         const isOnCall = orderTypeLower.includes('call') || orderTypeLower.includes('phone') || orderTypeLower.includes('pickup') || orderTypeLower.includes('delivery');
                         const orderTypeBadgeText = isOnCall ? 'On-Call' : 'Walk-In';
+                        const isPickupAssigned = Boolean(
+                          ord.assigned_for_pickup ||
+                          ord.pickup_status === 'Assigned for Pickup' ||
+                          ord.assigned_driver
+                        );
 
                         // Services Allocated list: empty when no items or services allocated
                         const servicesAllocated = (Array.isArray(ord.services_allocated) && ord.services_allocated.length > 0)
@@ -1512,39 +1529,72 @@ export default function POSModule({
                             <td style={{ verticalAlign: 'top', paddingTop: '14px', maxWidth: '175px' }}>
                               {servicesAllocated.length === 0 ? (
                                 isOnCall ? (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setAssignDriverTarget(ord);
-                                    }}
-                                    title={`Assign Pickup for ${orderNum}`}
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      gap: '8px',
-                                      padding: '7px 16px',
-                                      borderRadius: '8px',
-                                      border: '1.5px solid #60a5fa',
-                                      background: '#ffffff',
-                                      color: '#2563eb',
-                                      fontSize: '12px',
-                                      fontWeight: 600,
-                                      cursor: 'pointer',
-                                      boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
-                                      transition: 'all 0.15s ease',
-                                      whiteSpace: 'nowrap'
-                                    }}
-                                  >
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                      <rect x="1" y="3" width="15" height="13"></rect>
-                                      <polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon>
-                                      <circle cx="5.5" cy="18.5" r="2.5"></circle>
-                                      <circle cx="18.5" cy="18.5" r="2.5"></circle>
-                                    </svg>
-                                    <span>Assign Pickup</span>
-                                  </button>
+                                  isPickupAssigned ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setAssignDriverTarget(ord);
+                                      }}
+                                      title={`Assigned to ${ord.assigned_driver || 'Driver'}. Click to re-assign`}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        padding: '7px 14px',
+                                        borderRadius: '8px',
+                                        border: '1.5px solid #22c55e',
+                                        background: '#f0fdf4',
+                                        color: '#15803d',
+                                        fontSize: '12px',
+                                        fontWeight: 650,
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 2px rgba(34,197,94,0.1)',
+                                        transition: 'all 0.15s ease',
+                                        whiteSpace: 'nowrap'
+                                      }}
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                        <polyline points="20 6 9 17 4 12" />
+                                      </svg>
+                                      <span>Assigned for Pickup</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setAssignDriverTarget(ord);
+                                      }}
+                                      title={`Assign Pickup for ${orderNum}`}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '8px',
+                                        padding: '7px 16px',
+                                        borderRadius: '8px',
+                                        border: '1.5px solid #60a5fa',
+                                        background: '#ffffff',
+                                        color: '#2563eb',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
+                                        transition: 'all 0.15s ease',
+                                        whiteSpace: 'nowrap'
+                                      }}
+                                    >
+                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="1" y="3" width="15" height="13"></rect>
+                                        <polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon>
+                                        <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                                        <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                                      </svg>
+                                      <span>Assign Pickup</span>
+                                    </button>
+                                  )
                                 ) : (
                                   <span style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic', display: 'inline-block', paddingTop: '4px' }}>
                                     No services allocated
@@ -1591,40 +1641,74 @@ export default function POSModule({
                                     </span>
                                   )}
                                   {isOnCall && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setAssignDriverTarget(ord);
-                                      }}
-                                      title={`Assign Pickup for ${orderNum}`}
-                                      style={{
-                                        marginTop: '3px',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '6px',
-                                        padding: '5px 12px',
-                                        borderRadius: '6px',
-                                        background: '#ffffff',
-                                        border: '1.5px solid #60a5fa',
-                                        color: '#2563eb',
-                                        fontSize: '11.5px',
-                                        fontWeight: 650,
-                                        cursor: 'pointer',
-                                        boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
-                                        width: 'fit-content',
-                                        whiteSpace: 'nowrap'
-                                      }}
-                                    >
-                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                        <rect x="1" y="3" width="15" height="13"></rect>
-                                        <polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon>
-                                        <circle cx="5.5" cy="18.5" r="2.5"></circle>
-                                        <circle cx="18.5" cy="18.5" r="2.5"></circle>
-                                      </svg>
-                                      <span>Assign Pickup</span>
-                                    </button>
+                                    isPickupAssigned ? (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setAssignDriverTarget(ord);
+                                        }}
+                                        title={`Assigned to ${ord.assigned_driver || 'Driver'}. Click to re-assign`}
+                                        style={{
+                                          marginTop: '3px',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          gap: '6px',
+                                          padding: '5px 12px',
+                                          borderRadius: '6px',
+                                          background: '#f0fdf4',
+                                          border: '1.5px solid #22c55e',
+                                          color: '#15803d',
+                                          fontSize: '11.5px',
+                                          fontWeight: 650,
+                                          cursor: 'pointer',
+                                          boxShadow: '0 1px 2px rgba(34,197,94,0.1)',
+                                          width: 'fit-content',
+                                          whiteSpace: 'nowrap'
+                                        }}
+                                      >
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                          <polyline points="20 6 9 17 4 12" />
+                                        </svg>
+                                        <span>Assigned for Pickup</span>
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setAssignDriverTarget(ord);
+                                        }}
+                                        title={`Assign Pickup for ${orderNum}`}
+                                        style={{
+                                          marginTop: '3px',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          gap: '6px',
+                                          padding: '5px 12px',
+                                          borderRadius: '6px',
+                                          background: '#ffffff',
+                                          border: '1.5px solid #60a5fa',
+                                          color: '#2563eb',
+                                          fontSize: '11.5px',
+                                          fontWeight: 650,
+                                          cursor: 'pointer',
+                                          boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
+                                          width: 'fit-content',
+                                          whiteSpace: 'nowrap'
+                                        }}
+                                      >
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                          <rect x="1" y="3" width="15" height="13"></rect>
+                                          <polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon>
+                                          <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                                          <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                                        </svg>
+                                        <span>Assign Pickup</span>
+                                      </button>
+                                    )
                                   )}
                                 </div>
                               )}
@@ -1664,74 +1748,129 @@ export default function POSModule({
                               </div>
                             </td>
 
-                            {/* 7. Pickup & Delivery (Stacked Action Buttons) */}
+                            {/* 7. Pickup & Delivery (Stacked Action Buttons or Assigned status) */}
                             <td style={{ verticalAlign: 'middle', padding: '10px 14px' }}>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '126px' }}>
-                                <button
-                                  type="button"
-                                  className="pos-pickup-btn pos-schedule-btn"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setScheduleOrderTarget(ord);
-                                  }}
-                                  title={`Schedule Pickup/Delivery for ${orderNum}`}
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '6px',
-                                    padding: '6px 14px',
-                                    borderRadius: '8px',
-                                    border: '1.5px solid #60a5fa',
-                                    background: '#ffffff',
-                                    color: '#2563eb',
-                                    fontSize: '12px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
-                                    whiteSpace: 'nowrap'
-                                  }}
-                                >
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                                    <line x1="16" y1="2" x2="16" y2="6" />
-                                    <line x1="8" y1="2" x2="8" y2="6" />
-                                    <line x1="3" y1="10" x2="21" y2="10" />
-                                  </svg>
-                                  <span>Schedule</span>
-                                </button>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '130px' }}>
+                                {isPickupAssigned ? (
+                                  <>
+                                    <div style={{
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      gap: '2px',
+                                      padding: '6px 10px',
+                                      background: '#f0fdf4',
+                                      border: '1.5px solid #86efac',
+                                      borderRadius: '8px',
+                                      boxShadow: '0 1px 2px rgba(34,197,94,0.08)'
+                                    }}>
+                                      <span style={{ fontSize: '10px', color: '#166534', fontWeight: 750, letterSpacing: '0.3px', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <span>🚚</span> Assigned for Pickup
+                                      </span>
+                                      <span style={{ fontSize: '12px', color: '#14532d', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {ord.assigned_driver || 'Driver Assigned'}
+                                      </span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className="pos-pickup-btn pos-driver-btn"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setAssignDriverTarget(ord);
+                                      }}
+                                      title={`Re-assign Driver for ${orderNum}`}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        padding: '5px 12px',
+                                        borderRadius: '7px',
+                                        border: '1.5px solid #94a3b8',
+                                        background: '#ffffff',
+                                        color: '#475569',
+                                        fontSize: '11.5px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                                        whiteSpace: 'nowrap'
+                                      }}
+                                    >
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                        <circle cx="12" cy="7" r="4" />
+                                      </svg>
+                                      <span>Change Driver</span>
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="pos-pickup-btn pos-schedule-btn"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setScheduleOrderTarget(ord);
+                                      }}
+                                      title={`Schedule Pickup/Delivery for ${orderNum}`}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        padding: '6px 14px',
+                                        borderRadius: '8px',
+                                        border: '1.5px solid #60a5fa',
+                                        background: '#ffffff',
+                                        color: '#2563eb',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
+                                        whiteSpace: 'nowrap'
+                                      }}
+                                    >
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                        <line x1="16" y1="2" x2="16" y2="6" />
+                                        <line x1="8" y1="2" x2="8" y2="6" />
+                                        <line x1="3" y1="10" x2="21" y2="10" />
+                                      </svg>
+                                      <span>Schedule</span>
+                                    </button>
 
-                                <button
-                                  type="button"
-                                  className="pos-pickup-btn pos-driver-btn"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setAssignDriverTarget(ord);
-                                  }}
-                                  title={`Assign Driver for ${orderNum}`}
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '6px',
-                                    padding: '6px 14px',
-                                    borderRadius: '8px',
-                                    border: '1.5px solid #60a5fa',
-                                    background: '#ffffff',
-                                    color: '#2563eb',
-                                    fontSize: '12px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
-                                    whiteSpace: 'nowrap'
-                                  }}
-                                >
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                                    <circle cx="12" cy="7" r="4" />
-                                  </svg>
-                                  <span>Assign Driver</span>
-                                </button>
+                                    <button
+                                      type="button"
+                                      className="pos-pickup-btn pos-driver-btn"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setAssignDriverTarget(ord);
+                                      }}
+                                      title={`Assign Driver for ${orderNum}`}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        padding: '6px 14px',
+                                        borderRadius: '8px',
+                                        border: '1.5px solid #60a5fa',
+                                        background: '#ffffff',
+                                        color: '#2563eb',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
+                                        whiteSpace: 'nowrap'
+                                      }}
+                                    >
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                        <circle cx="12" cy="7" r="4" />
+                                      </svg>
+                                      <span>Assign Driver</span>
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             </td>
 
@@ -4051,7 +4190,78 @@ export default function POSModule({
                 <button
                   type="button"
                   onClick={() => {
-                    showToast?.(`👤 ${selectedDriver} assigned to Order ${assignDriverTarget.order_number || assignDriverTarget.order_id}`);
+                    const driverName = selectedDriver.split(' (')[0] || selectedDriver;
+                    const orderIdStr = assignDriverTarget.order_number || assignDriverTarget.order_id || assignDriverTarget.id || 'ORDER';
+                    const nowFormatted = new Date().toLocaleDateString('en-IN', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    });
+
+                    const pickupLog = {
+                      id: `log_pickup_${Date.now()}`,
+                      title: 'Assigned for Pickup',
+                      detail: `Pickup scheduled with ${selectedDriver}`,
+                      author: 'Store Dispatcher',
+                      time: nowFormatted,
+                      type: 'pickup',
+                      status: 'Assigned for Pickup',
+                    };
+
+                    const prevLogs = assignDriverTarget.audit_logs || assignDriverTarget.logs || [];
+                    const updatedLogs = [pickupLog, ...prevLogs.filter((l) => l.title !== 'Assigned for Pickup')];
+
+                    const updatedOrder = {
+                      ...assignDriverTarget,
+                      assigned_for_pickup: true,
+                      pickup_status: 'Assigned for Pickup',
+                      assigned_driver: driverName,
+                      assigned_driver_full: selectedDriver,
+                      pickup_delivery: `Assigned: ${driverName}`,
+                      audit_logs: updatedLogs,
+                      logs: updatedLogs,
+                      timeline: updatedLogs,
+                      updated_at: new Date().toISOString(),
+                    };
+
+                    // Notify parent to sync state & persist
+                    if (onUpdateOrder) {
+                      onUpdateOrder(updatedOrder);
+                    } else {
+                      try {
+                        const cached = localStorage.getItem('washdoor_orders_cache');
+                        if (cached) {
+                          const list = JSON.parse(cached);
+                          const nextList = list.map((o) =>
+                            (o.id === updatedOrder.id || o.order_number === updatedOrder.order_number) ? updatedOrder : o
+                          );
+                          localStorage.setItem('washdoor_orders_cache', JSON.stringify(nextList));
+                        }
+                      } catch {}
+                      onOrderCreated?.(updatedOrder);
+                    }
+
+                    // Keep inline edit states in sync if active
+                    if (editingOrderRecord && (editingOrderRecord.id === updatedOrder.id || editingOrderRecord.order_number === updatedOrder.order_number)) {
+                      setEditingOrderRecord(updatedOrder);
+                      setEditFormData((prev) => prev ? {
+                        ...prev,
+                        assigned_for_pickup: true,
+                        pickup_status: 'Assigned for Pickup',
+                        assigned_driver: driverName,
+                        assigned_driver_full: selectedDriver,
+                        pickup_delivery: `Assigned: ${driverName}`,
+                        audit_logs: updatedLogs,
+                        logs: updatedLogs,
+                      } : null);
+                    }
+                    if (sideEditTargetOrder && (sideEditTargetOrder.id === updatedOrder.id || sideEditTargetOrder.order_number === updatedOrder.order_number)) {
+                      setSideEditTargetOrder(updatedOrder);
+                    }
+
+                    showToast?.(`🚚 Order ${orderIdStr}: Assigned for pickup to ${driverName}!`);
                     setAssignDriverTarget(null);
                   }}
                   style={{
