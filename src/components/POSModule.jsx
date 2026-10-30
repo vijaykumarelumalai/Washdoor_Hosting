@@ -1311,29 +1311,6 @@ export default function POSModule({
                 </div>
               ) : (
                 <>
-                  <div className="pos-table-scroll-hint">
-                    <div className="pos-scroll-hint-label">
-                      <span>👉 Swipe horizontally or use buttons to navigate all 8 columns</span>
-                    </div>
-                    <div className="pos-table-scroll-actions">
-                      <button
-                        type="button"
-                        className="pos-table-scroll-btn"
-                        onClick={() => tableScrollRef.current?.scrollBy({ left: -300, behavior: 'smooth' })}
-                        title="Scroll columns left"
-                      >
-                        ◀ Left
-                      </button>
-                      <button
-                        type="button"
-                        className="pos-table-scroll-btn"
-                        onClick={() => tableScrollRef.current?.scrollBy({ left: 300, behavior: 'smooth' })}
-                        title="Scroll columns right"
-                      >
-                        Right ▶
-                      </button>
-                    </div>
-                  </div>
                   <div className="pos-orders-table-card" ref={tableScrollRef}>
                     <table className="pos-orders-table">
                     <thead>
