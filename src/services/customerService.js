@@ -5,7 +5,7 @@
 // - 'washdoor_order_items' (Line items per order)
 
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient.js';
-import masterOrders from '../data/masterOrders.json';
+import masterOrders from '../data/masterOrders.json' with { type: 'json' };
 
 // Default fallback products matching the database seed
 export const DEFAULT_PRODUCTS = [

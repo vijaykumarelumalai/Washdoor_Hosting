@@ -42,6 +42,7 @@ export default function App() {
   const [selectedStatusOrder, setSelectedStatusOrder] = useState(null);
   const [editingOrder, setEditingOrder] = useState(null);
   const [statusModalViewBill, setStatusModalViewBill] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Orders state with cache support and master orders default
   const [orders, setOrders] = useState(() => {
@@ -153,12 +154,8 @@ export default function App() {
   }, [loadOrders]);
 
   const handleOpenOrderStatus = (order, viewBill = false) => {
-    if (viewBill) {
-      showToast('bill viewed!');
-      return;
-    }
     setSelectedStatusOrder(order);
-    setStatusModalViewBill(false);
+    setStatusModalViewBill(viewBill);
     setIsStatusModalOpen(true);
   };
 
@@ -193,6 +190,21 @@ export default function App() {
     <div className="app">
       {/* ── Topbar ── */}
       <header className="topbar">
+        {/* Hamburger toggle — visible only on mobile via CSS */}
+        <button
+          type="button"
+          className="sidebar-toggle-btn"
+          onClick={() => setSidebarOpen((prev) => !prev)}
+          aria-label="Toggle sidebar"
+          title="Menu"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+
         <div className="brand">
           <div className="logo">W</div>
           <div>
@@ -207,7 +219,7 @@ export default function App() {
 
         {isSupabaseConfigured() ? (
           <a
-            href="https://supabase.com/dashboard/project/bpnruunbdxxwadtrswao/editor/17640?schema=public"
+            href="https://supabase.com/dashboard/project/eunguuboxwbblioljwmy/editor/17680?schema=public&sort=customer_id:asc"
             target="_blank"
             rel="noopener noreferrer"
             className="top-pill"
@@ -227,7 +239,7 @@ export default function App() {
           </a>
         ) : (
           <a
-            href="https://supabase.com/dashboard/project/bpnruunbdxxwadtrswao/editor/17640?schema=public"
+            href="https://supabase.com/dashboard/project/eunguuboxwbblioljwmy/editor/17680?schema=public&sort=customer_id:asc"
             target="_blank"
             rel="noopener noreferrer"
             className="top-pill"
@@ -441,11 +453,20 @@ export default function App() {
       </header>
 
       {/* ── Sidebar: Orders & POS, Customers ── */}
-      <aside className="sidebar">
+      {/* Mobile overlay backdrop */}
+      {sidebarOpen && (
+        <div
+          className="sidebar-overlay open"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside className={`sidebar${sidebarOpen ? ' mobile-open' : ''}`}>
         <button
           type="button"
           className={`nav ${activeTab === 'pos' ? 'active' : ''}`}
-          onClick={() => setActiveTab('pos')}
+          onClick={() => { setActiveTab('pos'); setSidebarOpen(false); }}
           title="Orders & POS Intake Register"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -455,20 +476,20 @@ export default function App() {
             <line x1="16" y1="17" x2="8" y2="17"></line>
             <polyline points="10 9 9 9 8 9"></polyline>
           </svg>
-          Orders &amp; POS
+          <span className="nav-label">Orders &amp; POS</span>
         </button>
 
         <button
           type="button"
           className={`nav ${activeTab === 'customers' ? 'active' : ''}`}
-          onClick={() => setActiveTab('customers')}
+          onClick={() => { setActiveTab('customers'); setSidebarOpen(false); }}
           title="Customer Records & Master Data"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
             <circle cx="12" cy="7" r="4"></circle>
           </svg>
-          Customers
+          <span className="nav-label">Customers</span>
         </button>
       </aside>
 

@@ -920,3 +920,75 @@ body.light-theme .pos-btn-hold:hover,
   background: #e2e8f0 !important;
   color: #0f172a !important;
 }
+
+/* ── EditOrderModal Complete Responsive Breakpoints ── */
+@media (max-width: 1200px) {
+  .pos-body-grid {
+    grid-template-columns: 1.25fr 1fr;
+    overflow-y: auto;
+  }
+  .pos-order-right {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 860px) {
+  .edit-order-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+  .edit-order-modal {
+    width: 100% !important;
+    max-width: 100vw !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    border-radius: 0 !important;
+  }
+  .pos-header-bar {
+    padding: 10px 14px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .pos-stepper-wrap {
+    display: none;
+  }
+  .pos-body-grid {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+    padding: 12px;
+    gap: 14px;
+  }
+  .pos-order-right {
+    grid-column: auto;
+  }
+  .pos-footer-action-bar {
+    padding: 10px 14px;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 600px) {
+  .pos-products-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+  .pos-item-card {
+    padding: 8px 6px !important;
+  }
+  .pos-item-img-wrap {
+    width: 48px !important;
+    height: 48px !important;
+  }
+  .pos-header-left {
+    min-width: 0;
+  }
+  .pos-main-title {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 380px) {
+  .pos-products-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

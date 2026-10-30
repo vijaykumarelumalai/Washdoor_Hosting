@@ -427,16 +427,27 @@ export default function POSModule({
     return () => clearTimeout(timer);
   }, [customerSearchQuery]);
 
-  // Close top dropdowns on outside click
+  // Close top dropdowns on outside click or Escape key
   useEffect(() => {
     const handleOutsideClick = (e) => {
       if (!e.target.closest('.pos-filter-dropdown-container')) {
         setActiveTopDropdown(null);
       }
     };
+    const handleEscapeKey = (e) => {
+      if (e.key === 'Escape') {
+        setActiveTopDropdown(null);
+        if (scheduleOrderTarget) setScheduleOrderTarget(null);
+        if (assignDriverTarget) setAssignDriverTarget(null);
+      }
+    };
     document.addEventListener('click', handleOutsideClick);
-    return () => document.removeEventListener('click', handleOutsideClick);
-  }, []);
+    document.addEventListener('keydown', handleEscapeKey);
+    return () => {
+      document.removeEventListener('click', handleOutsideClick);
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [scheduleOrderTarget, assignDriverTarget]);
 
   // Compute live counts for Status Filter Pills (Received, In Progress, Ready, Delivered, Cancelled)
   const statusCounts = useMemo(() => {
@@ -778,15 +789,15 @@ export default function POSModule({
   return (
     <div className="pos-module-container">
       {/* ── Screen Top Header: Orders & POS (Matching Reference Mockup) ── */}
-      <div className="pos-screen-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '20px', marginBottom: '14px', flexWrap: 'wrap' }}>
-        <div style={{ flexShrink: 0 }}>
+      <div className="pos-screen-header">
+        <div className="pos-screen-title-wrap">
           <h1 className="pos-screen-title" style={{ fontSize: '24px', fontWeight: 800, margin: '0 0 3px', color: '#0f172a' }}>Orders &amp; POS</h1>
           <div className="pos-screen-subtitle" style={{ fontSize: '13px', color: '#64748b' }}>Create new order, search and manage all laundry orders.</div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, justifyContent: 'flex-end', flexWrap: 'wrap', minWidth: '320px' }}>
+        <div className="pos-screen-actions">
           {/* Top Search Bar */}
-          <div className="pos-search-input-wrap" style={{ flex: 1, minWidth: '340px' }}>
+          <div className="pos-search-input-wrap">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
@@ -889,8 +900,8 @@ export default function POSModule({
       </div>
 
       {/* ── Status Filter Pills Row (with Filters & Refresh on right) ── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <div className="pos-status-pills-bar" style={{ margin: 0 }}>
+      <div className="pos-status-toolbar-row">
+        <div className="pos-status-pills-bar">
           <button
             type="button"
             className={`pos-status-pill ${activeStatusTab === 'All' || activeStatusTab === 'All Orders' ? 'active' : ''}`}
@@ -970,7 +981,7 @@ export default function POSModule({
           </button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="pos-status-actions-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {/* Filters Dropdown */}
           <div className="pos-filter-dropdown-container">
             <button
@@ -1075,7 +1086,7 @@ export default function POSModule({
           </button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="pos-status-actions-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {posViewMode === 'orders' && (
             <div className="pos-layout-toggle-group">
               <button
@@ -1848,12 +1859,7 @@ export default function POSModule({
                                         Col 2 (Right): Services Allocated & Garment Selection (Catalog + Cart)
                                        ══════════════════════════════════════════════════════════════════ */}
                                     <div
-                                      style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: '360px 1fr',
-                                        gap: '16px',
-                                        marginBottom: '16px'
-                                      }}
+                                      className="pos-inline-edit-top-grid"
                                     >
                                       {/* Left Column: Customer & Order Information */}
                                       <div
@@ -1861,7 +1867,9 @@ export default function POSModule({
                                           border: '1.5px solid #e2e8f0',
                                           borderRadius: '8px',
                                           padding: '16px',
-                                          background: '#ffffff'
+                                          background: '#ffffff',
+                                          display: 'flex',
+                                          flexDirection: 'column'
                                         }}
                                       >
                                         <div
@@ -1879,7 +1887,7 @@ export default function POSModule({
                                           <span>Customer &amp; Order Information</span>
                                         </div>
 
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '11px' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '11px', flex: 1 }}>
                                           <div>
                                             <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#334155', marginBottom: '4px' }}>
                                               Customer Name <span style={{ color: '#ef4444' }}>*</span>
@@ -2055,7 +2063,7 @@ export default function POSModule({
                                             </div>
                                           </div>
 
-                                          <div>
+                                          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
                                             <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#334155', marginBottom: '4px' }}>
                                               Comments
                                             </label>
@@ -2075,7 +2083,9 @@ export default function POSModule({
                                                 background: isOrderReady ? '#f8fafc' : '#ffffff',
                                                 color: '#0f172a',
                                                 outline: 'none',
-                                                resize: 'vertical'
+                                                resize: 'vertical',
+                                                minHeight: '65px',
+                                                flex: 1
                                               }}
                                             />
                                           </div>
@@ -2088,7 +2098,9 @@ export default function POSModule({
                                           border: '1.5px solid #e2e8f0',
                                           borderRadius: '8px',
                                           padding: '16px',
-                                          background: '#ffffff'
+                                          background: '#ffffff',
+                                          display: 'flex',
+                                          flexDirection: 'column'
                                         }}
                                       >
                                         <div
@@ -2107,11 +2119,7 @@ export default function POSModule({
                                         </div>
 
                                         <div
-                                          style={{
-                                            display: 'grid',
-                                            gridTemplateColumns: '1.2fr 1fr',
-                                            gap: '14px'
-                                          }}
+                                          className="pos-inline-edit-services-grid"
                                         >
                                           {/* Sub-col 1: Cloth Selection & Catalog */}
                                           <div
@@ -2119,7 +2127,11 @@ export default function POSModule({
                                               border: '1.5px solid #e2e8f0',
                                               borderRadius: '8px',
                                               padding: '12px',
-                                              background: '#f8fafc'
+                                              background: '#f8fafc',
+                                              display: 'flex',
+                                              flexDirection: 'column',
+                                              height: '100%',
+                                              boxSizing: 'border-box'
                                             }}
                                           >
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
@@ -2248,9 +2260,10 @@ export default function POSModule({
                                                 display: 'grid',
                                                 gridTemplateColumns: 'repeat(3, 1fr)',
                                                 gap: '8px',
-                                                height: '230px',
-                                                maxHeight: '230px',
-                                                overflowY: 'scroll',
+                                                flex: 1,
+                                                minHeight: '340px',
+                                                maxHeight: '430px',
+                                                overflowY: 'auto',
                                                 paddingRight: '6px',
                                                 scrollbarGutter: 'stable'
                                               }}
@@ -2318,14 +2331,14 @@ export default function POSModule({
                                             </div>
 
                                             {/* Scroller bottom indicator */}
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '11px', color: '#64748b', marginTop: '8px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '11px', color: '#64748b', marginTop: 'auto', paddingTop: '8px' }}>
                                               <span>↕</span>
                                               <span>Scroll up / down to view all 12 garments</span>
                                             </div>
                                           </div>
 
                                           {/* Sub-col 2: Selected Item Details & Cart Items */}
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
                                             {/* Selected Item Details */}
                                             <div
                                               style={{
@@ -2528,7 +2541,7 @@ export default function POSModule({
                                                       </div>
                                                     </div>
 
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <div className="pos-status-actions-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                       <span style={{ fontWeight: 750, color: '#0f172a' }}>
                                                         ₹{(Number(it.rate || 0) * Number(it.qty || 1)).toFixed(2)}
                                                       </span>
@@ -2587,18 +2600,6 @@ export default function POSModule({
                                                   ({editCartTotalPieces} pieces)
                                                 </span>
                                               </div>
-
-                                              {/* Scroller bottom indicator */}
-                                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '11px', color: '#64748b', marginTop: '8px' }}>
-                                                <span>↕</span>
-                                                <span>Scroll up / down to view all 12 garments</span>
-                                              </div>
-
-                                              {/* Scroller bottom indicator */}
-                                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '11px', color: '#64748b', marginTop: '8px' }}>
-                                                <span>↕</span>
-                                                <span>Scroll up / down to view all 12 garments</span>
-                                              </div>
                                             </div>
                                           </div>
                                         </div>
@@ -2634,12 +2635,7 @@ export default function POSModule({
 
                                       {/* Row 1: 4 Columns (Garment *, Color, Stains / Marks, Make) */}
                                       <div
-                                        style={{
-                                          display: 'grid',
-                                          gridTemplateColumns: 'repeat(4, 1fr)',
-                                          gap: '14px',
-                                          marginBottom: '12px'
-                                        }}
+                                        className="pos-edit-inspection-row-4col"
                                       >
                                         <div>
                                           <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
@@ -2757,12 +2753,7 @@ export default function POSModule({
 
                                       {/* Row 2: 3 Columns (Brand, Fabric Type, Garment Notes) */}
                                       <div
-                                        style={{
-                                          display: 'grid',
-                                          gridTemplateColumns: '1fr 1fr 1.5fr',
-                                          gap: '14px',
-                                          marginBottom: '14px'
-                                        }}
+                                        className="pos-edit-inspection-row-3col"
                                       >
                                         <div>
                                           <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
@@ -3025,7 +3016,7 @@ export default function POSModule({
                                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
                                             Logistics &amp; Factory Routing
                                           </div>
-                                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                                          <div className="pos-edit-logistics-grid">
                                             <div>
                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
                                                 Factory Hub
@@ -3091,7 +3082,7 @@ export default function POSModule({
                                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
                                             Payment Summary &amp; Mode
                                           </div>
-                                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', fontSize: '13px' }}>
+                                          <div className="pos-edit-payments-grid">
                                             <div>
                                               <span style={{ color: '#64748b' }}>Subtotal: </span>
                                               <strong style={{ color: '#0f172a' }}>₹{editCartSubtotal.toFixed(2)}</strong>
@@ -3731,7 +3722,7 @@ export default function POSModule({
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div className="pos-status-actions-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <strong style={{ fontSize: '14px', color: '#38bdf8' }}>
                         {currencySymbol}{item.grandTotal?.toFixed(2)}
                       </strong>
@@ -4030,6 +4021,23 @@ export default function POSModule({
         onClose={() => setSideEditTargetOrder(null)}
         showToast={showToast}
         currencySymbol={currencySymbol}
+        onUpdateOrder={(updated) => {
+          if (onUpdateOrder) {
+            onUpdateOrder(updated);
+          } else {
+            try {
+              const cached = localStorage.getItem('washdoor_orders_cache');
+              if (cached) {
+                const list = JSON.parse(cached);
+                const nextList = list.map((o) =>
+                  o.id === updated.id || o.order_number === updated.order_number ? updated : o
+                );
+                localStorage.setItem('washdoor_orders_cache', JSON.stringify(nextList));
+              }
+            } catch {}
+            onOrderCreated?.(updated);
+          }
+        }}
       />
     </div>
   );

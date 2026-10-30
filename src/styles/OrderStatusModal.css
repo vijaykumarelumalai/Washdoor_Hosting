@@ -777,3 +777,32 @@ body.light-theme .bill-total-val,
 [data-theme="light"] .bill-total-val {
   color: #2563eb !important;
 }
+
+/* ── OrderStatusModal Responsive Rules ── */
+.status-modal-card {
+  max-height: 92vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+@media (max-width: 640px) {
+  .status-modal-card {
+    padding: 16px 14px;
+    border-radius: 16px 16px 0 0;
+    max-height: 94vh;
+    align-self: flex-end;
+  }
+  .osm-body {
+    max-height: calc(94vh - 120px);
+    overflow-y: auto;
+  }
+  .bill-info-grid {
+    grid-template-columns: 1fr;
+  }
+  .osm-actions {
+    flex-direction: column-reverse;
+  }
+  .osm-actions button {
+    width: 100%;
+  }
+}
