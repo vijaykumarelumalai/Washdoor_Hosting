@@ -1155,6 +1155,376 @@ body.light-theme .pos-held-modal {
   color: #0f172a;
 }
 
+/* ── POS Dialogs & Modals (Schedule & Driver Assignment & Parked Orders) ── */
+.pos-dialog-modal {
+  width: 100%;
+  max-width: 440px;
+  background: #0b172a;
+  border: 1px solid #1e3a5f;
+  border-radius: 16px;
+  padding: 22px;
+  color: #f1f5f9;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+body.light-theme .pos-dialog-modal,
+[data-theme="light"] .pos-dialog-modal {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.12) !important;
+}
+
+.pos-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #1e293b;
+  padding-bottom: 12px;
+}
+
+body.light-theme .pos-dialog-header,
+[data-theme="light"] .pos-dialog-header {
+  border-bottom-color: #e2e8f0 !important;
+}
+
+.pos-dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 750;
+  font-size: 15px;
+  color: #f8fafc;
+}
+
+body.light-theme .pos-dialog-title,
+[data-theme="light"] .pos-dialog-title {
+  color: #0f172a !important;
+}
+
+.pos-dialog-close-btn {
+  background: transparent;
+  border: none;
+  font-size: 16px;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.pos-dialog-close-btn:hover {
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+body.light-theme .pos-dialog-close-btn,
+[data-theme="light"] .pos-dialog-close-btn {
+  color: #64748b !important;
+}
+
+body.light-theme .pos-dialog-close-btn:hover,
+[data-theme="light"] .pos-dialog-close-btn:hover {
+  color: #0f172a !important;
+  background: #f1f5f9 !important;
+}
+
+.pos-dialog-order-card {
+  background: #030b15;
+  border: 1px solid #17253d;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+body.light-theme .pos-dialog-order-card,
+[data-theme="light"] .pos-dialog-order-card {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+.pos-dialog-order-num {
+  font-weight: 700;
+  font-size: 13px;
+  color: #38bdf8;
+}
+
+body.light-theme .pos-dialog-order-num,
+[data-theme="light"] .pos-dialog-order-num {
+  color: #2563eb !important;
+}
+
+.pos-dialog-order-cust {
+  font-size: 12px;
+  color: #cbd5e1;
+  margin-top: 2px;
+}
+
+body.light-theme .pos-dialog-order-cust,
+[data-theme="light"] .pos-dialog-order-cust {
+  color: #334155 !important;
+}
+
+.pos-dialog-order-addr {
+  font-size: 11.5px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+body.light-theme .pos-dialog-order-addr,
+[data-theme="light"] .pos-dialog-order-addr {
+  color: #64748b !important;
+}
+
+.pos-dialog-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 650;
+  color: #94a3b8;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+body.light-theme .pos-dialog-label,
+[data-theme="light"] .pos-dialog-label {
+  color: #475569 !important;
+}
+
+.pos-dialog-type-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #1e293b;
+  background: #0f172a;
+  color: #94a3b8;
+  font-weight: 650;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pos-dialog-type-btn.active {
+  background: #1d4ed8;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+body.light-theme .pos-dialog-type-btn,
+[data-theme="light"] .pos-dialog-type-btn {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
+}
+
+body.light-theme .pos-dialog-type-btn.active,
+[data-theme="light"] .pos-dialog-type-btn.active {
+  background: #2563eb !important;
+  border-color: #1d4ed8 !important;
+  color: #ffffff !important;
+}
+
+.pos-dialog-input,
+.pos-dialog-select {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid #1e293b;
+  background: #040b17;
+  color: #f8fafc;
+  font-size: 13px;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pos-dialog-input:focus,
+.pos-dialog-select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+body.light-theme .pos-dialog-input,
+body.light-theme .pos-dialog-select,
+[data-theme="light"] .pos-dialog-input,
+[data-theme="light"] .pos-dialog-select {
+  background: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+body.light-theme .pos-dialog-input:focus,
+body.light-theme .pos-dialog-select:focus,
+[data-theme="light"] .pos-dialog-input:focus,
+[data-theme="light"] .pos-dialog-select:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+}
+
+body.light-theme .pos-dialog-input[type="date"]::-webkit-calendar-picker-indicator,
+body.light-theme .pos-dialog-input[type="time"]::-webkit-calendar-picker-indicator,
+[data-theme="light"] .pos-dialog-input[type="date"]::-webkit-calendar-picker-indicator,
+[data-theme="light"] .pos-dialog-input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: none !important;
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.pos-dialog-input[type="date"]::-webkit-calendar-picker-indicator,
+.pos-dialog-input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.75;
+  cursor: pointer;
+}
+
+.pos-dialog-cancel-btn {
+  flex: 1;
+  padding: 9px;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  background: transparent;
+  color: #94a3b8;
+  font-weight: 650;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pos-dialog-cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #f1f5f9;
+}
+
+body.light-theme .pos-dialog-cancel-btn,
+[data-theme="light"] .pos-dialog-cancel-btn {
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
+}
+
+body.light-theme .pos-dialog-cancel-btn:hover,
+[data-theme="light"] .pos-dialog-cancel-btn:hover {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #94a3b8 !important;
+}
+
+.pos-dialog-confirm-btn {
+  flex: 1;
+  padding: 9px;
+  border-radius: 8px;
+  border: none;
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+  transition: all 0.15s ease;
+}
+
+.pos-dialog-confirm-btn:hover {
+  background: #1d4ed8;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+}
+
+/* Driver Cards in Assign Driver Dialog */
+.pos-driver-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #1e293b;
+  background: #040b17;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pos-driver-card:hover {
+  background: #0f1b2d;
+  border-color: #2e4a73;
+}
+
+.pos-driver-card.selected {
+  border: 1.5px solid #3b82f6;
+  background: #1e293b;
+}
+
+body.light-theme .pos-driver-card,
+[data-theme="light"] .pos-driver-card {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+body.light-theme .pos-driver-card:hover,
+[data-theme="light"] .pos-driver-card:hover {
+  background: #f8fafc !important;
+  border-color: #93c5fd !important;
+}
+
+body.light-theme .pos-driver-card.selected,
+[data-theme="light"] .pos-driver-card.selected {
+  background: #eff6ff !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.1) !important;
+}
+
+.pos-driver-name {
+  font-weight: 650;
+  font-size: 13px;
+  color: #f8fafc;
+}
+
+body.light-theme .pos-driver-name,
+[data-theme="light"] .pos-driver-name {
+  color: #0f172a !important;
+}
+
+.pos-driver-meta {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 1px;
+}
+
+body.light-theme .pos-driver-meta,
+[data-theme="light"] .pos-driver-meta {
+  color: #64748b !important;
+}
+
+.pos-driver-check {
+  color: #38bdf8;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+body.light-theme .pos-driver-check,
+[data-theme="light"] .pos-driver-check {
+  color: #2563eb !important;
+}
+
+.pos-held-card {
+  background: #040a14;
+  border: 1px solid #172a44;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+body.light-theme .pos-held-card,
+[data-theme="light"] .pos-held-card {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
 /* ── Light Mode: POS Screen Header, Search Toolbar & Status Pills ── */
 body.light-theme .pos-screen-title,
 [data-theme="light"] .pos-screen-title {
@@ -3641,4 +4011,61 @@ body.light-theme .pos-pickup-btn.pos-change-driver-btn,
   border-color: #94a3b8 !important;
   color: #475569 !important;
 }
+
+/* Scheduled Date & Time Banner in Table */
+.pos-scheduled-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 8px;
+  background: rgba(37, 99, 235, 0.16);
+  border: 1.5px solid rgba(59, 130, 246, 0.45);
+  border-radius: 7px;
+  margin-bottom: 2px;
+}
+
+body.light-theme .pos-scheduled-banner,
+[data-theme="light"] .pos-scheduled-banner {
+  background: #eff6ff !important;
+  border-color: #bfdbfe !important;
+}
+
+.pos-scheduled-banner-title {
+  font-size: 10px;
+  color: #60a5fa;
+  font-weight: 750;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+body.light-theme .pos-scheduled-banner-title,
+[data-theme="light"] .pos-scheduled-banner-title {
+  color: #1d4ed8 !important;
+}
+
+.pos-scheduled-banner-datetime {
+  font-size: 11.5px;
+  color: #93c5fd;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+body.light-theme .pos-scheduled-banner-datetime,
+[data-theme="light"] .pos-scheduled-banner-datetime {
+  color: #2563eb !important;
+}
+
+/* Modal Date and Time styling */
+.pos-dialog-order-captured-time {
+  color: #38bdf8;
+}
+
+body.light-theme .pos-dialog-order-captured-time,
+[data-theme="light"] .pos-dialog-order-captured-time {
+  color: #2563eb !important;
+}
+
 
