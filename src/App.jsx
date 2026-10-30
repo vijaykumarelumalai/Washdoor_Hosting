@@ -544,8 +544,11 @@ export default function App() {
       <CreateOrderModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onOrderSuccess={() => {
+        onOrderSuccess={(newOrder) => {
           loadOrders();
+          if (newOrder) {
+            handleOpenOrderStatus(newOrder, true);
+          }
         }}
         showToast={showToast}
       />

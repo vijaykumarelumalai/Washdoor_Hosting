@@ -1351,3 +1351,16 @@ body:not(.light-theme) .side-edit-btn-cancel {
   border-color: #172a44;
   color: #cbd5e1;
 }
+
+/* Ensure high contrast for SideEditPanel select options in both themes */
+.side-edit-panel select option {
+  background-color: #ffffff;
+  color: #0f172a;
+  padding: 8px 12px;
+}
+
+[data-theme="dark"] .side-edit-panel select option,
+body:not(.light-theme) .side-edit-panel select option {
+  background-color: #091527 !important;
+  color: #f1f5f9 !important;
+}

@@ -6362,3 +6362,11 @@ html, body, #root, .app {
 
 
 
+
+
+/* Light Theme Native Select Option High Contrast */
+body.light-theme select option,
+[data-theme="light"] select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}

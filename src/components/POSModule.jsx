@@ -1865,56 +1865,16 @@ export default function POSModule({
                           {/* ── Inline Edit Dropdown Accordion Row ── */}
                           {isEditingThisOrder && editFormData && (
                             <tr key={`${orderNum}_edit_dropdown_card`} className="pos-edit-dropdown-row">
-                              <td
-                                colSpan={8}
-                                style={{
-                                  padding: '10px 16px 18px 16px',
-                                  background: '#f8fafc',
-                                  borderBottom: '2px solid #e2e8f0'
-                                }}
-                              >
-                                <div
-                                  className="pos-inline-edit-card"
-                                  style={{
-                                    background: '#ffffff',
-                                    borderRadius: '10px',
-                                    border: '1.5px solid #cbd5e1',
-                                    borderLeft: '4.5px solid #2563eb',
-                                    boxShadow: '0 6px 20px rgba(0, 0, 0, 0.06)',
-                                    padding: '18px 22px',
-                                    position: 'relative'
-                                  }}
-                                >
+                              <td colSpan={8} className="pos-inline-edit-wrap">
+                                <div className="pos-inline-edit-card">
                                   {/* ── Header ── */}
-                                  <div
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'space-between',
-                                      borderBottom: '1.5px solid #f1f5f9',
-                                      paddingBottom: '14px',
-                                      marginBottom: '16px'
-                                    }}
-                                  >
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+                                  <div className="pos-edit-header-bar">
+                                    <div className="pos-edit-header-title">
                                       <span style={{ color: '#2563eb', fontSize: '15px', fontWeight: 800 }}>◆</span>
-                                      <span style={{ fontSize: '15px', fontWeight: 750, color: '#0f172a' }}>
+                                      <span>
                                         Edit Order — {editFormData.order_number}
                                       </span>
-                                      <span
-                                        style={{
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: '5px',
-                                          background: '#eff6ff',
-                                          color: '#1d4ed8',
-                                          fontSize: '11.5px',
-                                          fontWeight: 700,
-                                          padding: '3px 10px',
-                                          borderRadius: '12px',
-                                          border: '1px solid #bfdbfe'
-                                        }}
-                                      >
+                                      <span className="pos-edit-status-pill">
                                         ● Status: {normalizeOrderStatus(editFormData.status || editFormData.order_status)}
                                       </span>
                                     </div>
@@ -1926,29 +1886,11 @@ export default function POSModule({
                                         setEditFormData(null);
                                       }}
                                       title="Collapse Edit Form"
-                                      style={{
-                                        background: '#f1f5f9',
-                                        border: '1px solid #cbd5e1',
-                                        borderRadius: '6px',
-                                        width: '30px',
-                                        height: '30px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        cursor: 'pointer',
-                                        color: '#334155',
-                                        fontSize: '13px',
-                                        fontWeight: 750,
-                                        transition: 'all 0.15s ease'
-                                      }}
-                                      onMouseOver={(e) => { e.currentTarget.style.background = '#e2e8f0'; }}
-                                      onMouseOut={(e) => { e.currentTarget.style.background = '#f1f5f9'; }}
+                                      className="pos-edit-collapse-btn"
                                     >
                                       ▲
                                     </button>
                                   </div>
-
-                                  
 
                                   <form onSubmit={handleSaveOrderEdit}>
                                     {/* ══════════════════════════════════════════════════════════════════
@@ -1956,1903 +1898,1372 @@ export default function POSModule({
                                         Col 1 (Left): Customer & Order Information (~360px)
                                         Col 2 (Right): Services Allocated & Garment Selection (Catalog + Cart)
                                        ══════════════════════════════════════════════════════════════════ */}
-                                    <div
-                                      className="pos-inline-edit-top-grid"
-                                    >
+                                    <div className="pos-inline-edit-top-grid">
                                       {/* Left Column: Customer & Order Information */}
-                                       <div
-                                         style={{
-                                           border: '1.5px solid #e2e8f0',
-                                           borderRadius: '8px',
-                                           padding: '16px',
-                                           background: '#ffffff',
-                                           display: 'flex',
-                                           flexDirection: 'column'
-                                         }}
-                                       >
-                                         <div
-                                           style={{
-                                             fontSize: '13.5px',
-                                             fontWeight: 700,
-                                             color: '#0f172a',
-                                             marginBottom: '14px',
-                                             display: 'flex',
-                                             alignItems: 'center',
-                                             gap: '7px'
-                                           }}
-                                         >
-                                           <span style={{ color: '#2563eb' }}>◆</span>
-                                           <span>Customer &amp; Order Information</span>
-                                         </div>
+                                      <div className="pos-edit-section-card">
+                                        <div className="pos-edit-section-title">
+                                          <span style={{ color: '#2563eb' }}>◆</span>
+                                          <span>Customer &amp; Order Information</span>
+                                        </div>
 
-                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '11px', flex: 1 }}>
-                                           <div>
-                                             <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#334155', marginBottom: '4px' }}>
-                                               Customer Name <span style={{ color: '#ef4444' }}>*</span>
-                                             </label>
-                                             <input
-                                               type="text"
-                                               value={editFormData.customer_name || ''}
-                                               onChange={(e) => setEditFormData({ ...editFormData, customer_name: e.target.value })}
-                                               required
-                                               style={{
-                                                 width: '100%',
-                                                 boxSizing: 'border-box',
-                                                 height: '36px',
-                                                 padding: '0 12px',
-                                                 fontSize: '13px',
-                                                 borderRadius: '6px',
-                                                 border: '1.5px solid #d1d5db',
-                                                 background: '#ffffff',
-                                                 color: '#0f172a',
-                                                 outline: 'none'
-                                               }}
-                                             />
-                                           </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '11px', flex: 1 }}>
+                                          {/* Customer Name */}
+                                          <div>
+                                            <label className="pos-edit-label">
+                                              Customer Name <span className="required">*</span>
+                                            </label>
+                                            <input
+                                              type="text"
+                                              className="pos-edit-field"
+                                              value={editFormData.customer_name || ''}
+                                              onChange={(e) => setEditFormData({ ...editFormData, customer_name: e.target.value })}
+                                              required
+                                            />
+                                          </div>
 
-                                           <div>
-                                             <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#334155', marginBottom: '4px' }}>
-                                               Mobile Number <span style={{ color: '#ef4444' }}>*</span>
-                                             </label>
-                                             <input
-                                               type="text"
-                                               value={editFormData.mobile_number || ''}
-                                               onChange={(e) => setEditFormData({ ...editFormData, mobile_number: e.target.value })}
-                                               required
-                                               style={{
-                                                 width: '100%',
-                                                 boxSizing: 'border-box',
-                                                 height: '36px',
-                                                 padding: '0 12px',
-                                                 fontSize: '13px',
-                                                 borderRadius: '6px',
-                                                 border: '1.5px solid #d1d5db',
-                                                 background: '#ffffff',
-                                                 color: '#0f172a',
-                                                 outline: 'none'
-                                               }}
-                                             />
-                                           </div>
+                                          {/* Mobile Number */}
+                                          <div>
+                                            <label className="pos-edit-label">
+                                              Mobile Number <span className="required">*</span>
+                                            </label>
+                                            <input
+                                              type="text"
+                                              className="pos-edit-field"
+                                              value={editFormData.mobile_number || ''}
+                                              onChange={(e) => setEditFormData({ ...editFormData, mobile_number: e.target.value })}
+                                              required
+                                            />
+                                          </div>
 
-                                           <div>
-                                             <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#334155', marginBottom: '4px' }}>
-                                               Address <span style={{ color: '#ef4444' }}>*</span>
-                                             </label>
-                                             <input
-                                               type="text"
-                                               value={editFormData.address || ''}
-                                               onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
-                                               required
-                                               style={{
-                                                 width: '100%',
-                                                 boxSizing: 'border-box',
-                                                 height: '36px',
-                                                 padding: '0 12px',
-                                                 fontSize: '13px',
-                                                 borderRadius: '6px',
-                                                 border: '1.5px solid #d1d5db',
-                                                 background: '#ffffff',
-                                                 color: '#0f172a',
-                                                 outline: 'none'
-                                               }}
-                                             />
-                                           </div>
+                                          {/* Address */}
+                                          <div>
+                                            <label className="pos-edit-label">
+                                              Address <span className="required">*</span>
+                                            </label>
+                                            <input
+                                              type="text"
+                                              className="pos-edit-field"
+                                              value={editFormData.address || ''}
+                                              onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
+                                              required
+                                            />
+                                          </div>
 
-                                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                                             <div>
-                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#334155', marginBottom: '4px' }}>
-                                                 Order Type <span style={{ color: '#ef4444' }}>*</span>
-                                               </label>
-                                               <select
-                                                 value={editFormData.order_type || 'Walk-in'}
-                                                 onChange={(e) => setEditFormData({ ...editFormData, order_type: e.target.value })}
-                                                 style={{
-                                                   width: '100%',
-                                                   boxSizing: 'border-box',
-                                                   height: '36px',
-                                                   padding: '0 10px',
-                                                   fontSize: '12.5px',
-                                                   borderRadius: '6px',
-                                                   border: '1.5px solid #d1d5db',
-                                                   background: '#ffffff',
-                                                   color: '#0f172a',
-                                                   outline: 'none'
-                                                 }}
-                                               >
-                                                 <option value="Walk-in">Walk-in</option>
-                                                 <option value="Home Delivery">Home Delivery</option>
-                                                 <option value="Express 24H">Express 24H</option>
-                                               </select>
-                                             </div>
+                                          {/* Row with Status * and Order Type * side-by-side (matching user screenshot) */}
+                                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                            <div>
+                                              <label className="pos-edit-label">
+                                                Status <span className="required">*</span>
+                                              </label>
+                                              <select
+                                                className="pos-edit-field"
+                                                value={normalizeOrderStatus(editFormData.status || editFormData.order_status)}
+                                                onChange={(e) => {
+                                                  const val = e.target.value;
+                                                  setEditFormData({ ...editFormData, status: val, order_status: val });
+                                                  handleQuickStatusUpdate(val);
+                                                }}
+                                              >
+                                                <option value="Received">Received</option>
+                                                <option value="In Progress">In Progress</option>
+                                                <option value="Ready">Ready</option>
+                                                <option value="Delivered">Delivered</option>
+                                                <option value="Cancelled">Cancelled</option>
+                                              </select>
+                                            </div>
 
-                                             <div>
-                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#334155', marginBottom: '4px' }}>
-                                                 Expected Delivery <span style={{ color: '#ef4444' }}>*</span>
-                                               </label>
-                                               <div style={{ position: 'relative' }}>
-                                                 <input
-                                                   type="text"
-                                                   value={editFormData.expected_delivery || ''}
-                                                   onChange={(e) => setEditFormData({ ...editFormData, expected_delivery: e.target.value })}
-                                                   placeholder="e.g. 30 Oct 2026, 05:00 PM"
-                                                   required
-                                                   style={{
-                                                     width: '100%',
-                                                     boxSizing: 'border-box',
-                                                     height: '36px',
-                                                     padding: '0 12px 0 34px',
-                                                     fontSize: '12.5px',
-                                                     borderRadius: '6px',
-                                                     border: '1.5px solid #d1d5db',
-                                                     background: '#ffffff',
-                                                     color: '#0f172a',
-                                                     outline: 'none'
-                                                   }}
-                                                 />
-                                                 <svg
-                                                   width="14"
-                                                   height="14"
-                                                   viewBox="0 0 24 24"
-                                                   fill="none"
-                                                   stroke="#64748b"
-                                                   strokeWidth="2.2"
-                                                   style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
-                                                 >
-                                                   <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                                                   <line x1="16" y1="2" x2="16" y2="6" />
-                                                   <line x1="8" y1="2" x2="8" y2="6" />
-                                                   <line x1="3" y1="10" x2="21" y2="10" />
-                                                 </svg>
-                                               </div>
-                                             </div>
-                                           </div>
+                                            <div>
+                                              <label className="pos-edit-label">
+                                                Order Type <span className="required">*</span>
+                                              </label>
+                                              <select
+                                                className="pos-edit-field"
+                                                value={editFormData.order_type || 'Walk-in'}
+                                                onChange={(e) => setEditFormData({ ...editFormData, order_type: e.target.value })}
+                                              >
+                                                <option value="Walk-in">Walk-in</option>
+                                                <option value="Home Delivery">Home Delivery</option>
+                                                <option value="Express 24H">Express 24H</option>
+                                              </select>
+                                            </div>
+                                          </div>
 
-                                           <div>
-                                             <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#334155', marginBottom: '4px' }}>
-                                               Comments
-                                             </label>
-                                             <textarea
-                                               rows={2}
-                                               value={editFormData.comments || ''}
-                                               onChange={(e) => setEditFormData({ ...editFormData, comments: e.target.value })}
-                                               placeholder="Customer special notes, delicate fabric instructions, or delivery directions..."
-                                               style={{
-                                                 width: '100%',
-                                                 boxSizing: 'border-box',
-                                                 padding: '8px 12px',
-                                                 fontSize: '12.5px',
-                                                 borderRadius: '6px',
-                                                 border: '1.5px solid #d1d5db',
-                                                 background: '#ffffff',
-                                                 color: '#0f172a',
-                                                 outline: 'none',
-                                                 resize: 'vertical',
-                                                 minHeight: '60px'
-                                               }}
-                                             />
-                                           </div>
+                                          {/* Expected Delivery with Calendar icon */}
+                                          <div>
+                                            <label className="pos-edit-label">
+                                              Expected Delivery <span className="required">*</span>
+                                            </label>
+                                            <div style={{ position: 'relative' }}>
+                                              <input
+                                                type="text"
+                                                className="pos-edit-field"
+                                                style={{ paddingLeft: '34px' }}
+                                                value={editFormData.expected_delivery || ''}
+                                                onChange={(e) => setEditFormData({ ...editFormData, expected_delivery: e.target.value })}
+                                                placeholder="e.g. 30 Oct 2026, 05:00 PM"
+                                                required
+                                              />
+                                              <svg
+                                                width="14"
+                                                height="14"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="2.2"
+                                                style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', opacity: 0.6, pointerEvents: 'none' }}
+                                              >
+                                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                                <line x1="16" y1="2" x2="16" y2="6" />
+                                                <line x1="8" y1="2" x2="8" y2="6" />
+                                                <line x1="3" y1="10" x2="21" y2="10" />
+                                              </svg>
+                                            </div>
+                                          </div>
 
-                                           {/* ── Status Field (in highlighted red box area) ── */}
-                                           <div
-                                             className="pos-edit-status-section"
-                                             style={{
-                                               marginTop: '6px',
-                                               padding: '12px',
-                                               background: '#f8fafc',
-                                               border: '1.5px solid #cbd5e1',
-                                               borderRadius: '8px',
-                                               display: 'flex',
-                                               flexDirection: 'column',
-                                               gap: '10px'
-                                             }}
-                                           >
-                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                               <label style={{ fontSize: '12px', fontWeight: 750, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                 <span>Status</span>
-                                                 <span style={{ color: '#ef4444' }}>*</span>
-                                               </label>
-                                               <span style={{ fontSize: '11px', color: '#64748b' }}>
-                                                 Updates live in orders list
-                                               </span>
-                                             </div>
+                                          {/* Comments Textarea */}
+                                          <div>
+                                            <label className="pos-edit-label">
+                                              Comments
+                                            </label>
+                                            <textarea
+                                              rows={2}
+                                              className="pos-edit-textarea"
+                                              value={editFormData.comments || ''}
+                                              onChange={(e) => setEditFormData({ ...editFormData, comments: e.target.value })}
+                                              placeholder="Customer special notes, delicate fabric instructions, or delivery directions..."
+                                            />
+                                          </div>
 
-                                             {/* Status Dropdown + Immediate Apply Action */}
-                                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                               <select
-                                                 value={normalizeOrderStatus(editFormData.status || editFormData.order_status)}
-                                                 onChange={(e) => {
-                                                   const val = e.target.value;
-                                                   setEditFormData({ ...editFormData, status: val, order_status: val });
-                                                   handleQuickStatusUpdate(val);
-                                                 }}
-                                                 style={{
-                                                   flex: 1,
-                                                   height: '38px',
-                                                   padding: '0 10px',
-                                                   fontSize: '13px',
-                                                   fontWeight: 650,
-                                                   borderRadius: '6px',
-                                                   border: '1.5px solid #3b82f6',
-                                                   background: '#ffffff',
-                                                   color: '#0f172a',
-                                                   outline: 'none',
-                                                   cursor: 'pointer'
-                                                 }}
-                                               >
-                                                 <option value="Received">🔵 Received</option>
-                                                 <option value="In Progress">🟡 In Progress</option>
-                                                 <option value="Ready">🟢 Ready</option>
-                                                 <option value="Delivered">🔷 Delivered</option>
-                                                 <option value="Cancelled">🔴 Cancelled</option>
-                                               </select>
+                                          {/* Live Status Quick Action & Pills */}
+                                          <div className="pos-edit-sub-panel" style={{ marginTop: '4px', gap: '8px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                              <span style={{ fontSize: '11.5px', fontWeight: 700, color: 'var(--text-primary)' }}>Live Status Actions</span>
+                                              <button
+                                                type="button"
+                                                onClick={() => handleQuickStatusUpdate(editFormData.status || editFormData.order_status)}
+                                                style={{
+                                                  height: '28px',
+                                                  padding: '0 10px',
+                                                  background: '#2563eb',
+                                                  color: '#ffffff',
+                                                  border: 'none',
+                                                  borderRadius: '5px',
+                                                  fontSize: '11px',
+                                                  fontWeight: 700,
+                                                  cursor: 'pointer',
+                                                  display: 'inline-flex',
+                                                  alignItems: 'center',
+                                                  gap: '4px'
+                                                }}
+                                              >
+                                                <span>⚡</span>
+                                                <span>Apply Status</span>
+                                              </button>
+                                            </div>
 
-                                               <button
-                                                 type="button"
-                                                 onClick={() => handleQuickStatusUpdate(editFormData.status || editFormData.order_status)}
-                                                 title="Apply Status to Orders List"
-                                                 style={{
-                                                   height: '38px',
-                                                   padding: '0 14px',
-                                                   background: '#2563eb',
-                                                   color: '#ffffff',
-                                                   border: 'none',
-                                                   borderRadius: '6px',
-                                                   fontSize: '12px',
-                                                   fontWeight: 700,
-                                                   cursor: 'pointer',
-                                                   whiteSpace: 'nowrap',
-                                                   display: 'inline-flex',
-                                                   alignItems: 'center',
-                                                   gap: '4px',
-                                                   boxShadow: '0 1px 3px rgba(37, 99, 235, 0.25)'
-                                                 }}
-                                               >
-                                                 <span>⚡</span>
-                                                 <span>Apply Status</span>
-                                               </button>
-                                             </div>
+                                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                              {[
+                                                { label: 'Received', color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe' },
+                                                { label: 'In Progress', color: '#b45309', bg: '#fef3c7', border: '#fde68a' },
+                                                { label: 'Ready', color: '#15803d', bg: '#dcfce7', border: '#bbf7d0' },
+                                                { label: 'Delivered', color: '#0369a1', bg: '#e0f2fe', border: '#bae6fd' },
+                                                { label: 'Cancelled', color: '#b91c1c', bg: '#fee2e2', border: '#fecaca' },
+                                              ].map((st) => {
+                                                const isCur = normalizeOrderStatus(editFormData.status || editFormData.order_status) === st.label;
+                                                return (
+                                                  <button
+                                                    key={st.label}
+                                                    type="button"
+                                                    onClick={() => {
+                                                      setEditFormData({ ...editFormData, status: st.label, order_status: st.label });
+                                                      handleQuickStatusUpdate(st.label);
+                                                    }}
+                                                    style={{
+                                                      padding: '3px 9px',
+                                                      borderRadius: '12px',
+                                                      fontSize: '11px',
+                                                      fontWeight: 700,
+                                                      cursor: 'pointer',
+                                                      border: isCur ? `2px solid ${st.color}` : `1px solid ${st.border}`,
+                                                      background: isCur ? st.color : st.bg,
+                                                      color: isCur ? '#ffffff' : st.color,
+                                                      transition: 'all 0.15s ease',
+                                                      display: 'inline-flex',
+                                                      alignItems: 'center',
+                                                      gap: '3px'
+                                                    }}
+                                                  >
+                                                    <span>{isCur ? '✓' : '●'}</span>
+                                                    <span>{st.label}</span>
+                                                  </button>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
 
-                                             {/* Quick Status Pills */}
-                                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                                               {[
-                                                 { label: 'Received', color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe' },
-                                                 { label: 'In Progress', color: '#b45309', bg: '#fef3c7', border: '#fde68a' },
-                                                 { label: 'Ready', color: '#15803d', bg: '#dcfce7', border: '#bbf7d0' },
-                                                 { label: 'Delivered', color: '#0369a1', bg: '#e0f2fe', border: '#bae6fd' },
-                                                 { label: 'Cancelled', color: '#b91c1c', bg: '#fee2e2', border: '#fecaca' },
-                                               ].map((st) => {
-                                                 const isCur = normalizeOrderStatus(editFormData.status || editFormData.order_status) === st.label;
-                                                 return (
-                                                   <button
-                                                     key={st.label}
-                                                     type="button"
-                                                     onClick={() => {
-                                                       setEditFormData({ ...editFormData, status: st.label, order_status: st.label });
-                                                       handleQuickStatusUpdate(st.label);
-                                                     }}
-                                                     style={{
-                                                       padding: '4px 10px',
-                                                       borderRadius: '14px',
-                                                       fontSize: '11px',
-                                                       fontWeight: 700,
-                                                       cursor: 'pointer',
-                                                       border: isCur ? `2px solid ${st.color}` : `1px solid ${st.border}`,
-                                                       background: isCur ? st.color : st.bg,
-                                                       color: isCur ? '#ffffff' : st.color,
-                                                       transition: 'all 0.15s ease',
-                                                       display: 'inline-flex',
-                                                       alignItems: 'center',
-                                                       gap: '4px'
-                                                     }}
-                                                   >
-                                                     <span>{isCur ? '✓' : '●'}</span>
-                                                     <span>{st.label}</span>
-                                                   </button>
-                                                 );
-                                               })}
-                                             </div>
-                                           </div>
-                                         </div>
-                                       </div>
-
-                                       {/* Right Column: Services Allocated & Garment Selection */}
-                                      <div
-                                        style={{
-                                          border: '1.5px solid #e2e8f0',
-                                          borderRadius: '8px',
-                                          padding: '16px',
-                                          background: '#ffffff',
-                                          display: 'flex',
-                                          flexDirection: 'column'
-                                        }}
-                                      >
-                                        <div
-                                          style={{
-                                            fontSize: '13.5px',
-                                            fontWeight: 700,
-                                            color: '#0f172a',
-                                            marginBottom: '14px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '7px'
-                                          }}
-                                        >
+                                      {/* Right Column: Services Allocated & Garment Selection */}
+                                      <div className="pos-edit-section-card">
+                                        <div className="pos-edit-section-title">
                                           <span style={{ color: '#2563eb' }}>◆</span>
                                           <span>Services Allocated &amp; Garment Selection</span>
                                         </div>
 
-                                        <div
-                                          className="pos-inline-edit-services-grid"
-                                        >
+                                        <div className="pos-inline-edit-services-grid">
                                           {/* Sub-col 1: Cloth Selection & Catalog */}
-                                           <div
-                                             style={{
-                                               border: '1.5px solid #e2e8f0',
-                                               borderRadius: '8px',
-                                               padding: '14px',
-                                               background: '#f8fafc',
-                                               display: 'flex',
-                                               flexDirection: 'column',
-                                               height: '100%',
-                                               boxSizing: 'border-box'
-                                             }}
-                                           >
-                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                                               <div style={{ fontSize: '13px', fontWeight: 750, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                 <span style={{ color: '#2563eb' }}>&#9670;</span>
-                                                 <span>Cloth Selection &amp; Catalog</span>
-                                               </div>
-                                               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                 <button
-                                                   type="button"
-                                                   onClick={() => {
-                                                     const el = document.getElementById('pos-edit-cloth-grid');
-                                                     if (el) el.scrollBy({ top: -140, behavior: 'smooth' });
-                                                   }}
-                                                   title="Scroll Up"
-                                                   style={{
-                                                     width: '26px',
-                                                     height: '26px',
-                                                     borderRadius: '5px',
-                                                     border: '1px solid #cbd5e1',
-                                                     background: '#ffffff',
-                                                     color: '#334155',
-                                                     display: 'flex',
-                                                     alignItems: 'center',
-                                                     justifyContent: 'center',
-                                                     cursor: 'pointer',
-                                                     fontSize: '11px',
-                                                     fontWeight: 700
-                                                   }}
-                                                 >
-                                                   ▲
-                                                 </button>
-                                                 <button
-                                                   type="button"
-                                                   onClick={() => {
-                                                     const el = document.getElementById('pos-edit-cloth-grid');
-                                                     if (el) el.scrollBy({ top: 140, behavior: 'smooth' });
-                                                   }}
-                                                   title="Scroll Down"
-                                                   style={{
-                                                     width: '26px',
-                                                     height: '26px',
-                                                     borderRadius: '5px',
-                                                     border: '1px solid #cbd5e1',
-                                                     background: '#ffffff',
-                                                     color: '#334155',
-                                                     display: 'flex',
-                                                     alignItems: 'center',
-                                                     justifyContent: 'center',
-                                                     cursor: 'pointer',
-                                                     fontSize: '11px',
-                                                     fontWeight: 700
-                                                   }}
-                                                 >
-                                                   ▼
-                                                 </button>
-                                               </div>
-                                             </div>
+                                          <div className="pos-edit-sub-panel" style={{ height: '100%', boxSizing: 'border-box' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                              <div style={{ fontSize: '13px', fontWeight: 750, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <span style={{ color: '#2563eb' }}>◆</span>
+                                                <span>Cloth Selection &amp; Catalog</span>
+                                              </div>
+                                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <button
+                                                  type="button"
+                                                  className="pos-edit-collapse-btn"
+                                                  style={{ width: '26px', height: '26px', fontSize: '11px' }}
+                                                  onClick={() => {
+                                                    const el = document.getElementById('pos-edit-cloth-grid');
+                                                    if (el) el.scrollBy({ top: -140, behavior: 'smooth' });
+                                                  }}
+                                                  title="Scroll Up"
+                                                >
+                                                  ▲
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  className="pos-edit-collapse-btn"
+                                                  style={{ width: '26px', height: '26px', fontSize: '11px' }}
+                                                  onClick={() => {
+                                                    const el = document.getElementById('pos-edit-cloth-grid');
+                                                    if (el) el.scrollBy({ top: 140, behavior: 'smooth' });
+                                                  }}
+                                                  title="Scroll Down"
+                                                >
+                                                  ▼
+                                                </button>
+                                              </div>
+                                            </div>
 
-                                             {/* Search box with flex layout - prevents text collision */}
-                                             <div
-                                               style={{
-                                                 display: 'flex',
-                                                 alignItems: 'center',
-                                                 background: '#ffffff',
-                                                 border: '1.5px solid #cbd5e1',
-                                                 borderRadius: '6px',
-                                                 height: '38px',
-                                                 padding: '0 12px',
-                                                 gap: '10px',
-                                                 marginBottom: '10px'
-                                               }}
-                                             >
-                                               <svg
-                                                 width="15"
-                                                 height="15"
-                                                 viewBox="0 0 24 24"
-                                                 fill="none"
-                                                 stroke="#64748b"
-                                                 strokeWidth="2.2"
-                                                 style={{ flexShrink: 0 }}
-                                               >
-                                                 <circle cx="11" cy="11" r="8"></circle>
-                                                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                                               </svg>
-                                               <input
-                                                 type="text"
-                                                 value={editCatalogSearch}
-                                                 onChange={(e) => setEditCatalogSearch(e.target.value)}
-                                                 placeholder="Search clothes (e.g. shirt, saree)..."
-                                                 style={{
-                                                   flex: 1,
-                                                   border: 'none',
-                                                   background: 'transparent',
-                                                   outline: 'none',
-                                                   fontSize: '12.5px',
-                                                   color: '#0f172a',
-                                                   padding: 0
-                                                 }}
-                                               />
-                                               {editCatalogSearch && (
-                                                 <button
-                                                   type="button"
-                                                   onClick={() => setEditCatalogSearch('')}
-                                                   style={{
-                                                     border: 'none',
-                                                     background: 'transparent',
-                                                     color: '#94a3b8',
-                                                     cursor: 'pointer',
-                                                     fontSize: '13px',
-                                                     padding: '0 4px',
-                                                     lineHeight: 1
-                                                   }}
-                                                 >
-                                                   ✕
-                                                 </button>
-                                               )}
-                                             </div>
+                                            {/* Search box with flex layout */}
+                                            <div
+                                              className="pos-edit-field"
+                                              style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                height: '38px',
+                                                padding: '0 12px',
+                                                gap: '10px',
+                                                marginBottom: '10px'
+                                              }}
+                                            >
+                                              <svg
+                                                width="15"
+                                                height="15"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="2.2"
+                                                style={{ flexShrink: 0, opacity: 0.6 }}
+                                              >
+                                                <circle cx="11" cy="11" r="8"></circle>
+                                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                              </svg>
+                                              <input
+                                                type="text"
+                                                value={editCatalogSearch}
+                                                onChange={(e) => setEditCatalogSearch(e.target.value)}
+                                                placeholder="Search clothes (e.g. shirt, saree)..."
+                                                style={{
+                                                  flex: 1,
+                                                  border: 'none',
+                                                  background: 'transparent',
+                                                  outline: 'none',
+                                                  fontSize: '12.5px',
+                                                  color: 'inherit',
+                                                  padding: 0
+                                                }}
+                                              />
+                                              {editCatalogSearch && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => setEditCatalogSearch('')}
+                                                  style={{
+                                                    border: 'none',
+                                                    background: 'transparent',
+                                                    color: 'var(--text-muted, #94a3b8)',
+                                                    cursor: 'pointer',
+                                                    fontSize: '13px',
+                                                    padding: '0 4px',
+                                                    lineHeight: 1
+                                                  }}
+                                                >
+                                                  ✕
+                                                </button>
+                                              )}
+                                            </div>
 
-                                             {/* Category filter pills */}
-                                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
-                                               {['All', 'Men', 'Women', 'Home Linen', 'Accessories'].map((cat) => {
-                                                 const isActive = editCatalogCategory === cat;
-                                                 return (
-                                                   <button
-                                                     key={cat}
-                                                     type="button"
-                                                     onClick={() => setEditCatalogCategory(cat)}
-                                                     style={{
-                                                       padding: '4px 12px',
-                                                       borderRadius: '16px',
-                                                       border: isActive ? '1.5px solid #2563eb' : '1px solid #cbd5e1',
-                                                       background: isActive ? '#2563eb' : '#ffffff',
-                                                       color: isActive ? '#ffffff' : '#475569',
-                                                       fontSize: '11.5px',
-                                                       fontWeight: 650,
-                                                       cursor: 'pointer',
-                                                       transition: 'all 0.15s ease'
-                                                     }}
-                                                   >
-                                                     {cat}
-                                                   </button>
-                                                 );
-                                               })}
-                                             </div>
+                                            {/* Category filter pills */}
+                                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                                              {['All', 'Men', 'Women', 'Home Linen', 'Accessories'].map((cat) => {
+                                                const isActive = editCatalogCategory === cat;
+                                                return (
+                                                  <button
+                                                    key={cat}
+                                                    type="button"
+                                                    className={`pos-edit-cat-pill ${isActive ? 'active' : ''}`}
+                                                    onClick={() => setEditCatalogCategory(cat)}
+                                                  >
+                                                    {cat}
+                                                  </button>
+                                                );
+                                              })}
+                                            </div>
 
-                                             {/* 3-Column Garment Cards Grid with ALWAYS-VISIBLE SCROLLER */}
-                                             <div
-                                               id="pos-edit-cloth-grid"
-                                               className="pos-cloth-catalog-scroller"
-                                               style={{
-                                                 display: 'grid',
-                                                 gridTemplateColumns: 'repeat(3, 1fr)',
-                                                 gap: '10px',
-                                                 flex: 1,
-                                                 minHeight: '340px',
-                                                 maxHeight: '430px',
-                                                 overflowY: 'auto',
-                                                 paddingRight: '6px',
-                                                 scrollbarGutter: 'stable'
-                                               }}
-                                             >
-                                               {EDIT_CATALOG_ITEMS.filter((item) => {
-                                                 const matchesCat =
-                                                   editCatalogCategory === 'All' ||
-                                                   item.category === editCatalogCategory ||
-                                                   item.secondaryCategory === editCatalogCategory;
-                                                 const matchesSearch =
-                                                   !editCatalogSearch.trim() ||
-                                                   item.name.toLowerCase().includes(editCatalogSearch.toLowerCase());
-                                                 return matchesCat && matchesSearch;
-                                               }).map((item) => {
-                                                 const isSelected = editSelectedItem?.id === item.id;
-                                                 return (
-                                                   <div
-                                                     key={item.id}
-                                                     onClick={() => {
-                                                       setEditSelectedItem(item);
-                                                       setEditSelectedRate(item.price);
-                                                     }}
-                                                     style={{
-                                                       border: isSelected ? '2px solid #2563eb' : '1px solid #e2e8f0',
-                                                       background: isSelected ? '#eff6ff' : '#ffffff',
-                                                       borderRadius: '8px',
-                                                       padding: '10px 8px',
-                                                       textAlign: 'center',
-                                                       cursor: 'pointer',
-                                                       transition: 'all 0.15s ease',
-                                                       boxShadow: isSelected ? '0 3px 8px rgba(37,99,235,0.18)' : '0 1px 3px rgba(0,0,0,0.03)',
-                                                       display: 'flex',
-                                                       flexDirection: 'column',
-                                                       alignItems: 'center',
-                                                       justifyContent: 'space-between'
-                                                     }}
-                                                   >
-                                                     <div style={{ height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '4px' }}>
-                                                       <ClothIllustration itemId={item.id} size={40} />
-                                                     </div>
-                                                     <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
-                                                       {item.name}
-                                                     </div>
-                                                     <div style={{ fontSize: '11px', color: '#475569', fontWeight: 600, marginBottom: '6px' }}>
-                                                       ₹{item.price} / {item.unit || 'piece'}
-                                                     </div>
-                                                     <button
-                                                       type="button"
-                                                       onClick={(e) => {
-                                                         e.stopPropagation();
-                                                         setEditSelectedItem(item);
-                                                         setEditSelectedRate(item.price);
-                                                         handleAddEditItemToCart();
-                                                       }}
-                                                       style={{
-                                                         padding: '4px 0',
-                                                         fontSize: '11px',
-                                                         fontWeight: 700,
-                                                         borderRadius: '5px',
-                                                         border: isSelected ? 'none' : '1px solid #cbd5e1',
-                                                         background: isSelected ? '#2563eb' : '#ffffff',
-                                                         color: isSelected ? '#ffffff' : '#334155',
-                                                         cursor: 'pointer',
-                                                         width: '100%',
-                                                         transition: 'all 0.15s ease'
-                                                       }}
-                                                     >
-                                                       + Add
-                                                     </button>
-                                                   </div>
-                                                 );
-                                               })}
-                                             </div>
+                                            {/* 3-Column Garment Cards Grid with Scroller */}
+                                            <div
+                                              id="pos-edit-cloth-grid"
+                                              className="pos-cloth-catalog-scroller"
+                                              style={{
+                                                display: 'grid',
+                                                gridTemplateColumns: 'repeat(3, 1fr)',
+                                                gap: '10px',
+                                                flex: 1,
+                                                minHeight: '340px',
+                                                maxHeight: '430px',
+                                                overflowY: 'auto',
+                                                paddingRight: '6px',
+                                                scrollbarGutter: 'stable'
+                                              }}
+                                            >
+                                              {EDIT_CATALOG_ITEMS.filter((item) => {
+                                                const matchesCat =
+                                                  editCatalogCategory === 'All' ||
+                                                  item.category === editCatalogCategory ||
+                                                  item.secondaryCategory === editCatalogCategory;
+                                                const matchesSearch =
+                                                  !editCatalogSearch.trim() ||
+                                                  item.name.toLowerCase().includes(editCatalogSearch.toLowerCase());
+                                                return matchesCat && matchesSearch;
+                                              }).map((item) => {
+                                                const isSelected = editSelectedItem?.id === item.id;
+                                                return (
+                                                  <div
+                                                    key={item.id}
+                                                    className={`pos-edit-garment-card ${isSelected ? 'selected' : ''}`}
+                                                    onClick={() => {
+                                                      setEditSelectedItem(item);
+                                                      setEditSelectedRate(item.price);
+                                                    }}
+                                                  >
+                                                    <div style={{ height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '4px' }}>
+                                                      <ClothIllustration itemId={item.id} size={40} />
+                                                    </div>
+                                                    <div className="pos-edit-garment-name">
+                                                      {item.name}
+                                                    </div>
+                                                    <div className="pos-edit-garment-rate">
+                                                      ₹{item.price} / {item.unit || 'piece'}
+                                                    </div>
+                                                    <button
+                                                      type="button"
+                                                      className="pos-edit-garment-btn"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEditSelectedItem(item);
+                                                        setEditSelectedRate(item.price);
+                                                        handleAddEditItemToCart();
+                                                      }}
+                                                    >
+                                                      + Add
+                                                    </button>
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
 
-                                             {/* Scroller bottom indicator */}
-                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '11px', color: '#64748b', marginTop: 'auto', paddingTop: '8px' }}>
-                                               <span>↕</span>
-                                               <span>Scroll up / down to view all 12 garments</span>
-                                             </div>
-                                           </div>
+                                            {/* Scroller bottom indicator */}
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '11px', color: 'var(--text-muted, #64748b)', marginTop: 'auto', paddingTop: '8px' }}>
+                                              <span>↕</span>
+                                              <span>Scroll up / down to view all 12 garments</span>
+                                            </div>
+                                          </div>
 
-                                           {/* Sub-col 2: Selected Item Details & Cart Items */}
-                                           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
-                                             {/* Selected Item Details */}
-                                             <div
-                                               style={{
-                                                 border: '1.5px solid #e2e8f0',
-                                                 borderRadius: '8px',
-                                                 padding: '14px',
-                                                 background: '#ffffff'
-                                               }}
-                                             >
-                                               <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#0f172a', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                 <span style={{ color: '#2563eb' }}>&#9670;</span>
-                                                 <span>Selected Item Details</span>
-                                               </div>
+                                          {/* Sub-col 2: Selected Item Details & Cart Items */}
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
+                                            {/* Selected Item Details */}
+                                            <div className="pos-edit-section-card">
+                                              <div className="pos-edit-section-title" style={{ fontSize: '12.5px', marginBottom: '10px' }}>
+                                                <span style={{ color: '#2563eb' }}>◆</span>
+                                                <span>Selected Item Details</span>
+                                              </div>
 
-                                               {/* Active Item Banner */}
-                                               <div
-                                                 style={{
-                                                   background: '#eff6ff',
-                                                   border: '1px solid #bfdbfe',
-                                                   borderRadius: '7px',
-                                                   padding: '8px 12px',
-                                                   display: 'flex',
-                                                   alignItems: 'center',
-                                                   gap: '10px',
-                                                   marginBottom: '10px'
-                                                 }}
-                                               >
-                                                 <div style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                   <ClothIllustration itemId={editSelectedItem?.id || 'shirt'} size={28} />
-                                                 </div>
-                                                 <div>
-                                                   <div style={{ fontWeight: 700, fontSize: '13px', color: '#1e3a8a' }}>
-                                                     {editSelectedItem?.name || 'Shirt'}
-                                                   </div>
-                                                   <div style={{ fontSize: '11px', color: '#3b82f6', fontWeight: 600 }}>
-                                                     ₹{editSelectedItem?.price || 15} / {editSelectedItem?.unit || 'piece'}
-                                                   </div>
-                                                 </div>
-                                                 <span style={{ fontSize: '11px', fontWeight: 650, background: '#dbeafe', color: '#1d4ed8', padding: '3px 8px', borderRadius: '4px', marginLeft: 'auto' }}>
-                                                   {editSelectedItem?.category || 'Men'}
-                                                 </span>
-                                               </div>
+                                              {/* Active Item Banner */}
+                                              <div className="pos-edit-active-banner">
+                                                <div style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                  <ClothIllustration itemId={editSelectedItem?.id || 'shirt'} size={28} />
+                                                </div>
+                                                <div>
+                                                  <div style={{ fontWeight: 700, fontSize: '13px', color: 'inherit' }}>
+                                                    {editSelectedItem?.name || 'Shirt'}
+                                                  </div>
+                                                  <div style={{ fontSize: '11px', opacity: 0.9, fontWeight: 600 }}>
+                                                    ₹{editSelectedItem?.price || 15} / {editSelectedItem?.unit || 'piece'}
+                                                  </div>
+                                                </div>
+                                                <span style={{ fontSize: '11px', fontWeight: 650, background: 'rgba(37, 99, 235, 0.15)', color: '#2563eb', padding: '3px 8px', borderRadius: '4px', marginLeft: 'auto' }}>
+                                                  {editSelectedItem?.category || 'Men'}
+                                                </span>
+                                              </div>
 
-                                               {/* Service Type Dropdown */}
-                                               <div style={{ marginBottom: '8px' }}>
-                                                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 650, color: '#334155', marginBottom: '3px' }}>
-                                                   Service Type
-                                                 </label>
-                                                 <select
-                                                   value={editSelectedService}
-                                                   onChange={(e) => setEditSelectedService(e.target.value)}
-                                                   style={{
-                                                     width: '100%',
-                                                     boxSizing: 'border-box',
-                                                     height: '36px',
-                                                     padding: '0 10px',
-                                                     fontSize: '12.5px',
-                                                     borderRadius: '6px',
-                                                     border: '1.5px solid #d1d5db',
-                                                     background: '#ffffff',
-                                                     color: '#0f172a',
-                                                     outline: 'none'
-                                                   }}
-                                                 >
-                                                   <option value="Laundry + Iron">Laundry + Iron</option>
-                                                   <option value="Normal Wash">Normal Wash</option>
-                                                   <option value="Dry Clean">Dry Clean</option>
-                                                   <option value="Steam Press">Steam Press</option>
-                                                   <option value="Wash &amp; Fold">Wash &amp; Fold</option>
-                                                   <option value="Shoe Spa / Leather Care">Shoe Spa / Leather Care</option>
-                                                 </select>
-                                               </div>
+                                              {/* Service Type Dropdown */}
+                                              <div style={{ marginBottom: '8px' }}>
+                                                <label className="pos-edit-label">Service Type</label>
+                                                <select
+                                                  className="pos-edit-field"
+                                                  value={editSelectedService}
+                                                  onChange={(e) => setEditSelectedService(e.target.value)}
+                                                >
+                                                  <option value="Laundry + Iron">Laundry + Iron</option>
+                                                  <option value="Normal Wash">Normal Wash</option>
+                                                  <option value="Dry Clean">Dry Clean</option>
+                                                  <option value="Steam Press">Steam Press</option>
+                                                  <option value="Wash &amp; Fold">Wash &amp; Fold</option>
+                                                  <option value="Shoe Spa / Leather Care">Shoe Spa / Leather Care</option>
+                                                </select>
+                                              </div>
 
-                                               {/* Quantity & Rate Row */}
-                                               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                                                 <div>
-                                                   <label style={{ display: 'block', fontSize: '11px', fontWeight: 650, color: '#334155', marginBottom: '3px' }}>
-                                                     Quantity
-                                                   </label>
-                                                   <div style={{ display: 'flex', alignItems: 'center', border: '1.5px solid #d1d5db', borderRadius: '6px', height: '36px', overflow: 'hidden', background: '#ffffff' }}>
-                                                     <button
-                                                       type="button"
-                                                       onClick={() => setEditSelectedQty((q) => Math.max(1, q - 1))}
-                                                       style={{
-                                                         width: '32px',
-                                                         height: '100%',
-                                                         border: 'none',
-                                                         background: '#f8fafc',
-                                                         cursor: 'pointer',
-                                                         fontSize: '15px',
-                                                         fontWeight: 700,
-                                                         color: '#334155'
-                                                       }}
-                                                     >
-                                                       -
-                                                     </button>
-                                                     <span style={{ flex: 1, textAlign: 'center', fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
-                                                       {editSelectedQty}
-                                                     </span>
-                                                     <button
-                                                       type="button"
-                                                       onClick={() => setEditSelectedQty((q) => q + 1)}
-                                                       style={{
-                                                         width: '32px',
-                                                         height: '100%',
-                                                         border: 'none',
-                                                         background: '#f8fafc',
-                                                         cursor: 'pointer',
-                                                         fontSize: '15px',
-                                                         fontWeight: 700,
-                                                         color: '#334155'
-                                                       }}
-                                                     >
-                                                       +
-                                                     </button>
-                                                   </div>
-                                                 </div>
+                                              {/* Quantity & Rate Row */}
+                                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                                                <div>
+                                                  <label className="pos-edit-label">Quantity</label>
+                                                  <div className="pos-edit-qty-group">
+                                                    <button
+                                                      type="button"
+                                                      className="pos-edit-qty-btn"
+                                                      onClick={() => setEditSelectedQty((q) => Math.max(1, q - 1))}
+                                                    >
+                                                      -
+                                                    </button>
+                                                    <span className="pos-edit-qty-val">
+                                                      {editSelectedQty}
+                                                    </span>
+                                                    <button
+                                                      type="button"
+                                                      className="pos-edit-qty-btn"
+                                                      onClick={() => setEditSelectedQty((q) => q + 1)}
+                                                    >
+                                                      +
+                                                    </button>
+                                                  </div>
+                                                </div>
 
-                                                 <div>
-                                                   <label style={{ display: 'block', fontSize: '11px', fontWeight: 650, color: '#334155', marginBottom: '3px' }}>
-                                                     Rate per piece (₹)
-                                                   </label>
-                                                   <input
-                                                     type="number"
-                                                     min="1"
-                                                     value={editSelectedRate}
-                                                     onChange={(e) => setEditSelectedRate(e.target.value)}
-                                                     style={{
-                                                       width: '100%',
-                                                       boxSizing: 'border-box',
-                                                       height: '36px',
-                                                       padding: '0 10px',
-                                                       fontSize: '13px',
-                                                       fontWeight: 650,
-                                                       borderRadius: '6px',
-                                                       border: '1.5px solid #d1d5db',
-                                                       background: '#ffffff',
-                                                       color: '#0f172a',
-                                                       outline: 'none'
-                                                     }}
-                                                   />
-                                                 </div>
-                                               </div>
+                                                <div>
+                                                  <label className="pos-edit-label">Rate per piece (₹)</label>
+                                                  <input
+                                                    type="number"
+                                                    min="1"
+                                                    className="pos-edit-field"
+                                                    value={editSelectedRate}
+                                                    onChange={(e) => setEditSelectedRate(e.target.value)}
+                                                  />
+                                                </div>
+                                              </div>
 
-                                               <div style={{ fontSize: '10.5px', color: '#64748b', marginBottom: '10px' }}>
-                                                 Standard laundry rate applied. Change if custom fabric.
-                                               </div>
+                                              <div style={{ fontSize: '10.5px', color: 'var(--text-muted, #64748b)', marginBottom: '10px' }}>
+                                                Standard laundry rate applied. Change if custom fabric.
+                                              </div>
 
-                                               <button
-                                                 type="button"
-                                                 onClick={handleAddEditItemToCart}
-                                                 style={{
-                                                   width: '100%',
-                                                   height: '36px',
-                                                   borderRadius: '6px',
-                                                   border: 'none',
-                                                   background: '#2563eb',
-                                                   color: '#ffffff',
-                                                   fontSize: '12.5px',
-                                                   fontWeight: 700,
-                                                   cursor: 'pointer',
-                                                   display: 'flex',
-                                                   alignItems: 'center',
-                                                   justifyContent: 'center',
-                                                   gap: '6px',
-                                                   boxShadow: '0 2px 6px rgba(37,99,235,0.25)',
-                                                   transition: 'all 0.15s ease'
-                                                 }}
-                                               >
-                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
-                                                   <circle cx="9" cy="21" r="1"></circle>
-                                                   <circle cx="20" cy="21" r="1"></circle>
-                                                   <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
-                                                 </svg>
-                                                 <span>Add to Cart</span>
-                                               </button>
-                                             </div>
+                                              <button
+                                                type="button"
+                                                className="pos-edit-save-btn"
+                                                style={{ width: '100%', justifyContent: 'center' }}
+                                                onClick={handleAddEditItemToCart}
+                                              >
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                                                  <circle cx="9" cy="21" r="1"></circle>
+                                                  <circle cx="20" cy="21" r="1"></circle>
+                                                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                                                </svg>
+                                                <span>Add to Cart</span>
+                                              </button>
+                                            </div>
 
-                                             {/* Cart Items List & Totals */}
-                                             <div
-                                               style={{
-                                                 border: '1.5px solid #e2e8f0',
-                                                 borderRadius: '8px',
-                                                 padding: '14px',
-                                                 background: '#ffffff'
-                                               }}
-                                             >
-                                               <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#0f172a', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                 <span style={{ color: '#2563eb' }}>&#9670;</span>
-                                                 <span>Cart Items ({editCart.length})</span>
-                                               </div>
+                                            {/* Cart Items List & Totals */}
+                                            <div className="pos-edit-section-card">
+                                              <div className="pos-edit-section-title" style={{ fontSize: '12.5px', marginBottom: '8px' }}>
+                                                <span style={{ color: '#2563eb' }}>◆</span>
+                                                <span>Cart Items ({editCart.length})</span>
+                                              </div>
 
-                                               <div style={{ maxHeight: '145px', overflowY: 'auto', marginBottom: '10px', paddingRight: '2px' }}>
-                                                 {editCart.map((it, idx) => (
-                                                   <div
-                                                     key={`${it.id}_${it.serviceType}_${idx}`}
-                                                     style={{
-                                                       display: 'flex',
-                                                       alignItems: 'center',
-                                                       justifyContent: 'space-between',
-                                                       padding: '6px 0',
-                                                       borderBottom: '1px solid #f1f5f9',
-                                                       fontSize: '12px'
-                                                     }}
-                                                   >
-                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                                                       <div style={{ width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                         <ClothIllustration itemId={it.id} size={20} />
-                                                       </div>
-                                                       <div>
-                                                         <div style={{ fontWeight: 700, color: '#0f172a' }}>{it.name}</div>
-                                                         <div style={{ fontSize: '10.5px', color: '#64748b' }}>
-                                                           {it.serviceType} x {it.qty}
-                                                         </div>
-                                                       </div>
-                                                     </div>
+                                              <div style={{ maxHeight: '145px', overflowY: 'auto', marginBottom: '10px', paddingRight: '2px' }}>
+                                                {editCart.map((it, idx) => (
+                                                  <div
+                                                    key={`${it.id}_${it.serviceType}_${idx}`}
+                                                    style={{
+                                                      display: 'flex',
+                                                      alignItems: 'center',
+                                                      justifyContent: 'space-between',
+                                                      padding: '6px 0',
+                                                      borderBottom: '1px solid var(--border, #f1f5f9)',
+                                                      fontSize: '12px'
+                                                    }}
+                                                  >
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                                                      <div style={{ width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                        <ClothIllustration itemId={it.id} size={20} />
+                                                      </div>
+                                                      <div>
+                                                        <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{it.name}</div>
+                                                        <div style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>
+                                                          {it.serviceType} x {it.qty}
+                                                        </div>
+                                                      </div>
+                                                    </div>
 
-                                                     <div className="pos-status-actions-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                       <span style={{ fontWeight: 750, color: '#0f172a' }}>
-                                                         ₹{(Number(it.rate || 0) * Number(it.qty || 1)).toFixed(2)}
-                                                       </span>
-                                                       <button
-                                                         type="button"
-                                                         onClick={() => handleRemoveEditCartItem(idx)}
-                                                         title="Remove item"
-                                                         style={{
-                                                           border: 'none',
-                                                           background: 'transparent',
-                                                           color: '#ef4444',
-                                                           cursor: 'pointer',
-                                                           fontSize: '12px',
-                                                           fontWeight: 700,
-                                                           padding: '0 3px'
-                                                         }}
-                                                       >
-                                                         ✕
-                                                       </button>
-                                                     </div>
-                                                   </div>
-                                                 ))}
-                                                 {editCart.length === 0 && (
-                                                   <div style={{ fontSize: '11.5px', color: '#94a3b8', fontStyle: 'italic', textAlign: 'center', padding: '12px 0' }}>
-                                                     No garments added yet.
-                                                   </div>
-                                                 )}
-                                               </div>
+                                                    <div className="pos-status-actions-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                      <span style={{ fontWeight: 750, color: 'var(--text-primary)' }}>
+                                                        ₹{(Number(it.rate || 0) * Number(it.qty || 1)).toFixed(2)}
+                                                      </span>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveEditCartItem(idx)}
+                                                        title="Remove item"
+                                                        style={{
+                                                          border: 'none',
+                                                          background: 'transparent',
+                                                          color: '#ef4444',
+                                                          cursor: 'pointer',
+                                                          fontSize: '12px',
+                                                          fontWeight: 700,
+                                                          padding: '0 3px'
+                                                        }}
+                                                      >
+                                                        ✕
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                                {editCart.length === 0 && (
+                                                  <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', padding: '12px 0' }}>
+                                                    No garments added yet.
+                                                  </div>
+                                                )}
+                                              </div>
 
-                                               {/* Subtotal & Taxes */}
-                                               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#475569', marginBottom: '4px' }}>
-                                                 <span>Subtotal:</span>
-                                                 <span style={{ fontWeight: 650, color: '#0f172a' }}>₹{editCartSubtotal.toFixed(2)}</span>
-                                               </div>
-                                               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#475569', marginBottom: '8px' }}>
-                                                 <span>GST / Tax (5%):</span>
-                                                 <span style={{ fontWeight: 650, color: '#0f172a' }}>₹{editCartTax.toFixed(2)}</span>
-                                               </div>
+                                              {/* Subtotal & Taxes */}
+                                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                                                <span>Subtotal:</span>
+                                                <span style={{ fontWeight: 650, color: 'var(--text-primary)' }}>₹{editCartSubtotal.toFixed(2)}</span>
+                                              </div>
+                                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                                                <span>GST / Tax (5%):</span>
+                                                <span style={{ fontWeight: 650, color: 'var(--text-primary)' }}>₹{editCartTax.toFixed(2)}</span>
+                                              </div>
 
-                                               {/* Grand Total Bar */}
-                                               <div
-                                                 style={{
-                                                   background: '#2563eb',
-                                                   color: '#ffffff',
-                                                   borderRadius: '6px',
-                                                   padding: '8px 12px',
-                                                   display: 'flex',
-                                                   alignItems: 'center',
-                                                   justifyContent: 'space-between',
-                                                   fontWeight: 750,
-                                                   fontSize: '12.5px'
-                                                 }}
-                                               >
-                                                 <span>Grand Total: ₹{editCartGrandTotal.toFixed(2)}</span>
-                                                 <span style={{ fontSize: '11px', opacity: 0.95 }}>
-                                                   ({editCartTotalPieces} pieces)
-                                                 </span>
-                                               </div>
-                                             </div>
-                                           </div>
-                                         </div>
-                                       </div>
-                                     </div>
+                                              {/* Grand Total Bar */}
+                                              <div
+                                                style={{
+                                                  background: '#2563eb',
+                                                  color: '#ffffff',
+                                                  borderRadius: '6px',
+                                                  padding: '8px 12px',
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  justifyContent: 'space-between',
+                                                  fontWeight: 750,
+                                                  fontSize: '12.5px'
+                                                }}
+                                              >
+                                                <span>Grand Total: ₹{editCartGrandTotal.toFixed(2)}</span>
+                                                <span style={{ fontSize: '11px', opacity: 0.95 }}>
+                                                  ({editCartTotalPieces} pieces)
+                                                </span>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
 
-                                     {/* ══════════════════════════════════════════════════════════════════
-                                         SECTION 2: GARMENT-BY-GARMENT INSPECTION & PHOTOS
-                                        ══════════════════════════════════════════════════════════════════ */}
-                                     <div
-                                       style={{
-                                         border: '1.5px solid #e2e8f0',
-                                         borderRadius: '8px',
-                                         padding: '16px',
-                                         background: '#ffffff',
-                                         marginBottom: '16px'
-                                       }}
-                                     >
-                                       <div
-                                         style={{
-                                           fontSize: '13.5px',
-                                           fontWeight: 700,
-                                           color: '#0f172a',
-                                           marginBottom: '14px',
-                                           display: 'flex',
-                                           alignItems: 'center',
-                                           gap: '7px'
-                                         }}
-                                       >
-                                         <span style={{ color: '#2563eb' }}>🔍</span>
-                                         <span>Garment-by-Garment Inspection &amp; Care</span>
-                                       </div>
+                                    {/* ══════════════════════════════════════════════════════════════════
+                                        SECTION 2: GARMENT-BY-GARMENT INSPECTION & CARE
+                                       ══════════════════════════════════════════════════════════════════ */}
+                                    <div className="pos-edit-section-card" style={{ marginBottom: '16px' }}>
+                                      <div className="pos-edit-section-title">
+                                        <span style={{ color: '#2563eb' }}>🔍</span>
+                                        <span>Garment-by-Garment Inspection &amp; Care</span>
+                                      </div>
 
-                                       {/* Row 1: 4 Columns (Garment *, Color, Stains / Marks, Make) */}
-                                       <div
-                                         className="pos-edit-inspection-row-4col"
-                                       >
-                                         <div>
-                                           <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
-                                             Garment <span style={{ color: '#ef4444' }}>*</span>
-                                           </label>
-                                           <select
-                                             value={editInspection.garment || 'Shirt'}
-                                             onChange={(e) => setEditInspection({ ...editInspection, garment: e.target.value })}
-                                             style={{
-                                               width: '100%',
-                                               boxSizing: 'border-box',
-                                               height: '38px',
-                                               padding: '0 10px',
-                                               fontSize: '13px',
-                                               borderRadius: '6px',
-                                               border: '1.5px solid #d1d5db',
-                                               background: '#ffffff',
-                                               color: '#0f172a',
-                                               outline: 'none'
-                                             }}
-                                           >
-                                             {editCart.length > 0
-                                               ? editCart.map((it, i) => (
-                                                   <option key={`${it.id}_${i}`} value={it.name}>
-                                                     {it.name}
-                                                   </option>
-                                                 ))
-                                               : ['Shirt', 'Formal Pant', 'T-Shirt', 'Jeans', 'Saree', 'Kurta'].map((g) => (
-                                                   <option key={g} value={g}>
-                                                     {g}
-                                                   </option>
-                                                 ))}
-                                           </select>
-                                         </div>
+                                      {/* Row 1: 4 Columns (Garment *, Color, Stains / Marks, Make) */}
+                                      <div className="pos-edit-inspection-row-4col">
+                                        <div>
+                                          <label className="pos-edit-label">
+                                            Garment <span className="required">*</span>
+                                          </label>
+                                          <select
+                                            className="pos-edit-field"
+                                            value={editInspection.garment || 'Shirt'}
+                                            onChange={(e) => setEditInspection({ ...editInspection, garment: e.target.value })}
+                                          >
+                                            {editCart.length > 0
+                                              ? editCart.map((it, i) => (
+                                                  <option key={`${it.id}_${i}`} value={it.name}>
+                                                    {it.name}
+                                                  </option>
+                                                ))
+                                              : ['Shirt', 'Formal Pant', 'T-Shirt', 'Jeans', 'Saree', 'Kurta'].map((g) => (
+                                                  <option key={g} value={g}>
+                                                    {g}
+                                                  </option>
+                                                ))}
+                                          </select>
+                                        </div>
 
-                                         <div>
-                                           <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
-                                             Color
-                                           </label>
-                                           <input
-                                             type="text"
-                                             value={editInspection.color || ''}
-                                             onChange={(e) => setEditInspection({ ...editInspection, color: e.target.value })}
-                                             placeholder="e.g. Navy blue"
-                                             style={{
-                                               width: '100%',
-                                               boxSizing: 'border-box',
-                                               height: '38px',
-                                               padding: '0 12px',
-                                               fontSize: '13px',
-                                               borderRadius: '6px',
-                                               border: '1.5px solid #d1d5db',
-                                               background: '#ffffff',
-                                               color: '#0f172a',
-                                               outline: 'none'
-                                             }}
-                                           />
-                                         </div>
+                                        <div>
+                                          <label className="pos-edit-label">Color</label>
+                                          <input
+                                            type="text"
+                                            className="pos-edit-field"
+                                            value={editInspection.color || ''}
+                                            onChange={(e) => setEditInspection({ ...editInspection, color: e.target.value })}
+                                            placeholder="e.g. Navy blue"
+                                          />
+                                        </div>
 
-                                         <div>
-                                           <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
-                                             Stains / Marks
-                                           </label>
-                                           <input
-                                             type="text"
-                                             value={editInspection.stains || ''}
-                                             onChange={(e) => setEditInspection({ ...editInspection, stains: e.target.value })}
-                                             placeholder="e.g. Oil stain on sleeve"
-                                             style={{
-                                               width: '100%',
-                                               boxSizing: 'border-box',
-                                               height: '38px',
-                                               padding: '0 12px',
-                                               fontSize: '13px',
-                                               borderRadius: '6px',
-                                               border: '1.5px solid #d1d5db',
-                                               background: '#ffffff',
-                                               color: '#0f172a',
-                                               outline: 'none'
-                                             }}
-                                           />
-                                         </div>
+                                        <div>
+                                          <label className="pos-edit-label">Stains / Marks</label>
+                                          <input
+                                            type="text"
+                                            className="pos-edit-field"
+                                            value={editInspection.stains || ''}
+                                            onChange={(e) => setEditInspection({ ...editInspection, stains: e.target.value })}
+                                            placeholder="e.g. Oil stain on sleeve"
+                                          />
+                                        </div>
 
-                                         <div>
-                                           <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
-                                             Make
-                                           </label>
-                                           <select
-                                             value={editInspection.make || 'Manufacturer / make'}
-                                             onChange={(e) => setEditInspection({ ...editInspection, make: e.target.value })}
-                                             style={{
-                                               width: '100%',
-                                               boxSizing: 'border-box',
-                                               height: '38px',
-                                               padding: '0 10px',
-                                               fontSize: '13px',
-                                               borderRadius: '6px',
-                                               border: '1.5px solid #d1d5db',
-                                               background: '#ffffff',
-                                               color: '#0f172a',
-                                               outline: 'none'
-                                             }}
-                                           >
-                                             <option value="Manufacturer / make">Manufacturer / make</option>
-                                             <option value="Readymade">Readymade</option>
-                                             <option value="Tailored / Custom">Tailored / Custom</option>
-                                             <option value="Designer / Boutique">Designer / Boutique</option>
-                                             <option value="Imported">Imported</option>
-                                           </select>
-                                         </div>
-                                       </div>
+                                        <div>
+                                          <label className="pos-edit-label">Make</label>
+                                          <select
+                                            className="pos-edit-field"
+                                            value={editInspection.make || 'Manufacturer / make'}
+                                            onChange={(e) => setEditInspection({ ...editInspection, make: e.target.value })}
+                                          >
+                                            <option value="Manufacturer / make">Manufacturer / make</option>
+                                            <option value="Readymade">Readymade</option>
+                                            <option value="Tailored / Custom">Tailored / Custom</option>
+                                            <option value="Designer / Boutique">Designer / Boutique</option>
+                                            <option value="Imported">Imported</option>
+                                          </select>
+                                        </div>
+                                      </div>
 
-                                       {/* Row 2: 3 Columns (Brand, Fabric Type, Garment Notes) */}
-                                       <div
-                                         className="pos-edit-inspection-row-3col"
-                                         style={{ marginBottom: '14px' }}
-                                       >
-                                         <div>
-                                           <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
-                                             Brand
-                                           </label>
-                                           <input
-                                             type="text"
-                                             value={editInspection.brand || ''}
-                                             onChange={(e) => setEditInspection({ ...editInspection, brand: e.target.value })}
-                                             placeholder="e.g. Van Heusen / Raymond"
-                                             style={{
-                                               width: '100%',
-                                               boxSizing: 'border-box',
-                                               height: '38px',
-                                               padding: '0 12px',
-                                               fontSize: '13px',
-                                               borderRadius: '6px',
-                                               border: '1.5px solid #d1d5db',
-                                               background: '#ffffff',
-                                               color: '#0f172a',
-                                               outline: 'none'
-                                             }}
-                                           />
-                                         </div>
+                                      {/* Row 2: 3 Columns (Brand, Fabric Type, Garment Notes) */}
+                                      <div className="pos-edit-inspection-row-3col" style={{ marginBottom: '14px' }}>
+                                        <div>
+                                          <label className="pos-edit-label">Brand</label>
+                                          <input
+                                            type="text"
+                                            className="pos-edit-field"
+                                            value={editInspection.brand || ''}
+                                            onChange={(e) => setEditInspection({ ...editInspection, brand: e.target.value })}
+                                            placeholder="e.g. Van Heusen / Raymond"
+                                          />
+                                        </div>
 
-                                         <div>
-                                           <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
-                                             Fabric Type
-                                           </label>
-                                           <select
-                                             value={editInspection.fabric || 'Select fabric'}
-                                             onChange={(e) => setEditInspection({ ...editInspection, fabric: e.target.value })}
-                                             style={{
-                                               width: '100%',
-                                               boxSizing: 'border-box',
-                                               height: '38px',
-                                               padding: '0 10px',
-                                               fontSize: '13px',
-                                               borderRadius: '6px',
-                                               border: '1.5px solid #d1d5db',
-                                               background: '#ffffff',
-                                               color: '#0f172a',
-                                               outline: 'none'
-                                             }}
-                                           >
-                                             <option value="Select fabric">Select fabric</option>
-                                             <option value="100% Cotton">100% Cotton</option>
-                                             <option value="Pure Silk">Pure Silk</option>
-                                             <option value="Linen">Linen</option>
-                                             <option value="Wool / Cashmere">Wool / Cashmere</option>
-                                             <option value="Polyester blend">Polyester blend</option>
-                                             <option value="Denim">Denim</option>
-                                             <option value="Rayon / Viscose">Rayon / Viscose</option>
-                                           </select>
-                                         </div>
+                                        <div>
+                                          <label className="pos-edit-label">Fabric Type</label>
+                                          <select
+                                            className="pos-edit-field"
+                                            value={editInspection.fabric || 'Select fabric'}
+                                            onChange={(e) => setEditInspection({ ...editInspection, fabric: e.target.value })}
+                                          >
+                                            <option value="Select fabric">Select fabric</option>
+                                            <option value="100% Cotton">100% Cotton</option>
+                                            <option value="Pure Silk">Pure Silk</option>
+                                            <option value="Linen">Linen</option>
+                                            <option value="Wool / Cashmere">Wool / Cashmere</option>
+                                            <option value="Polyester blend">Polyester blend</option>
+                                            <option value="Denim">Denim</option>
+                                            <option value="Rayon / Viscose">Rayon / Viscose</option>
+                                          </select>
+                                        </div>
 
-                                         <div>
-                                           <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
-                                             Garment Notes
-                                           </label>
-                                           <input
-                                             type="text"
-                                             value={editInspection.notes || ''}
-                                             onChange={(e) => setEditInspection({ ...editInspection, notes: e.target.value })}
-                                             placeholder="Damage, special handling, customer instructions..."
-                                             style={{
-                                               width: '100%',
-                                               boxSizing: 'border-box',
-                                               height: '38px',
-                                               padding: '0 12px',
-                                               fontSize: '13px',
-                                               borderRadius: '6px',
-                                               border: '1.5px solid #d1d5db',
-                                               background: '#ffffff',
-                                               color: '#0f172a',
-                                               outline: 'none'
-                                             }}
-                                           />
-                                         </div>
-                                       </div>
+                                        <div>
+                                          <label className="pos-edit-label">Garment Notes</label>
+                                          <input
+                                            type="text"
+                                            className="pos-edit-field"
+                                            value={editInspection.notes || ''}
+                                            onChange={(e) => setEditInspection({ ...editInspection, notes: e.target.value })}
+                                            placeholder="Damage, special handling, customer instructions..."
+                                          />
+                                        </div>
+                                      </div>
 
-                                       {/* Row 3: Dedicated Garment Photos Section */}
-                                       <div
-                                         style={{
-                                           border: '1.5px dashed #cbd5e1',
-                                           borderRadius: '8px',
-                                           padding: '14px',
-                                           background: '#f8fafc'
-                                         }}
-                                       >
-                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                                           <div>
-                                             <label style={{ fontSize: '12.5px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                               <span>📸 Garment Photos &amp; Visual Evidence</span>
-                                               <span style={{ fontSize: '11px', fontWeight: 650, color: '#2563eb', background: '#eff6ff', padding: '2px 8px', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
-                                                 {editInspectionPhotos.length} / 6 Attached
-                                               </span>
-                                             </label>
-                                             <p style={{ margin: '3px 0 0 0', fontSize: '11.5px', color: '#64748b' }}>
-                                               Upload visual condition photos to verify pre-existing stains, torn seams, or brand labels before processing.
-                                             </p>
-                                           </div>
+                                      {/* Row 3: Dedicated Garment Photos Section */}
+                                      <div className="pos-edit-photos-panel">
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                          <div>
+                                            <label style={{ fontSize: '12.5px', fontWeight: 750, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                              <span>📸 Garment Photos &amp; Visual Evidence</span>
+                                              <span style={{ fontSize: '11px', fontWeight: 650, color: '#2563eb', background: 'rgba(37, 99, 235, 0.1)', padding: '2px 8px', borderRadius: '12px', border: '1px solid rgba(37, 99, 235, 0.3)' }}>
+                                                {editInspectionPhotos.length} / 6 Attached
+                                              </span>
+                                            </label>
+                                            <p style={{ margin: '3px 0 0 0', fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                                              Upload visual condition photos to verify pre-existing stains, torn seams, or brand labels before processing.
+                                            </p>
+                                          </div>
 
-                                           <button
-                                             type="button"
-                                             onClick={() => editPhotoInputRef.current?.click()}
-                                             style={{
-                                               padding: '7px 14px',
-                                               borderRadius: '6px',
-                                               border: '1.5px solid #2563eb',
-                                               background: '#eff6ff',
-                                               color: '#2563eb',
-                                               fontSize: '12px',
-                                               fontWeight: 700,
-                                               cursor: 'pointer',
-                                               display: 'inline-flex',
-                                               alignItems: 'center',
-                                               gap: '6px',
-                                               transition: 'all 0.15s ease'
-                                             }}
-                                           >
-                                             <span>+ Add Photo</span>
-                                           </button>
-                                         </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => editPhotoInputRef.current?.click()}
+                                            style={{
+                                              padding: '7px 14px',
+                                              borderRadius: '6px',
+                                              border: '1.5px solid #2563eb',
+                                              background: 'rgba(37, 99, 235, 0.1)',
+                                              color: '#2563eb',
+                                              fontSize: '12px',
+                                              fontWeight: 700,
+                                              cursor: 'pointer',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: '6px',
+                                              transition: 'all 0.15s ease'
+                                            }}
+                                          >
+                                            <span>+ Add Photo</span>
+                                          </button>
+                                        </div>
 
-                                         <input
-                                           ref={editPhotoInputRef}
-                                           type="file"
-                                           multiple
-                                           accept="image/*"
-                                           onChange={handlePhotoUpload}
-                                           style={{ display: 'none' }}
-                                         />
+                                        <input
+                                          ref={editPhotoInputRef}
+                                          type="file"
+                                          multiple
+                                          accept="image/*"
+                                          onChange={handlePhotoUpload}
+                                          style={{ display: 'none' }}
+                                        />
 
-                                         {/* Photo Gallery Grid */}
-                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '10px', marginTop: '10px' }}>
-                                           {editInspectionPhotos.map((photo) => (
-                                             <div
-                                               key={photo.id}
-                                               style={{
-                                                 position: 'relative',
-                                                 borderRadius: '6px',
-                                                 border: '1.5px solid #e2e8f0',
-                                                 background: '#ffffff',
-                                                 overflow: 'hidden',
-                                                 boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-                                               }}
-                                             >
-                                               <img
-                                                 src={photo.url}
-                                                 alt={photo.name}
-                                                 onClick={() => setPhotoPreviewModal(photo)}
-                                                 style={{
-                                                   width: '100%',
-                                                   height: '84px',
-                                                   objectFit: 'cover',
-                                                   cursor: 'pointer',
-                                                   display: 'block'
-                                                 }}
-                                                 title="Click to zoom photo"
-                                               />
-                                               <button
-                                                 type="button"
-                                                 onClick={() => handleRemovePhoto(photo.id)}
-                                                 style={{
-                                                   position: 'absolute',
-                                                   top: '4px',
-                                                   right: '4px',
-                                                   width: '20px',
-                                                   height: '20px',
-                                                   borderRadius: '50%',
-                                                   background: 'rgba(239, 68, 68, 0.9)',
-                                                   color: '#ffffff',
-                                                   border: 'none',
-                                                   cursor: 'pointer',
-                                                   display: 'flex',
-                                                   alignItems: 'center',
-                                                   justifyContent: 'center',
-                                                   fontSize: '11px',
-                                                   fontWeight: 700,
-                                                   lineHeight: 1
-                                                 }}
-                                                 title="Remove photo"
-                                               >
-                                                 ✕
-                                               </button>
-                                               <div style={{ padding: '4px 6px', background: '#f8fafc', borderTop: '1px solid #f1f5f9' }}>
-                                                 <span style={{ fontSize: '10px', fontWeight: 650, color: '#1e3a8a', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                   {photo.tag || 'Defect Note'}
-                                                 </span>
-                                               </div>
-                                             </div>
-                                           ))}
+                                        {/* Photo Gallery Grid */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '10px', marginTop: '10px' }}>
+                                          {editInspectionPhotos.map((photo) => (
+                                            <div
+                                              key={photo.id}
+                                              className="pos-edit-photo-thumb-card"
+                                            >
+                                              <img
+                                                src={photo.url}
+                                                alt={photo.name}
+                                                onClick={() => setPhotoPreviewModal(photo)}
+                                                style={{
+                                                  width: '100%',
+                                                  height: '84px',
+                                                  objectFit: 'cover',
+                                                  cursor: 'pointer',
+                                                  display: 'block'
+                                                }}
+                                                title="Click to zoom photo"
+                                              />
+                                              <button
+                                                type="button"
+                                                onClick={() => handleRemovePhoto(photo.id)}
+                                                style={{
+                                                  position: 'absolute',
+                                                  top: '4px',
+                                                  right: '4px',
+                                                  width: '20px',
+                                                  height: '20px',
+                                                  borderRadius: '50%',
+                                                  background: 'rgba(239, 68, 68, 0.9)',
+                                                  color: '#ffffff',
+                                                  border: 'none',
+                                                  cursor: 'pointer',
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  justifyContent: 'center',
+                                                  fontSize: '11px',
+                                                  fontWeight: 700,
+                                                  lineHeight: 1
+                                                }}
+                                                title="Remove photo"
+                                              >
+                                                ✕
+                                              </button>
+                                              <div className="pos-edit-photo-tag-bar">
+                                                <span style={{ fontSize: '10px', fontWeight: 650, color: '#2563eb', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                  {photo.tag || 'Defect Note'}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          ))}
 
-                                           {/* Upload Placeholder if under limit */}
-                                           {editInspectionPhotos.length < 6 && (
-                                             <div
-                                               onClick={() => editPhotoInputRef.current?.click()}
-                                               style={{
-                                                 height: '108px',
-                                                 borderRadius: '6px',
-                                                 border: '1.5px dashed #93c5fd',
-                                                 background: '#f0f7ff',
-                                                 display: 'flex',
-                                                 flexDirection: 'column',
-                                                 alignItems: 'center',
-                                                 justifyContent: 'center',
-                                                 gap: '4px',
-                                                 cursor: 'pointer',
-                                                 transition: 'all 0.15s ease'
-                                               }}
-                                             >
-                                               <span style={{ fontSize: '20px', color: '#2563eb' }}>📷</span>
-                                               <span style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb' }}>Upload More</span>
-                                               <span style={{ fontSize: '10px', color: '#64748b' }}>Up to 6</span>
-                                             </div>
-                                           )}
-                                         </div>
-                                       </div>
-                                     </div>
+                                          {/* Upload Placeholder if under limit */}
+                                          {editInspectionPhotos.length < 6 && (
+                                            <div
+                                              onClick={() => editPhotoInputRef.current?.click()}
+                                              style={{
+                                                height: '108px',
+                                                borderRadius: '6px',
+                                                border: '1.5px dashed var(--border, #93c5fd)',
+                                                background: 'var(--bg-hover, #f0f7ff)',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '4px',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.15s ease'
+                                              }}
+                                            >
+                                              <span style={{ fontSize: '20px', color: '#2563eb' }}>📷</span>
+                                              <span style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb' }}>Upload More</span>
+                                              <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Up to 6</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
 
-                                     {/* ══════════════════════════════════════════════════════════════════
-                                         SECTION 3: 6 TABS & TAB CONTENT (Matching User Requirements)
-                                         1. Order Details, 2. Logistics & Factory, 3. Status Updates,
-                                         4. Payments, 5. Customer Messages, 6. Comments & Audit
-                                        ══════════════════════════════════════════════════════════════════ */}
-                                     <div
-                                       style={{
-                                         border: '1.5px solid #e2e8f0',
-                                         borderRadius: '8px',
-                                         padding: '16px',
-                                         background: '#ffffff',
-                                         marginBottom: '18px'
-                                       }}
-                                     >
-                                       {/* Tabs Navigation Bar */}
-                                       <div
-                                         style={{
-                                           display: 'flex',
-                                           alignItems: 'center',
-                                           gap: '8px',
-                                           borderBottom: '1.5px solid #f1f5f9',
-                                           paddingBottom: '10px',
-                                           marginBottom: '14px',
-                                           overflowX: 'auto'
-                                         }}
-                                       >
-                                         {[
-                                           { id: 'details', label: '1. Order Details' },
-                                           { id: 'logistics', label: '2. Logistics & Factory' },
-                                           { id: 'status', label: '3. Status Updates' },
-                                           { id: 'payments', label: '4. Payments' },
-                                           { id: 'messages', label: '5. Customer Messages' },
-                                           { id: 'audit', label: '6. Comments & Audit' }
-                                         ].map((tab) => {
-                                           const isActive = editActiveTab === tab.id;
-                                           return (
-                                             <button
-                                               key={tab.id}
-                                               type="button"
-                                               onClick={() => setEditActiveTab(tab.id)}
-                                               style={{
-                                                 padding: '7px 16px',
-                                                 borderRadius: '6px',
-                                                 border: isActive ? '1px solid #bfdbfe' : '1px solid transparent',
-                                                 background: isActive ? '#eff6ff' : 'transparent',
-                                                 color: isActive ? '#2563eb' : '#64748b',
-                                                 fontSize: '12.5px',
-                                                 fontWeight: isActive ? 700 : 600,
-                                                 cursor: 'pointer',
-                                                 whiteSpace: 'nowrap',
-                                                 transition: 'all 0.15s ease'
-                                               }}
-                                             >
-                                               {tab.label}
-                                             </button>
-                                           );
-                                         })}
-                                       </div>
+                                    {/* ══════════════════════════════════════════════════════════════════
+                                        SECTION 3: 6 TABS & TAB CONTENT
+                                        1. Order Details, 2. Logistics & Factory, 3. Status Updates,
+                                        4. Payments, 5. Customer Messages, 6. Comments & Audit
+                                       ══════════════════════════════════════════════════════════════════ */}
+                                    <div className="pos-edit-section-card" style={{ marginBottom: '18px' }}>
+                                      {/* Tabs Navigation Bar */}
+                                      <div
+                                        style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '8px',
+                                          borderBottom: '1.5px solid var(--border, #f1f5f9)',
+                                          paddingBottom: '10px',
+                                          marginBottom: '14px',
+                                          overflowX: 'auto'
+                                        }}
+                                      >
+                                        {[
+                                          { id: 'details', label: '1. Order Details' },
+                                          { id: 'logistics', label: '2. Logistics & Factory' },
+                                          { id: 'status', label: '3. Status Updates' },
+                                          { id: 'payments', label: '4. Payments' },
+                                          { id: 'messages', label: '5. Customer Messages' },
+                                          { id: 'audit', label: '6. Comments & Audit' }
+                                        ].map((tab) => {
+                                          const isActive = editActiveTab === tab.id;
+                                          return (
+                                            <button
+                                              key={tab.id}
+                                              type="button"
+                                              onClick={() => setEditActiveTab(tab.id)}
+                                              className={`pos-edit-tab-btn ${isActive ? 'active' : ''}`}
+                                            >
+                                              {tab.label}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
 
-                                       {/* Tab 1 Content: Order Details */}
-                                       {editActiveTab === 'details' && (
-                                         <div>
-                                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
-                                             Order Details Update &amp; Intake Metadata
-                                           </div>
-                                           <div
-                                             style={{
-                                               display: 'grid',
-                                               gridTemplateColumns: 'repeat(3, 1fr)',
-                                               gap: '16px',
-                                               marginBottom: '14px'
-                                             }}
-                                           >
-                                             <div>
-                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                 Order ID (Database Generated)
-                                               </label>
-                                               <div style={{ display: 'flex', alignItems: 'center', height: '38px', padding: '0 12px', borderRadius: '6px', border: '1.5px solid #cbd5e1', background: '#f8fafc', color: '#1e40af', fontWeight: 750, fontSize: '13px', gap: '6px' }}>
-                                                 <span>🔒</span>
-                                                 <span>{editFormData.order_number || ''}</span>
-                                               </div>
-                                             </div>
+                                      {/* Tab 1 Content: Order Details */}
+                                      {editActiveTab === 'details' && (
+                                        <div>
+                                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '12px' }}>
+                                            Order Details Update &amp; Intake Metadata
+                                          </div>
+                                          <div
+                                            style={{
+                                              display: 'grid',
+                                              gridTemplateColumns: 'repeat(3, 1fr)',
+                                              gap: '16px',
+                                              marginBottom: '14px'
+                                            }}
+                                          >
+                                            <div>
+                                              <label className="pos-edit-label">
+                                                Order ID (Database Generated)
+                                              </label>
+                                              <div className="pos-edit-field" style={{ display: 'flex', alignItems: 'center', fontWeight: 750, color: '#2563eb', gap: '6px' }}>
+                                                <span>🔒</span>
+                                                <span>{editFormData.order_number || ''}</span>
+                                              </div>
+                                            </div>
 
-                                             <div>
-                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                 Created Timestamp (Captured)
-                                               </label>
-                                               <div style={{ display: 'flex', alignItems: 'center', height: '38px', padding: '0 12px', borderRadius: '6px', border: '1.5px solid #cbd5e1', background: '#f8fafc', color: '#334155', fontWeight: 650, fontSize: '13px', gap: '6px' }}>
-                                                 <span>🕒</span>
-                                                 <span>{editFormData.captured_date || '2026-10-28'} {editFormData.captured_time || '10:15 AM'}</span>
-                                               </div>
-                                             </div>
+                                            <div>
+                                              <label className="pos-edit-label">
+                                                Created Timestamp (Captured)
+                                              </label>
+                                              <div className="pos-edit-field" style={{ display: 'flex', alignItems: 'center', fontWeight: 650, gap: '6px' }}>
+                                                <span>🕒</span>
+                                                <span>{editFormData.captured_date || '2026-10-28'} {editFormData.captured_time || '10:15 AM'}</span>
+                                              </div>
+                                            </div>
 
-                                             <div>
-                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                 Current Status
-                                               </label>
-                                               <div style={{ display: 'flex', alignItems: 'center', height: '38px', padding: '0 12px', borderRadius: '6px', border: '1.5px solid #bfdbfe', background: '#eff6ff', color: '#1d4ed8', fontWeight: 750, fontSize: '13px', gap: '6px' }}>
-                                                 <span>●</span>
-                                                 <span>{normalizeOrderStatus(editFormData.status || editFormData.order_status)}</span>
-                                               </div>
-                                             </div>
-                                           </div>
+                                            <div>
+                                              <label className="pos-edit-label">
+                                                Current Status
+                                              </label>
+                                              <div className="pos-edit-field" style={{ display: 'flex', alignItems: 'center', fontWeight: 750, color: '#2563eb', gap: '6px' }}>
+                                                <span>●</span>
+                                                <span>{normalizeOrderStatus(editFormData.status || editFormData.order_status)}</span>
+                                              </div>
+                                            </div>
+                                          </div>
 
-                                           <div
-                                             style={{
-                                               display: 'grid',
-                                               gridTemplateColumns: 'repeat(3, 1fr)',
-                                               gap: '16px'
-                                             }}
-                                           >
-                                             <div>
-                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                 Garment Pieces Count
-                                               </label>
-                                               <input
-                                                 type="text"
-                                                 disabled
-                                                 value={`${editCartTotalPieces} Pieces in Order`}
-                                                 style={{
-                                                   width: '100%',
-                                                   boxSizing: 'border-box',
-                                                   height: '38px',
-                                                   padding: '0 12px',
-                                                   fontSize: '13px',
-                                                   borderRadius: '6px',
-                                                   border: '1.5px solid #cbd5e1',
-                                                   background: '#f8fafc',
-                                                   color: '#0f172a',
-                                                   fontWeight: 750
-                                                 }}
-                                               />
-                                             </div>
+                                          <div
+                                            style={{
+                                              display: 'grid',
+                                              gridTemplateColumns: 'repeat(3, 1fr)',
+                                              gap: '16px'
+                                            }}
+                                          >
+                                            <div>
+                                              <label className="pos-edit-label">
+                                                Garment Pieces Count
+                                              </label>
+                                              <input
+                                                type="text"
+                                                disabled
+                                                className="pos-edit-field"
+                                                style={{ fontWeight: 750 }}
+                                                value={`${editCartTotalPieces} Pieces in Order`}
+                                              />
+                                            </div>
 
-                                             <div>
-                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                 Order Intake Type
-                                               </label>
-                                               <select
-                                                 value={editFormData.order_type || 'Walk-in'}
-                                                 onChange={(e) => setEditFormData({ ...editFormData, order_type: e.target.value })}
-                                                 style={{
-                                                   width: '100%',
-                                                   boxSizing: 'border-box',
-                                                   height: '38px',
-                                                   padding: '0 10px',
-                                                   fontSize: '13px',
-                                                   borderRadius: '6px',
-                                                   border: '1.5px solid #d1d5db',
-                                                   background: '#ffffff',
-                                                   color: '#0f172a',
-                                                   outline: 'none'
-                                                 }}
-                                               >
-                                                 <option value="Walk-in">Walk-in</option>
-                                                 <option value="Pickup &amp; Delivery">Pickup &amp; Delivery</option>
-                                                 <option value="On-Call">On-Call</option>
-                                                 <option value="Express 24H">Express 24H</option>
-                                               </select>
-                                             </div>
+                                            <div>
+                                              <label className="pos-edit-label">
+                                                Order Intake Type
+                                              </label>
+                                              <select
+                                                className="pos-edit-field"
+                                                value={editFormData.order_type || 'Walk-in'}
+                                                onChange={(e) => setEditFormData({ ...editFormData, order_type: e.target.value })}
+                                              >
+                                                <option value="Walk-in">Walk-in</option>
+                                                <option value="Pickup &amp; Delivery">Pickup &amp; Delivery</option>
+                                                <option value="On-Call">On-Call</option>
+                                                <option value="Express 24H">Express 24H</option>
+                                              </select>
+                                            </div>
 
-                                             <div>
-                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                 Expected Delivery Date &amp; Time
-                                               </label>
-                                               <input
-                                                 type="text"
-                                                 value={editFormData.expected_delivery || ''}
-                                                 onChange={(e) => setEditFormData({ ...editFormData, expected_delivery: e.target.value })}
-                                                 placeholder="30 Oct 2026, 05:00 PM"
-                                                 style={{
-                                                   width: '100%',
-                                                   boxSizing: 'border-box',
-                                                   height: '38px',
-                                                   padding: '0 12px',
-                                                   fontSize: '13px',
-                                                   borderRadius: '6px',
-                                                   border: '1.5px solid #d1d5db',
-                                                   background: '#ffffff',
-                                                   color: '#0f172a',
-                                                   outline: 'none'
-                                                 }}
-                                               />
-                                             </div>
-                                           </div>
-                                         </div>
-                                       )}
+                                            <div>
+                                              <label className="pos-edit-label">
+                                                Expected Delivery Date &amp; Time
+                                              </label>
+                                              <input
+                                                type="text"
+                                                className="pos-edit-field"
+                                                value={editFormData.expected_delivery || ''}
+                                                onChange={(e) => setEditFormData({ ...editFormData, expected_delivery: e.target.value })}
+                                                placeholder="30 Oct 2026, 05:00 PM"
+                                              />
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )}
 
-                                       {/* Tab 2: Logistics & Factory */}
-                                       {editActiveTab === 'logistics' && (
-                                         <div>
-                                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
-                                             Logistics &amp; Factory Routing Details
-                                           </div>
-                                           <div className="pos-edit-logistics-grid" style={{ marginBottom: '14px' }}>
-                                             <div>
-                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                 Factory Plant / Processing Hub
-                                               </label>
-                                               <select
-                                                 defaultValue="Main Plant (Unit 1)"
-                                                 style={{ width: '100%', boxSizing: 'border-box', height: '38px', padding: '0 10px', fontSize: '13px', borderRadius: '6px', border: '1.5px solid #d1d5db', background: '#ffffff', color: '#0f172a' }}
-                                               >
-                                                 <option value="Main Plant (Unit 1)">Main Plant (Unit 1) - Washer &amp; Pressing</option>
-                                                 <option value="Express Plant (Unit 2)">Express Plant (Unit 2) - 24H Quick Turnaround</option>
-                                                 <option value="Central Dry Clean Hub">Central Dry Clean Hub - Delicate &amp; Silk</option>
-                                               </select>
-                                             </div>
-                                             <div>
-                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                 Bag Tag / Barcode Identifier
-                                               </label>
-                                               <div style={{ display: 'flex', alignItems: 'center', height: '38px', padding: '0 12px', borderRadius: '6px', border: '1.5px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontWeight: 700, fontSize: '13px', gap: '6px' }}>
-                                                 <span>🏷</span>
-                                                 <span>BAG-{editFormData.order_number?.replace(/D/g, '') || '00108'}</span>
-                                               </div>
-                                             </div>
-                                             <div>
-                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                 Assigned Delivery Rider / Van
-                                               </label>
-                                               <select
-                                                 defaultValue="Ramesh Kumar (Route 4)"
-                                                 style={{ width: '100%', boxSizing: 'border-box', height: '38px', padding: '0 10px', fontSize: '13px', borderRadius: '6px', border: '1.5px solid #d1d5db', background: '#ffffff', color: '#0f172a' }}
-                                               >
-                                                 <option value="Ramesh Kumar (Route 4)">Ramesh Kumar (Route 4 - Downtown)</option>
-                                                 <option value="Suresh Babu (Route 2)">Suresh Babu (Route 2 - Residential)</option>
-                                                 <option value="Self Pickup">Counter Self-Pickup</option>
-                                               </select>
-                                             </div>
-                                           </div>
+                                      {/* Tab 2: Logistics & Factory */}
+                                      {editActiveTab === 'logistics' && (
+                                        <div>
+                                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '12px' }}>
+                                            Logistics &amp; Factory Routing Details
+                                          </div>
+                                          <div className="pos-edit-logistics-grid" style={{ marginBottom: '14px' }}>
+                                            <div>
+                                              <label className="pos-edit-label">
+                                                Factory Plant / Processing Hub
+                                              </label>
+                                              <select
+                                                className="pos-edit-field"
+                                                defaultValue="Main Plant (Unit 1)"
+                                              >
+                                                <option value="Main Plant (Unit 1)">Main Plant (Unit 1) - Washer &amp; Pressing</option>
+                                                <option value="Express Plant (Unit 2)">Express Plant (Unit 2) - 24H Quick Turnaround</option>
+                                                <option value="Central Dry Clean Hub">Central Dry Clean Hub - Delicate &amp; Silk</option>
+                                              </select>
+                                            </div>
+                                            <div>
+                                              <label className="pos-edit-label">
+                                                Bag Tag / Barcode Identifier
+                                              </label>
+                                              <div className="pos-edit-field" style={{ display: 'flex', alignItems: 'center', fontWeight: 700, gap: '6px' }}>
+                                                <span>🏷</span>
+                                                <span>BAG-{editFormData.order_number?.replace(/D/g, '') || '00108'}</span>
+                                              </div>
+                                            </div>
+                                            <div>
+                                              <label className="pos-edit-label">
+                                                Assigned Delivery Rider / Van
+                                              </label>
+                                              <select
+                                                className="pos-edit-field"
+                                                defaultValue="Ramesh Kumar (Route 4)"
+                                              >
+                                                <option value="Ramesh Kumar (Route 4)">Ramesh Kumar (Route 4 - Downtown)</option>
+                                                <option value="Suresh Babu (Route 2)">Suresh Babu (Route 2 - Residential)</option>
+                                                <option value="Self Pickup">Counter Self-Pickup</option>
+                                              </select>
+                                            </div>
+                                          </div>
 
-                                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                                             <div>
-                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                 Plant Transit &amp; Packaging Status
-                                               </label>
-                                               <select
-                                                 defaultValue="Washing in Progress"
-                                                 style={{ width: '100%', boxSizing: 'border-box', height: '38px', padding: '0 10px', fontSize: '13px', borderRadius: '6px', border: '1.5px solid #d1d5db', background: '#ffffff', color: '#0f172a' }}
-                                               >
-                                                 <option value="Intake Complete">Intake Complete - Bagged</option>
-                                                 <option value="In Transit to Factory">In Transit to Factory</option>
-                                                 <option value="Washing in Progress">Washing in Progress</option>
-                                                 <option value="Pressed &amp; Quality Checked">Pressed &amp; Quality Checked</option>
-                                                 <option value="Ready for Dispatch to Store">Ready for Dispatch to Store</option>
-                                               </select>
-                                             </div>
-                                             <div>
-                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                 Factory Bin / Storage Shelf
-                                               </label>
-                                               <input
-                                                 type="text"
-                                                 defaultValue="Bin B-14 (Hanger Rail 2)"
-                                                 style={{ width: '100%', boxSizing: 'border-box', height: '38px', padding: '0 12px', fontSize: '13px', borderRadius: '6px', border: '1.5px solid #d1d5db', background: '#ffffff', color: '#0f172a' }}
-                                               />
-                                             </div>
-                                           </div>
-                                         </div>
-                                       )}
+                                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                            <div>
+                                              <label className="pos-edit-label">
+                                                Plant Transit &amp; Packaging Status
+                                              </label>
+                                              <select
+                                                className="pos-edit-field"
+                                                defaultValue="Washing in Progress"
+                                              >
+                                                <option value="Intake Complete">Intake Complete - Bagged</option>
+                                                <option value="In Transit to Factory">In Transit to Factory</option>
+                                                <option value="Washing in Progress">Washing in Progress</option>
+                                                <option value="Pressed &amp; Quality Checked">Pressed &amp; Quality Checked</option>
+                                                <option value="Ready for Dispatch to Store">Ready for Dispatch to Store</option>
+                                              </select>
+                                            </div>
+                                            <div>
+                                              <label className="pos-edit-label">
+                                                Factory Bin / Storage Shelf
+                                              </label>
+                                              <input
+                                                type="text"
+                                                className="pos-edit-field"
+                                                defaultValue="Bin B-14 (Hanger Rail 2)"
+                                              />
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )}
 
-                                       {/* Tab 3: Status Updates */}
-                                       {editActiveTab === 'status' && (
-                                         <div>
-                                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
-                                             Live Order Status Pipeline &amp; Milestone Controls
-                                           </div>
+                                      {/* Tab 3: Status Updates */}
+                                      {editActiveTab === 'status' && (
+                                        <div>
+                                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '12px' }}>
+                                            Live Order Status Pipeline &amp; Milestone Controls
+                                          </div>
 
-                                           {/* Visual Milestone Progression Bar */}
-                                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12.5px', color: '#475569', flexWrap: 'wrap', marginBottom: '16px', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                             {['Received', 'In Progress', 'Ready', 'Delivered'].map((step, idx) => {
-                                               const currentNorm = normalizeOrderStatus(editFormData.status || editFormData.order_status);
-                                               const isDone = ['Received', 'In Progress', 'Ready', 'Delivered'].indexOf(currentNorm) >= idx;
-                                               return (
-                                                 <React.Fragment key={step}>
-                                                   {idx > 0 && <span style={{ color: '#94a3b8' }}>➔</span>}
-                                                   <span
-                                                     style={{
-                                                       padding: '6px 12px',
-                                                       borderRadius: '6px',
-                                                       background: isDone ? (step === 'Ready' ? '#dcfce7' : '#eff6ff') : '#ffffff',
-                                                       color: isDone ? (step === 'Ready' ? '#15803d' : '#1d4ed8') : '#64748b',
-                                                       fontWeight: isDone ? 750 : 500,
-                                                       border: isDone ? '1px solid #bfdbfe' : '1px solid #cbd5e1'
-                                                     }}
-                                                   >
-                                                     {isDone ? '✓ ' : '○ '}{step}
-                                                   </span>
-                                                 </React.Fragment>
-                                               );
-                                             })}
-                                           </div>
+                                          {/* Visual Milestone Progression Bar */}
+                                          <div className="pos-edit-sub-panel" style={{ flexDirection: 'row', alignItems: 'center', gap: '10px', fontSize: '12.5px', flexWrap: 'wrap', marginBottom: '16px', padding: '12px' }}>
+                                            {['Received', 'In Progress', 'Ready', 'Delivered'].map((step, idx) => {
+                                              const currentNorm = normalizeOrderStatus(editFormData.status || editFormData.order_status);
+                                              const isDone = ['Received', 'In Progress', 'Ready', 'Delivered'].indexOf(currentNorm) >= idx;
+                                              return (
+                                                <React.Fragment key={step}>
+                                                  {idx > 0 && <span style={{ color: 'var(--text-muted)' }}>➔</span>}
+                                                  <span
+                                                    style={{
+                                                      padding: '6px 12px',
+                                                      borderRadius: '6px',
+                                                      background: isDone ? (step === 'Ready' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(37, 99, 235, 0.15)') : 'var(--bg-surface)',
+                                                      color: isDone ? (step === 'Ready' ? '#16a34a' : '#2563eb') : 'var(--text-muted)',
+                                                      fontWeight: isDone ? 750 : 500,
+                                                      border: isDone ? '1px solid rgba(37, 99, 235, 0.3)' : '1px solid var(--border)'
+                                                    }}
+                                                  >
+                                                    {isDone ? '✓ ' : '○ '}{step}
+                                                  </span>
+                                                </React.Fragment>
+                                              );
+                                            })}
+                                          </div>
 
-                                           {/* Interactive Status Selector Row */}
-                                           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                             <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>
-                                               Change Status:
-                                             </label>
-                                             <select
-                                               value={normalizeOrderStatus(editFormData.status || editFormData.order_status)}
-                                               onChange={(e) => {
-                                                 const val = e.target.value;
-                                                 setEditFormData({ ...editFormData, status: val, order_status: val });
-                                                 handleQuickStatusUpdate(val);
-                                               }}
-                                               style={{
-                                                 height: '38px',
-                                                 padding: '0 12px',
-                                                 fontSize: '13px',
-                                                 fontWeight: 650,
-                                                 borderRadius: '6px',
-                                                 border: '1.5px solid #2563eb',
-                                                 background: '#ffffff',
-                                                 color: '#0f172a',
-                                                 outline: 'none',
-                                                 minWidth: '180px'
-                                               }}
-                                             >
-                                               <option value="Received">🔵 Received</option>
-                                               <option value="In Progress">🟡 In Progress</option>
-                                               <option value="Ready">🟢 Ready for Pickup</option>
-                                               <option value="Delivered">🔷 Delivered</option>
-                                               <option value="Cancelled">🔴 Cancelled</option>
-                                             </select>
+                                          {/* Interactive Status Selector Row */}
+                                          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                            <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                              Change Status:
+                                            </label>
+                                            <select
+                                              className="pos-edit-field"
+                                              style={{ minWidth: '180px', width: 'auto' }}
+                                              value={normalizeOrderStatus(editFormData.status || editFormData.order_status)}
+                                              onChange={(e) => {
+                                                const val = e.target.value;
+                                                setEditFormData({ ...editFormData, status: val, order_status: val });
+                                                handleQuickStatusUpdate(val);
+                                              }}
+                                            >
+                                              <option value="Received">🔵 Received</option>
+                                              <option value="In Progress">🟡 In Progress</option>
+                                              <option value="Ready">🟢 Ready for Pickup</option>
+                                              <option value="Delivered">🔷 Delivered</option>
+                                              <option value="Cancelled">🔴 Cancelled</option>
+                                            </select>
 
-                                             <button
-                                               type="button"
-                                               onClick={() => handleQuickStatusUpdate(editFormData.status || editFormData.order_status)}
-                                               style={{
-                                                 height: '38px',
-                                                 padding: '0 16px',
-                                                 borderRadius: '6px',
-                                                 border: 'none',
-                                                 background: '#2563eb',
-                                                 color: '#ffffff',
-                                                 fontSize: '12.5px',
-                                                 fontWeight: 700,
-                                                 cursor: 'pointer',
-                                                 display: 'inline-flex',
-                                                 alignItems: 'center',
-                                                 gap: '6px',
-                                                 boxShadow: '0 2px 6px rgba(37,99,235,0.25)'
-                                               }}
-                                             >
-                                               <span>⚡</span>
-                                               <span>Apply &amp; Save Status</span>
-                                             </button>
-                                           </div>
-                                         </div>
-                                       )}
+                                            <button
+                                              type="button"
+                                              className="pos-edit-save-btn"
+                                              style={{ height: '36px', padding: '0 16px', fontSize: '12px' }}
+                                              onClick={() => handleQuickStatusUpdate(editFormData.status || editFormData.order_status)}
+                                            >
+                                              <span>⚡</span>
+                                              <span>Apply &amp; Save Status</span>
+                                            </button>
+                                          </div>
+                                        </div>
+                                      )}
 
-                                       {/* Tab 4: Payments */}
-                                       {editActiveTab === 'payments' && (
-                                         <div>
-                                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
-                                             Payment Breakdown &amp; Transaction Details
-                                           </div>
+                                      {/* Tab 4: Payments */}
+                                      {editActiveTab === 'payments' && (
+                                        <div>
+                                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '12px' }}>
+                                            Payment Breakdown &amp; Transaction Details
+                                          </div>
 
-                                           {/* 4 Summary Cards */}
-                                           <div
-                                             style={{
-                                               display: 'grid',
-                                               gridTemplateColumns: 'repeat(4, 1fr)',
-                                               gap: '12px',
-                                               marginBottom: '16px'
-                                             }}
-                                           >
-                                             <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                               <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px' }}>Subtotal</span>
-                                               <span style={{ fontSize: '15px', fontWeight: 750, color: '#0f172a' }}>₹{editCartSubtotal.toFixed(2)}</span>
-                                             </div>
-                                             <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                               <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px' }}>Tax (5% GST)</span>
-                                               <span style={{ fontSize: '15px', fontWeight: 750, color: '#0f172a' }}>₹{editCartTax.toFixed(2)}</span>
-                                             </div>
-                                             <div style={{ background: '#eff6ff', padding: '12px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
-                                               <span style={{ fontSize: '11px', color: '#1e40af', display: 'block', marginBottom: '4px' }}>Grand Total</span>
-                                               <span style={{ fontSize: '16px', fontWeight: 800, color: '#1d4ed8' }}>₹{editCartGrandTotal.toFixed(2)}</span>
-                                             </div>
-                                             <div style={{ background: '#fef3c7', padding: '12px', borderRadius: '8px', border: '1px solid #fde68a' }}>
-                                               <span style={{ fontSize: '11px', color: '#92400e', display: 'block', marginBottom: '4px' }}>Balance Due</span>
-                                               <span style={{ fontSize: '15px', fontWeight: 800, color: '#b45309' }}>
-                                                 ₹{Math.max(0, editCartGrandTotal - Number(editFormData.advance_paid || 0)).toFixed(2)}
-                                               </span>
-                                             </div>
-                                           </div>
+                                          {/* 4 Summary Cards */}
+                                          <div
+                                            style={{
+                                              display: 'grid',
+                                              gridTemplateColumns: 'repeat(4, 1fr)',
+                                              gap: '12px',
+                                              marginBottom: '16px'
+                                            }}
+                                          >
+                                            <div className="pos-edit-metric-card">
+                                              <span className="metric-label">Subtotal</span>
+                                              <span className="metric-val">₹{editCartSubtotal.toFixed(2)}</span>
+                                            </div>
+                                            <div className="pos-edit-metric-card">
+                                              <span className="metric-label">Tax (5% GST)</span>
+                                              <span className="metric-val">₹{editCartTax.toFixed(2)}</span>
+                                            </div>
+                                            <div className="pos-edit-metric-card" style={{ borderColor: 'rgba(37, 99, 235, 0.4)', background: 'rgba(37, 99, 235, 0.08)' }}>
+                                              <span className="metric-label" style={{ color: '#2563eb' }}>Grand Total</span>
+                                              <span className="metric-val" style={{ color: '#2563eb' }}>₹{editCartGrandTotal.toFixed(2)}</span>
+                                            </div>
+                                            <div className="pos-edit-metric-card" style={{ borderColor: 'rgba(234, 179, 8, 0.4)', background: 'rgba(234, 179, 8, 0.08)' }}>
+                                              <span className="metric-label" style={{ color: '#d97706' }}>Balance Due</span>
+                                              <span className="metric-val" style={{ color: '#d97706' }}>
+                                                ₹{Math.max(0, editCartGrandTotal - Number(editFormData.advance_paid || 0)).toFixed(2)}
+                                              </span>
+                                            </div>
+                                          </div>
 
-                                           {/* Payment Fields */}
-                                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
-                                             <div>
-                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                 Payment Status
-                                               </label>
-                                               <select
-                                                 value={editFormData.payment_status || 'Unpaid'}
-                                                 onChange={(e) => setEditFormData({ ...editFormData, payment_status: e.target.value })}
-                                                 style={{ width: '100%', boxSizing: 'border-box', height: '38px', padding: '0 10px', fontSize: '13px', borderRadius: '6px', border: '1.5px solid #d1d5db', background: '#ffffff', color: '#0f172a' }}
-                                               >
-                                                 <option value="Paid">🟢 Fully Paid</option>
-                                                 <option value="Partially Paid">🟡 Partially Paid</option>
-                                                 <option value="Unpaid">🔴 Unpaid</option>
-                                               </select>
-                                             </div>
+                                          {/* Payment Fields */}
+                                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+                                            <div>
+                                              <label className="pos-edit-label">
+                                                Payment Status
+                                              </label>
+                                              <select
+                                                className="pos-edit-field"
+                                                value={editFormData.payment_status || 'Unpaid'}
+                                                onChange={(e) => setEditFormData({ ...editFormData, payment_status: e.target.value })}
+                                              >
+                                                <option value="Paid">🟢 Fully Paid</option>
+                                                <option value="Partially Paid">🟡 Partially Paid</option>
+                                                <option value="Unpaid">🔴 Unpaid</option>
+                                              </select>
+                                            </div>
 
-                                             <div>
-                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                 Payment Mode / Gateway
-                                               </label>
-                                               <select
-                                                 defaultValue="UPI / QR Code"
-                                                 style={{ width: '100%', boxSizing: 'border-box', height: '38px', padding: '0 10px', fontSize: '13px', borderRadius: '6px', border: '1.5px solid #d1d5db', background: '#ffffff', color: '#0f172a' }}
-                                               >
-                                                 <option value="Cash">Cash at Counter</option>
-                                                 <option value="UPI / QR Code">UPI (GPay / PhonePe / Paytm)</option>
-                                                 <option value="Credit / Debit Card">Credit / Debit Card</option>
-                                                 <option value="Net Banking">Net Banking</option>
-                                                 <option value="Store Credit">Store Credit / Wallet</option>
-                                               </select>
-                                             </div>
+                                            <div>
+                                              <label className="pos-edit-label">
+                                                Payment Mode / Gateway
+                                              </label>
+                                              <select
+                                                className="pos-edit-field"
+                                                defaultValue="UPI / QR Code"
+                                              >
+                                                <option value="Cash">Cash at Counter</option>
+                                                <option value="UPI / QR Code">UPI (GPay / PhonePe / Paytm)</option>
+                                                <option value="Credit / Debit Card">Credit / Debit Card</option>
+                                                <option value="Net Banking">Net Banking</option>
+                                                <option value="Store Credit">Store Credit / Wallet</option>
+                                              </select>
+                                            </div>
 
-                                             <div>
-                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                 Advance Paid (₹)
-                                               </label>
-                                               <input
-                                                 type="number"
-                                                 min="0"
-                                                 value={editFormData.advance_paid || 0}
-                                                 onChange={(e) => setEditFormData({ ...editFormData, advance_paid: e.target.value })}
-                                                 style={{ width: '100%', boxSizing: 'border-box', height: '38px', padding: '0 12px', fontSize: '13px', borderRadius: '6px', border: '1.5px solid #d1d5db', background: '#ffffff', color: '#0f172a' }}
-                                               />
-                                             </div>
-                                           </div>
-                                         </div>
-                                       )}
+                                            <div>
+                                              <label className="pos-edit-label">
+                                                Advance Paid (₹)
+                                              </label>
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                className="pos-edit-field"
+                                                value={editFormData.advance_paid || 0}
+                                                onChange={(e) => setEditFormData({ ...editFormData, advance_paid: e.target.value })}
+                                              />
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )}
 
-                                       {/* Tab 5: Customer Messages */}
-                                       {editActiveTab === 'messages' && (
-                                         <div>
-                                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '10px' }}>
-                                             Customer Messaging &amp; Automated Notifications
-                                           </div>
+                                      {/* Tab 5: Customer Messages */}
+                                      {editActiveTab === 'messages' && (
+                                        <div>
+                                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '10px' }}>
+                                            Customer Messaging &amp; Automated Notifications
+                                          </div>
 
-                                           {/* Customer Contact Snapshot */}
-                                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '14px' }}>
-                                             <div>
-                                               <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
-                                                 {editFormData.customer_name || 'Customer'}
-                                               </div>
-                                               <div style={{ fontSize: '12px', color: '#64748b' }}>
-                                                 📱 +91 {editFormData.mobile_number || '9876543210'} • {editFormData.address || 'MG Road, Vellore'}
-                                               </div>
-                                             </div>
-                                             <button
-                                               type="button"
-                                               onClick={() => showToast?.(`💬 WhatsApp opened for +91 ${editFormData.mobile_number || '9876543210'}`)}
-                                               style={{
-                                                 padding: '6px 14px',
-                                                 borderRadius: '6px',
-                                                 border: '1px solid #22c55e',
-                                                 background: '#f0fdf4',
-                                                 color: '#15803d',
-                                                 fontSize: '12px',
-                                                 fontWeight: 700,
-                                                 cursor: 'pointer',
-                                                 display: 'inline-flex',
-                                                 alignItems: 'center',
-                                                 gap: '6px'
-                                               }}
-                                             >
-                                               <span>💬</span>
-                                               <span>WhatsApp Customer</span>
-                                             </button>
-                                           </div>
+                                          {/* Customer Contact Snapshot */}
+                                          <div className="pos-edit-sub-panel" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', padding: '12px 14px' }}>
+                                            <div>
+                                              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                                {editFormData.customer_name || 'Customer'}
+                                              </div>
+                                              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                                📱 +91 {editFormData.mobile_number || '9876543210'} • {editFormData.address || 'MG Road, Vellore'}
+                                              </div>
+                                            </div>
+                                            <button
+                                              type="button"
+                                              onClick={() => showToast?.(`💬 WhatsApp opened for +91 ${editFormData.mobile_number || '9876543210'}`)}
+                                              style={{
+                                                padding: '6px 14px',
+                                                borderRadius: '6px',
+                                                border: '1px solid #22c55e',
+                                                background: 'rgba(34, 197, 94, 0.1)',
+                                                color: '#16a34a',
+                                                fontSize: '12px',
+                                                fontWeight: 700,
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px'
+                                              }}
+                                            >
+                                              <span>💬</span>
+                                              <span>WhatsApp Customer</span>
+                                            </button>
+                                          </div>
 
-                                           {/* Notification Template Preview */}
-                                           <div style={{ fontSize: '12px', color: '#334155', background: '#f0fdf4', padding: '12px 14px', borderRadius: '6px', border: '1px solid #bbf7d0', lineHeight: 1.5, marginBottom: '12px' }}>
-                                             <span style={{ fontWeight: 700, color: '#166534', display: 'block', marginBottom: '4px' }}>
-                                               Automated WhatsApp &amp; SMS Template:
-                                             </span>
-                                             "Hello <strong>{editFormData.customer_name || 'Customer'}</strong>, your laundry order <strong>#{editFormData.order_number}</strong> with Washdoor is now <strong>{normalizeOrderStatus(editFormData.status || editFormData.order_status)}</strong> ({editCartTotalPieces} pieces). Total Bill: ₹{editCartGrandTotal.toFixed(2)}. Expected delivery: {editFormData.expected_delivery || '30 Oct 2026, 05:00 PM'}."
-                                           </div>
+                                          {/* Notification Template Preview */}
+                                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', background: 'rgba(34, 197, 94, 0.08)', padding: '12px 14px', borderRadius: '6px', border: '1px solid rgba(34, 197, 94, 0.25)', lineHeight: 1.5, marginBottom: '12px' }}>
+                                            <span style={{ fontWeight: 700, color: '#16a34a', display: 'block', marginBottom: '4px' }}>
+                                              Automated WhatsApp &amp; SMS Template:
+                                            </span>
+                                            "Hello <strong>{editFormData.customer_name || 'Customer'}</strong>, your laundry order <strong>#{editFormData.order_number}</strong> with Washdoor is now <strong>{normalizeOrderStatus(editFormData.status || editFormData.order_status)}</strong> ({editCartTotalPieces} pieces). Total Bill: ₹{editCartGrandTotal.toFixed(2)}. Expected delivery: {editFormData.expected_delivery || '30 Oct 2026, 05:00 PM'}."
+                                          </div>
 
-                                           <div style={{ display: 'flex', gap: '8px' }}>
-                                             <button
-                                               type="button"
-                                               onClick={() => showToast?.(`✅ WhatsApp notification sent to ${editFormData.customer_name}!`)}
-                                               style={{ padding: '7px 14px', borderRadius: '6px', border: 'none', background: '#16a34a', color: '#ffffff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
-                                             >
-                                               Send WhatsApp Alert
-                                             </button>
-                                             <button
-                                               type="button"
-                                               onClick={() => showToast?.(`✅ SMS alert dispatched to +91 ${editFormData.mobile_number}!`)}
-                                               style={{ padding: '7px 14px', borderRadius: '6px', border: '1.5px solid #cbd5e1', background: '#ffffff', color: '#334155', fontSize: '12px', fontWeight: 650, cursor: 'pointer' }}
-                                             >
-                                               Send SMS Alert
-                                             </button>
-                                           </div>
-                                         </div>
-                                       )}
+                                          <div style={{ display: 'flex', gap: '8px' }}>
+                                            <button
+                                              type="button"
+                                              onClick={() => showToast?.(`✅ WhatsApp notification sent to ${editFormData.customer_name}!`)}
+                                              style={{ padding: '7px 14px', borderRadius: '6px', border: 'none', background: '#16a34a', color: '#ffffff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                                            >
+                                              Send WhatsApp Alert
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => showToast?.(`✅ SMS alert dispatched to +91 ${editFormData.mobile_number}!`)}
+                                              className="pos-edit-cancel-btn"
+                                              style={{ padding: '7px 14px', fontSize: '12px' }}
+                                            >
+                                              Send SMS Alert
+                                            </button>
+                                          </div>
+                                        </div>
+                                      )}
 
-                                       {/* Tab 6: Comments & Audit */}
-                                       {editActiveTab === 'audit' && (
-                                         <div>
-                                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
-                                             Internal Staff Comments &amp; Immutable System Audit Trail
-                                           </div>
+                                      {/* Tab 6: Comments & Audit */}
+                                      {editActiveTab === 'audit' && (
+                                        <div>
+                                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '12px' }}>
+                                            Internal Staff Comments &amp; Immutable System Audit Trail
+                                          </div>
 
-                                           {/* Operator Notes Field */}
-                                           <div style={{ marginBottom: '14px' }}>
-                                             <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                               Internal Staff Instructions / Store Comments
-                                             </label>
-                                             <textarea
-                                               rows={2}
-                                               value={editFormData.comments || ''}
-                                               onChange={(e) => setEditFormData({ ...editFormData, comments: e.target.value })}
-                                               placeholder="Internal notes for laundry wash technician or rider..."
-                                               style={{
-                                                 width: '100%',
-                                                 boxSizing: 'border-box',
-                                                 padding: '8px 12px',
-                                                 fontSize: '12.5px',
-                                                 borderRadius: '6px',
-                                                 border: '1.5px solid #cbd5e1',
-                                                 background: '#ffffff',
-                                                 color: '#0f172a',
-                                                 outline: 'none',
-                                                 minHeight: '60px'
-                                               }}
-                                             />
-                                           </div>
+                                          {/* Operator Notes Field */}
+                                          <div style={{ marginBottom: '14px' }}>
+                                            <label className="pos-edit-label">
+                                              Internal Staff Instructions / Store Comments
+                                            </label>
+                                            <textarea
+                                              rows={2}
+                                              className="pos-edit-textarea"
+                                              value={editFormData.comments || ''}
+                                              onChange={(e) => setEditFormData({ ...editFormData, comments: e.target.value })}
+                                              placeholder="Internal notes for laundry wash technician or rider..."
+                                            />
+                                          </div>
 
-                                           {/* Audit Trail Timeline */}
-                                           <div style={{ fontSize: '12px', color: '#64748b', background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', lineHeight: 1.8 }}>
-                                             <div>• <strong>Order Created:</strong> {editFormData.captured_date || '2026-10-28'} at {editFormData.captured_time || '10:15 AM'} by Counter Operator</div>
-                                             <div>• <strong>Current Work Status:</strong> {normalizeOrderStatus(editFormData.status || editFormData.order_status)}</div>
-                                             <div>• <strong>Items Logged:</strong> {editCartTotalPieces} pieces allocated across {editCart.length} service line(s)</div>
-                                             <div>• <strong>Garment Inspection:</strong> {editInspection.garment} ({editInspection.color || 'Standard'}) — {editInspectionPhotos.length} photo evidence image(s) attached</div>
-                                             <div>• <strong>Financial Status:</strong> {editFormData.payment_status || 'Unpaid'} — Total ₹{editCartGrandTotal.toFixed(2)}</div>
-                                           </div>
-                                         </div>
-                                       )}
-                                     </div>
+                                          {/* Audit Trail Timeline */}
+                                          <div className="pos-edit-sub-panel" style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.8 }}>
+                                            <div>• <strong>Order Created:</strong> {editFormData.captured_date || '2026-10-28'} at {editFormData.captured_time || '10:15 AM'} by Counter Operator</div>
+                                            <div>• <strong>Current Work Status:</strong> {normalizeOrderStatus(editFormData.status || editFormData.order_status)}</div>
+                                            <div>• <strong>Items Logged:</strong> {editCartTotalPieces} pieces allocated across {editCart.length} service line(s)</div>
+                                            <div>• <strong>Garment Inspection:</strong> {editInspection.garment} ({editInspection.color || 'Standard'}) — {editInspectionPhotos.length} photo evidence image(s) attached</div>
+                                            <div>• <strong>Financial Status:</strong> {editFormData.payment_status || 'Unpaid'} — Total ₹{editCartGrandTotal.toFixed(2)}</div>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
 
-                                     {/* Lightbox Modal for Photo Preview */}
-                                     {photoPreviewModal && (
-                                       <div
-                                         onClick={() => setPhotoPreviewModal(null)}
-                                         style={{
-                                           position: 'fixed',
-                                           inset: 0,
-                                           background: 'rgba(0, 0, 0, 0.75)',
-                                           display: 'flex',
-                                           alignItems: 'center',
-                                           justifyContent: 'center',
-                                           zIndex: 9999,
-                                           padding: '20px'
-                                         }}
-                                       >
-                                         <div
-                                           onClick={(e) => e.stopPropagation()}
-                                           style={{
-                                             background: '#ffffff',
-                                             borderRadius: '10px',
-                                             maxWidth: '540px',
-                                             width: '100%',
-                                             overflow: 'hidden',
-                                             boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
-                                           }}
-                                         >
-                                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #e2e8f0' }}>
-                                             <div>
-                                               <div style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>{photoPreviewModal.name}</div>
-                                               <div style={{ fontSize: '11px', color: '#2563eb', fontWeight: 600 }}>{photoPreviewModal.tag}</div>
-                                             </div>
-                                             <button
-                                               type="button"
-                                               onClick={() => setPhotoPreviewModal(null)}
-                                               style={{ border: 'none', background: 'transparent', fontSize: '16px', cursor: 'pointer', color: '#64748b' }}
-                                             >
-                                               ✕
-                                             </button>
-                                           </div>
-                                           <div style={{ padding: '16px', display: 'flex', justifyContent: 'center', background: '#0f172a' }}>
-                                             <img
-                                               src={photoPreviewModal.url}
-                                               alt={photoPreviewModal.name}
-                                               style={{ maxWidth: '100%', maxHeight: '380px', objectFit: 'contain', borderRadius: '4px' }}
-                                             />
-                                           </div>
-                                         </div>
-                                       </div>
-                                     )}
+                                    {/* Lightbox Modal for Photo Preview */}
+                                    {photoPreviewModal && (
+                                      <div
+                                        onClick={() => setPhotoPreviewModal(null)}
+                                        style={{
+                                          position: 'fixed',
+                                          inset: 0,
+                                          background: 'rgba(0, 0, 0, 0.75)',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          zIndex: 9999,
+                                          padding: '20px'
+                                        }}
+                                      >
+                                        <div
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="pos-edit-section-card"
+                                          style={{
+                                            maxWidth: '540px',
+                                            width: '100%',
+                                            padding: 0,
+                                            overflow: 'hidden',
+                                            boxShadow: '0 20px 40px rgba(0,0,0,0.5)'
+                                          }}
+                                        >
+                                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+                                            <div>
+                                              <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)' }}>{photoPreviewModal.name}</div>
+                                              <div style={{ fontSize: '11px', color: '#2563eb', fontWeight: 600 }}>{photoPreviewModal.tag}</div>
+                                            </div>
+                                            <button
+                                              type="button"
+                                              onClick={() => setPhotoPreviewModal(null)}
+                                              style={{ border: 'none', background: 'transparent', fontSize: '16px', cursor: 'pointer', color: 'var(--text-muted)' }}
+                                            >
+                                              ✕
+                                            </button>
+                                          </div>
+                                          <div style={{ padding: '16px', display: 'flex', justifyContent: 'center', background: '#0a101d' }}>
+                                            <img
+                                              src={photoPreviewModal.url}
+                                              alt={photoPreviewModal.name}
+                                              style={{ maxWidth: '100%', maxHeight: '380px', objectFit: 'contain', borderRadius: '4px' }}
+                                            />
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
 
-                                     {/* ══════════════════════════════════════════════════════════════════
+                                    {/* ══════════════════════════════════════════════════════════════════
                                         FOOTER ACTION BUTTONS (Bottom Right)
                                        ══════════════════════════════════════════════════════════════════ */}
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px' }}>
                                       <button
                                         type="button"
+                                        className="pos-edit-cancel-btn"
                                         onClick={() => {
                                           setEditingOrderRecord(null);
                                           setEditFormData(null);
                                         }}
-                                        style={{
-                                          padding: '9px 24px',
-                                          borderRadius: '6px',
-                                          border: '1.5px solid #cbd5e1',
-                                          background: '#ffffff',
-                                          color: '#475569',
-                                          fontSize: '13px',
-                                          fontWeight: 650,
-                                          cursor: 'pointer',
-                                          transition: 'all 0.15s ease'
-                                        }}
-                                        onMouseOver={(e) => { e.currentTarget.style.background = '#f8fafc'; }}
-                                        onMouseOut={(e) => { e.currentTarget.style.background = '#ffffff'; }}
                                       >
                                         Cancel
                                       </button>
                                       <button
-                                         type="submit"
-                                         style={{
-                                           padding: '9px 28px',
-                                           borderRadius: '6px',
-                                           border: 'none',
-                                           background: '#2563eb',
-                                           color: '#ffffff',
-                                           fontSize: '13px',
-                                           fontWeight: 700,
-                                           cursor: 'pointer',
-                                           boxShadow: '0 3px 8px rgba(37, 99, 235, 0.3)',
-                                           display: 'flex',
-                                           alignItems: 'center',
-                                           gap: '7px',
-                                           transition: 'all 0.15s ease'
-                                         }}
-                                         onMouseOver={(e) => { e.currentTarget.style.background = '#1d4ed8'; }}
-                                         onMouseOut={(e) => { e.currentTarget.style.background = '#2563eb'; }}
-                                       >
-                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                                           <polyline points="20 6 9 17 4 12" />
-                                         </svg>
-                                         <span>Save Changes</span>
-                                       </button>
+                                        type="submit"
+                                        className="pos-edit-save-btn"
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                                          <polyline points="20 6 9 17 4 12" />
+                                        </svg>
+                                        <span>Save Changes</span>
+                                      </button>
                                     </div>
                                   </form>
                                 </div>

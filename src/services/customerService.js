@@ -654,6 +654,7 @@ function mapCustomerWorkRowToOrder(row) {
     payment_status: row.payment_status || 'Unpaid',
     payment_method: row.payment_method || 'Cash',
     item_count: itemCount,
+    total_pieces: itemCount,
     items: items,
     customer_history: { items: items },
     intake_date: row.intake_date || row.created_at,
