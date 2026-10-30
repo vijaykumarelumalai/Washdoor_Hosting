@@ -656,7 +656,8 @@ export async function searchCustomers(query) {
 function mapCustomerWorkRowToOrder(row) {
   const orderNum = row.work_number ? formatOrderId(row.work_number) : (row.work_id ? `ORD${String(row.work_id).slice(-5)}` : 'ORD00001');
   const custId = formatCustomerId(row.customer_id || 'CUST-00001');
-  const rawStatus = row.work_status || 'Order in Progress';
+  const rawStatus = row.work_status || 'Received';
+  const displayStatus = (rawStatus === 'Received' || rawStatus === 'Order Received') ? 'Order Received' : rawStatus;
 
   const items = Array.isArray(row.items) ? row.items : [];
   const itemCount = row.total_pieces !== undefined && row.total_pieces !== null ? Number(row.total_pieces) : (items.length || 1);
@@ -673,8 +674,8 @@ function mapCustomerWorkRowToOrder(row) {
     preference: row.service_type || 'Wash & Steam Press',
     preference_notes: row.special_instructions || '',
     order_notes: row.special_instructions || '',
-    order_status: rawStatus,
-    status: rawStatus,
+    order_status: displayStatus,
+    status: displayStatus,
     progress: rawStatus === 'Ready' ? 75 : rawStatus === 'Delivered' ? 100 : 25,
     total_amount: Number(row.total_amount || 0),
     advance_paid: Number(row.advance_paid || 0),
@@ -1142,7 +1143,7 @@ export async function createOrderWithCustomer({
       referral_code: cleanCust.referral_code || null,
       marketing_source: cleanCust.marketing_source || 'Walk-in',
       order_type: orderType || 'walk-in',
-      order_status: 'Laundry In Progress',
+      order_status: 'Received',
       total_amount: Number(totalAmount) || 0.00,
       customer_history: {
         items: items || [],
@@ -1162,8 +1163,8 @@ export async function createOrderWithCustomer({
       ? 'Pickup & Delivery'
       : 'Walk-In';
 
-    // Normalize initial status to strict check constraint values: 'In Progress' for Walk-In, 'Received' for Pickup
-    const initialWorkStatus = normalizedIntake === 'Pickup & Delivery' ? 'Received' : 'In Progress';
+    // All newly created orders have an initial status of 'Received'
+    const initialWorkStatus = 'Received';
 
     try {
       // Assign standardized ORD00001 order identifier to work_number
@@ -1256,8 +1257,9 @@ export async function updateOrderStatus(orderIdentifier, newStatus, progressPerc
     const formattedId = orderIdentifier ? String(orderIdentifier).trim() : '';
 
     // 1. Update customer_works
+    const dbWorkStatus = (newStatus === 'Order Received') ? 'Received' : newStatus;
     const workUpdate = {
-      work_status: newStatus,
+      work_status: dbWorkStatus,
       updated_at: new Date().toISOString(),
     };
     try {
@@ -1384,7 +1386,7 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       workUpdate.special_instructions = updatePayload.orderNotes || null;
     }
     if (updatePayload.status) {
-      workUpdate.work_status = updatePayload.status;
+      workUpdate.work_status = updatePayload.status === 'Order Received' ? 'Received' : updatePayload.status;
     }
     if (updatePayload.advancePaid !== undefined) {
       workUpdate.advance_paid = Number(updatePayload.advancePaid);

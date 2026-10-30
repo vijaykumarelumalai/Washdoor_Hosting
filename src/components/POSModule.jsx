@@ -47,9 +47,9 @@ export function normalizeOrderStatus(raw) {
   if (s.includes('cancel')) return 'Cancelled';
   if (s.includes('deliver') || s.includes('complete')) return 'Delivered';
   if (s.includes('ready') || s.includes('billing')) return 'Ready';
+  if (s.includes('receive') || s.includes('intake') || s.includes('new') || s.includes('overdue')) return 'Order Received';
   if (s.includes('progress') || s.includes('wash') || s.includes('iron') || s.includes('process')) return 'In Progress';
-  if (s.includes('receive') || s.includes('intake') || s.includes('new') || s.includes('overdue')) return 'Received';
-  return 'In Progress';
+  return 'Order Received';
 }
 
 const EDIT_CATALOG_ITEMS = [
@@ -555,7 +555,7 @@ export default function POSModule({
     };
   }, [scheduleOrderTarget, assignDriverTarget]);
 
-  // Compute live counts for Status Filter Pills (Received, In Progress, Ready, Delivered, Cancelled)
+  // Compute live counts for Status Filter Pills (Order Received, In Progress, Ready, Delivered, Cancelled)
   const statusCounts = useMemo(() => {
     const counts = {
       all: orders.length,
@@ -567,7 +567,7 @@ export default function POSModule({
     };
     orders.forEach((o) => {
       const norm = normalizeOrderStatus(o.order_status || o.status);
-      if (norm === 'Received') counts.received++;
+      if (norm === 'Order Received') counts.received++;
       else if (norm === 'In Progress') counts.inProgress++;
       else if (norm === 'Ready') counts.ready++;
       else if (norm === 'Delivered') counts.delivered++;
@@ -865,8 +865,7 @@ export default function POSModule({
     const finalOrderNum = data?.order_number || nextOrderNum;
     showToast?.(`✅ Order ${finalOrderNum} placed successfully!`);
 
-    const isPickup = intakeType.toLowerCase().includes('pickup');
-    const initialStatus = isPickup ? 'Received' : 'In Progress';
+    const initialStatus = 'Received';
 
     const createdRecord = {
       id: finalOrderNum,
@@ -1013,14 +1012,14 @@ export default function POSModule({
 
           <button
             type="button"
-            className={`pos-status-pill ${activeStatusTab === 'Received' ? 'active' : ''}`}
+            className={`pos-status-pill ${activeStatusTab === 'Order Received' ? 'active' : ''}`}
             onClick={() => {
-              setActiveStatusTab('Received');
+              setActiveStatusTab('Order Received');
               setPosViewMode('orders');
             }}
           >
             <span className="pos-status-dot dot-received" style={{ background: '#2563eb' }}></span>
-            <span>Received</span>
+            <span>Order Received</span>
             <span className="pos-status-pill-count">{statusCounts.received}</span>
           </button>
 
@@ -1427,24 +1426,30 @@ export default function POSModule({
                                   className="pos-ticket-num"
                                   onClick={() => onOpenOrderStatus?.(ord, false)}
                                   title={`View details for ${orderNum}`}
-                                  style={{ cursor: 'pointer', fontWeight: 800, fontSize: '14px', color: '#2563eb' }}
+                                  style={{ cursor: 'pointer', fontWeight: 800, fontSize: '15px', color: '#1d4ed8' }}
                                 >
                                   {orderNum}
                                 </span>
                                 <div style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: '4px',
-                                  padding: '2px 8px',
-                                  borderRadius: '4px',
-                                  fontSize: '11px',
+                                  gap: '5px',
+                                  padding: '3px 8px',
+                                  borderRadius: '6px',
+                                  fontSize: '11.5px',
                                   fontWeight: 650,
                                   width: 'fit-content',
                                   background: '#eff6ff',
                                   color: '#2563eb',
-                                  border: '1px solid #bfdbfe'
+                                  border: '1px solid #dbeafe'
                                 }}>
-                                  <span>+</span>
+                                  {isOnCall ? (
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                                    </svg>
+                                  ) : (
+                                    <span style={{ fontSize: '12px', lineHeight: 1 }}>＋</span>
+                                  )}
                                   <span>{orderTypeBadgeText}</span>
                                 </div>
                               </div>
@@ -1462,13 +1467,12 @@ export default function POSModule({
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
+                                  fontWeight: 700,
+                                  fontSize: '13.5px',
                                   flexShrink: 0,
                                   boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
                                 }}>
-                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                                    <circle cx="12" cy="7" r="4"></circle>
-                                  </svg>
+                                  {custName.charAt(0).toUpperCase() || 'C'}
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                                   <div style={{ fontWeight: 750, color: '#0f172a', fontSize: '13.5px' }}>
@@ -1486,74 +1490,66 @@ export default function POSModule({
 
                             {/* 3. Address (Red Map Pin & Text) */}
                             <td style={{ maxWidth: '210px', verticalAlign: 'top', paddingTop: '14px' }}>
-                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '7px', fontSize: '12px', color: '#475569', lineHeight: 1.45 }}>
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="#ef4444" stroke="#dc2626" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', lineHeight: 1.35 }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="#ef4444" stroke="#dc2626" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
                                   <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
                                   <circle cx="12" cy="10" r="3" fill="#ffffff"></circle>
                                 </svg>
-                                <span>{custAddress}</span>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                  <span style={{ fontWeight: 650, color: '#1e293b', fontSize: '13px' }}>
+                                    {custAddress.split(',')[0]?.trim() || custAddress}
+                                  </span>
+                                  {custAddress.includes(',') && (
+                                    <span style={{ fontSize: '11.5px', color: '#64748b', marginTop: '1px' }}>
+                                      {custAddress.split(',').slice(1).join(',').trim()}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </td>
 
-                            {/* 4. Services Allocated (Neat badges or compact empty state, Assign Pickup only for On-Call) */}
+                            {/* 4. Services Allocated (Neat badges or Assign Pickup button for On-Call) */}
                             <td style={{ verticalAlign: 'top', paddingTop: '14px', maxWidth: '175px' }}>
                               {servicesAllocated.length === 0 ? (
-                                <div style={{
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  gap: '4px',
-                                  background: '#f8fafc',
-                                  border: '1px solid #e2e8f0',
-                                  borderRadius: '8px',
-                                  padding: '8px 10px',
-                                  width: '135px',
-                                  boxSizing: 'border-box'
-                                }}>
-                                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M20.38 3.46L16 2a4 4 0 01-8 0L3.62 3.46a2 2 0 00-1.34 2.23l.58 3.47a1 1 0 00.99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 002-2V10h2.15a1 1 0 00.99-.84l.58-3.47a2 2 0 00-1.34-2.23z" />
-                                  </svg>
-                                  <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                isOnCall ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setAssignDriverTarget(ord);
+                                    }}
+                                    title={`Assign Pickup for ${orderNum}`}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      gap: '8px',
+                                      padding: '7px 16px',
+                                      borderRadius: '8px',
+                                      border: '1.5px solid #60a5fa',
+                                      background: '#ffffff',
+                                      color: '#2563eb',
+                                      fontSize: '12px',
+                                      fontWeight: 600,
+                                      cursor: 'pointer',
+                                      boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
+                                      transition: 'all 0.15s ease',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                  >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <rect x="1" y="3" width="15" height="13"></rect>
+                                      <polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon>
+                                      <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                                      <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                                    </svg>
+                                    <span>Assign Pickup</span>
+                                  </button>
+                                ) : (
+                                  <span style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic', display: 'inline-block', paddingTop: '4px' }}>
                                     No services allocated
                                   </span>
-                                  {isOnCall && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setAssignDriverTarget(ord);
-                                      }}
-                                      title={`Assign Pickup for ${orderNum}`}
-                                      style={{
-                                        marginTop: '4px',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '4px',
-                                        padding: '4px 8px',
-                                        borderRadius: '6px',
-                                        background: '#ffffff',
-                                        border: '1px solid #3b82f6',
-                                        color: '#2563eb',
-                                        fontSize: '11px',
-                                        fontWeight: 650,
-                                        cursor: 'pointer',
-                                        boxShadow: '0 1px 2px rgba(37,99,235,0.08)',
-                                        width: '100%',
-                                        whiteSpace: 'nowrap'
-                                      }}
-                                    >
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                        <rect x="1" y="3" width="15" height="13"></rect>
-                                        <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
-                                        <circle cx="5.5" cy="18.5" r="2.5"></circle>
-                                        <circle cx="18.5" cy="18.5" r="2.5"></circle>
-                                      </svg>
-                                      <span>Assign Pickup</span>
-                                    </button>
-                                  )}
-                                </div>
+                                )
                               ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', width: 'fit-content' }}>
                                   {servicesAllocated.slice(0, 3).map((srvItem, sIdx) => (
@@ -1607,23 +1603,23 @@ export default function POSModule({
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        gap: '4px',
-                                        padding: '3px 8px',
+                                        gap: '6px',
+                                        padding: '5px 12px',
                                         borderRadius: '6px',
                                         background: '#ffffff',
-                                        border: '1px solid #3b82f6',
+                                        border: '1.5px solid #60a5fa',
                                         color: '#2563eb',
-                                        fontSize: '11px',
+                                        fontSize: '11.5px',
                                         fontWeight: 650,
                                         cursor: 'pointer',
-                                        boxShadow: '0 1px 2px rgba(37,99,235,0.08)',
+                                        boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
                                         width: 'fit-content',
                                         whiteSpace: 'nowrap'
                                       }}
                                     >
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                         <rect x="1" y="3" width="15" height="13"></rect>
-                                        <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                                        <polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon>
                                         <circle cx="5.5" cy="18.5" r="2.5"></circle>
                                         <circle cx="18.5" cy="18.5" r="2.5"></circle>
                                       </svg>
@@ -1640,28 +1636,17 @@ export default function POSModule({
                                 <div style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: '6px',
-                                  padding: '4px 10px',
-                                  borderRadius: '16px',
-                                  fontSize: '12px',
-                                  fontWeight: 700,
+                                  gap: '7px',
+                                  padding: '5px 12px',
+                                  borderRadius: '8px',
+                                  fontSize: '12.5px',
+                                  fontWeight: 650,
                                   background: statusBg,
                                   color: statusColor,
                                   border: `1px solid ${statusBorder}`
                                 }}>
-                                  <span style={{
-                                    width: '14px',
-                                    height: '14px',
-                                    borderRadius: '50%',
-                                    background: statusDotColor,
-                                    color: '#ffffff',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '9px',
-                                    fontWeight: 800
-                                  }}>
-                                    {workStatus === 'In Progress' ? '⏱' : workStatus === 'Cancelled' ? '✕' : '✓'}
+                                  <span style={{ fontSize: '13px', lineHeight: 1 }}>
+                                    {workStatus === 'In Progress' ? '⏱' : workStatus === 'Cancelled' ? '✕' : workStatus === 'Ready' ? '✓' : workStatus === 'Delivered' ? '✓' : '📥'}
                                   </span>
                                   <span>{workStatus}</span>
                                 </div>
@@ -1670,127 +1655,83 @@ export default function POSModule({
 
                             {/* 6. Order Details (Captured Time) */}
                             <td style={{ verticalAlign: 'top', paddingTop: '14px' }}>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', color: '#475569' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                                  <span>Order Captured: {orderCapturedStr}</span>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                                  <span>Order Type : {orderTypeStr}</span>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                                  <span>Expected Delivery: {expectedDeliveryStr}</span>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '12px', color: '#475569' }}>
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" style={{ flexShrink: 0, marginTop: '2px' }}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                                  <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>Order Captured:</span>
+                                  <span style={{ fontSize: '12.5px', color: '#1e293b', fontWeight: 650 }}>{orderCapturedStr}</span>
                                 </div>
                               </div>
                             </td>
 
-                            {/* 7. Pickup & Delivery (Van graphic card + Action Buttons) */}
+                            {/* 7. Pickup & Delivery (Stacked Action Buttons) */}
                             <td style={{ verticalAlign: 'middle', padding: '10px 14px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'center' }}>
-                                {/* Delivery Van Graphic Card */}
-                                <div style={{
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  gap: '3px',
-                                  background: '#f8fafc',
-                                  border: '1px solid #e2e8f0',
-                                  borderRadius: '8px',
-                                  padding: '7px 8px',
-                                  width: '74px',
-                                  flexShrink: 0
-                                }}>
-                                  <div style={{
-                                    width: '26px',
-                                    height: '26px',
-                                    borderRadius: '6px',
-                                    background: '#eff6ff',
-                                    display: 'flex',
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '126px' }}>
+                                <button
+                                  type="button"
+                                  className="pos-pickup-btn pos-schedule-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setScheduleOrderTarget(ord);
+                                  }}
+                                  title={`Schedule Pickup/Delivery for ${orderNum}`}
+                                  style={{
+                                    display: 'inline-flex',
                                     alignItems: 'center',
-                                    justifyContent: 'center'
-                                  }}>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                      <rect x="1" y="3" width="15" height="13"></rect>
-                                      <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
-                                      <circle cx="5.5" cy="18.5" r="2.5"></circle>
-                                      <circle cx="18.5" cy="18.5" r="2.5"></circle>
-                                    </svg>
-                                  </div>
-                                  <span style={{ fontSize: '9.5px', fontWeight: 650, color: '#64748b', textAlign: 'center', lineHeight: 1.1 }}>
-                                    {pickupDeliveryStr && pickupDeliveryStr !== '--------' ? pickupDeliveryStr : 'Not Scheduled'}
-                                  </span>
-                                </div>
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    padding: '6px 14px',
+                                    borderRadius: '8px',
+                                    border: '1.5px solid #60a5fa',
+                                    background: '#ffffff',
+                                    color: '#2563eb',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                    <line x1="16" y1="2" x2="16" y2="6" />
+                                    <line x1="8" y1="2" x2="8" y2="6" />
+                                    <line x1="3" y1="10" x2="21" y2="10" />
+                                  </svg>
+                                  <span>Schedule</span>
+                                </button>
 
-                                {/* Stacked Schedule & Assign Driver Buttons */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'stretch', width: '116px' }}>
-                                  <button
-                                    type="button"
-                                    className="pos-pickup-btn pos-schedule-btn"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setScheduleOrderTarget(ord);
-                                    }}
-                                    title={`Schedule Pickup/Delivery for ${orderNum}`}
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      gap: '5px',
-                                      padding: '5px 10px',
-                                      borderRadius: '6px',
-                                      border: '1.5px solid #3b82f6',
-                                      background: '#ffffff',
-                                      color: '#2563eb',
-                                      fontWeight: 650,
-                                      fontSize: '12px',
-                                      cursor: 'pointer',
-                                      whiteSpace: 'nowrap',
-                                      boxShadow: '0 1px 2px rgba(59, 130, 246, 0.08)',
-                                      transition: 'all 0.15s ease'
-                                    }}
-                                  >
-                                    <span style={{ fontSize: '13px', fontWeight: 800 }}>＋</span>
-                                    <span>Schedule</span>
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    className="pos-pickup-btn pos-driver-btn"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setAssignDriverTarget(ord);
-                                    }}
-                                    title={`Assign Driver for ${orderNum}`}
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      gap: '5px',
-                                      padding: '5px 10px',
-                                      borderRadius: '6px',
-                                      border: '1.5px solid #3b82f6',
-                                      background: '#ffffff',
-                                      color: '#2563eb',
-                                      fontWeight: 650,
-                                      fontSize: '12px',
-                                      cursor: 'pointer',
-                                      whiteSpace: 'nowrap',
-                                      boxShadow: '0 1px 2px rgba(59, 130, 246, 0.08)',
-                                      transition: 'all 0.15s ease'
-                                    }}
-                                  >
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-                                      <circle cx="9" cy="7" r="4"></circle>
-                                      <line x1="19" y1="8" x2="19" y2="14"></line>
-                                      <line x1="22" y1="11" x2="16" y2="11"></line>
-                                    </svg>
-                                    <span>Assign Driver</span>
-                                  </button>
-                                </div>
+                                <button
+                                  type="button"
+                                  className="pos-pickup-btn pos-driver-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setAssignDriverTarget(ord);
+                                  }}
+                                  title={`Assign Driver for ${orderNum}`}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    padding: '6px 14px',
+                                    borderRadius: '8px',
+                                    border: '1.5px solid #60a5fa',
+                                    background: '#ffffff',
+                                    color: '#2563eb',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                    <circle cx="12" cy="7" r="4" />
+                                  </svg>
+                                  <span>Assign Driver</span>
+                                </button>
                               </div>
                             </td>
 
@@ -1901,23 +1842,6 @@ export default function POSModule({
                                     <span>Side Edit Panel</span>
                                   </button>
                                 </div>
-
-                                <button
-                                  type="button"
-                                  onClick={() => onOpenOrderStatus?.(ord, false)}
-                                  title="More Actions"
-                                  style={{
-                                    border: 'none',
-                                    background: 'transparent',
-                                    color: '#64748b',
-                                    cursor: 'pointer',
-                                    padding: '4px',
-                                    fontSize: '18px',
-                                    lineHeight: 1
-                                  }}
-                                >
-                                  ⋮
-                                </button>
                               </div>
                             </td>
                           </tr>
@@ -2024,7 +1948,7 @@ export default function POSModule({
                                                   handleQuickStatusUpdate(val);
                                                 }}
                                               >
-                                                <option value="Received">Received</option>
+                                                <option value="Order Received">Order Received</option>
                                                 <option value="In Progress">In Progress</option>
                                                 <option value="Ready">Ready</option>
                                                 <option value="Delivered">Delivered</option>
@@ -2123,7 +2047,7 @@ export default function POSModule({
 
                                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                               {[
-                                                { label: 'Received', color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe' },
+                                                { label: 'Order Received', color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe' },
                                                 { label: 'In Progress', color: '#b45309', bg: '#fef3c7', border: '#fde68a' },
                                                 { label: 'Ready', color: '#15803d', bg: '#dcfce7', border: '#bbf7d0' },
                                                 { label: 'Delivered', color: '#0369a1', bg: '#e0f2fe', border: '#bae6fd' },
@@ -3008,9 +2932,9 @@ export default function POSModule({
 
                                           {/* Visual Milestone Progression Bar */}
                                           <div className="pos-edit-sub-panel" style={{ flexDirection: 'row', alignItems: 'center', gap: '10px', fontSize: '12.5px', flexWrap: 'wrap', marginBottom: '16px', padding: '12px' }}>
-                                            {['Received', 'In Progress', 'Ready', 'Delivered'].map((step, idx) => {
+                                            {['Order Received', 'In Progress', 'Ready', 'Delivered'].map((step, idx) => {
                                               const currentNorm = normalizeOrderStatus(editFormData.status || editFormData.order_status);
-                                              const isDone = ['Received', 'In Progress', 'Ready', 'Delivered'].indexOf(currentNorm) >= idx;
+                                              const isDone = ['Order Received', 'In Progress', 'Ready', 'Delivered'].indexOf(currentNorm) >= idx;
                                               return (
                                                 <React.Fragment key={step}>
                                                   {idx > 0 && <span style={{ color: 'var(--text-muted)' }}>➔</span>}
@@ -3046,7 +2970,7 @@ export default function POSModule({
                                                 handleQuickStatusUpdate(val);
                                               }}
                                             >
-                                              <option value="Received">🔵 Received</option>
+                                              <option value="Order Received">🔵 Order Received</option>
                                               <option value="In Progress">🟡 In Progress</option>
                                               <option value="Ready">🟢 Ready for Pickup</option>
                                               <option value="Delivered">🔷 Delivered</option>

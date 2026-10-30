@@ -52,12 +52,12 @@ export default function App() {
         if (Array.isArray(parsed)) {
           return parsed.map((o) => {
             const s = String(o.order_status || o.status || '').toLowerCase();
-            let norm = 'In Progress';
+            let norm = 'Order Received';
             if (s.includes('cancel')) norm = 'Cancelled';
             else if (s.includes('deliver') || s.includes('complete')) norm = 'Delivered';
             else if (s.includes('ready') || s.includes('billing')) norm = 'Ready';
-            else if (s.includes('receive') || s.includes('intake') || s.includes('overdue')) norm = 'Received';
             else if (s.includes('progress') || s.includes('wash')) norm = 'In Progress';
+            else if (s.includes('receive') || s.includes('intake') || s.includes('overdue')) norm = 'Order Received';
             return { ...o, status: norm, order_status: norm };
           });
         }
@@ -207,21 +207,6 @@ export default function App() {
     <div className="app">
       {/* ── Topbar ── */}
       <header className="topbar">
-        {/* Hamburger toggle — visible only on mobile via CSS */}
-        <button
-          type="button"
-          className="sidebar-toggle-btn"
-          onClick={() => setSidebarOpen((prev) => !prev)}
-          aria-label="Toggle sidebar"
-          title="Menu"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="3" y1="6" x2="21" y2="6"></line>
-            <line x1="3" y1="12" x2="21" y2="12"></line>
-            <line x1="3" y1="18" x2="21" y2="18"></line>
-          </svg>
-        </button>
-
         <div className="brand">
           <div className="logo">W</div>
           <div>

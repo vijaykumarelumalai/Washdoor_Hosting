@@ -587,7 +587,7 @@ export default function SideEditPanel({
                         onChange={(e) => setStatus(e.target.value)}
                       >
                         <option value="In Progress">In Progress</option>
-                        <option value="Received">Received</option>
+                        <option value="Order Received">Order Received</option>
                         <option value="Ready">Ready</option>
                         <option value="Delivered">Delivered</option>
                         <option value="Cancelled">Cancelled</option>
@@ -1199,12 +1199,12 @@ export default function SideEditPanel({
               <div className="side-edit-stepper">
                 <div className="side-edit-stepper-line"></div>
                 {[
-                  { name: 'Received', label: 'Received' },
+                  { name: 'Order Received', label: 'Order Received' },
                   { name: 'In Progress', label: 'In Progress' },
                   { name: 'Ready', label: 'Ready' },
                   { name: 'Delivered', label: 'Delivered' },
                 ].map((step, idx) => {
-                  const currentIdx = ['Received', 'In Progress', 'Ready', 'Delivered'].indexOf(status);
+                  const currentIdx = ['Order Received', 'In Progress', 'Ready', 'Delivered'].indexOf(status === 'Received' ? 'Order Received' : status);
                   const isCompleted = currentIdx > idx;
                   const isActive = currentIdx === idx;
                   return (
@@ -1228,10 +1228,10 @@ export default function SideEditPanel({
                   <label className="side-edit-label">Current Order Status</label>
                   <select
                     className="side-edit-select"
-                    value={status}
+                    value={status === 'Received' ? 'Order Received' : status}
                     onChange={(e) => setStatus(e.target.value)}
                   >
-                    <option value="Received">Received &amp; Tagged</option>
+                    <option value="Order Received">Order Received &amp; Tagged</option>
                     <option value="In Progress">In Progress / Washing</option>
                     <option value="Ready">Ready for Pickup / Delivery</option>
                     <option value="Delivered">Delivered</option>

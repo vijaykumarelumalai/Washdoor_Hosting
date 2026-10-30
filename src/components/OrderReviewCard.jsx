@@ -69,7 +69,7 @@ export default function OrderReviewCard({
     statusPercentage = 75;
   } else if (rawStatus.includes('receive') || rawStatus.includes('intake')) {
     activePipelineStage = 1;
-    statusBadgeLabel = 'Received';
+    statusBadgeLabel = 'Order Received';
     statusBadgeClass = 'received';
     statusPercentage = 15;
   }
@@ -349,7 +349,7 @@ export default function OrderReviewCard({
                 onClick={() => onOpenStatus(order)}
               >
                 <span className="step-icon">🕒</span>
-                <span>Received</span>
+                <span>Order Received</span>
               </button>
               <button
                 type="button"

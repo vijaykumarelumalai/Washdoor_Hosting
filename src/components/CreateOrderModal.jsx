@@ -97,8 +97,7 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
       : `✅ Order ${orderNumber} created for ${customerData?.customer_name || 'customer'}!`;
     showToast(toastMsg);
     
-    const isPickup = (orderType === 'pickup' || orderType === 'pickup & delivery' || orderType === 'home delivery');
-    const initialStatus = isPickup ? 'Received' : 'In Progress';
+    const initialStatus = 'Order Received';
 
     // Pass newly created order so Order Status Dialog opens automatically
     const createdOrderPayload = {
@@ -110,7 +109,7 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
       preference_notes: orderPreferenceNotes || '',
       status: initialStatus,
       order_status: initialStatus,
-      progress: isPickup ? 15 : 30,
+      progress: 15,
       total_amount: Number(totalAmount) || 0.00,
       item_count: itemCount,
       items: cartItems,
