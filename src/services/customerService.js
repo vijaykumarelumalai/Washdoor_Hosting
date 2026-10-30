@@ -1081,36 +1081,54 @@ export async function createOrderWithCustomer({
     let insertedOrderNum = generatedOrderNumber;
     let insertedOrderId = generatedOrderNumber;
 
+    // Normalize intake method to strict check constraint values: 'Walk-In', 'On-Call', 'Pickup & Delivery'
+    const normalizedIntake = (orderType === 'on-call' || cleanCust.intake_type === 'On-Call')
+      ? 'On-Call'
+      : (orderType === 'pickup' || orderType === 'pickup & delivery' || orderType === 'home delivery' || cleanCust.intake_type === 'Pickup & Delivery')
+      ? 'Pickup & Delivery'
+      : 'Walk-In';
+
+    // Normalize initial status to strict check constraint values: 'In Progress' for Walk-In, 'Received' for Pickup
+    const initialWorkStatus = normalizedIntake === 'Pickup & Delivery' ? 'Received' : 'In Progress';
+
     try {
+      // Omit work_number and created_at to allow PostgreSQL sequence/default triggers to assign canonical backend metadata
+      // Omit balance_due because PostgreSQL has it defined as a generated column
       const workRow = {
-        work_number: generatedOrderNumber,
         customer_id: finalCustId,
         customer_name: cleanCust.customer_name,
         mobile_number: cleanCust.mobile_number,
         alternate_phone: cleanCust.alternate_phone || null,
         email: cleanCust.email || null,
-        delivery_address: cleanCust.address || cleanCust.street_area || 'Counter Walk-In',
+        delivery_address: cleanCust.address || cleanCust.street_area || (normalizedIntake === 'Walk-In' ? 'Counter Walk-In' : 'Pending Address'),
         service_type: orderPreference || cleanCust.service_category || 'Wash & Steam Press',
-        work_status: 'Order in Progress',
+        work_status: initialWorkStatus,
         priority: 'Normal',
-        intake_method: orderType === 'on-call' ? 'On-Call' : 'Walk-In',
+        intake_method: normalizedIntake,
         items: items || [],
         total_pieces: calculatedItemCount || 1,
         subtotal: Number(totalAmount) || 0.00,
         total_amount: Number(totalAmount) || 0.00,
         advance_paid: 0.00,
-        balance_due: Number(totalAmount) || 0.00,
         payment_status: 'Unpaid',
         payment_method: 'Cash',
         special_instructions: orderPreferenceNotes || cleanCust.notes || null,
         internal_notes: cleanCust.internal_comments || null,
-        created_at: new Date().toISOString(),
       };
       Object.keys(workRow).forEach((k) => workRow[k] === undefined && delete workRow[k]);
       const { data: wData, error: wErr } = await supabase.from('customer_works').insert([workRow]).select().single();
       if (!wErr && wData) {
         insertedOrderNum = wData.work_number || generatedOrderNumber;
         insertedOrderId = wData.work_id || generatedOrderNumber;
+      } else if (wErr) {
+        console.warn('customer_works insert warning, retrying with fallback work_number:', wErr);
+        // Fallback with generated order number if database requires work_number explicitly
+        const fallbackRow = { ...workRow, work_number: generatedOrderNumber };
+        const { data: fbData } = await supabase.from('customer_works').insert([fallbackRow]).select().single();
+        if (fbData) {
+          insertedOrderNum = fbData.work_number || generatedOrderNumber;
+          insertedOrderId = fbData.work_id || generatedOrderNumber;
+        }
       }
     } catch (workSyncErr) {
       console.warn('customer_works order sync note:', workSyncErr);
@@ -1281,6 +1299,21 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       const raw = String(updatePayload.mobileNumber).replace(/\D/g, '');
       workUpdate.mobile_number = raw.length === 12 && raw.startsWith('91') ? raw.slice(2) : raw.length === 11 && raw.startsWith('0') ? raw.slice(1) : raw;
     }
+    if (updatePayload.address !== undefined) {
+      workUpdate.delivery_address = updatePayload.address || null;
+    }
+    if (updatePayload.orderNotes !== undefined) {
+      workUpdate.special_instructions = updatePayload.orderNotes || null;
+    }
+    if (updatePayload.status) {
+      workUpdate.work_status = updatePayload.status;
+    }
+    if (updatePayload.advancePaid !== undefined) {
+      workUpdate.advance_paid = Number(updatePayload.advancePaid);
+    }
+    if (updatePayload.paymentStatus) {
+      workUpdate.payment_status = updatePayload.paymentStatus;
+    }
     if (updatePayload.items) {
       workUpdate.items = updatePayload.items;
       workUpdate.total_pieces = updatePayload.items.reduce((s, i) => s + (Number(i.qty) || 1), 0);
@@ -1307,8 +1340,6 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       await query;
     } catch {}
 
-    return { data: [{ order_number: formattedId }], error: null };
-
     // Synchronize item records to washdoor_order_items table
     if (updatePayload.items && Array.isArray(updatePayload.items)) {
       try {
@@ -1334,6 +1365,8 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
               preference_notes: updatePayload.orderNotes !== undefined ? updatePayload.orderNotes : o.preference_notes,
               customer_name: updatePayload.customerName || o.customer_name,
               mobile_number: updatePayload.mobileNumber || o.mobile_number,
+              status: updatePayload.status || o.status,
+              order_status: updatePayload.status || o.order_status,
               items: updatePayload.items || o.items,
               customer_history: {
                 ...(o.customer_history || {}),
@@ -1349,11 +1382,21 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       console.warn('Cache sync error:', cacheErr);
     }
 
-    return { data, error: null };
+    return { data: [{ order_number: formattedId }], error: null };
   } catch (err) {
     console.error('updateOrder catch:', err);
     return { data: null, error: err };
   }
+}
+
+/**
+ * Dedicated Supabase Update Service:
+ * Directly updates an order in Supabase customer_works (and washdoor_orders_master).
+ * Guarantees immutability of canonical identifiers: order_id, work_id, order_number, work_number, created_at.
+ * Automatically injects updated_at timestamp.
+ */
+export async function updateOrderInSupabase(orderNumberOrId, updatePayload = {}) {
+  return updateOrder(orderNumberOrId, updatePayload);
 }
 
 /**

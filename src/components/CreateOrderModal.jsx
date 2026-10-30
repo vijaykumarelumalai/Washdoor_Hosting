@@ -94,6 +94,9 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
     const orderNumber = data?.order_number || (data?.order_id ? `ORDER-${data.order_id}` : 'ORDER-00001');
     showToast(`✅ Order ${orderNumber} created successfully!`);
     
+    const isPickup = (orderType === 'pickup' || orderType === 'pickup & delivery' || orderType === 'home delivery');
+    const initialStatus = isPickup ? 'Received' : 'In Progress';
+
     // Pass newly created order so Order Status Dialog opens automatically
     const createdOrderPayload = {
       id: orderNumber,
@@ -102,8 +105,9 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
       order_type: orderType || 'walk-in',
       preference: orderPreference || 'Standard',
       preference_notes: orderPreferenceNotes || '',
-      status: 'Order in Progress',
-      progress: 25,
+      status: initialStatus,
+      order_status: initialStatus,
+      progress: isPickup ? 15 : 30,
       total_amount: Number(totalAmount) || 0.00,
       item_count: itemCount,
       items: cartItems,

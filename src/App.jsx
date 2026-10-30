@@ -7,7 +7,7 @@ import POSModule from './components/POSModule';
 import CreateOrderModal from './components/CreateOrderModal';
 import OrderStatusModal from './components/OrderStatusModal';
 import EditOrderModal from './components/EditOrderModal';
-import { getOrders } from './services/customerService';
+import { getOrders, updateOrderInSupabase } from './services/customerService';
 import masterOrders from './data/masterOrders.json';
 import { isSupabaseConfigured } from './lib/supabaseClient';
 import './styles/OrderStatusModal.css';
@@ -160,6 +160,7 @@ export default function App() {
   };
 
   const handleUpdateOrderRecord = useCallback((updatedOrder) => {
+    if (!updatedOrder) return;
     setOrders((prev) => {
       const next = prev.map((o) =>
         (o.id === updatedOrder.id || o.order_number === updatedOrder.order_number) ? updatedOrder : o
@@ -169,6 +170,24 @@ export default function App() {
       } catch {}
       return next;
     });
+
+    // Dedicated backend update service: persist change to Supabase customer_works
+    const orderKey = updatedOrder.order_number || updatedOrder.id || updatedOrder.work_number;
+    if (orderKey) {
+      updateOrderInSupabase(orderKey, {
+        status: updatedOrder.order_status || updatedOrder.status,
+        customerName: updatedOrder.customer_name || updatedOrder.customer?.customer_name,
+        mobileNumber: updatedOrder.mobile_number || updatedOrder.customer?.mobile_number,
+        address: updatedOrder.address || updatedOrder.delivery_address || updatedOrder.customer?.address,
+        serviceCategory: updatedOrder.service_category || updatedOrder.service_type || updatedOrder.preference,
+        orderNotes: updatedOrder.order_notes || updatedOrder.special_instructions || updatedOrder.comments,
+        totalAmount: updatedOrder.total_amount,
+        advancePaid: updatedOrder.advance_paid,
+        paymentStatus: updatedOrder.payment_status,
+        paymentMethod: updatedOrder.payment_method,
+        items: updatedOrder.items,
+      }).catch((err) => console.warn('Background Supabase order update note:', err));
+    }
   }, []);
 
   // Keyboard shortcut: Press 'N' or 'n' to open Create Order

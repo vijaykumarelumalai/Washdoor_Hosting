@@ -2,7 +2,7 @@
 // Washdoor Orders & POS Counter Intake & Management Module
 // Matches the exact Orders & POS design with Orders List Table and Counter Intake Register
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import ClothIllustration from './ClothIllustration';
 import OrderReviewCard from './OrderReviewCard';
 import SideEditPanel from './SideEditPanel';
@@ -11,6 +11,7 @@ import {
   searchCustomers,
   createOrderWithCustomer,
   getNextOrderId,
+  updateOrderInSupabase,
 } from '../services/customerService';
 import {
   normalizeMobileNumber,
@@ -89,6 +90,7 @@ export default function POSModule({
   const [orderDisplayLayout, setOrderDisplayLayout] = useState('table'); // 'table' | 'cards'
   const [expandedOrderId, setExpandedOrderId] = useState(null);
   const [expandedServicesOrderId, setExpandedServicesOrderId] = useState(null);
+  const tableScrollRef = useRef(null);
 
   // Inline Order Edit Modal State (List View Fields, Read-Only when Ready)
   const [editingOrderRecord, setEditingOrderRecord] = useState(null);
@@ -115,7 +117,37 @@ export default function POSModule({
     notes: '',
     photosCount: 0,
   });
+  const [editInspectionPhotos, setEditInspectionPhotos] = useState([]);
+  const [photoPreviewModal, setPhotoPreviewModal] = useState(null);
+  const editPhotoInputRef = useRef(null);
   const [editActiveTab, setEditActiveTab] = useState('details');
+
+  const handlePhotoUpload = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const remaining = 6 - editInspectionPhotos.length;
+    const toProcess = files.slice(0, Math.max(0, remaining));
+
+    toProcess.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setEditInspectionPhotos((prev) => [
+          ...prev,
+          {
+            id: `photo_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+            name: file.name,
+            tag: 'Stain / Defect',
+            url: ev.target.result,
+          }
+        ]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleRemovePhoto = (photoId) => {
+    setEditInspectionPhotos((prev) => prev.filter((p) => p.id !== photoId));
+  };
 
   const editCartSubtotal = useMemo(() => {
     return editCart.reduce((sum, item) => sum + (Number(item.qty) || 0) * (Number(item.rate) || 0), 0);
@@ -227,6 +259,16 @@ export default function POSModule({
       ];
     }
     setEditCart(initialCart);
+    const initialPhotos = (ord.photos && ord.photos.length > 0)
+      ? ord.photos
+      : (ord.inspection?.photos && ord.inspection.photos.length > 0)
+      ? ord.inspection.photos
+      : [
+          { id: 'p1', name: 'Collar_Stain.jpg', tag: 'Stain / Defect', url: 'https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=300&auto=format&fit=crop&q=80' },
+          { id: 'p2', name: 'Brand_Tag.jpg', tag: 'Brand Tag', url: 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=300&auto=format&fit=crop&q=80' },
+          { id: 'p3', name: 'Prewash_Overview.jpg', tag: 'Pre-wash Condition', url: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=300&auto=format&fit=crop&q=80' }
+        ];
+    setEditInspectionPhotos(initialPhotos);
     setEditInspection(ord.inspection || {
       garment: 'Shirt',
       color: '',
@@ -235,7 +277,7 @@ export default function POSModule({
       brand: '',
       fabric: 'Select fabric',
       notes: '',
-      photosCount: 0,
+      photosCount: initialPhotos.length,
     });
     setEditActiveTab('details');
 
@@ -298,6 +340,18 @@ export default function POSModule({
       onOrderCreated?.(updatedOrder);
     }
 
+    // Direct Supabase persistence
+    const ordKey = updatedOrder.order_number || updatedOrder.id || updatedOrder.work_number;
+    if (ordKey) {
+      updateOrderInSupabase(ordKey, {
+        status: normalized,
+        customerName: updatedOrder.customer_name,
+        mobileNumber: updatedOrder.mobile_number,
+        address: updatedOrder.address,
+        orderNotes: updatedOrder.comments,
+      }).catch((e) => console.warn('Supabase status update note:', e));
+    }
+
     showToast?.(`✅ Order ${updatedOrder.order_number || updatedOrder.id} status updated to "${normalized}"!`);
   };
 
@@ -346,7 +400,12 @@ export default function POSModule({
         mobile_number: editFormData.mobile_number,
         address: editFormData.address,
       },
-      inspection: editInspection,
+      photos: editInspectionPhotos,
+      inspection: {
+        ...editInspection,
+        photos: editInspectionPhotos,
+        photosCount: editInspectionPhotos.length,
+      },
     };
 
     if (onUpdateOrder) {
@@ -361,6 +420,23 @@ export default function POSModule({
         }
       } catch {}
       onOrderCreated?.(updatedOrder);
+    }
+
+    // Direct Supabase update
+    const saveKey = updatedOrder.order_number || updatedOrder.id || updatedOrder.work_number;
+    if (saveKey) {
+      updateOrderInSupabase(saveKey, {
+        status: updatedOrder.status,
+        customerName: updatedOrder.customer_name,
+        mobileNumber: updatedOrder.mobile_number,
+        address: updatedOrder.address,
+        serviceCategory: updatedOrder.service_category,
+        orderNotes: updatedOrder.comments,
+        totalAmount: updatedOrder.total_amount,
+        advancePaid: updatedOrder.advance_paid,
+        paymentStatus: updatedOrder.payment_status,
+        items: updatedOrder.items,
+      }).catch((e) => console.warn('Supabase saveOrder update note:', e));
     }
 
     showToast?.(`✅ Order ${updatedOrder.order_number || updatedOrder.id} updated successfully!`);
@@ -821,8 +897,8 @@ export default function POSModule({
       {/* ── Screen Top Header: Orders & POS (Matching Reference Mockup) ── */}
       <div className="pos-screen-header">
         <div className="pos-screen-title-wrap">
-          <h1 className="pos-screen-title" style={{ fontSize: '24px', fontWeight: 800, margin: '0 0 3px', color: '#0f172a' }}>Orders &amp; POS</h1>
-          <div className="pos-screen-subtitle" style={{ fontSize: '13px', color: '#64748b' }}>Create new order, search and manage all laundry orders.</div>
+          <h1 className="pos-screen-title">Orders &amp; POS</h1>
+          <div className="pos-screen-subtitle">Create new order, search and manage all laundry orders.</div>
         </div>
 
         <div className="pos-screen-actions">
@@ -857,16 +933,15 @@ export default function POSModule({
               type="button"
               className={`pos-toolbar-btn ${activeTopDropdown === 'date' ? 'active' : ''}`}
               onClick={() => setActiveTopDropdown((prev) => (prev === 'date' ? null : 'date'))}
-              style={{ whiteSpace: 'nowrap', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '8px 12px', color: '#334155', fontWeight: 600, fontSize: '12.5px' }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                 <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
                 <line x1="16" y1="2" x2="16" y2="6"></line>
                 <line x1="8" y1="2" x2="8" y2="6"></line>
                 <line x1="3" y1="10" x2="21" y2="10"></line>
               </svg>
-              <span>{dateFilter === 'All Time' ? '28 Oct 2026 - 28 Oct 2026' : dateFilter}</span>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <span className="pos-date-label">{dateFilter === 'All Time' ? '28 Oct 2026 - 28 Oct 2026' : dateFilter}</span>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                 <polyline points="6 9 12 15 18 9"></polyline>
               </svg>
             </button>
@@ -906,24 +981,11 @@ export default function POSModule({
               }
             }}
             title="Create new order (Press N)"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '9px 18px',
-              background: '#2563eb',
-              color: '#ffffff',
-              borderRadius: '8px',
-              fontWeight: 700,
-              fontSize: '13px',
-              border: 'none',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap'
-            }}
           >
             <span style={{ fontSize: '16px', lineHeight: 1 }}>＋</span>
-            <span>Create Order</span>
-            <span className="pos-key-badge" style={{ background: '#1d4ed8', color: '#fff', padding: '1px 6px', borderRadius: '4px', fontSize: '11px' }}>N</span>
+            <span className="pos-btn-label-full">Create Order</span>
+            <span className="pos-btn-label-short">Order</span>
+            <span className="pos-key-badge">N</span>
           </button>
         </div>
 
@@ -1246,9 +1308,29 @@ export default function POSModule({
               ) : (
                 <>
                   <div className="pos-table-scroll-hint">
-                    <span>👉 Swipe horizontally to view all 8 order columns (Customer, Address, Services, Status, Timeline, Logistics, Bill)</span>
+                    <div className="pos-scroll-hint-label">
+                      <span>👉 Swipe horizontally or use buttons to navigate all 8 columns</span>
+                    </div>
+                    <div className="pos-table-scroll-actions">
+                      <button
+                        type="button"
+                        className="pos-table-scroll-btn"
+                        onClick={() => tableScrollRef.current?.scrollBy({ left: -300, behavior: 'smooth' })}
+                        title="Scroll columns left"
+                      >
+                        ◀ Left
+                      </button>
+                      <button
+                        type="button"
+                        className="pos-table-scroll-btn"
+                        onClick={() => tableScrollRef.current?.scrollBy({ left: 300, behavior: 'smooth' })}
+                        title="Scroll columns right"
+                      >
+                        Right ▶
+                      </button>
+                    </div>
                   </div>
-                  <div className="pos-orders-table-card">
+                  <div className="pos-orders-table-card" ref={tableScrollRef}>
                     <table className="pos-orders-table">
                     <thead>
                       <tr>
@@ -2219,1017 +2301,1504 @@ export default function POSModule({
                                           className="pos-inline-edit-services-grid"
                                         >
                                           {/* Sub-col 1: Cloth Selection & Catalog */}
-                                          <div
-                                            style={{
-                                              border: '1.5px solid #e2e8f0',
-                                              borderRadius: '8px',
-                                              padding: '12px',
-                                              background: '#f8fafc',
-                                              display: 'flex',
-                                              flexDirection: 'column',
-                                              height: '100%',
-                                              boxSizing: 'border-box'
-                                            }}
-                                          >
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                                              <div style={{ fontSize: '12px', fontWeight: 750, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <span style={{ color: '#2563eb' }}>◆</span>
-                                                <span>Cloth Selection &amp; Catalog</span>
-                                              </div>
-                                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => {
-                                                    const el = document.getElementById('pos-edit-cloth-grid');
-                                                    if (el) el.scrollBy({ top: -130, behavior: 'smooth' });
-                                                  }}
-                                                  title="Scroll Up"
-                                                  style={{
-                                                    width: '24px',
-                                                    height: '24px',
-                                                    borderRadius: '4px',
-                                                    border: '1px solid #cbd5e1',
-                                                    background: '#ffffff',
-                                                    color: '#334155',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    cursor: 'pointer',
-                                                    fontSize: '11px',
-                                                    fontWeight: 700
-                                                  }}
-                                                >
-                                                  ▲
-                                                </button>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => {
-                                                    const el = document.getElementById('pos-edit-cloth-grid');
-                                                    if (el) el.scrollBy({ top: 130, behavior: 'smooth' });
-                                                  }}
-                                                  title="Scroll Down"
-                                                  style={{
-                                                    width: '24px',
-                                                    height: '24px',
-                                                    borderRadius: '4px',
-                                                    border: '1px solid #cbd5e1',
-                                                    background: '#ffffff',
-                                                    color: '#334155',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    cursor: 'pointer',
-                                                    fontSize: '11px',
-                                                    fontWeight: 700
-                                                  }}
-                                                >
-                                                  ▼
-                                                </button>
-                                              </div>
-                                            </div>
+                                           <div
+                                             style={{
+                                               border: '1.5px solid #e2e8f0',
+                                               borderRadius: '8px',
+                                               padding: '14px',
+                                               background: '#f8fafc',
+                                               display: 'flex',
+                                               flexDirection: 'column',
+                                               height: '100%',
+                                               boxSizing: 'border-box'
+                                             }}
+                                           >
+                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                               <div style={{ fontSize: '13px', fontWeight: 750, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                 <span style={{ color: '#2563eb' }}>&#9670;</span>
+                                                 <span>Cloth Selection &amp; Catalog</span>
+                                               </div>
+                                               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                 <button
+                                                   type="button"
+                                                   onClick={() => {
+                                                     const el = document.getElementById('pos-edit-cloth-grid');
+                                                     if (el) el.scrollBy({ top: -140, behavior: 'smooth' });
+                                                   }}
+                                                   title="Scroll Up"
+                                                   style={{
+                                                     width: '26px',
+                                                     height: '26px',
+                                                     borderRadius: '5px',
+                                                     border: '1px solid #cbd5e1',
+                                                     background: '#ffffff',
+                                                     color: '#334155',
+                                                     display: 'flex',
+                                                     alignItems: 'center',
+                                                     justifyContent: 'center',
+                                                     cursor: 'pointer',
+                                                     fontSize: '11px',
+                                                     fontWeight: 700
+                                                   }}
+                                                 >
+                                                   ▲
+                                                 </button>
+                                                 <button
+                                                   type="button"
+                                                   onClick={() => {
+                                                     const el = document.getElementById('pos-edit-cloth-grid');
+                                                     if (el) el.scrollBy({ top: 140, behavior: 'smooth' });
+                                                   }}
+                                                   title="Scroll Down"
+                                                   style={{
+                                                     width: '26px',
+                                                     height: '26px',
+                                                     borderRadius: '5px',
+                                                     border: '1px solid #cbd5e1',
+                                                     background: '#ffffff',
+                                                     color: '#334155',
+                                                     display: 'flex',
+                                                     alignItems: 'center',
+                                                     justifyContent: 'center',
+                                                     cursor: 'pointer',
+                                                     fontSize: '11px',
+                                                     fontWeight: 700
+                                                   }}
+                                                 >
+                                                   ▼
+                                                 </button>
+                                               </div>
+                                             </div>
 
-                                            {/* Search box with ample left padding */}
-                                            <div style={{ position: 'relative', marginBottom: '10px' }}>
-                                              <input
-                                                type="text"
-                                                value={editCatalogSearch}
-                                                onChange={(e) => setEditCatalogSearch(e.target.value)}
-                                                placeholder="Search clothes (e.g. shirt, saree)..."
-                                                style={{
-                                                  width: '100%',
-                                                  boxSizing: 'border-box',
-                                                  height: '36px',
-                                                  padding: '0 12px 0 34px',
-                                                  fontSize: '12px',
-                                                  borderRadius: '6px',
-                                                  border: '1.5px solid #d1d5db',
-                                                  background: '#ffffff',
-                                                  color: '#0f172a',
-                                                  outline: 'none'
-                                                }}
-                                              />
-                                              <svg
-                                                width="14"
-                                                height="14"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="#94a3b8"
-                                                strokeWidth="2.4"
-                                                style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
-                                              >
-                                                <circle cx="11" cy="11" r="8"></circle>
-                                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                                              </svg>
-                                            </div>
+                                             {/* Search box with flex layout - prevents text collision */}
+                                             <div
+                                               style={{
+                                                 display: 'flex',
+                                                 alignItems: 'center',
+                                                 background: '#ffffff',
+                                                 border: '1.5px solid #cbd5e1',
+                                                 borderRadius: '6px',
+                                                 height: '38px',
+                                                 padding: '0 12px',
+                                                 gap: '10px',
+                                                 marginBottom: '10px'
+                                               }}
+                                             >
+                                               <svg
+                                                 width="15"
+                                                 height="15"
+                                                 viewBox="0 0 24 24"
+                                                 fill="none"
+                                                 stroke="#64748b"
+                                                 strokeWidth="2.2"
+                                                 style={{ flexShrink: 0 }}
+                                               >
+                                                 <circle cx="11" cy="11" r="8"></circle>
+                                                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                               </svg>
+                                               <input
+                                                 type="text"
+                                                 value={editCatalogSearch}
+                                                 onChange={(e) => setEditCatalogSearch(e.target.value)}
+                                                 placeholder="Search clothes (e.g. shirt, saree)..."
+                                                 style={{
+                                                   flex: 1,
+                                                   border: 'none',
+                                                   background: 'transparent',
+                                                   outline: 'none',
+                                                   fontSize: '12.5px',
+                                                   color: '#0f172a',
+                                                   padding: 0
+                                                 }}
+                                               />
+                                               {editCatalogSearch && (
+                                                 <button
+                                                   type="button"
+                                                   onClick={() => setEditCatalogSearch('')}
+                                                   style={{
+                                                     border: 'none',
+                                                     background: 'transparent',
+                                                     color: '#94a3b8',
+                                                     cursor: 'pointer',
+                                                     fontSize: '13px',
+                                                     padding: '0 4px',
+                                                     lineHeight: 1
+                                                   }}
+                                                 >
+                                                   ✕
+                                                 </button>
+                                               )}
+                                             </div>
 
-                                            {/* Category filter pills */}
-                                            <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginBottom: '10px' }}>
-                                              {['All', 'Men', 'Women', 'Home Linen', 'Accessories'].map((cat) => {
-                                                const isActive = editCatalogCategory === cat;
-                                                return (
-                                                  <button
-                                                    key={cat}
-                                                    type="button"
-                                                    onClick={() => setEditCatalogCategory(cat)}
-                                                    style={{
-                                                      padding: '3px 10px',
-                                                      borderRadius: '14px',
-                                                      border: isActive ? '1px solid #2563eb' : '1px solid #cbd5e1',
-                                                      background: isActive ? '#2563eb' : '#ffffff',
-                                                      color: isActive ? '#ffffff' : '#475569',
-                                                      fontSize: '11px',
-                                                      fontWeight: 650,
-                                                      cursor: 'pointer',
-                                                      transition: 'all 0.15s ease'
-                                                    }}
-                                                  >
-                                                    {cat}
-                                                  </button>
-                                                );
-                                              })}
-                                            </div>
+                                             {/* Category filter pills */}
+                                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                                               {['All', 'Men', 'Women', 'Home Linen', 'Accessories'].map((cat) => {
+                                                 const isActive = editCatalogCategory === cat;
+                                                 return (
+                                                   <button
+                                                     key={cat}
+                                                     type="button"
+                                                     onClick={() => setEditCatalogCategory(cat)}
+                                                     style={{
+                                                       padding: '4px 12px',
+                                                       borderRadius: '16px',
+                                                       border: isActive ? '1.5px solid #2563eb' : '1px solid #cbd5e1',
+                                                       background: isActive ? '#2563eb' : '#ffffff',
+                                                       color: isActive ? '#ffffff' : '#475569',
+                                                       fontSize: '11.5px',
+                                                       fontWeight: 650,
+                                                       cursor: 'pointer',
+                                                       transition: 'all 0.15s ease'
+                                                     }}
+                                                   >
+                                                     {cat}
+                                                   </button>
+                                                 );
+                                               })}
+                                             </div>
 
-                                            {/* 3-Column Garment Cards Grid with ALWAYS-VISIBLE SCROLLER */}
-                                            <div
-                                              id="pos-edit-cloth-grid"
-                                              className="pos-cloth-catalog-scroller"
-                                              style={{
-                                                display: 'grid',
-                                                gridTemplateColumns: 'repeat(3, 1fr)',
-                                                gap: '8px',
-                                                flex: 1,
-                                                minHeight: '340px',
-                                                maxHeight: '430px',
-                                                overflowY: 'auto',
-                                                paddingRight: '6px',
-                                                scrollbarGutter: 'stable'
-                                              }}
-                                            >
-                                              {EDIT_CATALOG_ITEMS.filter((item) => {
-                                                const matchesCat =
-                                                  editCatalogCategory === 'All' ||
-                                                  item.category === editCatalogCategory ||
-                                                  item.secondaryCategory === editCatalogCategory;
-                                                const matchesSearch =
-                                                  !editCatalogSearch.trim() ||
-                                                  item.name.toLowerCase().includes(editCatalogSearch.toLowerCase());
-                                                return matchesCat && matchesSearch;
-                                              }).map((item) => {
-                                                const isSelected = editSelectedItem?.id === item.id;
-                                                return (
-                                                  <div
-                                                    key={item.id}
-                                                    onClick={() => {
-                                                      setEditSelectedItem(item);
-                                                      setEditSelectedRate(item.price);
-                                                    }}
-                                                    style={{
-                                                      border: isSelected ? '1.5px solid #2563eb' : '1px solid #e2e8f0',
-                                                      background: isSelected ? '#f0f7ff' : '#ffffff',
-                                                      borderRadius: '8px',
-                                                      padding: '8px 6px',
-                                                      textAlign: 'center',
-                                                      cursor: 'pointer',
-                                                      transition: 'all 0.15s ease',
-                                                      boxShadow: isSelected ? '0 2px 6px rgba(37,99,235,0.18)' : '0 1px 3px rgba(0,0,0,0.02)'
-                                                    }}
-                                                  >
-                                                    <div style={{ fontSize: '20px', marginBottom: '3px' }}>{item.icon}</div>
-                                                    <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                      {item.name}
-                                                    </div>
-                                                    <div style={{ fontSize: '10px', color: '#64748b' }}>{item.category}</div>
-                                                    <button
-                                                      type="button"
-                                                      onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setEditSelectedItem(item);
-                                                        setEditSelectedRate(item.price);
-                                                      }}
-                                                      style={{
-                                                        marginTop: '6px',
-                                                        padding: '3px 0',
-                                                        fontSize: '10.5px',
-                                                        fontWeight: 700,
-                                                        borderRadius: '5px',
-                                                        border: isSelected ? 'none' : '1px solid #cbd5e1',
-                                                        background: isSelected ? '#2563eb' : '#ffffff',
-                                                        color: isSelected ? '#ffffff' : '#334155',
-                                                        cursor: 'pointer',
-                                                        width: '100%',
-                                                        transition: 'all 0.15s ease'
-                                                      }}
-                                                    >
-                                                      + Add
-                                                    </button>
-                                                  </div>
-                                                );
-                                              })}
-                                            </div>
+                                             {/* 3-Column Garment Cards Grid with ALWAYS-VISIBLE SCROLLER */}
+                                             <div
+                                               id="pos-edit-cloth-grid"
+                                               className="pos-cloth-catalog-scroller"
+                                               style={{
+                                                 display: 'grid',
+                                                 gridTemplateColumns: 'repeat(3, 1fr)',
+                                                 gap: '10px',
+                                                 flex: 1,
+                                                 minHeight: '340px',
+                                                 maxHeight: '430px',
+                                                 overflowY: 'auto',
+                                                 paddingRight: '6px',
+                                                 scrollbarGutter: 'stable'
+                                               }}
+                                             >
+                                               {EDIT_CATALOG_ITEMS.filter((item) => {
+                                                 const matchesCat =
+                                                   editCatalogCategory === 'All' ||
+                                                   item.category === editCatalogCategory ||
+                                                   item.secondaryCategory === editCatalogCategory;
+                                                 const matchesSearch =
+                                                   !editCatalogSearch.trim() ||
+                                                   item.name.toLowerCase().includes(editCatalogSearch.toLowerCase());
+                                                 return matchesCat && matchesSearch;
+                                               }).map((item) => {
+                                                 const isSelected = editSelectedItem?.id === item.id;
+                                                 return (
+                                                   <div
+                                                     key={item.id}
+                                                     onClick={() => {
+                                                       setEditSelectedItem(item);
+                                                       setEditSelectedRate(item.price);
+                                                     }}
+                                                     style={{
+                                                       border: isSelected ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                                                       background: isSelected ? '#eff6ff' : '#ffffff',
+                                                       borderRadius: '8px',
+                                                       padding: '10px 8px',
+                                                       textAlign: 'center',
+                                                       cursor: 'pointer',
+                                                       transition: 'all 0.15s ease',
+                                                       boxShadow: isSelected ? '0 3px 8px rgba(37,99,235,0.18)' : '0 1px 3px rgba(0,0,0,0.03)',
+                                                       display: 'flex',
+                                                       flexDirection: 'column',
+                                                       alignItems: 'center',
+                                                       justifyContent: 'space-between'
+                                                     }}
+                                                   >
+                                                     <div style={{ height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '4px' }}>
+                                                       <ClothIllustration itemId={item.id} size={40} />
+                                                     </div>
+                                                     <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
+                                                       {item.name}
+                                                     </div>
+                                                     <div style={{ fontSize: '11px', color: '#475569', fontWeight: 600, marginBottom: '6px' }}>
+                                                       ₹{item.price} / {item.unit || 'piece'}
+                                                     </div>
+                                                     <button
+                                                       type="button"
+                                                       onClick={(e) => {
+                                                         e.stopPropagation();
+                                                         setEditSelectedItem(item);
+                                                         setEditSelectedRate(item.price);
+                                                         handleAddEditItemToCart();
+                                                       }}
+                                                       style={{
+                                                         padding: '4px 0',
+                                                         fontSize: '11px',
+                                                         fontWeight: 700,
+                                                         borderRadius: '5px',
+                                                         border: isSelected ? 'none' : '1px solid #cbd5e1',
+                                                         background: isSelected ? '#2563eb' : '#ffffff',
+                                                         color: isSelected ? '#ffffff' : '#334155',
+                                                         cursor: 'pointer',
+                                                         width: '100%',
+                                                         transition: 'all 0.15s ease'
+                                                       }}
+                                                     >
+                                                       + Add
+                                                     </button>
+                                                   </div>
+                                                 );
+                                               })}
+                                             </div>
 
-                                            {/* Scroller bottom indicator */}
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '11px', color: '#64748b', marginTop: 'auto', paddingTop: '8px' }}>
-                                              <span>↕</span>
-                                              <span>Scroll up / down to view all 12 garments</span>
-                                            </div>
-                                          </div>
+                                             {/* Scroller bottom indicator */}
+                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '11px', color: '#64748b', marginTop: 'auto', paddingTop: '8px' }}>
+                                               <span>↕</span>
+                                               <span>Scroll up / down to view all 12 garments</span>
+                                             </div>
+                                           </div>
 
-                                          {/* Sub-col 2: Selected Item Details & Cart Items */}
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
-                                            {/* Selected Item Details */}
-                                            <div
-                                              style={{
-                                                border: '1.5px solid #e2e8f0',
-                                                borderRadius: '8px',
-                                                padding: '12px',
-                                                background: '#ffffff'
-                                              }}
-                                            >
-                                              <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <span style={{ color: '#2563eb' }}>◆</span>
-                                                <span>Selected Item Details</span>
-                                              </div>
+                                           {/* Sub-col 2: Selected Item Details & Cart Items */}
+                                           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
+                                             {/* Selected Item Details */}
+                                             <div
+                                               style={{
+                                                 border: '1.5px solid #e2e8f0',
+                                                 borderRadius: '8px',
+                                                 padding: '14px',
+                                                 background: '#ffffff'
+                                               }}
+                                             >
+                                               <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#0f172a', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                 <span style={{ color: '#2563eb' }}>&#9670;</span>
+                                                 <span>Selected Item Details</span>
+                                               </div>
 
-                                              {/* Active Item Banner */}
-                                              <div
-                                                style={{
-                                                  background: '#eff6ff',
-                                                  border: '1px solid #bfdbfe',
-                                                  borderRadius: '7px',
-                                                  padding: '7px 10px',
-                                                  display: 'flex',
-                                                  alignItems: 'center',
-                                                  gap: '8px',
-                                                  marginBottom: '10px'
-                                                }}
-                                              >
-                                                <span style={{ fontSize: '18px' }}>{editSelectedItem?.icon || '👔'}</span>
-                                                <span style={{ fontWeight: 700, fontSize: '13px', color: '#1e3a8a' }}>
-                                                  {editSelectedItem?.name || 'Shirt'}
-                                                </span>
-                                                <span style={{ fontSize: '10.5px', fontWeight: 650, background: '#dbeafe', color: '#1d4ed8', padding: '2px 7px', borderRadius: '4px', marginLeft: 'auto' }}>
-                                                  {editSelectedItem?.category || 'Men'}
-                                                </span>
-                                              </div>
+                                               {/* Active Item Banner */}
+                                               <div
+                                                 style={{
+                                                   background: '#eff6ff',
+                                                   border: '1px solid #bfdbfe',
+                                                   borderRadius: '7px',
+                                                   padding: '8px 12px',
+                                                   display: 'flex',
+                                                   alignItems: 'center',
+                                                   gap: '10px',
+                                                   marginBottom: '10px'
+                                                 }}
+                                               >
+                                                 <div style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                   <ClothIllustration itemId={editSelectedItem?.id || 'shirt'} size={28} />
+                                                 </div>
+                                                 <div>
+                                                   <div style={{ fontWeight: 700, fontSize: '13px', color: '#1e3a8a' }}>
+                                                     {editSelectedItem?.name || 'Shirt'}
+                                                   </div>
+                                                   <div style={{ fontSize: '11px', color: '#3b82f6', fontWeight: 600 }}>
+                                                     ₹{editSelectedItem?.price || 15} / {editSelectedItem?.unit || 'piece'}
+                                                   </div>
+                                                 </div>
+                                                 <span style={{ fontSize: '11px', fontWeight: 650, background: '#dbeafe', color: '#1d4ed8', padding: '3px 8px', borderRadius: '4px', marginLeft: 'auto' }}>
+                                                   {editSelectedItem?.category || 'Men'}
+                                                 </span>
+                                               </div>
 
-                                              {/* Service Type Dropdown */}
-                                              <div style={{ marginBottom: '8px' }}>
-                                                <label style={{ display: 'block', fontSize: '11px', fontWeight: 650, color: '#334155', marginBottom: '3px' }}>
-                                                  Service Type
-                                                </label>
-                                                <select
-                                                  value={editSelectedService}
-                                                  onChange={(e) => setEditSelectedService(e.target.value)}
-                                                  style={{
-                                                    width: '100%',
-                                                    boxSizing: 'border-box',
-                                                    height: '36px',
-                                                    padding: '0 10px',
-                                                    fontSize: '12.5px',
-                                                    borderRadius: '6px',
-                                                    border: '1.5px solid #d1d5db',
-                                                    background: '#ffffff',
-                                                    color: '#0f172a',
-                                                    outline: 'none'
-                                                  }}
-                                                >
-                                                  <option value="Laundry + Iron">Laundry + Iron</option>
-                                                  <option value="Dry Clean">Dry Clean</option>
-                                                  <option value="Steam Iron Only">Steam Iron Only</option>
-                                                  <option value="Wash & Fold">Wash & Fold</option>
-                                                  <option value="Shoe Spa / Leather Care">Shoe Spa / Leather Care</option>
-                                                </select>
-                                              </div>
+                                               {/* Service Type Dropdown */}
+                                               <div style={{ marginBottom: '8px' }}>
+                                                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 650, color: '#334155', marginBottom: '3px' }}>
+                                                   Service Type
+                                                 </label>
+                                                 <select
+                                                   value={editSelectedService}
+                                                   onChange={(e) => setEditSelectedService(e.target.value)}
+                                                   style={{
+                                                     width: '100%',
+                                                     boxSizing: 'border-box',
+                                                     height: '36px',
+                                                     padding: '0 10px',
+                                                     fontSize: '12.5px',
+                                                     borderRadius: '6px',
+                                                     border: '1.5px solid #d1d5db',
+                                                     background: '#ffffff',
+                                                     color: '#0f172a',
+                                                     outline: 'none'
+                                                   }}
+                                                 >
+                                                   <option value="Laundry + Iron">Laundry + Iron</option>
+                                                   <option value="Normal Wash">Normal Wash</option>
+                                                   <option value="Dry Clean">Dry Clean</option>
+                                                   <option value="Steam Press">Steam Press</option>
+                                                   <option value="Wash &amp; Fold">Wash &amp; Fold</option>
+                                                   <option value="Shoe Spa / Leather Care">Shoe Spa / Leather Care</option>
+                                                 </select>
+                                               </div>
 
-                                              {/* Quantity & Rate Row */}
-                                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                                                <div>
-                                                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 650, color: '#334155', marginBottom: '3px' }}>
-                                                    Quantity
-                                                  </label>
-                                                  <div style={{ display: 'flex', alignItems: 'center', border: '1.5px solid #d1d5db', borderRadius: '6px', height: '36px', overflow: 'hidden', background: '#ffffff' }}>
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => setEditSelectedQty((q) => Math.max(1, q - 1))}
-                                                      style={{
-                                                        width: '32px',
-                                                        height: '100%',
-                                                        border: 'none',
-                                                        background: '#f8fafc',
-                                                        cursor: 'pointer',
-                                                        fontSize: '15px',
-                                                        fontWeight: 700,
-                                                        color: '#334155'
-                                                      }}
-                                                    >
-                                                      -
-                                                    </button>
-                                                    <span style={{ flex: 1, textAlign: 'center', fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
-                                                      {editSelectedQty}
-                                                    </span>
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => setEditSelectedQty((q) => q + 1)}
-                                                      style={{
-                                                        width: '32px',
-                                                        height: '100%',
-                                                        border: 'none',
-                                                        background: '#f8fafc',
-                                                        cursor: 'pointer',
-                                                        fontSize: '15px',
-                                                        fontWeight: 700,
-                                                        color: '#334155'
-                                                      }}
-                                                    >
-                                                      +
-                                                    </button>
-                                                  </div>
-                                                </div>
+                                               {/* Quantity & Rate Row */}
+                                               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                                                 <div>
+                                                   <label style={{ display: 'block', fontSize: '11px', fontWeight: 650, color: '#334155', marginBottom: '3px' }}>
+                                                     Quantity
+                                                   </label>
+                                                   <div style={{ display: 'flex', alignItems: 'center', border: '1.5px solid #d1d5db', borderRadius: '6px', height: '36px', overflow: 'hidden', background: '#ffffff' }}>
+                                                     <button
+                                                       type="button"
+                                                       onClick={() => setEditSelectedQty((q) => Math.max(1, q - 1))}
+                                                       style={{
+                                                         width: '32px',
+                                                         height: '100%',
+                                                         border: 'none',
+                                                         background: '#f8fafc',
+                                                         cursor: 'pointer',
+                                                         fontSize: '15px',
+                                                         fontWeight: 700,
+                                                         color: '#334155'
+                                                       }}
+                                                     >
+                                                       -
+                                                     </button>
+                                                     <span style={{ flex: 1, textAlign: 'center', fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+                                                       {editSelectedQty}
+                                                     </span>
+                                                     <button
+                                                       type="button"
+                                                       onClick={() => setEditSelectedQty((q) => q + 1)}
+                                                       style={{
+                                                         width: '32px',
+                                                         height: '100%',
+                                                         border: 'none',
+                                                         background: '#f8fafc',
+                                                         cursor: 'pointer',
+                                                         fontSize: '15px',
+                                                         fontWeight: 700,
+                                                         color: '#334155'
+                                                       }}
+                                                     >
+                                                       +
+                                                     </button>
+                                                   </div>
+                                                 </div>
 
-                                                <div>
-                                                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 650, color: '#334155', marginBottom: '3px' }}>
-                                                    Sample Rate (₹)
-                                                  </label>
-                                                  <input
-                                                    type="number"
-                                                    value={editSelectedRate}
-                                                    onChange={(e) => setEditSelectedRate(e.target.value)}
-                                                    style={{
-                                                      width: '100%',
-                                                      boxSizing: 'border-box',
-                                                      height: '36px',
-                                                      padding: '0 10px',
-                                                      fontSize: '13px',
-                                                      fontWeight: 650,
-                                                      borderRadius: '6px',
-                                                      border: '1.5px solid #d1d5db',
-                                                      background: '#ffffff',
-                                                      color: '#0f172a',
-                                                      outline: 'none'
-                                                    }}
-                                                  />
-                                                </div>
-                                              </div>
+                                                 <div>
+                                                   <label style={{ display: 'block', fontSize: '11px', fontWeight: 650, color: '#334155', marginBottom: '3px' }}>
+                                                     Rate per piece (₹)
+                                                   </label>
+                                                   <input
+                                                     type="number"
+                                                     min="1"
+                                                     value={editSelectedRate}
+                                                     onChange={(e) => setEditSelectedRate(e.target.value)}
+                                                     style={{
+                                                       width: '100%',
+                                                       boxSizing: 'border-box',
+                                                       height: '36px',
+                                                       padding: '0 10px',
+                                                       fontSize: '13px',
+                                                       fontWeight: 650,
+                                                       borderRadius: '6px',
+                                                       border: '1.5px solid #d1d5db',
+                                                       background: '#ffffff',
+                                                       color: '#0f172a',
+                                                       outline: 'none'
+                                                     }}
+                                                   />
+                                                 </div>
+                                               </div>
 
-                                              <div style={{ fontSize: '10.5px', color: '#64748b', marginBottom: '10px' }}>
-                                                Standard laundry rate applied. Change if custom fabric.
-                                              </div>
+                                               <div style={{ fontSize: '10.5px', color: '#64748b', marginBottom: '10px' }}>
+                                                 Standard laundry rate applied. Change if custom fabric.
+                                               </div>
 
-                                              <button
-                                                type="button"
-                                                onClick={handleAddEditItemToCart}
-                                                style={{
-                                                  width: '100%',
-                                                  height: '36px',
-                                                  borderRadius: '6px',
-                                                  border: 'none',
-                                                  background: '#2563eb',
-                                                  color: '#ffffff',
-                                                  fontSize: '12.5px',
-                                                  fontWeight: 700,
-                                                  cursor: 'pointer',
-                                                  display: 'flex',
-                                                  alignItems: 'center',
-                                                  justifyContent: 'center',
-                                                  gap: '6px',
-                                                  boxShadow: '0 2px 6px rgba(37,99,235,0.25)',
-                                                  transition: 'all 0.15s ease'
-                                                }}
-                                              >
-                                                <span>🛒</span>
-                                                <span>Add to Cart</span>
-                                              </button>
-                                            </div>
+                                               <button
+                                                 type="button"
+                                                 onClick={handleAddEditItemToCart}
+                                                 style={{
+                                                   width: '100%',
+                                                   height: '36px',
+                                                   borderRadius: '6px',
+                                                   border: 'none',
+                                                   background: '#2563eb',
+                                                   color: '#ffffff',
+                                                   fontSize: '12.5px',
+                                                   fontWeight: 700,
+                                                   cursor: 'pointer',
+                                                   display: 'flex',
+                                                   alignItems: 'center',
+                                                   justifyContent: 'center',
+                                                   gap: '6px',
+                                                   boxShadow: '0 2px 6px rgba(37,99,235,0.25)',
+                                                   transition: 'all 0.15s ease'
+                                                 }}
+                                               >
+                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                                                   <circle cx="9" cy="21" r="1"></circle>
+                                                   <circle cx="20" cy="21" r="1"></circle>
+                                                   <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                                                 </svg>
+                                                 <span>Add to Cart</span>
+                                               </button>
+                                             </div>
 
-                                            {/* Cart Items List & Totals */}
-                                            <div
-                                              style={{
-                                                border: '1.5px solid #e2e8f0',
-                                                borderRadius: '8px',
-                                                padding: '12px',
-                                                background: '#ffffff'
-                                              }}
-                                            >
-                                              <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <span style={{ color: '#2563eb' }}>◆</span>
-                                                <span>Cart Items ({editCart.length})</span>
-                                              </div>
+                                             {/* Cart Items List & Totals */}
+                                             <div
+                                               style={{
+                                                 border: '1.5px solid #e2e8f0',
+                                                 borderRadius: '8px',
+                                                 padding: '14px',
+                                                 background: '#ffffff'
+                                               }}
+                                             >
+                                               <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#0f172a', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                 <span style={{ color: '#2563eb' }}>&#9670;</span>
+                                                 <span>Cart Items ({editCart.length})</span>
+                                               </div>
 
-                                              <div style={{ maxHeight: '145px', overflowY: 'auto', marginBottom: '10px', paddingRight: '2px' }}>
-                                                {editCart.map((it, idx) => (
-                                                  <div
-                                                    key={`${it.id}_${it.serviceType}_${idx}`}
-                                                    style={{
-                                                      display: 'flex',
-                                                      alignItems: 'center',
-                                                      justifyContent: 'space-between',
-                                                      padding: '6px 0',
-                                                      borderBottom: '1px solid #f1f5f9',
-                                                      fontSize: '12px'
-                                                    }}
-                                                  >
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                                                      <span style={{ fontSize: '15px' }}>{it.icon || '👕'}</span>
-                                                      <div>
-                                                        <div style={{ fontWeight: 700, color: '#0f172a' }}>{it.name}</div>
-                                                        <div style={{ fontSize: '10.5px', color: '#64748b' }}>
-                                                          {it.serviceType} x {it.qty}
-                                                        </div>
-                                                      </div>
-                                                    </div>
+                                               <div style={{ maxHeight: '145px', overflowY: 'auto', marginBottom: '10px', paddingRight: '2px' }}>
+                                                 {editCart.map((it, idx) => (
+                                                   <div
+                                                     key={`${it.id}_${it.serviceType}_${idx}`}
+                                                     style={{
+                                                       display: 'flex',
+                                                       alignItems: 'center',
+                                                       justifyContent: 'space-between',
+                                                       padding: '6px 0',
+                                                       borderBottom: '1px solid #f1f5f9',
+                                                       fontSize: '12px'
+                                                     }}
+                                                   >
+                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                                                       <div style={{ width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                         <ClothIllustration itemId={it.id} size={20} />
+                                                       </div>
+                                                       <div>
+                                                         <div style={{ fontWeight: 700, color: '#0f172a' }}>{it.name}</div>
+                                                         <div style={{ fontSize: '10.5px', color: '#64748b' }}>
+                                                           {it.serviceType} x {it.qty}
+                                                         </div>
+                                                       </div>
+                                                     </div>
 
-                                                    <div className="pos-status-actions-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                      <span style={{ fontWeight: 750, color: '#0f172a' }}>
-                                                        ₹{(Number(it.rate || 0) * Number(it.qty || 1)).toFixed(2)}
-                                                      </span>
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => handleRemoveEditCartItem(idx)}
-                                                        title="Remove item"
-                                                        style={{
-                                                          border: 'none',
-                                                          background: 'transparent',
-                                                          color: '#ef4444',
-                                                          cursor: 'pointer',
-                                                          fontSize: '12px',
-                                                          fontWeight: 700,
-                                                          padding: '0 3px'
-                                                        }}
-                                                      >
-                                                        ✕
-                                                      </button>
-                                                    </div>
-                                                  </div>
-                                                ))}
-                                                {editCart.length === 0 && (
-                                                  <div style={{ fontSize: '11.5px', color: '#94a3b8', fontStyle: 'italic', textAlign: 'center', padding: '12px 0' }}>
-                                                    No garments added yet.
-                                                  </div>
-                                                )}
-                                              </div>
+                                                     <div className="pos-status-actions-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                       <span style={{ fontWeight: 750, color: '#0f172a' }}>
+                                                         ₹{(Number(it.rate || 0) * Number(it.qty || 1)).toFixed(2)}
+                                                       </span>
+                                                       <button
+                                                         type="button"
+                                                         onClick={() => handleRemoveEditCartItem(idx)}
+                                                         title="Remove item"
+                                                         style={{
+                                                           border: 'none',
+                                                           background: 'transparent',
+                                                           color: '#ef4444',
+                                                           cursor: 'pointer',
+                                                           fontSize: '12px',
+                                                           fontWeight: 700,
+                                                           padding: '0 3px'
+                                                         }}
+                                                       >
+                                                         ✕
+                                                       </button>
+                                                     </div>
+                                                   </div>
+                                                 ))}
+                                                 {editCart.length === 0 && (
+                                                   <div style={{ fontSize: '11.5px', color: '#94a3b8', fontStyle: 'italic', textAlign: 'center', padding: '12px 0' }}>
+                                                     No garments added yet.
+                                                   </div>
+                                                 )}
+                                               </div>
 
-                                              {/* Subtotal & Tax */}
-                                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#475569', marginBottom: '3px' }}>
-                                                <span>Subtotal:</span>
-                                                <span style={{ fontWeight: 650, color: '#0f172a' }}>₹{editCartSubtotal.toFixed(2)}</span>
-                                              </div>
-                                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#475569', marginBottom: '8px' }}>
-                                                <span>GST (5%):</span>
-                                                <span style={{ fontWeight: 650, color: '#0f172a' }}>₹{editCartTax.toFixed(2)}</span>
-                                              </div>
+                                               {/* Subtotal & Taxes */}
+                                               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#475569', marginBottom: '4px' }}>
+                                                 <span>Subtotal:</span>
+                                                 <span style={{ fontWeight: 650, color: '#0f172a' }}>₹{editCartSubtotal.toFixed(2)}</span>
+                                               </div>
+                                               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#475569', marginBottom: '8px' }}>
+                                                 <span>GST / Tax (5%):</span>
+                                                 <span style={{ fontWeight: 650, color: '#0f172a' }}>₹{editCartTax.toFixed(2)}</span>
+                                               </div>
 
-                                              {/* Grand Total Bar */}
-                                              <div
-                                                style={{
-                                                  background: '#2563eb',
-                                                  color: '#ffffff',
-                                                  borderRadius: '6px',
-                                                  padding: '8px 12px',
-                                                  display: 'flex',
-                                                  alignItems: 'center',
-                                                  justifyContent: 'space-between',
-                                                  fontWeight: 750,
-                                                  fontSize: '12.5px'
-                                                }}
-                                              >
-                                                <span>Grand Total: ₹{editCartGrandTotal.toFixed(2)}</span>
-                                                <span style={{ fontSize: '11px', opacity: 0.95 }}>
-                                                  ({editCartTotalPieces} pieces)
-                                                </span>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
+                                               {/* Grand Total Bar */}
+                                               <div
+                                                 style={{
+                                                   background: '#2563eb',
+                                                   color: '#ffffff',
+                                                   borderRadius: '6px',
+                                                   padding: '8px 12px',
+                                                   display: 'flex',
+                                                   alignItems: 'center',
+                                                   justifyContent: 'space-between',
+                                                   fontWeight: 750,
+                                                   fontSize: '12.5px'
+                                                 }}
+                                               >
+                                                 <span>Grand Total: ₹{editCartGrandTotal.toFixed(2)}</span>
+                                                 <span style={{ fontSize: '11px', opacity: 0.95 }}>
+                                                   ({editCartTotalPieces} pieces)
+                                                 </span>
+                                               </div>
+                                             </div>
+                                           </div>
+                                         </div>
+                                       </div>
+                                     </div>
 
-                                    {/* ══════════════════════════════════════════════════════════════════
-                                        SECTION 2: GARMENT-BY-GARMENT INSPECTION (Matching Screenshot 2)
-                                       ══════════════════════════════════════════════════════════════════ */}
-                                    <div
-                                      style={{
-                                        border: '1.5px solid #e2e8f0',
-                                        borderRadius: '8px',
-                                        padding: '16px',
-                                        background: '#ffffff',
-                                        marginBottom: '16px'
-                                      }}
-                                    >
-                                      <div
-                                        style={{
-                                          fontSize: '13.5px',
-                                          fontWeight: 700,
-                                          color: '#0f172a',
-                                          marginBottom: '14px',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '7px'
-                                        }}
-                                      >
-                                        <span style={{ color: '#2563eb' }}>🔍</span>
-                                        <span>Garment-by-Garment Inspection</span>
-                                      </div>
+                                     {/* ══════════════════════════════════════════════════════════════════
+                                         SECTION 2: GARMENT-BY-GARMENT INSPECTION & PHOTOS
+                                        ══════════════════════════════════════════════════════════════════ */}
+                                     <div
+                                       style={{
+                                         border: '1.5px solid #e2e8f0',
+                                         borderRadius: '8px',
+                                         padding: '16px',
+                                         background: '#ffffff',
+                                         marginBottom: '16px'
+                                       }}
+                                     >
+                                       <div
+                                         style={{
+                                           fontSize: '13.5px',
+                                           fontWeight: 700,
+                                           color: '#0f172a',
+                                           marginBottom: '14px',
+                                           display: 'flex',
+                                           alignItems: 'center',
+                                           gap: '7px'
+                                         }}
+                                       >
+                                         <span style={{ color: '#2563eb' }}>🔍</span>
+                                         <span>Garment-by-Garment Inspection &amp; Care</span>
+                                       </div>
 
-                                      {/* Row 1: 4 Columns (Garment *, Color, Stains / Marks, Make) */}
-                                      <div
-                                        className="pos-edit-inspection-row-4col"
-                                      >
-                                        <div>
-                                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
-                                            Garment <span style={{ color: '#ef4444' }}>*</span>
-                                          </label>
-                                          <select
-                                            disabled={isOrderReady}
-                                            value={editInspection.garment || 'Shirt'}
-                                            onChange={(e) => setEditInspection({ ...editInspection, garment: e.target.value })}
-                                            style={{
-                                              width: '100%',
-                                              boxSizing: 'border-box',
-                                              height: '38px',
-                                              padding: '0 10px',
-                                              fontSize: '13px',
-                                              borderRadius: '6px',
-                                              border: '1.5px solid #d1d5db',
-                                              background: isOrderReady ? '#f8fafc' : '#ffffff',
-                                              color: '#0f172a',
-                                              outline: 'none'
-                                            }}
-                                          >
-                                            {editCart.length > 0
-                                              ? editCart.map((it, i) => (
-                                                  <option key={`${it.id}_${i}`} value={it.name}>
-                                                    {it.name}
-                                                  </option>
-                                                ))
-                                              : ['Shirt', 'Formal Pant', 'T-Shirt', 'Jeans', 'Saree', 'Kurta'].map((g) => (
-                                                  <option key={g} value={g}>
-                                                    {g}
-                                                  </option>
-                                                ))}
-                                          </select>
-                                        </div>
+                                       {/* Row 1: 4 Columns (Garment *, Color, Stains / Marks, Make) */}
+                                       <div
+                                         className="pos-edit-inspection-row-4col"
+                                       >
+                                         <div>
+                                           <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
+                                             Garment <span style={{ color: '#ef4444' }}>*</span>
+                                           </label>
+                                           <select
+                                             value={editInspection.garment || 'Shirt'}
+                                             onChange={(e) => setEditInspection({ ...editInspection, garment: e.target.value })}
+                                             style={{
+                                               width: '100%',
+                                               boxSizing: 'border-box',
+                                               height: '38px',
+                                               padding: '0 10px',
+                                               fontSize: '13px',
+                                               borderRadius: '6px',
+                                               border: '1.5px solid #d1d5db',
+                                               background: '#ffffff',
+                                               color: '#0f172a',
+                                               outline: 'none'
+                                             }}
+                                           >
+                                             {editCart.length > 0
+                                               ? editCart.map((it, i) => (
+                                                   <option key={`${it.id}_${i}`} value={it.name}>
+                                                     {it.name}
+                                                   </option>
+                                                 ))
+                                               : ['Shirt', 'Formal Pant', 'T-Shirt', 'Jeans', 'Saree', 'Kurta'].map((g) => (
+                                                   <option key={g} value={g}>
+                                                     {g}
+                                                   </option>
+                                                 ))}
+                                           </select>
+                                         </div>
 
-                                        <div>
-                                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
-                                            Color
-                                          </label>
-                                          <input
-                                            type="text"
-                                            disabled={isOrderReady}
-                                            value={editInspection.color || ''}
-                                            onChange={(e) => setEditInspection({ ...editInspection, color: e.target.value })}
-                                            placeholder="e.g. Light Blue"
-                                            style={{
-                                              width: '100%',
-                                              boxSizing: 'border-box',
-                                              height: '38px',
-                                              padding: '0 12px',
-                                              fontSize: '13px',
-                                              borderRadius: '6px',
-                                              border: '1.5px solid #d1d5db',
-                                              background: isOrderReady ? '#f8fafc' : '#ffffff',
-                                              color: '#0f172a',
-                                              outline: 'none'
-                                            }}
-                                          />
-                                        </div>
+                                         <div>
+                                           <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
+                                             Color
+                                           </label>
+                                           <input
+                                             type="text"
+                                             value={editInspection.color || ''}
+                                             onChange={(e) => setEditInspection({ ...editInspection, color: e.target.value })}
+                                             placeholder="e.g. Navy blue"
+                                             style={{
+                                               width: '100%',
+                                               boxSizing: 'border-box',
+                                               height: '38px',
+                                               padding: '0 12px',
+                                               fontSize: '13px',
+                                               borderRadius: '6px',
+                                               border: '1.5px solid #d1d5db',
+                                               background: '#ffffff',
+                                               color: '#0f172a',
+                                               outline: 'none'
+                                             }}
+                                           />
+                                         </div>
 
-                                        <div>
-                                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
-                                            Stains / Marks
-                                          </label>
-                                          <input
-                                            type="text"
-                                            disabled={isOrderReady}
-                                            value={editInspection.stains || ''}
-                                            onChange={(e) => setEditInspection({ ...editInspection, stains: e.target.value })}
-                                            placeholder="e.g. Tea stain on collar, ink spot on pocket"
-                                            style={{
-                                              width: '100%',
-                                              boxSizing: 'border-box',
-                                              height: '38px',
-                                              padding: '0 12px',
-                                              fontSize: '13px',
-                                              borderRadius: '6px',
-                                              border: '1.5px solid #d1d5db',
-                                              background: isOrderReady ? '#f8fafc' : '#ffffff',
-                                              color: '#0f172a',
-                                              outline: 'none'
-                                            }}
-                                          />
-                                        </div>
+                                         <div>
+                                           <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
+                                             Stains / Marks
+                                           </label>
+                                           <input
+                                             type="text"
+                                             value={editInspection.stains || ''}
+                                             onChange={(e) => setEditInspection({ ...editInspection, stains: e.target.value })}
+                                             placeholder="e.g. Oil stain on sleeve"
+                                             style={{
+                                               width: '100%',
+                                               boxSizing: 'border-box',
+                                               height: '38px',
+                                               padding: '0 12px',
+                                               fontSize: '13px',
+                                               borderRadius: '6px',
+                                               border: '1.5px solid #d1d5db',
+                                               background: '#ffffff',
+                                               color: '#0f172a',
+                                               outline: 'none'
+                                             }}
+                                           />
+                                         </div>
 
-                                        <div>
-                                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
-                                            Make
-                                          </label>
-                                          <select
-                                            disabled={isOrderReady}
-                                            value={editInspection.make || 'Readymade'}
-                                            onChange={(e) => setEditInspection({ ...editInspection, make: e.target.value })}
-                                            style={{
-                                              width: '100%',
-                                              boxSizing: 'border-box',
-                                              height: '38px',
-                                              padding: '0 10px',
-                                              fontSize: '13px',
-                                              borderRadius: '6px',
-                                              border: '1.5px solid #d1d5db',
-                                              background: isOrderReady ? '#f8fafc' : '#ffffff',
-                                              color: '#0f172a',
-                                              outline: 'none'
-                                            }}
-                                          >
-                                            <option value="Readymade">Readymade</option>
-                                            <option value="Tailored / Custom">Tailored / Custom</option>
-                                            <option value="Designer / Boutique">Designer / Boutique</option>
-                                            <option value="Imported">Imported</option>
-                                          </select>
-                                        </div>
-                                      </div>
+                                         <div>
+                                           <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
+                                             Make
+                                           </label>
+                                           <select
+                                             value={editInspection.make || 'Manufacturer / make'}
+                                             onChange={(e) => setEditInspection({ ...editInspection, make: e.target.value })}
+                                             style={{
+                                               width: '100%',
+                                               boxSizing: 'border-box',
+                                               height: '38px',
+                                               padding: '0 10px',
+                                               fontSize: '13px',
+                                               borderRadius: '6px',
+                                               border: '1.5px solid #d1d5db',
+                                               background: '#ffffff',
+                                               color: '#0f172a',
+                                               outline: 'none'
+                                             }}
+                                           >
+                                             <option value="Manufacturer / make">Manufacturer / make</option>
+                                             <option value="Readymade">Readymade</option>
+                                             <option value="Tailored / Custom">Tailored / Custom</option>
+                                             <option value="Designer / Boutique">Designer / Boutique</option>
+                                             <option value="Imported">Imported</option>
+                                           </select>
+                                         </div>
+                                       </div>
 
-                                      {/* Row 2: 3 Columns (Brand, Fabric Type, Garment Notes) */}
-                                      <div
-                                        className="pos-edit-inspection-row-3col"
-                                      >
-                                        <div>
-                                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
-                                            Brand
-                                          </label>
-                                          <input
-                                            type="text"
-                                            disabled={isOrderReady}
-                                            value={editInspection.brand || ''}
-                                            onChange={(e) => setEditInspection({ ...editInspection, brand: e.target.value })}
-                                            placeholder="e.g. Van Heusen"
-                                            style={{
-                                              width: '100%',
-                                              boxSizing: 'border-box',
-                                              height: '38px',
-                                              padding: '0 12px',
-                                              fontSize: '13px',
-                                              borderRadius: '6px',
-                                              border: '1.5px solid #d1d5db',
-                                              background: isOrderReady ? '#f8fafc' : '#ffffff',
-                                              color: '#0f172a',
-                                              outline: 'none'
-                                            }}
-                                          />
-                                        </div>
+                                       {/* Row 2: 3 Columns (Brand, Fabric Type, Garment Notes) */}
+                                       <div
+                                         className="pos-edit-inspection-row-3col"
+                                         style={{ marginBottom: '14px' }}
+                                       >
+                                         <div>
+                                           <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
+                                             Brand
+                                           </label>
+                                           <input
+                                             type="text"
+                                             value={editInspection.brand || ''}
+                                             onChange={(e) => setEditInspection({ ...editInspection, brand: e.target.value })}
+                                             placeholder="e.g. Van Heusen / Raymond"
+                                             style={{
+                                               width: '100%',
+                                               boxSizing: 'border-box',
+                                               height: '38px',
+                                               padding: '0 12px',
+                                               fontSize: '13px',
+                                               borderRadius: '6px',
+                                               border: '1.5px solid #d1d5db',
+                                               background: '#ffffff',
+                                               color: '#0f172a',
+                                               outline: 'none'
+                                             }}
+                                           />
+                                         </div>
 
-                                        <div>
-                                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
-                                            Fabric Type
-                                          </label>
-                                          <select
-                                            disabled={isOrderReady}
-                                            value={editInspection.fabric || 'Select fabric'}
-                                            onChange={(e) => setEditInspection({ ...editInspection, fabric: e.target.value })}
-                                            style={{
-                                              width: '100%',
-                                              boxSizing: 'border-box',
-                                              height: '38px',
-                                              padding: '0 10px',
-                                              fontSize: '13px',
-                                              borderRadius: '6px',
-                                              border: '1.5px solid #d1d5db',
-                                              background: isOrderReady ? '#f8fafc' : '#ffffff',
-                                              color: '#0f172a',
-                                              outline: 'none'
-                                            }}
-                                          >
-                                            <option value="Select fabric">Select fabric</option>
-                                            <option value="100% Cotton">100% Cotton</option>
-                                            <option value="Pure Silk">Pure Silk</option>
-                                            <option value="Linen">Linen</option>
-                                            <option value="Wool / Cashmere">Wool / Cashmere</option>
-                                            <option value="Polyester blend">Polyester blend</option>
-                                            <option value="Denim">Denim</option>
-                                          </select>
-                                        </div>
+                                         <div>
+                                           <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
+                                             Fabric Type
+                                           </label>
+                                           <select
+                                             value={editInspection.fabric || 'Select fabric'}
+                                             onChange={(e) => setEditInspection({ ...editInspection, fabric: e.target.value })}
+                                             style={{
+                                               width: '100%',
+                                               boxSizing: 'border-box',
+                                               height: '38px',
+                                               padding: '0 10px',
+                                               fontSize: '13px',
+                                               borderRadius: '6px',
+                                               border: '1.5px solid #d1d5db',
+                                               background: '#ffffff',
+                                               color: '#0f172a',
+                                               outline: 'none'
+                                             }}
+                                           >
+                                             <option value="Select fabric">Select fabric</option>
+                                             <option value="100% Cotton">100% Cotton</option>
+                                             <option value="Pure Silk">Pure Silk</option>
+                                             <option value="Linen">Linen</option>
+                                             <option value="Wool / Cashmere">Wool / Cashmere</option>
+                                             <option value="Polyester blend">Polyester blend</option>
+                                             <option value="Denim">Denim</option>
+                                             <option value="Rayon / Viscose">Rayon / Viscose</option>
+                                           </select>
+                                         </div>
 
-                                        <div>
-                                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
-                                            Garment Notes
-                                          </label>
-                                          <input
-                                            type="text"
-                                            disabled={isOrderReady}
-                                            value={editInspection.notes || ''}
-                                            onChange={(e) => setEditInspection({ ...editInspection, notes: e.target.value })}
-                                            placeholder="e.g. Extra starch on collar. Handle gently."
-                                            style={{
-                                              width: '100%',
-                                              boxSizing: 'border-box',
-                                              height: '38px',
-                                              padding: '0 12px',
-                                              fontSize: '13px',
-                                              borderRadius: '6px',
-                                              border: '1.5px solid #d1d5db',
-                                              background: isOrderReady ? '#f8fafc' : '#ffffff',
-                                              color: '#0f172a',
-                                              outline: 'none'
-                                            }}
-                                          />
-                                        </div>
-                                      </div>
+                                         <div>
+                                           <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
+                                             Garment Notes
+                                           </label>
+                                           <input
+                                             type="text"
+                                             value={editInspection.notes || ''}
+                                             onChange={(e) => setEditInspection({ ...editInspection, notes: e.target.value })}
+                                             placeholder="Damage, special handling, customer instructions..."
+                                             style={{
+                                               width: '100%',
+                                               boxSizing: 'border-box',
+                                               height: '38px',
+                                               padding: '0 12px',
+                                               fontSize: '13px',
+                                               borderRadius: '6px',
+                                               border: '1.5px solid #d1d5db',
+                                               background: '#ffffff',
+                                               color: '#0f172a',
+                                               outline: 'none'
+                                             }}
+                                           />
+                                         </div>
+                                       </div>
 
-                                      {/* Row 3: Garment Photos Upload */}
-                                      <div>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#334155', marginBottom: '5px' }}>
-                                          Garment Photos
-                                        </label>
-                                        <input
-                                          type="file"
-                                          disabled={isOrderReady}
-                                          multiple
-                                          accept="image/*"
-                                          onChange={(e) => {
-                                            const count = e.target.files ? e.target.files.length : 0;
-                                            setEditInspection({ ...editInspection, photosCount: count });
-                                          }}
-                                          style={{
-                                            display: 'block',
-                                            fontSize: '12.5px',
-                                            color: '#475569',
-                                            cursor: isOrderReady ? 'not-allowed' : 'pointer'
-                                          }}
-                                        />
-                                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '5px' }}>
-                                          Capture / upload photos of existing defects, tears, stains or brand labels before intake. Max 5 images.
-                                        </div>
-                                      </div>
-                                    </div>
+                                       {/* Row 3: Dedicated Garment Photos Section */}
+                                       <div
+                                         style={{
+                                           border: '1.5px dashed #cbd5e1',
+                                           borderRadius: '8px',
+                                           padding: '14px',
+                                           background: '#f8fafc'
+                                         }}
+                                       >
+                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                           <div>
+                                             <label style={{ fontSize: '12.5px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                               <span>📸 Garment Photos &amp; Visual Evidence</span>
+                                               <span style={{ fontSize: '11px', fontWeight: 650, color: '#2563eb', background: '#eff6ff', padding: '2px 8px', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
+                                                 {editInspectionPhotos.length} / 6 Attached
+                                               </span>
+                                             </label>
+                                             <p style={{ margin: '3px 0 0 0', fontSize: '11.5px', color: '#64748b' }}>
+                                               Upload visual condition photos to verify pre-existing stains, torn seams, or brand labels before processing.
+                                             </p>
+                                           </div>
 
-                                    {/* ══════════════════════════════════════════════════════════════════
-                                        SECTION 3: 6 TABS & TAB CONTENT (Matching Screenshot 3)
-                                       ══════════════════════════════════════════════════════════════════ */}
-                                    <div
-                                      style={{
-                                        border: '1.5px solid #e2e8f0',
-                                        borderRadius: '8px',
-                                        padding: '16px',
-                                        background: '#ffffff',
-                                        marginBottom: '18px'
-                                      }}
-                                    >
-                                      {/* Tabs Navigation Bar */}
-                                      <div
-                                        style={{
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '8px',
-                                          borderBottom: '1.5px solid #f1f5f9',
-                                          paddingBottom: '10px',
-                                          marginBottom: '14px',
-                                          overflowX: 'auto'
-                                        }}
-                                      >
-                                        {[
-                                          { id: 'details', label: '1. Order Details' },
-                                          { id: 'logistics', label: '2. Logistics & Factory' },
-                                          { id: 'status', label: '3. Status Updates' },
-                                          { id: 'payments', label: '4. Payments' },
-                                          { id: 'messages', label: '5. Customer Messages' },
-                                          { id: 'audit', label: '6. Comments & Audit' }
-                                        ].map((tab) => {
-                                          const isActive = editActiveTab === tab.id;
-                                          return (
-                                            <button
-                                              key={tab.id}
-                                              type="button"
-                                              onClick={() => setEditActiveTab(tab.id)}
-                                              style={{
-                                                padding: '7px 16px',
-                                                borderRadius: '6px',
-                                                border: isActive ? '1px solid #bfdbfe' : '1px solid transparent',
-                                                background: isActive ? '#eff6ff' : 'transparent',
-                                                color: isActive ? '#2563eb' : '#64748b',
-                                                fontSize: '12.5px',
-                                                fontWeight: isActive ? 700 : 600,
-                                                cursor: 'pointer',
-                                                whiteSpace: 'nowrap',
-                                                transition: 'all 0.15s ease'
-                                              }}
-                                            >
-                                              {tab.label}
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
+                                           <button
+                                             type="button"
+                                             onClick={() => editPhotoInputRef.current?.click()}
+                                             style={{
+                                               padding: '7px 14px',
+                                               borderRadius: '6px',
+                                               border: '1.5px solid #2563eb',
+                                               background: '#eff6ff',
+                                               color: '#2563eb',
+                                               fontSize: '12px',
+                                               fontWeight: 700,
+                                               cursor: 'pointer',
+                                               display: 'inline-flex',
+                                               alignItems: 'center',
+                                               gap: '6px',
+                                               transition: 'all 0.15s ease'
+                                             }}
+                                           >
+                                             <span>+ Add Photo</span>
+                                           </button>
+                                         </div>
 
-                                      {/* Tab 1 Content: Order Details Update */}
-                                      {editActiveTab === 'details' && (
-                                        <div>
-                                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
-                                            Order Details Update
-                                          </div>
-                                          <div
-                                            style={{
-                                              display: 'grid',
-                                              gridTemplateColumns: 'repeat(3, 1fr)',
-                                              gap: '16px'
-                                            }}
-                                          >
-                                            <div>
-                                              <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                Order ID
-                                              </label>
-                                              <input
-                                                type="text"
-                                                disabled
-                                                value={editFormData.order_number || ''}
-                                                style={{
-                                                  width: '100%',
-                                                  boxSizing: 'border-box',
-                                                  height: '38px',
-                                                  padding: '0 12px',
-                                                  fontSize: '13px',
-                                                  borderRadius: '6px',
-                                                  border: '1.5px solid #cbd5e1',
-                                                  background: '#f8fafc',
-                                                  color: '#0f172a',
-                                                  fontWeight: 750
-                                                }}
-                                              />
-                                            </div>
+                                         <input
+                                           ref={editPhotoInputRef}
+                                           type="file"
+                                           multiple
+                                           accept="image/*"
+                                           onChange={handlePhotoUpload}
+                                           style={{ display: 'none' }}
+                                         />
 
-                                            <div>
-                                              <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                Garment Count
-                                              </label>
-                                              <input
-                                                type="text"
-                                                disabled
-                                                value={`${editCartTotalPieces} Pieces`}
-                                                style={{
-                                                  width: '100%',
-                                                  boxSizing: 'border-box',
-                                                  height: '38px',
-                                                  padding: '0 12px',
-                                                  fontSize: '13px',
-                                                  borderRadius: '6px',
-                                                  border: '1.5px solid #cbd5e1',
-                                                  background: '#f8fafc',
-                                                  color: '#0f172a',
-                                                  fontWeight: 750
-                                                }}
-                                              />
-                                            </div>
+                                         {/* Photo Gallery Grid */}
+                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '10px', marginTop: '10px' }}>
+                                           {editInspectionPhotos.map((photo) => (
+                                             <div
+                                               key={photo.id}
+                                               style={{
+                                                 position: 'relative',
+                                                 borderRadius: '6px',
+                                                 border: '1.5px solid #e2e8f0',
+                                                 background: '#ffffff',
+                                                 overflow: 'hidden',
+                                                 boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                                               }}
+                                             >
+                                               <img
+                                                 src={photo.url}
+                                                 alt={photo.name}
+                                                 onClick={() => setPhotoPreviewModal(photo)}
+                                                 style={{
+                                                   width: '100%',
+                                                   height: '84px',
+                                                   objectFit: 'cover',
+                                                   cursor: 'pointer',
+                                                   display: 'block'
+                                                 }}
+                                                 title="Click to zoom photo"
+                                               />
+                                               <button
+                                                 type="button"
+                                                 onClick={() => handleRemovePhoto(photo.id)}
+                                                 style={{
+                                                   position: 'absolute',
+                                                   top: '4px',
+                                                   right: '4px',
+                                                   width: '20px',
+                                                   height: '20px',
+                                                   borderRadius: '50%',
+                                                   background: 'rgba(239, 68, 68, 0.9)',
+                                                   color: '#ffffff',
+                                                   border: 'none',
+                                                   cursor: 'pointer',
+                                                   display: 'flex',
+                                                   alignItems: 'center',
+                                                   justifyContent: 'center',
+                                                   fontSize: '11px',
+                                                   fontWeight: 700,
+                                                   lineHeight: 1
+                                                 }}
+                                                 title="Remove photo"
+                                               >
+                                                 ✕
+                                               </button>
+                                               <div style={{ padding: '4px 6px', background: '#f8fafc', borderTop: '1px solid #f1f5f9' }}>
+                                                 <span style={{ fontSize: '10px', fontWeight: 650, color: '#1e3a8a', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                   {photo.tag || 'Defect Note'}
+                                                 </span>
+                                               </div>
+                                             </div>
+                                           ))}
 
-                                            <div>
-                                              <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                Order Type
-                                              </label>
-                                              <select
-                                                disabled={isOrderReady}
-                                                value={editFormData.order_type || 'Walk-in'}
-                                                onChange={(e) => setEditFormData({ ...editFormData, order_type: e.target.value })}
-                                                style={{
-                                                  width: '100%',
-                                                  boxSizing: 'border-box',
-                                                  height: '38px',
-                                                  padding: '0 10px',
-                                                  fontSize: '13px',
-                                                  borderRadius: '6px',
-                                                  border: '1.5px solid #d1d5db',
-                                                  background: isOrderReady ? '#f8fafc' : '#ffffff',
-                                                  color: '#0f172a',
-                                                  outline: 'none'
-                                                }}
-                                              >
-                                                <option value="Walk-in">Walk-in</option>
-                                                <option value="Home Delivery">Home Delivery</option>
-                                                <option value="Express 24H">Express 24H</option>
-                                              </select>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      )}
+                                           {/* Upload Placeholder if under limit */}
+                                           {editInspectionPhotos.length < 6 && (
+                                             <div
+                                               onClick={() => editPhotoInputRef.current?.click()}
+                                               style={{
+                                                 height: '108px',
+                                                 borderRadius: '6px',
+                                                 border: '1.5px dashed #93c5fd',
+                                                 background: '#f0f7ff',
+                                                 display: 'flex',
+                                                 flexDirection: 'column',
+                                                 alignItems: 'center',
+                                                 justifyContent: 'center',
+                                                 gap: '4px',
+                                                 cursor: 'pointer',
+                                                 transition: 'all 0.15s ease'
+                                               }}
+                                             >
+                                               <span style={{ fontSize: '20px', color: '#2563eb' }}>📷</span>
+                                               <span style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb' }}>Upload More</span>
+                                               <span style={{ fontSize: '10px', color: '#64748b' }}>Up to 6</span>
+                                             </div>
+                                           )}
+                                         </div>
+                                       </div>
+                                     </div>
 
-                                      {/* Tab 2: Logistics & Factory */}
-                                      {editActiveTab === 'logistics' && (
-                                        <div>
-                                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
-                                            Logistics &amp; Factory Routing
-                                          </div>
-                                          <div className="pos-edit-logistics-grid">
-                                            <div>
-                                              <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                Factory Hub
-                                              </label>
-                                              <select
-                                                disabled={isOrderReady}
-                                                defaultValue="Main Plant (Unit 1)"
-                                                style={{ width: '100%', boxSizing: 'border-box', height: '38px', padding: '0 10px', fontSize: '13px', borderRadius: '6px', border: '1.5px solid #d1d5db', background: '#ffffff', color: '#0f172a' }}
-                                              >
-                                                <option value="Main Plant (Unit 1)">Main Plant (Unit 1)</option>
-                                                <option value="Express Plant (Unit 2)">Express Plant (Unit 2)</option>
-                                              </select>
-                                            </div>
-                                            <div>
-                                              <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                Bag Tag / Intake Barcode
-                                              </label>
-                                              <input
-                                                type="text"
-                                                disabled={isOrderReady}
-                                                defaultValue={`BAG-${editFormData.order_number?.replace(/\D/g, '') || '001'}`}
-                                                style={{ width: '100%', boxSizing: 'border-box', height: '38px', padding: '0 12px', fontSize: '13px', borderRadius: '6px', border: '1.5px solid #d1d5db', background: '#ffffff', color: '#0f172a' }}
-                                              />
-                                            </div>
-                                            <div>
-                                              <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
-                                                Assigned Rider / Van
-                                              </label>
-                                              <select
-                                                disabled={isOrderReady}
-                                                defaultValue="Ramesh Kumar (Route 4)"
-                                                style={{ width: '100%', boxSizing: 'border-box', height: '38px', padding: '0 10px', fontSize: '13px', borderRadius: '6px', border: '1.5px solid #d1d5db', background: '#ffffff', color: '#0f172a' }}
-                                              >
-                                                <option value="Ramesh Kumar (Route 4)">Ramesh Kumar (Route 4)</option>
-                                                <option value="Suresh Babu (Route 2)">Suresh Babu (Route 2)</option>
-                                              </select>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      )}
+                                     {/* ══════════════════════════════════════════════════════════════════
+                                         SECTION 3: 6 TABS & TAB CONTENT (Matching User Requirements)
+                                         1. Order Details, 2. Logistics & Factory, 3. Status Updates,
+                                         4. Payments, 5. Customer Messages, 6. Comments & Audit
+                                        ══════════════════════════════════════════════════════════════════ */}
+                                     <div
+                                       style={{
+                                         border: '1.5px solid #e2e8f0',
+                                         borderRadius: '8px',
+                                         padding: '16px',
+                                         background: '#ffffff',
+                                         marginBottom: '18px'
+                                       }}
+                                     >
+                                       {/* Tabs Navigation Bar */}
+                                       <div
+                                         style={{
+                                           display: 'flex',
+                                           alignItems: 'center',
+                                           gap: '8px',
+                                           borderBottom: '1.5px solid #f1f5f9',
+                                           paddingBottom: '10px',
+                                           marginBottom: '14px',
+                                           overflowX: 'auto'
+                                         }}
+                                       >
+                                         {[
+                                           { id: 'details', label: '1. Order Details' },
+                                           { id: 'logistics', label: '2. Logistics & Factory' },
+                                           { id: 'status', label: '3. Status Updates' },
+                                           { id: 'payments', label: '4. Payments' },
+                                           { id: 'messages', label: '5. Customer Messages' },
+                                           { id: 'audit', label: '6. Comments & Audit' }
+                                         ].map((tab) => {
+                                           const isActive = editActiveTab === tab.id;
+                                           return (
+                                             <button
+                                               key={tab.id}
+                                               type="button"
+                                               onClick={() => setEditActiveTab(tab.id)}
+                                               style={{
+                                                 padding: '7px 16px',
+                                                 borderRadius: '6px',
+                                                 border: isActive ? '1px solid #bfdbfe' : '1px solid transparent',
+                                                 background: isActive ? '#eff6ff' : 'transparent',
+                                                 color: isActive ? '#2563eb' : '#64748b',
+                                                 fontSize: '12.5px',
+                                                 fontWeight: isActive ? 700 : 600,
+                                                 cursor: 'pointer',
+                                                 whiteSpace: 'nowrap',
+                                                 transition: 'all 0.15s ease'
+                                               }}
+                                             >
+                                               {tab.label}
+                                             </button>
+                                           );
+                                         })}
+                                       </div>
 
-                                      {/* Tab 3: Status Updates */}
-                                      {editActiveTab === 'status' && (
-                                        <div>
-                                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
-                                            Status Workflow Milestones
-                                          </div>
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12.5px', color: '#475569', flexWrap: 'wrap' }}>
-                                            <span style={{ padding: '5px 10px', borderRadius: '5px', background: '#dcfce7', color: '#15803d', fontWeight: 700 }}>✓ Received</span>
-                                            <span>➔</span>
-                                            <span style={{ padding: '5px 10px', borderRadius: '5px', background: '#e0f2fe', color: '#0369a1', fontWeight: 700 }}>⚙ In Processing</span>
-                                            <span>➔</span>
-                                            <span style={{ padding: '5px 10px', borderRadius: '5px', background: '#fef3c7', color: '#92400e', fontWeight: 700 }}>⏳ Ready for Pickup</span>
-                                            <span>➔</span>
-                                            <span style={{ padding: '5px 10px', borderRadius: '5px', background: '#f1f5f9', color: '#64748b' }}>📦 Delivered</span>
-                                          </div>
-                                        </div>
-                                      )}
+                                       {/* Tab 1 Content: Order Details */}
+                                       {editActiveTab === 'details' && (
+                                         <div>
+                                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
+                                             Order Details Update &amp; Intake Metadata
+                                           </div>
+                                           <div
+                                             style={{
+                                               display: 'grid',
+                                               gridTemplateColumns: 'repeat(3, 1fr)',
+                                               gap: '16px',
+                                               marginBottom: '14px'
+                                             }}
+                                           >
+                                             <div>
+                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
+                                                 Order ID (Database Generated)
+                                               </label>
+                                               <div style={{ display: 'flex', alignItems: 'center', height: '38px', padding: '0 12px', borderRadius: '6px', border: '1.5px solid #cbd5e1', background: '#f8fafc', color: '#1e40af', fontWeight: 750, fontSize: '13px', gap: '6px' }}>
+                                                 <span>🔒</span>
+                                                 <span>{editFormData.order_number || ''}</span>
+                                               </div>
+                                             </div>
 
-                                      {/* Tab 4: Payments */}
-                                      {editActiveTab === 'payments' && (
-                                        <div>
-                                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
-                                            Payment Summary &amp; Mode
-                                          </div>
-                                          <div className="pos-edit-payments-grid">
-                                            <div>
-                                              <span style={{ color: '#64748b' }}>Subtotal: </span>
-                                              <strong style={{ color: '#0f172a' }}>₹{editCartSubtotal.toFixed(2)}</strong>
-                                            </div>
-                                            <div>
-                                              <span style={{ color: '#64748b' }}>Taxes (5%): </span>
-                                              <strong style={{ color: '#0f172a' }}>₹{editCartTax.toFixed(2)}</strong>
-                                            </div>
-                                            <div>
-                                              <span style={{ color: '#64748b' }}>Total Due: </span>
-                                              <strong style={{ color: '#2563eb' }}>₹{editCartGrandTotal.toFixed(2)}</strong>
-                                            </div>
-                                            <div>
-                                              <span style={{ color: '#64748b' }}>Status: </span>
-                                              <span style={{ fontWeight: 750, color: editFormData.payment_status === 'Paid' ? '#16a34a' : '#d97706' }}>
-                                                {editFormData.payment_status || 'Pending'}
-                                              </span>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      )}
+                                             <div>
+                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
+                                                 Created Timestamp (Captured)
+                                               </label>
+                                               <div style={{ display: 'flex', alignItems: 'center', height: '38px', padding: '0 12px', borderRadius: '6px', border: '1.5px solid #cbd5e1', background: '#f8fafc', color: '#334155', fontWeight: 650, fontSize: '13px', gap: '6px' }}>
+                                                 <span>🕒</span>
+                                                 <span>{editFormData.captured_date || '2026-10-28'} {editFormData.captured_time || '10:15 AM'}</span>
+                                               </div>
+                                             </div>
 
-                                      {/* Tab 5: Customer Messages */}
-                                      {editActiveTab === 'messages' && (
-                                        <div>
-                                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '10px' }}>
-                                            WhatsApp &amp; SMS Notifications
-                                          </div>
-                                          <div style={{ fontSize: '12px', color: '#475569', background: '#f8fafc', padding: '10px 14px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                                            Notification template: <em>"Hello {editFormData.customer_name}, your laundry order #{editFormData.order_number} has been updated. Expected delivery: {editFormData.expected_delivery}."</em>
-                                          </div>
-                                        </div>
-                                      )}
+                                             <div>
+                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
+                                                 Current Status
+                                               </label>
+                                               <div style={{ display: 'flex', alignItems: 'center', height: '38px', padding: '0 12px', borderRadius: '6px', border: '1.5px solid #bfdbfe', background: '#eff6ff', color: '#1d4ed8', fontWeight: 750, fontSize: '13px', gap: '6px' }}>
+                                                 <span>●</span>
+                                                 <span>{normalizeOrderStatus(editFormData.status || editFormData.order_status)}</span>
+                                               </div>
+                                             </div>
+                                           </div>
 
-                                      {/* Tab 6: Comments & Audit */}
-                                      {editActiveTab === 'audit' && (
-                                        <div>
-                                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '10px' }}>
-                                            Audit Trail &amp; Operator Activity
-                                          </div>
-                                          <div style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.6 }}>
-                                            <div>• Order created on {editFormData.captured_date} at {editFormData.captured_time}</div>
-                                            <div>• Intake operator: Store Staff (Bellandur Branch)</div>
-                                            <div>• Last status modification: {editFormData.status}</div>
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
+                                           <div
+                                             style={{
+                                               display: 'grid',
+                                               gridTemplateColumns: 'repeat(3, 1fr)',
+                                               gap: '16px'
+                                             }}
+                                           >
+                                             <div>
+                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
+                                                 Garment Pieces Count
+                                               </label>
+                                               <input
+                                                 type="text"
+                                                 disabled
+                                                 value={`${editCartTotalPieces} Pieces in Order`}
+                                                 style={{
+                                                   width: '100%',
+                                                   boxSizing: 'border-box',
+                                                   height: '38px',
+                                                   padding: '0 12px',
+                                                   fontSize: '13px',
+                                                   borderRadius: '6px',
+                                                   border: '1.5px solid #cbd5e1',
+                                                   background: '#f8fafc',
+                                                   color: '#0f172a',
+                                                   fontWeight: 750
+                                                 }}
+                                               />
+                                             </div>
 
-                                    {/* ══════════════════════════════════════════════════════════════════
+                                             <div>
+                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
+                                                 Order Intake Type
+                                               </label>
+                                               <select
+                                                 value={editFormData.order_type || 'Walk-in'}
+                                                 onChange={(e) => setEditFormData({ ...editFormData, order_type: e.target.value })}
+                                                 style={{
+                                                   width: '100%',
+                                                   boxSizing: 'border-box',
+                                                   height: '38px',
+                                                   padding: '0 10px',
+                                                   fontSize: '13px',
+                                                   borderRadius: '6px',
+                                                   border: '1.5px solid #d1d5db',
+                                                   background: '#ffffff',
+                                                   color: '#0f172a',
+                                                   outline: 'none'
+                                                 }}
+                                               >
+                                                 <option value="Walk-in">Walk-in</option>
+                                                 <option value="Pickup &amp; Delivery">Pickup &amp; Delivery</option>
+                                                 <option value="On-Call">On-Call</option>
+                                                 <option value="Express 24H">Express 24H</option>
+                                               </select>
+                                             </div>
+
+                                             <div>
+                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
+                                                 Expected Delivery Date &amp; Time
+                                               </label>
+                                               <input
+                                                 type="text"
+                                                 value={editFormData.expected_delivery || ''}
+                                                 onChange={(e) => setEditFormData({ ...editFormData, expected_delivery: e.target.value })}
+                                                 placeholder="30 Oct 2026, 05:00 PM"
+                                                 style={{
+                                                   width: '100%',
+                                                   boxSizing: 'border-box',
+                                                   height: '38px',
+                                                   padding: '0 12px',
+                                                   fontSize: '13px',
+                                                   borderRadius: '6px',
+                                                   border: '1.5px solid #d1d5db',
+                                                   background: '#ffffff',
+                                                   color: '#0f172a',
+                                                   outline: 'none'
+                                                 }}
+                                               />
+                                             </div>
+                                           </div>
+                                         </div>
+                                       )}
+
+                                       {/* Tab 2: Logistics & Factory */}
+                                       {editActiveTab === 'logistics' && (
+                                         <div>
+                                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
+                                             Logistics &amp; Factory Routing Details
+                                           </div>
+                                           <div className="pos-edit-logistics-grid" style={{ marginBottom: '14px' }}>
+                                             <div>
+                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
+                                                 Factory Plant / Processing Hub
+                                               </label>
+                                               <select
+                                                 defaultValue="Main Plant (Unit 1)"
+                                                 style={{ width: '100%', boxSizing: 'border-box', height: '38px', padding: '0 10px', fontSize: '13px', borderRadius: '6px', border: '1.5px solid #d1d5db', background: '#ffffff', color: '#0f172a' }}
+                                               >
+                                                 <option value="Main Plant (Unit 1)">Main Plant (Unit 1) - Washer &amp; Pressing</option>
+                                                 <option value="Express Plant (Unit 2)">Express Plant (Unit 2) - 24H Quick Turnaround</option>
+                                                 <option value="Central Dry Clean Hub">Central Dry Clean Hub - Delicate &amp; Silk</option>
+                                               </select>
+                                             </div>
+                                             <div>
+                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
+                                                 Bag Tag / Barcode Identifier
+                                               </label>
+                                               <div style={{ display: 'flex', alignItems: 'center', height: '38px', padding: '0 12px', borderRadius: '6px', border: '1.5px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontWeight: 700, fontSize: '13px', gap: '6px' }}>
+                                                 <span>🏷</span>
+                                                 <span>BAG-{editFormData.order_number?.replace(/D/g, '') || '00108'}</span>
+                                               </div>
+                                             </div>
+                                             <div>
+                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
+                                                 Assigned Delivery Rider / Van
+                                               </label>
+                                               <select
+                                                 defaultValue="Ramesh Kumar (Route 4)"
+                                                 style={{ width: '100%', boxSizing: 'border-box', height: '38px', padding: '0 10px', fontSize: '13px', borderRadius: '6px', border: '1.5px solid #d1d5db', background: '#ffffff', color: '#0f172a' }}
+                                               >
+                                                 <option value="Ramesh Kumar (Route 4)">Ramesh Kumar (Route 4 - Downtown)</option>
+                                                 <option value="Suresh Babu (Route 2)">Suresh Babu (Route 2 - Residential)</option>
+                                                 <option value="Self Pickup">Counter Self-Pickup</option>
+                                               </select>
+                                             </div>
+                                           </div>
+
+                                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                             <div>
+                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
+                                                 Plant Transit &amp; Packaging Status
+                                               </label>
+                                               <select
+                                                 defaultValue="Washing in Progress"
+                                                 style={{ width: '100%', boxSizing: 'border-box', height: '38px', padding: '0 10px', fontSize: '13px', borderRadius: '6px', border: '1.5px solid #d1d5db', background: '#ffffff', color: '#0f172a' }}
+                                               >
+                                                 <option value="Intake Complete">Intake Complete - Bagged</option>
+                                                 <option value="In Transit to Factory">In Transit to Factory</option>
+                                                 <option value="Washing in Progress">Washing in Progress</option>
+                                                 <option value="Pressed &amp; Quality Checked">Pressed &amp; Quality Checked</option>
+                                                 <option value="Ready for Dispatch to Store">Ready for Dispatch to Store</option>
+                                               </select>
+                                             </div>
+                                             <div>
+                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
+                                                 Factory Bin / Storage Shelf
+                                               </label>
+                                               <input
+                                                 type="text"
+                                                 defaultValue="Bin B-14 (Hanger Rail 2)"
+                                                 style={{ width: '100%', boxSizing: 'border-box', height: '38px', padding: '0 12px', fontSize: '13px', borderRadius: '6px', border: '1.5px solid #d1d5db', background: '#ffffff', color: '#0f172a' }}
+                                               />
+                                             </div>
+                                           </div>
+                                         </div>
+                                       )}
+
+                                       {/* Tab 3: Status Updates */}
+                                       {editActiveTab === 'status' && (
+                                         <div>
+                                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
+                                             Live Order Status Pipeline &amp; Milestone Controls
+                                           </div>
+
+                                           {/* Visual Milestone Progression Bar */}
+                                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12.5px', color: '#475569', flexWrap: 'wrap', marginBottom: '16px', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                             {['Received', 'In Progress', 'Ready', 'Delivered'].map((step, idx) => {
+                                               const currentNorm = normalizeOrderStatus(editFormData.status || editFormData.order_status);
+                                               const isDone = ['Received', 'In Progress', 'Ready', 'Delivered'].indexOf(currentNorm) >= idx;
+                                               return (
+                                                 <React.Fragment key={step}>
+                                                   {idx > 0 && <span style={{ color: '#94a3b8' }}>➔</span>}
+                                                   <span
+                                                     style={{
+                                                       padding: '6px 12px',
+                                                       borderRadius: '6px',
+                                                       background: isDone ? (step === 'Ready' ? '#dcfce7' : '#eff6ff') : '#ffffff',
+                                                       color: isDone ? (step === 'Ready' ? '#15803d' : '#1d4ed8') : '#64748b',
+                                                       fontWeight: isDone ? 750 : 500,
+                                                       border: isDone ? '1px solid #bfdbfe' : '1px solid #cbd5e1'
+                                                     }}
+                                                   >
+                                                     {isDone ? '✓ ' : '○ '}{step}
+                                                   </span>
+                                                 </React.Fragment>
+                                               );
+                                             })}
+                                           </div>
+
+                                           {/* Interactive Status Selector Row */}
+                                           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                             <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>
+                                               Change Status:
+                                             </label>
+                                             <select
+                                               value={normalizeOrderStatus(editFormData.status || editFormData.order_status)}
+                                               onChange={(e) => {
+                                                 const val = e.target.value;
+                                                 setEditFormData({ ...editFormData, status: val, order_status: val });
+                                                 handleQuickStatusUpdate(val);
+                                               }}
+                                               style={{
+                                                 height: '38px',
+                                                 padding: '0 12px',
+                                                 fontSize: '13px',
+                                                 fontWeight: 650,
+                                                 borderRadius: '6px',
+                                                 border: '1.5px solid #2563eb',
+                                                 background: '#ffffff',
+                                                 color: '#0f172a',
+                                                 outline: 'none',
+                                                 minWidth: '180px'
+                                               }}
+                                             >
+                                               <option value="Received">🔵 Received</option>
+                                               <option value="In Progress">🟡 In Progress</option>
+                                               <option value="Ready">🟢 Ready for Pickup</option>
+                                               <option value="Delivered">🔷 Delivered</option>
+                                               <option value="Cancelled">🔴 Cancelled</option>
+                                             </select>
+
+                                             <button
+                                               type="button"
+                                               onClick={() => handleQuickStatusUpdate(editFormData.status || editFormData.order_status)}
+                                               style={{
+                                                 height: '38px',
+                                                 padding: '0 16px',
+                                                 borderRadius: '6px',
+                                                 border: 'none',
+                                                 background: '#2563eb',
+                                                 color: '#ffffff',
+                                                 fontSize: '12.5px',
+                                                 fontWeight: 700,
+                                                 cursor: 'pointer',
+                                                 display: 'inline-flex',
+                                                 alignItems: 'center',
+                                                 gap: '6px',
+                                                 boxShadow: '0 2px 6px rgba(37,99,235,0.25)'
+                                               }}
+                                             >
+                                               <span>⚡</span>
+                                               <span>Apply &amp; Save Status</span>
+                                             </button>
+                                           </div>
+                                         </div>
+                                       )}
+
+                                       {/* Tab 4: Payments */}
+                                       {editActiveTab === 'payments' && (
+                                         <div>
+                                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
+                                             Payment Breakdown &amp; Transaction Details
+                                           </div>
+
+                                           {/* 4 Summary Cards */}
+                                           <div
+                                             style={{
+                                               display: 'grid',
+                                               gridTemplateColumns: 'repeat(4, 1fr)',
+                                               gap: '12px',
+                                               marginBottom: '16px'
+                                             }}
+                                           >
+                                             <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                               <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px' }}>Subtotal</span>
+                                               <span style={{ fontSize: '15px', fontWeight: 750, color: '#0f172a' }}>₹{editCartSubtotal.toFixed(2)}</span>
+                                             </div>
+                                             <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                               <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px' }}>Tax (5% GST)</span>
+                                               <span style={{ fontSize: '15px', fontWeight: 750, color: '#0f172a' }}>₹{editCartTax.toFixed(2)}</span>
+                                             </div>
+                                             <div style={{ background: '#eff6ff', padding: '12px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+                                               <span style={{ fontSize: '11px', color: '#1e40af', display: 'block', marginBottom: '4px' }}>Grand Total</span>
+                                               <span style={{ fontSize: '16px', fontWeight: 800, color: '#1d4ed8' }}>₹{editCartGrandTotal.toFixed(2)}</span>
+                                             </div>
+                                             <div style={{ background: '#fef3c7', padding: '12px', borderRadius: '8px', border: '1px solid #fde68a' }}>
+                                               <span style={{ fontSize: '11px', color: '#92400e', display: 'block', marginBottom: '4px' }}>Balance Due</span>
+                                               <span style={{ fontSize: '15px', fontWeight: 800, color: '#b45309' }}>
+                                                 ₹{Math.max(0, editCartGrandTotal - Number(editFormData.advance_paid || 0)).toFixed(2)}
+                                               </span>
+                                             </div>
+                                           </div>
+
+                                           {/* Payment Fields */}
+                                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+                                             <div>
+                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
+                                                 Payment Status
+                                               </label>
+                                               <select
+                                                 value={editFormData.payment_status || 'Unpaid'}
+                                                 onChange={(e) => setEditFormData({ ...editFormData, payment_status: e.target.value })}
+                                                 style={{ width: '100%', boxSizing: 'border-box', height: '38px', padding: '0 10px', fontSize: '13px', borderRadius: '6px', border: '1.5px solid #d1d5db', background: '#ffffff', color: '#0f172a' }}
+                                               >
+                                                 <option value="Paid">🟢 Fully Paid</option>
+                                                 <option value="Partially Paid">🟡 Partially Paid</option>
+                                                 <option value="Unpaid">🔴 Unpaid</option>
+                                               </select>
+                                             </div>
+
+                                             <div>
+                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
+                                                 Payment Mode / Gateway
+                                               </label>
+                                               <select
+                                                 defaultValue="UPI / QR Code"
+                                                 style={{ width: '100%', boxSizing: 'border-box', height: '38px', padding: '0 10px', fontSize: '13px', borderRadius: '6px', border: '1.5px solid #d1d5db', background: '#ffffff', color: '#0f172a' }}
+                                               >
+                                                 <option value="Cash">Cash at Counter</option>
+                                                 <option value="UPI / QR Code">UPI (GPay / PhonePe / Paytm)</option>
+                                                 <option value="Credit / Debit Card">Credit / Debit Card</option>
+                                                 <option value="Net Banking">Net Banking</option>
+                                                 <option value="Store Credit">Store Credit / Wallet</option>
+                                               </select>
+                                             </div>
+
+                                             <div>
+                                               <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
+                                                 Advance Paid (₹)
+                                               </label>
+                                               <input
+                                                 type="number"
+                                                 min="0"
+                                                 value={editFormData.advance_paid || 0}
+                                                 onChange={(e) => setEditFormData({ ...editFormData, advance_paid: e.target.value })}
+                                                 style={{ width: '100%', boxSizing: 'border-box', height: '38px', padding: '0 12px', fontSize: '13px', borderRadius: '6px', border: '1.5px solid #d1d5db', background: '#ffffff', color: '#0f172a' }}
+                                               />
+                                             </div>
+                                           </div>
+                                         </div>
+                                       )}
+
+                                       {/* Tab 5: Customer Messages */}
+                                       {editActiveTab === 'messages' && (
+                                         <div>
+                                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '10px' }}>
+                                             Customer Messaging &amp; Automated Notifications
+                                           </div>
+
+                                           {/* Customer Contact Snapshot */}
+                                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '14px' }}>
+                                             <div>
+                                               <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+                                                 {editFormData.customer_name || 'Rahul Kumar'}
+                                               </div>
+                                               <div style={{ fontSize: '12px', color: '#64748b' }}>
+                                                 📱 +91 {editFormData.mobile_number || '9876543210'} • {editFormData.address || 'MG Road, Vellore'}
+                                               </div>
+                                             </div>
+                                             <button
+                                               type="button"
+                                               onClick={() => showToast?.(`💬 WhatsApp opened for +91 ${editFormData.mobile_number || '9876543210'}`)}
+                                               style={{
+                                                 padding: '6px 14px',
+                                                 borderRadius: '6px',
+                                                 border: '1px solid #22c55e',
+                                                 background: '#f0fdf4',
+                                                 color: '#15803d',
+                                                 fontSize: '12px',
+                                                 fontWeight: 700,
+                                                 cursor: 'pointer',
+                                                 display: 'inline-flex',
+                                                 alignItems: 'center',
+                                                 gap: '6px'
+                                               }}
+                                             >
+                                               <span>💬</span>
+                                               <span>WhatsApp Customer</span>
+                                             </button>
+                                           </div>
+
+                                           {/* Notification Template Preview */}
+                                           <div style={{ fontSize: '12px', color: '#334155', background: '#f0fdf4', padding: '12px 14px', borderRadius: '6px', border: '1px solid #bbf7d0', lineHeight: 1.5, marginBottom: '12px' }}>
+                                             <span style={{ fontWeight: 700, color: '#166534', display: 'block', marginBottom: '4px' }}>
+                                               Automated WhatsApp &amp; SMS Template:
+                                             </span>
+                                             "Hello <strong>{editFormData.customer_name || 'Customer'}</strong>, your laundry order <strong>#{editFormData.order_number}</strong> with Washdoor is now <strong>{normalizeOrderStatus(editFormData.status || editFormData.order_status)}</strong> ({editCartTotalPieces} pieces). Total Bill: ₹{editCartGrandTotal.toFixed(2)}. Expected delivery: {editFormData.expected_delivery || '30 Oct 2026, 05:00 PM'}."
+                                           </div>
+
+                                           <div style={{ display: 'flex', gap: '8px' }}>
+                                             <button
+                                               type="button"
+                                               onClick={() => showToast?.(`✅ WhatsApp notification sent to ${editFormData.customer_name}!`)}
+                                               style={{ padding: '7px 14px', borderRadius: '6px', border: 'none', background: '#16a34a', color: '#ffffff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                                             >
+                                               Send WhatsApp Alert
+                                             </button>
+                                             <button
+                                               type="button"
+                                               onClick={() => showToast?.(`✅ SMS alert dispatched to +91 ${editFormData.mobile_number}!`)}
+                                               style={{ padding: '7px 14px', borderRadius: '6px', border: '1.5px solid #cbd5e1', background: '#ffffff', color: '#334155', fontSize: '12px', fontWeight: 650, cursor: 'pointer' }}
+                                             >
+                                               Send SMS Alert
+                                             </button>
+                                           </div>
+                                         </div>
+                                       )}
+
+                                       {/* Tab 6: Comments & Audit */}
+                                       {editActiveTab === 'audit' && (
+                                         <div>
+                                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '12px' }}>
+                                             Internal Staff Comments &amp; Immutable System Audit Trail
+                                           </div>
+
+                                           {/* Operator Notes Field */}
+                                           <div style={{ marginBottom: '14px' }}>
+                                             <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 650, color: '#475569', marginBottom: '5px' }}>
+                                               Internal Staff Instructions / Store Comments
+                                             </label>
+                                             <textarea
+                                               rows={2}
+                                               value={editFormData.comments || ''}
+                                               onChange={(e) => setEditFormData({ ...editFormData, comments: e.target.value })}
+                                               placeholder="Internal notes for laundry wash technician or rider..."
+                                               style={{
+                                                 width: '100%',
+                                                 boxSizing: 'border-box',
+                                                 padding: '8px 12px',
+                                                 fontSize: '12.5px',
+                                                 borderRadius: '6px',
+                                                 border: '1.5px solid #cbd5e1',
+                                                 background: '#ffffff',
+                                                 color: '#0f172a',
+                                                 outline: 'none',
+                                                 minHeight: '60px'
+                                               }}
+                                             />
+                                           </div>
+
+                                           {/* Audit Trail Timeline */}
+                                           <div style={{ fontSize: '12px', color: '#64748b', background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', lineHeight: 1.8 }}>
+                                             <div>• <strong>Order Created:</strong> {editFormData.captured_date || '2026-10-28'} at {editFormData.captured_time || '10:15 AM'} by Counter Operator</div>
+                                             <div>• <strong>Current Work Status:</strong> {normalizeOrderStatus(editFormData.status || editFormData.order_status)}</div>
+                                             <div>• <strong>Items Logged:</strong> {editCartTotalPieces} pieces allocated across {editCart.length} service line(s)</div>
+                                             <div>• <strong>Garment Inspection:</strong> {editInspection.garment} ({editInspection.color || 'Standard'}) — {editInspectionPhotos.length} photo evidence image(s) attached</div>
+                                             <div>• <strong>Financial Status:</strong> {editFormData.payment_status || 'Unpaid'} — Total ₹{editCartGrandTotal.toFixed(2)}</div>
+                                           </div>
+                                         </div>
+                                       )}
+                                     </div>
+
+                                     {/* Lightbox Modal for Photo Preview */}
+                                     {photoPreviewModal && (
+                                       <div
+                                         onClick={() => setPhotoPreviewModal(null)}
+                                         style={{
+                                           position: 'fixed',
+                                           inset: 0,
+                                           background: 'rgba(0, 0, 0, 0.75)',
+                                           display: 'flex',
+                                           alignItems: 'center',
+                                           justifyContent: 'center',
+                                           zIndex: 9999,
+                                           padding: '20px'
+                                         }}
+                                       >
+                                         <div
+                                           onClick={(e) => e.stopPropagation()}
+                                           style={{
+                                             background: '#ffffff',
+                                             borderRadius: '10px',
+                                             maxWidth: '540px',
+                                             width: '100%',
+                                             overflow: 'hidden',
+                                             boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
+                                           }}
+                                         >
+                                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #e2e8f0' }}>
+                                             <div>
+                                               <div style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>{photoPreviewModal.name}</div>
+                                               <div style={{ fontSize: '11px', color: '#2563eb', fontWeight: 600 }}>{photoPreviewModal.tag}</div>
+                                             </div>
+                                             <button
+                                               type="button"
+                                               onClick={() => setPhotoPreviewModal(null)}
+                                               style={{ border: 'none', background: 'transparent', fontSize: '16px', cursor: 'pointer', color: '#64748b' }}
+                                             >
+                                               ✕
+                                             </button>
+                                           </div>
+                                           <div style={{ padding: '16px', display: 'flex', justifyContent: 'center', background: '#0f172a' }}>
+                                             <img
+                                               src={photoPreviewModal.url}
+                                               alt={photoPreviewModal.name}
+                                               style={{ maxWidth: '100%', maxHeight: '380px', objectFit: 'contain', borderRadius: '4px' }}
+                                             />
+                                           </div>
+                                         </div>
+                                       </div>
+                                     )}
+
+                                     {/* ══════════════════════════════════════════════════════════════════
                                         FOOTER ACTION BUTTONS (Bottom Right)
                                        ══════════════════════════════════════════════════════════════════ */}
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px' }}>

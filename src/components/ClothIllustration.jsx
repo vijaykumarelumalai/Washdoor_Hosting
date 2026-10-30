@@ -217,6 +217,42 @@ export default function ClothIllustration({ itemId, size = 64 }) {
         </svg>
       );
 
+    case 'kurta':
+      return (
+        <svg width={size} height={size} viewBox="0 0 80 80" fill="none">
+          {/* Ethnic Long Kurta */}
+          <path d="M26 18 L34 24 L46 24 L54 18 L68 28 L60 38 L54 34 L55 74 L25 74 L26 34 L20 38 L12 28 Z" fill="#fed7aa" stroke="#f97316" strokeWidth="2" strokeLinejoin="round" />
+          <polygon points="34,24 40,32 30,28" fill="#ffedd5" stroke="#ea580c" strokeWidth="1.5" />
+          <polygon points="46,24 40,32 50,28" fill="#ffedd5" stroke="#ea580c" strokeWidth="1.5" />
+          <line x1="40" y1="32" x2="40" y2="52" stroke="#ea580c" strokeWidth="1.5" />
+          <circle cx="40" cy="38" r="1.5" fill="#c2410c" />
+          <circle cx="40" cy="46" r="1.5" fill="#c2410c" />
+        </svg>
+      );
+
+    case 'frock':
+      return (
+        <svg width={size} height={size} viewBox="0 0 80 80" fill="none">
+          {/* Kids / Girl's Flared Frock */}
+          <path d="M30 18 C35 22 45 22 50 18 L60 26 L54 34 L50 30 L52 42 L66 72 L14 72 L28 42 L30 30 L26 34 L20 26 Z" fill="#fbcfe8" stroke="#ec4899" strokeWidth="2" strokeLinejoin="round" />
+          <path d="M28 42 C36 45 44 45 52 42" stroke="#db2777" strokeWidth="2" fill="none" />
+          <circle cx="40" cy="42" r="3" fill="#be185d" />
+        </svg>
+      );
+
+    case 'shoes':
+      return (
+        <svg width={size} height={size} viewBox="0 0 80 80" fill="none">
+          {/* Athletic Sneaker / Shoe */}
+          <path d="M14 52 C14 42 22 36 30 36 L44 36 L56 46 L68 50 C70 54 68 62 62 64 L16 64 C13 64 12 58 14 52 Z" fill="#0284c7" stroke="#0369a1" strokeWidth="2" strokeLinejoin="round" />
+          {/* Sole */}
+          <path d="M12 60 L68 60 C70 60 72 63 70 66 L66 68 L14 68 C12 68 10 65 12 60 Z" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.5" />
+          {/* Shoe laces */}
+          <line x1="36" y1="38" x2="44" y2="44" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
+          <line x1="34" y1="44" x2="42" y2="50" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+
     case 'curtain':
       return (
         <svg width={size} height={size} viewBox="0 0 80 80" fill="none">

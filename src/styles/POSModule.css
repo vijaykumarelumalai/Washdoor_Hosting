@@ -1545,11 +1545,12 @@ body.light-theme .pos-top-result-item:hover,
   margin-bottom: 24px;
 }
 
-/* Mobile & Tablet: Unbound vertical scroll to prevent nested scroll traps */
+/* Mobile & Tablet: Keep table contained within viewport so horizontal scroller is always visible */
 @media (max-width: 960px) {
   .pos-orders-table-card {
-    max-height: none !important;
-    overflow-y: visible !important;
+    max-height: calc(100vh - 200px);
+    max-height: calc(100dvh - 200px);
+    overflow-y: auto !important;
     border-radius: 12px;
   }
 }
@@ -1937,22 +1938,22 @@ body.light-theme .pos-orders-table-card,
   background: #ffffff !important;
   border: 1.5px solid #cbd5e1 !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06) !important;
-  scrollbar-color: #cbd5e1 #f8fafc !important;
+  scrollbar-color: #3b82f6 #f1f5f9 !important;
 }
 
 body.light-theme .pos-orders-table-card::-webkit-scrollbar-track,
 [data-theme="light"] .pos-orders-table-card::-webkit-scrollbar-track {
-  background: #f8fafc !important;
+  background: #f1f5f9 !important;
 }
 
 body.light-theme .pos-orders-table-card::-webkit-scrollbar-thumb,
 [data-theme="light"] .pos-orders-table-card::-webkit-scrollbar-thumb {
-  background: #cbd5e1 !important;
+  background: #3b82f6 !important;
 }
 
 body.light-theme .pos-orders-table-card::-webkit-scrollbar-thumb:hover,
 [data-theme="light"] .pos-orders-table-card::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8 !important;
+  background: #2563eb !important;
 }
 
 body.light-theme .pos-orders-table th,
@@ -2503,27 +2504,107 @@ body.light-theme .pos-status-pills-bar::-webkit-scrollbar-thumb,
 }
 
 /* ═══════════════════════════════════════════════════════════
-   Table horizontal scroll hint
+   Table horizontal scroll hint & interactive nav buttons
    ═══════════════════════════════════════════════════════════ */
-.pos-table-scroll-hint {
+.pos-btn-label-short {
   display: none;
-  font-size: 11.5px;
-  color: #2563eb;
-  padding: 6px 12px;
-  background: rgba(37, 99, 235, 0.07);
-  border: 1px dashed rgba(37, 99, 235, 0.3);
-  border-radius: 8px;
-  margin-bottom: 8px;
-  font-weight: 600;
 }
 
-@media (max-width: 1024px) {
-  .pos-table-scroll-hint {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
+@media (max-width: 480px) {
+  .pos-btn-label-full {
+    display: none;
   }
+  .pos-btn-label-short {
+    display: inline;
+  }
+  .pos-date-label {
+    font-size: 11px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 105px;
+    display: inline-block;
+  }
+}
+
+.pos-table-scroll-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: #1d4ed8;
+  padding: 8px 14px;
+  background: #eff6ff;
+  border: 1.5px solid #bfdbfe;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  font-weight: 600;
+  flex-wrap: wrap;
+}
+
+.pos-scroll-hint-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pos-table-scroll-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pos-table-scroll-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
+  transition: background 0.15s ease;
+}
+
+.pos-table-scroll-btn:hover {
+  background: #1d4ed8;
+}
+
+/* Light theme table scroll & sticky rules */
+body.light-theme .pos-orders-table-card,
+[data-theme="light"] .pos-orders-table-card {
+  scrollbar-color: #3b82f6 #f1f5f9 !important;
+}
+
+body.light-theme .pos-orders-table th:first-child,
+[data-theme="light"] .pos-orders-table th:first-child,
+body.light-theme .pos-orders-table td:first-child,
+[data-theme="light"] .pos-orders-table td:first-child {
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 10 !important;
+  background: #ffffff !important;
+  box-shadow: 4px 0 10px -2px rgba(15, 23, 42, 0.12) !important;
+}
+
+body.light-theme .pos-orders-table thead th,
+[data-theme="light"] .pos-orders-table thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 8 !important;
+  background: #f8fafc !important;
+  border-bottom: 2px solid #cbd5e1 !important;
+}
+
+body.light-theme .pos-orders-table thead th:first-child,
+[data-theme="light"] .pos-orders-table thead th:first-child {
+  z-index: 14 !important;
+  background: #f8fafc !important;
 }
 
 /* ═══════════════════════════════════════════════════════════
