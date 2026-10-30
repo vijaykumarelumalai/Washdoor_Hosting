@@ -2819,7 +2819,10 @@ select option {
   }
   .main {
     margin-left: 0;
-    padding: 16px 14px 72px; /* space for bottom navigation bar */
+    padding: 14px 12px 100px; /* generous space so bottom navigation bar never covers table rows */
+    max-width: 100vw;
+    box-sizing: border-box;
+    overflow-x: hidden;
   }
   .modal {
     width: 100%;
@@ -6281,18 +6284,43 @@ html, body, #root, .app {
   .topbar {
     gap: 6px;
     padding: 0 10px;
+    max-width: 100vw;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+  .top-pill {
+    padding: 5px 8px;
+    font-size: 11px;
+    flex-shrink: 0;
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 580px) {
+  .theme-toggle-label {
+    display: none !important;
+  }
+  .top-pill.theme-toggle-btn {
+    padding: 6px 8px !important;
+  }
+  .top-pill-currency,
+  .top-pill-language {
+    padding: 4px 6px !important;
+  }
+}
+
+@media (max-width: 440px) {
   .top-pill-status {
     display: none !important;
   }
+  .topbar {
+    padding: 0 6px;
+    gap: 4px;
+  }
   .topbar .brand-name {
-    font-size: 14px;
+    font-size: 13.5px;
   }
   .topbar .sub {
-    font-size: 9.5px;
+    font-size: 9px;
   }
 }
 

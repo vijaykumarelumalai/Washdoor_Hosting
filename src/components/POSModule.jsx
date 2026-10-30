@@ -1214,8 +1214,12 @@ export default function POSModule({
                   ))}
                 </div>
               ) : (
-                <div className="pos-orders-table-card">
-                  <table className="pos-orders-table">
+                <>
+                  <div className="pos-table-scroll-hint">
+                    <span>👉 Swipe horizontally to view all 8 order columns (Customer, Address, Services, Status, Timeline, Logistics, Bill)</span>
+                  </div>
+                  <div className="pos-orders-table-card">
+                    <table className="pos-orders-table">
                     <thead>
                       <tr>
                         <th>Order ID</th>
@@ -3202,6 +3206,7 @@ export default function POSModule({
                     </tbody>
                   </table>
                 </div>
+                </>
               )}
             </>
           )}

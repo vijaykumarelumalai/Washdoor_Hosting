@@ -1532,7 +1532,9 @@ body.light-theme .pos-top-result-item:hover,
   border: 1.5px solid #1c2e4a;
   border-radius: 14px;
   overflow-x: auto !important;
-  overflow-y: hidden;
+  overflow-y: auto !important;
+  max-height: calc(100vh - 240px);
+  max-height: calc(100dvh - 240px);
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: #2b3d5b rgba(0, 0, 0, 0.1);
@@ -1540,10 +1542,21 @@ body.light-theme .pos-top-result-item:hover,
   width: 100%;
   max-width: 100%;
   position: relative;
+  margin-bottom: 24px;
+}
+
+/* Mobile & Tablet: Unbound vertical scroll to prevent nested scroll traps */
+@media (max-width: 960px) {
+  .pos-orders-table-card {
+    max-height: none !important;
+    overflow-y: visible !important;
+    border-radius: 12px;
+  }
 }
 
 .pos-orders-table-card::-webkit-scrollbar {
-  height: 7px;
+  width: 6px;
+  height: 8px;
   display: block !important;
 }
 
@@ -1555,6 +1568,8 @@ body.light-theme .pos-top-result-item:hover,
 .pos-orders-table-card::-webkit-scrollbar-thumb {
   background: #233550;
   border-radius: 6px;
+  min-height: 40px;
+  min-width: 40px;
 }
 
 .pos-orders-table-card::-webkit-scrollbar-thumb:hover {
@@ -1562,25 +1577,27 @@ body.light-theme .pos-top-result-item:hover,
 }
 
 .pos-orders-table {
-  min-width: 1080px;
+  min-width: 1140px;
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   text-align: left;
 }
 
 .pos-orders-table th {
-  padding: 13px 16px;
-  font-size: 11.5px;
+  padding: 14px 16px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #6a7e9d;
-  background: #050e1b;
-  border-bottom: 1.5px solid #172a44;
+  letter-spacing: 0.04em;
+  color: #8fa5c2;
+  background: #0b1a2f;
+  border-bottom: 1.5px solid #1c2e4a;
   white-space: nowrap;
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 5;
+  vertical-align: middle;
 }
 
 .pos-orders-table td {
@@ -1589,18 +1606,86 @@ body.light-theme .pos-top-result-item:hover,
   font-size: 13px;
   color: #f1f5f9;
   vertical-align: middle;
+  background: #081527;
+}
+
+/* ── Sticky First Column: Order ID (Pinned during horizontal scroll) ── */
+.pos-orders-table th:first-child,
+.pos-orders-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  background: #081527;
+  box-shadow: 4px 0 10px -2px rgba(0, 0, 0, 0.45);
+}
+
+.pos-orders-table thead th:first-child {
+  z-index: 10;
+  background: #0b1a2f;
 }
 
 .pos-orders-table tbody tr.pos-order-row {
   transition: background-color 0.15s ease;
 }
 
-.pos-orders-table tbody tr.pos-order-row:hover {
+.pos-orders-table tbody tr.pos-order-row:hover td {
+  background-color: #0d1e38;
+}
+
+.pos-orders-table tbody tr.pos-order-row:hover td:first-child {
   background-color: #0d1e38;
 }
 
 .pos-orders-table tbody tr:last-child td {
   border-bottom: none;
+}
+
+/* ── Exact Column Dimensions for Clean Alignment ── */
+.pos-orders-table th:nth-child(1),
+.pos-orders-table td:nth-child(1) {
+  width: 135px;
+  min-width: 135px;
+  max-width: 140px;
+}
+
+.pos-orders-table th:nth-child(2),
+.pos-orders-table td:nth-child(2) {
+  width: 175px;
+  min-width: 175px;
+}
+
+.pos-orders-table th:nth-child(3),
+.pos-orders-table td:nth-child(3) {
+  min-width: 180px;
+  max-width: 220px;
+  word-break: break-word;
+}
+
+.pos-orders-table th:nth-child(4),
+.pos-orders-table td:nth-child(4) {
+  min-width: 165px;
+}
+
+.pos-orders-table th:nth-child(5),
+.pos-orders-table td:nth-child(5) {
+  min-width: 125px;
+  width: 125px;
+}
+
+.pos-orders-table th:nth-child(6),
+.pos-orders-table td:nth-child(6) {
+  min-width: 195px;
+}
+
+.pos-orders-table th:nth-child(7),
+.pos-orders-table td:nth-child(7) {
+  min-width: 220px;
+}
+
+.pos-orders-table th:nth-child(8),
+.pos-orders-table td:nth-child(8) {
+  width: 140px;
+  min-width: 140px;
 }
 
 /* Table Cells */
@@ -1877,17 +1962,37 @@ body.light-theme .pos-orders-table th,
   color: #475569 !important;
   position: sticky !important;
   top: 0 !important;
-  z-index: 2 !important;
+  z-index: 5 !important;
 }
 
 body.light-theme .pos-orders-table td,
 [data-theme="light"] .pos-orders-table td {
   border-bottom: 1px solid #f1f5f9 !important;
   color: #000000 !important;
+  background: #ffffff !important;
 }
 
-body.light-theme .pos-orders-table tbody tr.pos-order-row:hover,
-[data-theme="light"] .pos-orders-table tbody tr.pos-order-row:hover {
+body.light-theme .pos-orders-table th:first-child,
+[data-theme="light"] .pos-orders-table th:first-child {
+  background: #f8fafc !important;
+  z-index: 10 !important;
+  box-shadow: 4px 0 10px -2px rgba(15, 23, 42, 0.08) !important;
+}
+
+body.light-theme .pos-orders-table td:first-child,
+[data-theme="light"] .pos-orders-table td:first-child {
+  background: #ffffff !important;
+  z-index: 6 !important;
+  box-shadow: 4px 0 10px -2px rgba(15, 23, 42, 0.08) !important;
+}
+
+body.light-theme .pos-orders-table tbody tr.pos-order-row:hover td,
+[data-theme="light"] .pos-orders-table tbody tr.pos-order-row:hover td {
+  background-color: #f8fafc !important;
+}
+
+body.light-theme .pos-orders-table tbody tr.pos-order-row:hover td:first-child,
+[data-theme="light"] .pos-orders-table tbody tr.pos-order-row:hover td:first-child {
   background-color: #f8fafc !important;
 }
 
@@ -2301,18 +2406,38 @@ body.light-theme .pos-status-pills-bar::-webkit-scrollbar-thumb,
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 860px) {
   .pos-screen-header {
+    flex-direction: column;
+    align-items: stretch;
     gap: 12px;
+  }
+  .pos-screen-title-wrap {
+    width: 100%;
   }
   .pos-screen-actions {
     width: 100%;
     justify-content: flex-start;
+    gap: 10px;
   }
   .pos-search-input-wrap {
     width: 100%;
     max-width: 100%;
     min-width: 0;
+    flex: 1 1 100%;
+    order: 1;
+  }
+  .pos-filter-dropdown-container {
+    order: 2;
+    flex: 1 1 auto;
+  }
+  .pos-filter-dropdown-container .pos-toolbar-btn {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .pos-create-order-btn {
+    order: 3;
+    flex: 0 0 auto;
   }
   .pos-edit-logistics-grid {
     grid-template-columns: 1fr;
@@ -2323,6 +2448,10 @@ body.light-theme .pos-status-pills-bar::-webkit-scrollbar-thumb,
   .pos-status-toolbar-row {
     flex-wrap: wrap;
     gap: 10px;
+  }
+  .pos-status-pills-bar {
+    width: 100%;
+    flex: 1 1 100%;
   }
   .pos-status-actions-bar {
     width: 100%;
@@ -2340,15 +2469,31 @@ body.light-theme .pos-status-pills-bar::-webkit-scrollbar-thumb,
 }
 
 @media (max-width: 480px) {
-  .pos-edit-inspection-row-4col {
-    grid-template-columns: 1fr;
+  .pos-screen-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
   }
-  .pos-edit-payments-grid {
-    grid-template-columns: 1fr;
+  .pos-search-input-wrap {
+    grid-column: 1 / -1;
+  }
+  .pos-filter-dropdown-container {
+    grid-column: 1;
+  }
+  .pos-filter-dropdown-container .pos-toolbar-btn {
+    padding: 8px 6px !important;
+    font-size: 11.5px !important;
+    width: 100% !important;
+    justify-content: space-between !important;
   }
   .pos-create-order-btn {
-    padding: 8px 12px !important;
+    grid-column: 2;
+    padding: 8px 8px !important;
     font-size: 12px !important;
+    justify-content: center !important;
+  }
+  .pos-create-order-btn .pos-key-badge {
+    display: none;
   }
   .pos-dropdown-menu {
     right: 0;
@@ -2356,6 +2501,111 @@ body.light-theme .pos-status-pills-bar::-webkit-scrollbar-thumb,
     min-width: 180px;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Table horizontal scroll hint
+   ═══════════════════════════════════════════════════════════ */
+.pos-table-scroll-hint {
+  display: none;
+  font-size: 11.5px;
+  color: #2563eb;
+  padding: 6px 12px;
+  background: rgba(37, 99, 235, 0.07);
+  border: 1px dashed rgba(37, 99, 235, 0.3);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+@media (max-width: 1024px) {
+  .pos-table-scroll-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Orders table: nowrap dates, centered Bill header,
+   sticky Bill column (desktop only)
+   ═══════════════════════════════════════════════════════════ */
+
+/* Dates never wrap: Order ID column + Order Details column */
+.pos-orders-table td:nth-child(1),
+.pos-orders-table td:nth-child(1) *,
+.pos-orders-table td:nth-child(6),
+.pos-orders-table td:nth-child(6) * {
+  white-space: nowrap;
+}
+
+/* Bill column: fixed width, content and header right aligned */
+.pos-orders-table th:last-child,
+.pos-orders-table td:last-child {
+  width: 140px;
+  min-width: 140px;
+  text-align: right;
+  padding-right: 16px;
+}
+
+.pos-orders-table td:last-child .pos-row-actions {
+  justify-content: flex-end;
+}
+
+/* Sticky Bill column, desktop only (mobile/tablet scroll normally) */
+@media (min-width: 1024px) {
+  .pos-orders-table th:last-child,
+  .pos-orders-table td:last-child {
+    position: sticky;
+    right: 0;
+    box-shadow: -8px 0 12px -8px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Body cell: opaque so scrolled content doesn't show through */
+  .pos-orders-table td:last-child {
+    z-index: 4;
+    background: #081527;
+  }
+
+  /* Header cell: sticks to the top AND right, so it sits above everything */
+  .pos-orders-table thead th:last-child {
+    z-index: 8;
+    background: #0b1a2f;
+  }
+
+  /* Keep hover colour in sync with the row */
+  .pos-orders-table tbody tr.pos-order-row:hover td:last-child {
+    background: #0d1e38;
+  }
+
+  /* Light theme */
+  body.light-theme .pos-orders-table td:last-child,
+  [data-theme="light"] .pos-orders-table td:last-child {
+    background: #ffffff !important;
+    box-shadow: -8px 0 12px -8px rgba(15, 23, 42, 0.15);
+  }
+
+  body.light-theme .pos-orders-table tbody tr.pos-order-row:hover td:last-child,
+  [data-theme="light"] .pos-orders-table tbody tr.pos-order-row:hover td:last-child {
+    background: #f8fafc !important;
+  }
+
+  body.light-theme .pos-orders-table thead th:last-child,
+  [data-theme="light"] .pos-orders-table thead th:last-child {
+    background: #f8fafc !important;
+    box-shadow: -8px 0 12px -8px rgba(15, 23, 42, 0.15);
+  }
+}
+
+/* Mobile/tablet: no sticky Bill column */
+@media (max-width: 1023px) {
+  .pos-orders-table th:last-child,
+  .pos-orders-table td:last-child {
+    position: static;
+    box-shadow: none;
+  }
+}
+
 
 
 

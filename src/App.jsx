@@ -222,7 +222,7 @@ export default function App() {
             href="https://supabase.com/dashboard/project/eunguuboxwbblioljwmy/editor/17680?schema=public&sort=customer_id:asc"
             target="_blank"
             rel="noopener noreferrer"
-            className="top-pill"
+            className="top-pill top-pill-status"
             style={{
               color: '#4ee2af',
               borderColor: '#175438',
@@ -235,14 +235,15 @@ export default function App() {
             }}
             title="Open Supabase Table Editor in new tab"
           >
-            ● Supabase Live
+            <span className="top-pill-label-full">● Supabase Live</span>
+            <span className="top-pill-label-short">● Live</span>
           </a>
         ) : (
           <a
             href="https://supabase.com/dashboard/project/eunguuboxwbblioljwmy/editor/17680?schema=public&sort=customer_id:asc"
             target="_blank"
             rel="noopener noreferrer"
-            className="top-pill"
+            className="top-pill top-pill-status"
             style={{
               color: '#ffd768',
               borderColor: '#59430f',
@@ -255,7 +256,8 @@ export default function App() {
             }}
             title="Open Supabase Table Editor in new tab (Configure Supabase in .env.local)"
           >
-            ● Local Master Mode
+            <span className="top-pill-label-full">● Local Master Mode</span>
+            <span className="top-pill-label-short">● Local</span>
           </a>
         )}
 
@@ -263,7 +265,7 @@ export default function App() {
         <div className="top-pill-dropdown-wrap">
           <button
             type="button"
-            className={`top-pill ${activeDropdown === 'currency' ? 'active' : ''}`}
+            className={`top-pill top-pill-currency ${activeDropdown === 'currency' ? 'active' : ''}`}
             onClick={(e) => {
               e.stopPropagation();
               setActiveDropdown((prev) => (prev === 'currency' ? null : 'currency'));
@@ -271,7 +273,8 @@ export default function App() {
             title="Select Sample Currency"
           >
             <span>📍</span>
-            <span>{currentCurrency.label}</span>
+            <span className="top-pill-label-full">{currentCurrency.label}</span>
+            <span className="top-pill-label-short">{currentCurrency.symbol}</span>
             <svg
               width="11"
               height="11"
@@ -319,7 +322,7 @@ export default function App() {
         <div className="top-pill-dropdown-wrap">
           <button
             type="button"
-            className={`top-pill ${activeDropdown === 'language' ? 'active' : ''}`}
+            className={`top-pill top-pill-language ${activeDropdown === 'language' ? 'active' : ''}`}
             onClick={(e) => {
               e.stopPropagation();
               setActiveDropdown((prev) => (prev === 'language' ? null : 'language'));
@@ -327,7 +330,8 @@ export default function App() {
             title="Select Sample Language"
           >
             <span>🌐</span>
-            <span>{currentLanguage.name}</span>
+            <span className="top-pill-label-full">{currentLanguage.name}</span>
+            <span className="top-pill-label-short">{currentLanguage.code.toUpperCase()}</span>
             <svg
               width="11"
               height="11"
@@ -401,14 +405,14 @@ export default function App() {
                 <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
                 <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
               </svg>
-              <span>Light Mode</span>
+              <span className="theme-toggle-label">Light Mode</span>
             </>
           ) : (
             <>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
               </svg>
-              <span>Dark Mode</span>
+              <span className="theme-toggle-label">Dark Mode</span>
             </>
           )}
         </button>
