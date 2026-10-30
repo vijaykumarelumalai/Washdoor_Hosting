@@ -24,7 +24,9 @@ export default function OrderReviewCard({
   const orderType = order.order_type || 'walk-in';
 
   // State for Rider assignment & Staff note
-  const [assignedRider, setAssignedRider] = useState('-- Unassigned --');
+  const [assignedRider, setAssignedRider] = useState(
+    order.assigned_driver || order.assigned_rider || '-- Unassigned --'
+  );
   const [staffNote, setStaffNote] = useState('');
   const [logNotes, setLogNotes] = useState(
     order.preference_notes || order.order_notes || ''
@@ -32,7 +34,10 @@ export default function OrderReviewCard({
 
   useEffect(() => {
     setLogNotes(order.preference_notes || order.order_notes || '');
-  }, [order.preference_notes, order.order_notes]);
+    if (order.assigned_driver || order.assigned_rider) {
+      setAssignedRider(order.assigned_driver || order.assigned_rider);
+    }
+  }, [order.preference_notes, order.order_notes, order.assigned_driver, order.assigned_rider]);
 
   // Garment breakdown
   const weight = order.product_weight || '0';

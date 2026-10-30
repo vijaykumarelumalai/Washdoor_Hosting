@@ -142,14 +142,14 @@ export default function SideEditPanel({
 
   // 6. Logistics & Factory Fields (Tab 2)
   const [factoryPlant, setFactoryPlant] = useState('Main Central Laundry Plant - Ranipet #1');
-  const [assignedRider, setAssignedRider] = useState('Suresh Kumar');
-  const [riderPhone, setRiderPhone] = useState('+91 98765 11223');
-  const [vehicleNo, setVehicleNo] = useState('TN 23 BK 4092 (Van 02)');
-  const [routeZone, setRouteZone] = useState('Zone 1 - East Ranipet');
-  const [pickupTime, setPickupTime] = useState('28 Oct 2026, 11:30 AM');
-  const [deliverySlot, setDeliverySlot] = useState('30 Oct 2026, 05:00 PM - 07:00 PM');
-  const [dispatchBagTag, setDispatchBagTag] = useState('BAG-RANIPET-7821');
-  const [logisticsStatus, setLogisticsStatus] = useState('At Factory');
+  const [assignedRider, setAssignedRider] = useState(order?.assigned_driver || order?.assigned_rider || 'Ramesh Kumar');
+  const [riderPhone, setRiderPhone] = useState(order?.rider_phone || '+91 98765 11223');
+  const [vehicleNo, setVehicleNo] = useState(order?.assigned_driver_full || order?.vehicle_no || 'TN 23 BK 4092 (Van 01)');
+  const [routeZone, setRouteZone] = useState(order?.route_zone || 'Zone 1 - East Ranipet');
+  const [pickupTime, setPickupTime] = useState(order?.pickup_time || '28 Oct 2026, 11:30 AM');
+  const [deliverySlot, setDeliverySlot] = useState(order?.delivery_slot || '30 Oct 2026, 05:00 PM - 07:00 PM');
+  const [dispatchBagTag, setDispatchBagTag] = useState(order?.bag_tag || 'BAG-RANIPET-7821');
+  const [logisticsStatus, setLogisticsStatus] = useState(order?.pickup_status || (order?.assigned_driver ? 'Assigned for Pickup' : 'At Factory'));
   const [driverInstructions, setDriverInstructions] = useState('Ring doorbell twice, customer requested contactless drop.');
 
   // 7. Status Updates Fields (Tab 3)
@@ -184,57 +184,81 @@ export default function SideEditPanel({
     stainTreatment: true,
   });
 
-  const [auditLogs, setAuditLogs] = useState([
-    {
-      id: 'log_1',
-      title: 'Order Intake Created',
-      detail: `Order #${initialOrderNum} created for ${initialCustName} (${initialOrderType})`,
-      time: '28 Oct 2026, 10:15 AM',
-      author: 'Admin (Counter #1)',
-      type: 'create',
-    },
-    {
-      id: 'log_2',
-      title: 'Garments & Services Allocated',
-      detail: 'Catalog items added to cart. Service: Normal Wash, Steam Press, Dry Clean.',
-      time: '28 Oct 2026, 10:30 AM',
-      author: 'Staff (Vellore Store)',
-      type: 'items',
-    },
-    {
-      id: 'log_3',
-      title: 'Inspection & Photos Uploaded',
-      detail: 'Oil stain noted on shirt sleeve. 3 inspection photos attached.',
-      time: '28 Oct 2026, 10:48 AM',
-      author: 'QC Lead (Ramesh K.)',
-      type: 'inspection',
-    },
-    {
-      id: 'log_4',
-      title: 'Advance Payment Collected',
-      detail: '₹100.00 received via UPI / Google Pay (Ref: UPI/2026/8941729831)',
-      time: '28 Oct 2026, 11:00 AM',
-      author: 'Cashier (Pooja M.)',
-      type: 'payment',
-    },
-    {
-      id: 'log_5',
-      title: 'Dispatched to Processing Hub',
-      detail: 'Transit Bag: BAG-RANIPET-7821 handed to Rider Suresh Kumar (Van 02)',
-      time: '28 Oct 2026, 11:35 AM',
-      author: 'Logistics Desk',
-      type: 'logistics',
-    },
-    {
-      id: 'log_6',
-      title: 'Status Updated: In Progress',
-      detail: 'Garments loaded into Washer Extractor #3. Stain pre-spotting applied.',
-      time: '28 Oct 2026, 02:40 PM',
-      author: 'Plant Supervisor',
-      type: 'status',
-    },
-  ]);
+  const getInitialAuditLogs = () => {
+    if (order?.audit_logs && Array.isArray(order.audit_logs) && order.audit_logs.length > 0) {
+      return order.audit_logs;
+    }
+    if (order?.logs && Array.isArray(order.logs) && order.logs.length > 0) {
+      return order.logs;
+    }
+    if (order?.customer_history?.logs && Array.isArray(order.customer_history.logs) && order.customer_history.logs.length > 0) {
+      return order.customer_history.logs;
+    }
+    const defaultList = [];
+    if (order?.assigned_driver || order?.pickup_status === 'Assigned for Pickup' || order?.assigned_for_pickup) {
+      defaultList.push({
+        id: `log_pickup_${Date.now()}`,
+        title: 'Assigned for Pickup',
+        detail: `Pickup scheduled with ${order.assigned_driver || 'Driver'} (${order.assigned_driver_full || 'Zone Driver'})`,
+        time: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        author: 'Store Dispatcher',
+        type: 'pickup',
+      });
+    }
+    defaultList.push(
+      {
+        id: 'log_1',
+        title: 'Order Intake Created',
+        detail: `Order #${initialOrderNum} created for ${initialCustName || 'Customer'} (${initialOrderType})`,
+        time: '28 Oct 2026, 10:15 AM',
+        author: 'Admin (Counter #1)',
+        type: 'create',
+      },
+      {
+        id: 'log_2',
+        title: 'Garments & Services Allocated',
+        detail: 'Catalog items added to cart. Service: Normal Wash, Steam Press, Dry Clean.',
+        time: '28 Oct 2026, 10:30 AM',
+        author: 'Staff (Vellore Store)',
+        type: 'items',
+      },
+      {
+        id: 'log_3',
+        title: 'Inspection & Tagging Completed',
+        detail: 'Oil stain noted on shirt sleeve. 3 inspection photos attached.',
+        time: '28 Oct 2026, 10:48 AM',
+        author: 'QC Lead (Ramesh K.)',
+        type: 'inspection',
+      },
+      {
+        id: 'log_4',
+        title: 'Advance Payment Collected',
+        detail: '₹100.00 received via UPI / Google Pay (Ref: UPI/2026/8941729831)',
+        time: '28 Oct 2026, 11:00 AM',
+        author: 'Cashier (Pooja M.)',
+        type: 'payment',
+      }
+    );
+    return defaultList;
+  };
+
+  const [auditLogs, setAuditLogs] = useState(getInitialAuditLogs);
   const [newAuditNote, setNewAuditNote] = useState('');
+
+  // Sync state when order prop updates
+  useEffect(() => {
+    if (order) {
+      setCustomerName(order.customer_name || order.customer?.customer_name || '');
+      setMobileNumber(order.mobile_number || order.customer?.mobile_number || '');
+      setAddress(order.address || order.delivery_address || order.customer?.address || '');
+      setStatus(order.status || order.order_status || 'In Progress');
+      setOrderType(order.order_type || 'Walk-in');
+      if (order.assigned_driver) setAssignedRider(order.assigned_driver);
+      if (order.assigned_driver_full) setVehicleNo(order.assigned_driver_full);
+      if (order.pickup_status) setLogisticsStatus(order.pickup_status);
+      setAuditLogs(getInitialAuditLogs());
+    }
+  }, [order]);
 
   // Sync selected product rate
   useEffect(() => {
@@ -428,7 +452,12 @@ export default function SideEditPanel({
       payment_status: paymentStatus,
       staff_notes: staffNote,
       flags: flags,
+      assigned_driver: assignedRider,
+      assigned_driver_full: `${assignedRider} (${vehicleNo})`,
+      pickup_status: logisticsStatus,
+      assigned_for_pickup: Boolean(assignedRider || logisticsStatus === 'Assigned for Pickup'),
       audit_logs: auditLogs,
+      logs: auditLogs,
       updated_at: new Date().toISOString(),
     };
 
@@ -1065,6 +1094,29 @@ export default function SideEditPanel({
                 </svg>
                 <span>Logistics &amp; Factory Processing Dispatch</span>
               </div>
+
+              {(order?.assigned_driver || order?.assigned_for_pickup || logisticsStatus === 'Assigned for Pickup') && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '10px 14px',
+                  background: '#f0fdf4',
+                  border: '1.5px solid #86efac',
+                  borderRadius: '10px',
+                  marginBottom: '14px',
+                  color: '#15803d',
+                  fontSize: '13px'
+                }}>
+                  <span style={{ fontSize: '20px' }}>🚚</span>
+                  <div>
+                    <div style={{ fontWeight: 750, color: '#166534' }}>Assigned for Pickup</div>
+                    <div style={{ fontSize: '11.5px', color: '#15803d', fontWeight: 500, marginTop: '2px' }}>
+                      Driver: <strong>{assignedRider || order?.assigned_driver}</strong> {vehicleNo ? `• ${vehicleNo}` : ''}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Scheduling Section */}
               <div style={{ fontSize: '12px', fontWeight: 750, color: '#1e3a8a', marginTop: '4px' }}>

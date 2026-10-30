@@ -197,6 +197,14 @@ export default function OrderStatusModal({
                   </svg>
                   {preference}
                 </span>
+                {(order.assigned_driver || order.pickup_status === 'Assigned for Pickup' || order.assigned_for_pickup) && (
+                  <>
+                    <span className="status-meta-divider">|</span>
+                    <span className="status-meta-text" style={{ color: '#22c55e', fontWeight: 650 }}>
+                      🚚 Assigned for Pickup: {order.assigned_driver || 'Driver'}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           </div>

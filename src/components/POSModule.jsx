@@ -3304,7 +3304,20 @@ export default function POSModule({
 
                                           {/* Audit Trail Timeline */}
                                           <div className="pos-edit-sub-panel" style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.8 }}>
+                                            <div style={{ fontWeight: 700, fontSize: '12.5px', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                                              📋 Order Audit Trail &amp; Activity Log:
+                                            </div>
                                             <div>• <strong>Order Created:</strong> {editFormData.captured_date || '2026-10-28'} at {editFormData.captured_time || '10:15 AM'} by Counter Operator</div>
+                                            {editFormData.assigned_driver && (
+                                              <div style={{ color: '#16a34a', fontWeight: 650 }}>
+                                                • <strong>Assigned for Pickup:</strong> {editFormData.assigned_driver} {editFormData.assigned_driver_full ? `(${editFormData.assigned_driver_full})` : ''}
+                                              </div>
+                                            )}
+                                            {(editFormData.audit_logs || editFormData.logs || []).map((l, idx) => (
+                                              <div key={l.id || idx} style={{ color: l.type === 'pickup' ? '#16a34a' : 'inherit' }}>
+                                                • <strong>{l.title}:</strong> {l.detail} <span style={{ fontSize: '11px', color: '#64748b' }}>({l.time})</span>
+                                              </div>
+                                            ))}
                                             <div>• <strong>Current Work Status:</strong> {normalizeOrderStatus(editFormData.status || editFormData.order_status)}</div>
                                             <div>• <strong>Items Logged:</strong> {editCartTotalPieces} pieces allocated across {editCart.length} service line(s)</div>
                                             <div>• <strong>Garment Inspection:</strong> {editInspection.garment} ({editInspection.color || 'Standard'}) — {editInspectionPhotos.length} photo evidence image(s) attached</div>
