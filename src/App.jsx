@@ -75,12 +75,13 @@ export default function App() {
   const [currentCurrency, setCurrentCurrency] = useState(SAMPLE_CURRENCIES[0] || { symbol: '₹', code: 'IN', label: 'IN • ₹' });
   const [currentLanguage, setCurrentLanguage] = useState(SAMPLE_LANGUAGES[0] || { name: 'English', code: 'en' });
 
-  // Theme State: 'light' (default matching screenshot) | 'dark'
+  // Theme State: 'dark' (default design) | 'light'
   const [theme, setTheme] = useState(() => {
     try {
-      return localStorage.getItem('washdoor_theme') || 'light';
+      const saved = localStorage.getItem('washdoor_theme');
+      return (saved === 'dark' || saved === 'light') ? saved : 'dark';
     } catch {
-      return 'light';
+      return 'dark';
     }
   });
 
@@ -90,9 +91,13 @@ export default function App() {
     if (theme === 'light') {
       document.body.classList.add('light-theme');
       document.body.classList.remove('dark-theme');
+      document.documentElement.classList.add('light-theme');
+      document.documentElement.classList.remove('dark-theme');
     } else {
       document.body.classList.add('dark-theme');
       document.body.classList.remove('light-theme');
+      document.documentElement.classList.add('dark-theme');
+      document.documentElement.classList.remove('light-theme');
     }
     try {
       localStorage.setItem('washdoor_theme', theme);
@@ -396,7 +401,14 @@ export default function App() {
         >
           {theme === 'dark' ? (
             <>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#facc15" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+              <span className="theme-toggle-label">Dark Mode</span>
+            </>
+          ) : (
+            <>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="5"></circle>
                 <line x1="12" y1="1" x2="12" y2="3"></line>
                 <line x1="12" y1="21" x2="12" y2="23"></line>
@@ -408,13 +420,6 @@ export default function App() {
                 <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
               </svg>
               <span className="theme-toggle-label">Light Mode</span>
-            </>
-          ) : (
-            <>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-              </svg>
-              <span className="theme-toggle-label">Dark Mode</span>
             </>
           )}
         </button>

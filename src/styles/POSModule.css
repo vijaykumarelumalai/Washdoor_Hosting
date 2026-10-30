@@ -2028,9 +2028,239 @@ body.light-theme .pos-delivery-date,
   color: #000000 !important;
 }
 
+.pos-order-type-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 650;
+  width: fit-content;
+  background: rgba(37, 99, 235, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+body.light-theme .pos-order-type-pill,
+[data-theme="light"] .pos-order-type-pill {
+  background: #eff6ff !important;
+  color: #2563eb !important;
+  border: 1px solid #dbeafe !important;
+}
+
+.pos-order-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 650;
+  transition: all 0.15s ease;
+}
+
+.pos-order-status-badge.status-order-received {
+  background: rgba(37, 99, 235, 0.18);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+body.light-theme .pos-order-status-badge.status-order-received,
+[data-theme="light"] .pos-order-status-badge.status-order-received {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+  border: 1px solid #bfdbfe !important;
+}
+
+.pos-order-status-badge.status-in-progress {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fde047;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+body.light-theme .pos-order-status-badge.status-in-progress,
+[data-theme="light"] .pos-order-status-badge.status-in-progress {
+  background: #fef3c7 !important;
+  color: #b45309 !important;
+  border: 1px solid #fde68a !important;
+}
+
+.pos-order-status-badge.status-ready {
+  background: rgba(16, 185, 129, 0.18);
+  color: #86efac;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+body.light-theme .pos-order-status-badge.status-ready,
+[data-theme="light"] .pos-order-status-badge.status-ready {
+  background: #dcfce7 !important;
+  color: #15803d !important;
+  border: 1px solid #bbf7d0 !important;
+}
+
+.pos-order-status-badge.status-delivered {
+  background: rgba(2, 132, 199, 0.18);
+  color: #7dd3fc;
+  border: 1px solid rgba(2, 132, 199, 0.4);
+}
+
+body.light-theme .pos-order-status-badge.status-delivered,
+[data-theme="light"] .pos-order-status-badge.status-delivered {
+  background: #e0f2fe !important;
+  color: #0369a1 !important;
+  border: 1px solid #bae6fd !important;
+}
+
+.pos-order-status-badge.status-cancelled {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+body.light-theme .pos-order-status-badge.status-cancelled,
+[data-theme="light"] .pos-order-status-badge.status-cancelled {
+  background: #fee2e2 !important;
+  color: #b91c1c !important;
+  border: 1px solid #fecaca !important;
+}
+
 body.light-theme .pos-amt-val,
 [data-theme="light"] .pos-amt-val {
   color: #059669 !important;
+}
+
+.pos-address-main {
+  font-weight: 650;
+  color: #f1f5f9;
+  font-size: 13px;
+}
+
+body.light-theme .pos-address-main,
+[data-theme="light"] .pos-address-main {
+  color: #1e293b !important;
+}
+
+.pos-address-sub {
+  font-size: 11.5px;
+  color: #8899ac;
+}
+
+body.light-theme .pos-address-sub,
+[data-theme="light"] .pos-address-sub {
+  color: #64748b !important;
+}
+
+.pos-time-label {
+  font-size: 11px;
+  color: #8899ac;
+  font-weight: 500;
+}
+
+body.light-theme .pos-time-label,
+[data-theme="light"] .pos-time-label {
+  color: #64748b !important;
+}
+
+.pos-time-val {
+  font-size: 12.5px;
+  color: #f1f5f9;
+  font-weight: 650;
+}
+
+body.light-theme .pos-time-val,
+[data-theme="light"] .pos-time-val {
+  color: #1e293b !important;
+}
+
+.pos-table-action-btn.pos-pickup-btn,
+.pos-pickup-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1.5px solid rgba(59, 130, 246, 0.4);
+  background: rgba(37, 99, 235, 0.14);
+  color: #60a5fa;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.pos-table-action-btn.pos-pickup-btn:hover,
+.pos-pickup-btn:hover {
+  background: rgba(37, 99, 235, 0.28);
+  border-color: #60a5fa;
+  color: #93c5fd;
+}
+
+body.light-theme .pos-pickup-btn,
+[data-theme="light"] .pos-pickup-btn {
+  border: 1.5px solid #60a5fa !important;
+  background: #ffffff !important;
+  color: #2563eb !important;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.06) !important;
+}
+
+body.light-theme .pos-pickup-btn:hover,
+[data-theme="light"] .pos-pickup-btn:hover {
+  background: #eff6ff !important;
+  border-color: #2563eb !important;
+  color: #1d4ed8 !important;
+}
+
+.pos-table-action-btn.btn-edit-order {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 12px;
+  width: 82px;
+  border-radius: 6px;
+  border: 1.5px solid #2b3d5b;
+  background: #0d1a2d;
+  color: #cbd5e1;
+  font-weight: 650;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pos-table-action-btn.btn-edit-order:hover {
+  background: #142844;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+body.light-theme .pos-table-action-btn.btn-edit-order,
+[data-theme="light"] .pos-table-action-btn.btn-edit-order {
+  border: 1.5px solid #cbd5e1 !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+}
+
+body.light-theme .pos-table-action-btn.btn-edit-order:hover,
+[data-theme="light"] .pos-table-action-btn.btn-edit-order:hover {
+  background: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+}
+
+.pos-table-action-btn.btn-edit-order.active-edit-btn {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.2);
+  color: #93c5fd;
+}
+
+body.light-theme .pos-table-action-btn.btn-edit-order.active-edit-btn,
+[data-theme="light"] .pos-table-action-btn.btn-edit-order.active-edit-btn {
+  border-color: #2563eb !important;
+  background: #eff6ff !important;
+  color: #2563eb !important;
 }
 
 body.light-theme .pos-status-badge-wrap,
@@ -3267,3 +3497,148 @@ body.dark-theme .pos-edit-cancel-btn:hover,
   background: #192c48;
   color: #ffffff;
 }
+
+/* Service Allocated badges */
+.pos-service-allocated-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(71, 85, 105, 0.4);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: #e2e8f0;
+  width: fit-content;
+  white-space: nowrap;
+}
+
+body.light-theme .pos-service-allocated-item,
+[data-theme="light"] .pos-service-allocated-item {
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #1e293b !important;
+}
+
+.pos-service-allocated-count {
+  font-weight: 700;
+  color: #60a5fa;
+  background: rgba(37, 99, 235, 0.25);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+body.light-theme .pos-service-allocated-count,
+[data-theme="light"] .pos-service-allocated-count {
+  color: #2563eb !important;
+  background: #dbeafe !important;
+}
+
+.pos-service-allocated-more {
+  font-size: 11px;
+  font-weight: 700;
+  color: #60a5fa;
+  background: rgba(37, 99, 235, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  padding: 2px 6px;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+body.light-theme .pos-service-allocated-more,
+[data-theme="light"] .pos-service-allocated-more {
+  color: #2563eb !important;
+  background: #eff6ff !important;
+  border-color: #bfdbfe !important;
+}
+
+/* Pickup & Delivery Assigned Banner */
+.pos-assigned-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  background: rgba(22, 101, 52, 0.22);
+  border: 1.5px solid rgba(34, 197, 94, 0.45);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+body.light-theme .pos-assigned-banner,
+[data-theme="light"] .pos-assigned-banner {
+  background: #f0fdf4 !important;
+  border: 1.5px solid #86efac !important;
+  box-shadow: 0 1px 2px rgba(34, 197, 94, 0.08) !important;
+}
+
+.pos-assigned-banner-title {
+  font-size: 10px;
+  color: #4ade80;
+  font-weight: 750;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+body.light-theme .pos-assigned-banner-title,
+[data-theme="light"] .pos-assigned-banner-title {
+  color: #166534 !important;
+}
+
+.pos-assigned-banner-driver {
+  font-size: 12px;
+  color: #86efac;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.light-theme .pos-assigned-banner-driver,
+[data-theme="light"] .pos-assigned-banner-driver {
+  color: #14532d !important;
+}
+
+/* Assigned state & change driver buttons */
+.pos-pickup-btn.pos-driver-assigned-btn {
+  background: rgba(34, 197, 94, 0.16);
+  border-color: rgba(34, 197, 94, 0.45);
+  color: #4ade80;
+}
+
+.pos-pickup-btn.pos-driver-assigned-btn:hover {
+  background: rgba(34, 197, 94, 0.26);
+  border-color: #4ade80;
+  color: #86efac;
+}
+
+body.light-theme .pos-pickup-btn.pos-driver-assigned-btn,
+[data-theme="light"] .pos-pickup-btn.pos-driver-assigned-btn {
+  background: #f0fdf4 !important;
+  border-color: #22c55e !important;
+  color: #15803d !important;
+}
+
+.pos-pickup-btn.pos-change-driver-btn {
+  background: rgba(71, 85, 105, 0.25);
+  border-color: rgba(148, 163, 184, 0.35);
+  color: #cbd5e1;
+}
+
+.pos-pickup-btn.pos-change-driver-btn:hover {
+  background: rgba(71, 85, 105, 0.4);
+  border-color: #94a3b8;
+  color: #ffffff;
+}
+
+body.light-theme .pos-pickup-btn.pos-change-driver-btn,
+[data-theme="light"] .pos-pickup-btn.pos-change-driver-btn {
+  background: #ffffff !important;
+  border-color: #94a3b8 !important;
+  color: #475569 !important;
+}
+
