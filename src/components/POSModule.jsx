@@ -76,7 +76,6 @@ export default function POSModule({
   onCreateOrder,
   currencySymbol = '₹',
   showToast,
-  onOpenOrderStatus,
   onEditOrder,
   onOrderCreated,
   onNavigateTab,
@@ -1032,9 +1031,6 @@ export default function POSModule({
     };
 
     onOrderCreated?.(createdRecord);
-    if (onOpenOrderStatus) {
-      onOpenOrderStatus(createdRecord, true);
-    }
 
     handleResetRegister();
     setPosViewMode('orders');
@@ -1444,7 +1440,7 @@ export default function POSModule({
                         setExpandedOrderId((prev) => (prev === key ? null : key));
                       }}
                       onEdit={(orderToEdit) => onEditOrder?.(orderToEdit)}
-                      onOpenStatus={(orderStatus) => onOpenOrderStatus?.(orderStatus, false)}
+                      onOpenStatus={(orderStatus) => handleOpenSideEdit(orderStatus)}
                       onOpenBill={() => showToast?.('bill viewed!')}
                       showToast={showToast}
                       currencySymbol={currencySymbol}
@@ -1577,8 +1573,8 @@ export default function POSModule({
                               <div className="pos-ticket-cell" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                 <span
                                   className="pos-ticket-num"
-                                  onClick={() => onOpenOrderStatus?.(ord, false)}
-                                  title={`View details for ${orderNum}`}
+                                  onClick={() => handleOpenSideEdit(ord)}
+                                  title={`Edit order ${orderNum}`}
                                   style={{ cursor: 'pointer', fontWeight: 800, fontSize: '15px' }}
                                 >
                                   {orderNum}

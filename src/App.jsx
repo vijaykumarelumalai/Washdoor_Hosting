@@ -5,11 +5,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import CustomerManagement from './components/CustomerManagement';
 import POSModule from './components/POSModule';
 import CreateOrderModal from './components/CreateOrderModal';
-import OrderStatusModal from './components/OrderStatusModal';
 import EditOrderModal from './components/EditOrderModal';
 import { getOrders, updateOrderInSupabase, deleteOrderFromSupabase } from './services/customerService';
 import { isSupabaseConfigured } from './lib/supabaseClient';
-import './styles/OrderStatusModal.css';
 
 const SAMPLE_CURRENCIES = [
   { code: 'IN', symbol: '₹', label: 'IN • ₹', name: 'India (INR - ₹)' },
@@ -37,10 +35,7 @@ const SAMPLE_LANGUAGES = [
 export default function App() {
   const [activeTab, setActiveTab] = useState('pos');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
-  const [selectedStatusOrder, setSelectedStatusOrder] = useState(null);
   const [editingOrder, setEditingOrder] = useState(null);
-  const [statusModalViewBill, setStatusModalViewBill] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Orders state with cache support (authentically loaded from database, no hardcoded mock records)
@@ -145,22 +140,12 @@ export default function App() {
       try {
         localStorage.setItem('washdoor_orders_cache', JSON.stringify(data));
       } catch {}
-      setSelectedStatusOrder((prev) => {
-        if (!prev) return null;
-        return data.find((o) => o.order_number === prev.order_number || o.order_id === prev.order_id) || prev;
-      });
     }
   }, []);
 
   useEffect(() => {
     loadOrders();
   }, [loadOrders]);
-
-  const handleOpenOrderStatus = (order, viewBill = false) => {
-    setSelectedStatusOrder(order);
-    setStatusModalViewBill(viewBill);
-    setIsStatusModalOpen(true);
-  };
 
   const handleUpdateOrderRecord = useCallback((updatedOrder) => {
     if (!updatedOrder) return;
@@ -531,7 +516,6 @@ export default function App() {
             onCreateOrder={() => setIsModalOpen(true)}
             currencySymbol={currentCurrency?.symbol || '₹'}
             showToast={showToast}
-            onOpenOrderStatus={handleOpenOrderStatus}
             onEditOrder={(orderToEdit) => setEditingOrder(orderToEdit)}
             onOrderCreated={loadOrders}
             onNavigateTab={setActiveTab}
@@ -547,31 +531,13 @@ export default function App() {
       <CreateOrderModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onOrderSuccess={(newOrder) => {
+        onOrderSuccess={() => {
           loadOrders();
-          if (newOrder) {
-            handleOpenOrderStatus(newOrder, true);
-          }
         }}
         showToast={showToast}
       />
 
-      {/* ── Laundry Order Status Modal ── */}
-      <OrderStatusModal
-        isOpen={isStatusModalOpen}
-        order={selectedStatusOrder}
-        initialViewBill={statusModalViewBill}
-        onClose={() => {
-          setIsStatusModalOpen(false);
-          setSelectedStatusOrder(null);
-          setStatusModalViewBill(false);
-        }}
-        onOrderUpdated={loadOrders}
-        onEditOrder={(orderToEdit) => setEditingOrder(orderToEdit)}
-        showToast={showToast}
-        currencySymbol={currentCurrency.symbol}
-      />
-
+      
       {/* ── Edit Order Modal (Interactive Product Catalog & Cart Dialog) ── */}
       <EditOrderModal
         isOpen={Boolean(editingOrder)}
