@@ -865,6 +865,9 @@ export default function POSModule({
     const finalOrderNum = data?.order_number || nextOrderNum;
     showToast?.(`✅ Order ${finalOrderNum} placed successfully!`);
 
+    const isPickup = intakeType.toLowerCase().includes('pickup');
+    const initialStatus = isPickup ? 'Received' : 'In Progress';
+
     const createdRecord = {
       id: finalOrderNum,
       order_number: finalOrderNum,
@@ -872,8 +875,9 @@ export default function POSModule({
       mobile_number: cleanMobile,
       total_amount: grandTotal,
       item_count: totalItemsCount,
-      order_status: 'Order in Progress',
-      created_at: new Date().toISOString(),
+      status: initialStatus,
+      order_status: initialStatus,
+      created_at: data?.created_at || new Date().toISOString(),
       items: cart,
       customer: {
         customer_name: customerName,
