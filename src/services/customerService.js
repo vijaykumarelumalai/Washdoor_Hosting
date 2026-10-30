@@ -1482,6 +1482,75 @@ export async function updateOrderInSupabase(orderNumberOrId, updatePayload = {})
 }
 
 /**
+ * Fetches the latest single order data from Supabase customer_works.
+ */
+export async function getOrderById(identifier) {
+  if (!isSupabaseConfigured() || !identifier) {
+    return { data: null, error: 'Supabase not configured' };
+  }
+  try {
+    const numMatch = String(identifier).match(/\d+/);
+    const num = numMatch ? parseInt(numMatch[0], 10) : null;
+    const ordId = num ? `ORD${String(num).padStart(5, '0')}` : identifier;
+    const workId = num ? `WORK-${String(num).padStart(5, '0')}` : identifier;
+    const orderIdPattern = num ? `ORDER-${String(num).padStart(5, '0')}` : identifier;
+
+    const { data, error } = await supabase
+      .from('customer_works')
+      .select('*')
+      .or(`work_number.eq.${ordId},work_number.eq.${workId},work_number.eq.${orderIdPattern},work_id.eq.${identifier}`)
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data) {
+      return { data: null, error: error?.message || 'Order not found' };
+    }
+    return { data: mapCustomerWorkRow(data), error: null };
+  } catch (err) {
+    return { data: null, error: err.message };
+  }
+}
+
+/**
+ * Deletes an order from Supabase customer_works and washdoor_orders_master.
+ */
+export async function deleteOrderFromSupabase(identifier) {
+  if (!isSupabaseConfigured() || !identifier) {
+    return { success: false, error: 'Supabase not configured' };
+  }
+  try {
+    const numMatch = String(identifier).match(/\d+/);
+    const num = numMatch ? parseInt(numMatch[0], 10) : null;
+    const ordId = num ? `ORD${String(num).padStart(5, '0')}` : identifier;
+    const workId = num ? `WORK-${String(num).padStart(5, '0')}` : identifier;
+    const orderIdPattern = num ? `ORDER-${String(num).padStart(5, '0')}` : identifier;
+
+    // 1. Delete from customer_works
+    const { error: workErr } = await supabase
+      .from('customer_works')
+      .delete()
+      .or(`work_number.eq.${ordId},work_number.eq.${workId},work_number.eq.${orderIdPattern},work_id.eq.${identifier}`);
+
+    // 2. Also best-effort delete from washdoor_orders_master if present
+    try {
+      await supabase
+        .from('washdoor_orders_master')
+        .delete()
+        .or(`order_number.eq.${identifier},order_id.eq.${identifier}`);
+    } catch {}
+
+    if (workErr) {
+      console.warn('Supabase deleteOrder warning:', workErr);
+      return { success: false, error: workErr.message };
+    }
+    return { success: true };
+  } catch (err) {
+    console.error('Error in deleteOrderFromSupabase:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
  * Sanitizes form payload by turning empty strings into nulls and standardizing numbers
  */
 function cleanPayload(obj) {

@@ -3602,6 +3602,42 @@ body.light-theme .pos-orders-table thead th:first-child,
 }
 
 /* Footer Action Buttons */
+.pos-edit-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 6px;
+  border: 1.5px solid #fca5a5;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-right: auto;
+}
+
+.pos-edit-delete-btn:hover {
+  background: #fecaca;
+  color: #991b1b;
+  border-color: #f87171;
+}
+
+body.dark-theme .pos-edit-delete-btn,
+[data-theme="dark"] .pos-edit-delete-btn {
+  background: rgba(239, 68, 68, 0.16) !important;
+  border-color: rgba(239, 68, 68, 0.45) !important;
+  color: #f87171 !important;
+}
+
+body.dark-theme .pos-edit-delete-btn:hover,
+[data-theme="dark"] .pos-edit-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.28) !important;
+  border-color: #ef4444 !important;
+  color: #fca5a5 !important;
+}
+
 .pos-edit-cancel-btn {
   padding: 9px 24px;
   border-radius: 6px;

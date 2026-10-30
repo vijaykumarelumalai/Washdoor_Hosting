@@ -41,6 +41,7 @@ export default function SideEditPanel({
   isOpen,
   order,
   onClose,
+  onDelete,
   showToast,
   currencySymbol = '₹',
   onUpdateOrder,
@@ -382,6 +383,19 @@ export default function SideEditPanel({
 
   // Comprehensive Save
   const handleSave = () => {
+    // 1. Shared Validation
+    if (!customerName || !customerName.trim()) {
+      showToast?.('⚠️ Customer Name is required.');
+      return;
+    }
+    const cleanPhone = String(mobileNumber || '').replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) {
+      showToast?.('⚠️ A valid 10-digit mobile number is required.');
+      return;
+    }
+
+    const totalPieces = cartItems.reduce((sum, c) => sum + Number(c.qty || 0), 0);
+
     const updatedOrder = {
       ...(order || {}),
       id: order?.id || initialOrderNum,
@@ -397,14 +411,26 @@ export default function SideEditPanel({
       order_type: orderType,
       expected_delivery: expectedDelivery,
       comments: comments,
+      special_instructions: comments,
+      order_notes: comments,
       items: cartItems.map((c) => ({
         id: c.id,
         name: c.name,
         service: c.service || 'Laundry',
+        serviceType: c.service || 'Laundry',
         rate: c.rate,
+        qty: c.qty,
         quantity: c.qty,
         total: c.rate * c.qty,
+        icon: c.icon || '👕',
       })),
+      services_allocated: cartItems.map((c) => ({
+        name: c.name,
+        count: c.qty,
+        icon: c.icon || '👕',
+      })),
+      item_count: totalPieces,
+      total_pieces: totalPieces,
       cart: cartItems,
       inspection: {
         garment: inspectionGarment,
@@ -1723,6 +1749,16 @@ export default function SideEditPanel({
           </div>
 
           <div className="side-edit-footer-actions">
+            {onDelete && (
+              <button
+                type="button"
+                className="side-edit-btn-delete"
+                onClick={onDelete}
+                title="Delete this order"
+              >
+                🗑️ Delete Order
+              </button>
+            )}
             <button
               type="button"
               className="side-edit-btn-cancel"

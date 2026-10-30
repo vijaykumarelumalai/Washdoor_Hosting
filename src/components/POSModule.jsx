@@ -12,6 +12,8 @@ import {
   createOrderWithCustomer,
   getNextOrderId,
   updateOrderInSupabase,
+  getOrderById,
+  deleteOrderFromSupabase,
 } from '../services/customerService';
 import {
   normalizeMobileNumber,
@@ -79,6 +81,7 @@ export default function POSModule({
   onOrderCreated,
   onNavigateTab,
   onUpdateOrder,
+  onDeleteOrder,
 }) {
   // Top Header, Search Toolbar & Status Tab State (matching reference mockup)
   const [topSearchQuery, setTopSearchQuery] = useState('');
@@ -98,6 +101,133 @@ export default function POSModule({
 
   // Static Side Edit Panel Target Order
   const [sideEditTargetOrder, setSideEditTargetOrder] = useState(null);
+  const [confirmDeleteOrder, setConfirmDeleteOrder] = useState(null);
+
+  // Shared Read: Fetch freshest order from Supabase when opening Side Edit
+  const handleOpenSideEdit = (ord) => {
+    if (!ord) return;
+    setSideEditTargetOrder(ord);
+
+    const key = ord.order_number || ord.id || ord.work_number;
+    if (key) {
+      getOrderById(key).then(({ data }) => {
+        if (data) {
+          setSideEditTargetOrder((prev) =>
+            prev && (prev.id === data.id || prev.order_number === data.order_number) ? { ...prev, ...data } : prev
+          );
+        }
+      }).catch(() => {});
+    }
+  };
+
+  // Shared Delete: Transaction-safe confirmation & deletion
+  const handleConfirmDelete = async () => {
+    if (!confirmDeleteOrder) return;
+    const target = confirmDeleteOrder;
+    const orderId = target.order_number || target.order_id || target.id || target.work_number;
+
+    if (onDeleteOrder) {
+      await onDeleteOrder(orderId);
+    } else {
+      try {
+        await deleteOrderFromSupabase(orderId);
+        const cached = localStorage.getItem('washdoor_orders_cache');
+        if (cached) {
+          const list = JSON.parse(cached);
+          const next = list.filter((o) => o.id !== target.id && o.order_number !== target.order_number);
+          localStorage.setItem('washdoor_orders_cache', JSON.stringify(next));
+        }
+      } catch {}
+      onOrderCreated?.();
+    }
+
+    if (editingOrderRecord && (editingOrderRecord.id === target.id || editingOrderRecord.order_number === target.order_number)) {
+      setEditingOrderRecord(null);
+      setEditFormData(null);
+    }
+    if (sideEditTargetOrder && (sideEditTargetOrder.id === target.id || sideEditTargetOrder.order_number === target.order_number)) {
+      setSideEditTargetOrder(null);
+    }
+
+    setConfirmDeleteOrder(null);
+    showToast?.(`🗑️ Order ${orderId} deleted successfully!`);
+  };
+
+  // Shared Update: Consistent validation, payload mapping & bi-directional sync
+  const handleSaveSharedOrder = (updatedOrder) => {
+    if (!updatedOrder) return false;
+
+    // 1. Shared Validation
+    const custName = updatedOrder.customer_name || updatedOrder.customer?.customer_name;
+    const phone = updatedOrder.mobile_number || updatedOrder.customer?.mobile_number;
+    if (!custName || !String(custName).trim()) {
+      showToast?.('⚠️ Customer Name is required.');
+      return false;
+    }
+    const cleanPhone = String(phone || '').replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) {
+      showToast?.('⚠️ A valid 10-digit mobile number is required.');
+      return false;
+    }
+
+    // 2. Synchronize to parent state & Supabase
+    if (onUpdateOrder) {
+      onUpdateOrder(updatedOrder);
+    } else {
+      try {
+        const cached = localStorage.getItem('washdoor_orders_cache');
+        if (cached) {
+          const list = JSON.parse(cached);
+          const nextList = list.map((o) =>
+            o.id === updatedOrder.id || o.order_number === updatedOrder.order_number ? updatedOrder : o
+          );
+          localStorage.setItem('washdoor_orders_cache', JSON.stringify(nextList));
+        }
+      } catch {}
+      onOrderCreated?.(updatedOrder);
+    }
+
+    // Direct Supabase update
+    const saveKey = updatedOrder.order_number || updatedOrder.id || updatedOrder.work_number;
+    if (saveKey) {
+      updateOrderInSupabase(saveKey, {
+        status: updatedOrder.order_status || updatedOrder.status,
+        customerName: updatedOrder.customer_name || updatedOrder.customer?.customer_name,
+        mobileNumber: updatedOrder.mobile_number || updatedOrder.customer?.mobile_number,
+        address: updatedOrder.address || updatedOrder.delivery_address || updatedOrder.customer?.address,
+        serviceCategory: updatedOrder.service_category || updatedOrder.service_type || updatedOrder.preference,
+        orderNotes: updatedOrder.order_notes || updatedOrder.special_instructions || updatedOrder.comments,
+        totalAmount: updatedOrder.total_amount,
+        advancePaid: updatedOrder.advance_paid,
+        paymentStatus: updatedOrder.payment_status,
+        paymentMethod: updatedOrder.payment_method,
+        items: updatedOrder.items,
+      }).catch((e) => console.warn('Supabase saveOrder update note:', e));
+    }
+
+    // 3. Bi-directional Synchronization between both editing surfaces
+    if (editingOrderRecord && (editingOrderRecord.id === updatedOrder.id || editingOrderRecord.order_number === updatedOrder.order_number)) {
+      setEditingOrderRecord(updatedOrder);
+      setEditFormData((prev) => (prev ? {
+        ...prev,
+        ...updatedOrder,
+        customer_name: updatedOrder.customer_name,
+        mobile_number: updatedOrder.mobile_number,
+        address: updatedOrder.address,
+        status: updatedOrder.status,
+        order_status: updatedOrder.status,
+        items: updatedOrder.items,
+        total_amount: updatedOrder.total_amount,
+      } : null));
+    }
+
+    if (sideEditTargetOrder && (sideEditTargetOrder.id === updatedOrder.id || sideEditTargetOrder.order_number === updatedOrder.order_number)) {
+      setSideEditTargetOrder(updatedOrder);
+    }
+
+    showToast?.(`✅ Order ${updatedOrder.order_number || updatedOrder.id} updated successfully!`);
+    return true;
+  };
 
   // Expanded Inline Edit Order States (Matching 3-panel UI)
   const [editCatalogCategory, setEditCatalogCategory] = useState('All');
@@ -282,6 +412,19 @@ export default function POSModule({
     setEditActiveTab('details');
 
     setEditingOrderRecord(ord);
+
+    // Read: Fetch freshest order record from Supabase in background
+    const editKey = ord.order_number || ord.id || ord.work_number;
+    if (editKey) {
+      getOrderById(editKey).then(({ data }) => {
+        if (data) {
+          setEditingOrderRecord((prev) =>
+            prev && (prev.id === data.id || prev.order_number === data.order_number) ? { ...prev, ...data } : prev
+          );
+        }
+      }).catch(() => {});
+    }
+
     setEditFormData({
       id: ord.id || ord.order_number,
       order_number: ord.order_number || ord.order_id || ord.id,
@@ -420,40 +563,11 @@ export default function POSModule({
       logs: editFormData.logs || editingOrderRecord.logs || [],
     };
 
-    if (onUpdateOrder) {
-      onUpdateOrder(updatedOrder);
-    } else {
-      try {
-        const cached = localStorage.getItem('washdoor_orders_cache');
-        if (cached) {
-          const list = JSON.parse(cached);
-          const nextList = list.map((o) => (o.id === updatedOrder.id || o.order_number === updatedOrder.order_number) ? updatedOrder : o);
-          localStorage.setItem('washdoor_orders_cache', JSON.stringify(nextList));
-        }
-      } catch {}
-      onOrderCreated?.(updatedOrder);
+    const ok = handleSaveSharedOrder(updatedOrder);
+    if (ok) {
+      setEditingOrderRecord(null);
+      setEditFormData(null);
     }
-
-    // Direct Supabase update
-    const saveKey = updatedOrder.order_number || updatedOrder.id || updatedOrder.work_number;
-    if (saveKey) {
-      updateOrderInSupabase(saveKey, {
-        status: updatedOrder.status,
-        customerName: updatedOrder.customer_name,
-        mobileNumber: updatedOrder.mobile_number,
-        address: updatedOrder.address,
-        serviceCategory: updatedOrder.service_category,
-        orderNotes: updatedOrder.comments,
-        totalAmount: updatedOrder.total_amount,
-        advancePaid: updatedOrder.advance_paid,
-        paymentStatus: updatedOrder.payment_status,
-        items: updatedOrder.items,
-      }).catch((e) => console.warn('Supabase saveOrder update note:', e));
-    }
-
-    showToast?.(`✅ Order ${updatedOrder.order_number || updatedOrder.id} updated successfully!`);
-    setEditingOrderRecord(null);
-    setEditFormData(null);
   };
 
   // Graphical Action Modal States
@@ -1580,7 +1694,7 @@ export default function POSModule({
                                 )
                               ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', width: 'fit-content' }}>
-                                  {servicesAllocated.slice(0, 3).map((srvItem, sIdx) => (
+                                  {servicesAllocated.map((srvItem, sIdx) => (
                                     <div key={sIdx} className="pos-service-allocated-item">
                                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
                                         <span>{srvItem.icon || '👕'}</span>
@@ -1591,11 +1705,6 @@ export default function POSModule({
                                       </span>
                                     </div>
                                   ))}
-                                  {servicesAllocated.length > 3 && (
-                                    <span className="pos-service-allocated-more">
-                                      +{servicesAllocated.length - 3} more
-                                    </span>
-                                  )}
                                   {isOnCall && (
                                     isPickupAssigned ? (
                                       <button
@@ -1784,7 +1893,7 @@ export default function POSModule({
                                     className="pos-table-action-btn btn-side-action"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setSideEditTargetOrder(ord);
+                                      handleOpenSideEdit(ord);
                                     }}
                                     title={`Open Side Edit Panel for ${orderNum}`}
                                     style={{
@@ -3117,6 +3226,18 @@ export default function POSModule({
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px' }}>
                                       <button
                                         type="button"
+                                        className="pos-edit-delete-btn"
+                                        onClick={() => setConfirmDeleteOrder(editingOrderRecord)}
+                                        title="Delete this order"
+                                      >
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                          <polyline points="3 6 5 6 21 6"></polyline>
+                                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                        </svg>
+                                        <span>Delete Order</span>
+                                      </button>
+                                      <button
+                                        type="button"
                                         className="pos-edit-cancel-btn"
                                         onClick={() => {
                                           setEditingOrderRecord(null);
@@ -4075,28 +4196,81 @@ export default function POSModule({
       )}
 
       {/* ── Standalone Static Side Edit Panel (matching reference mockup) ── */}
+      {/* ── Unified Delete Order Confirmation Modal ── */}
+      {confirmDeleteOrder && (
+        <div className="pos-held-modal-backdrop" onClick={() => setConfirmDeleteOrder(null)}>
+          <div className="pos-dialog-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+            <div className="pos-dialog-header">
+              <div className="pos-dialog-title" style={{ color: '#ef4444' }}>
+                <span style={{ fontSize: '18px' }}>🗑️</span>
+                <span>Delete Order Confirmation</span>
+              </div>
+              <button
+                type="button"
+                className="pos-dialog-close-btn"
+                onClick={() => setConfirmDeleteOrder(null)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="pos-dialog-order-card" style={{ borderLeft: '4px solid #ef4444' }}>
+              <div className="pos-dialog-order-num" style={{ color: '#ef4444' }}>
+                {confirmDeleteOrder.order_number || confirmDeleteOrder.order_id || confirmDeleteOrder.id}
+              </div>
+              <div className="pos-dialog-order-cust">
+                {confirmDeleteOrder.customer_name || confirmDeleteOrder.customer?.customer_name} • {confirmDeleteOrder.mobile_number || confirmDeleteOrder.customer?.mobile_number}
+              </div>
+              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                Total: {currencySymbol}{confirmDeleteOrder.total_amount || 0} • Pieces: {confirmDeleteOrder.item_count || confirmDeleteOrder.total_pieces || 0}
+              </div>
+            </div>
+
+            <p style={{ fontSize: '13px', color: '#94a3b8', margin: '14px 0 20px', lineHeight: 1.5 }}>
+              Are you sure you want to permanently delete this order? This action will remove the record from Supabase and cannot be undone.
+            </p>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                type="button"
+                className="pos-dialog-cancel-btn"
+                onClick={() => setConfirmDeleteOrder(null)}
+              >
+                No, Keep Order
+              </button>
+              <button
+                type="button"
+                style={{
+                  flex: 1,
+                  padding: '9px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#dc2626',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                onClick={handleConfirmDelete}
+              >
+                Yes, Delete Order
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Standalone Static Side Edit Panel (matching reference mockup) ── */}
       <SideEditPanel
         isOpen={Boolean(sideEditTargetOrder)}
         order={sideEditTargetOrder}
         onClose={() => setSideEditTargetOrder(null)}
+        onDelete={() => setConfirmDeleteOrder(sideEditTargetOrder)}
         showToast={showToast}
         currencySymbol={currencySymbol}
         onUpdateOrder={(updated) => {
-          if (onUpdateOrder) {
-            onUpdateOrder(updated);
-          } else {
-            try {
-              const cached = localStorage.getItem('washdoor_orders_cache');
-              if (cached) {
-                const list = JSON.parse(cached);
-                const nextList = list.map((o) =>
-                  o.id === updated.id || o.order_number === updated.order_number ? updated : o
-                );
-                localStorage.setItem('washdoor_orders_cache', JSON.stringify(nextList));
-              }
-            } catch {}
-            onOrderCreated?.(updated);
-          }
+          handleSaveSharedOrder(updated);
+          setSideEditTargetOrder(null);
         }}
       />
     </div>

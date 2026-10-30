@@ -7,7 +7,7 @@ import POSModule from './components/POSModule';
 import CreateOrderModal from './components/CreateOrderModal';
 import OrderStatusModal from './components/OrderStatusModal';
 import EditOrderModal from './components/EditOrderModal';
-import { getOrders, updateOrderInSupabase } from './services/customerService';
+import { getOrders, updateOrderInSupabase, deleteOrderFromSupabase } from './services/customerService';
 import { isSupabaseConfigured } from './lib/supabaseClient';
 import './styles/OrderStatusModal.css';
 
@@ -190,6 +190,23 @@ export default function App() {
         paymentMethod: updatedOrder.payment_method,
         items: updatedOrder.items,
       }).catch((err) => console.warn('Background Supabase order update note:', err));
+    }
+  }, []);
+
+  const handleDeleteOrderRecord = useCallback(async (orderId) => {
+    if (!orderId) return;
+    setOrders((prev) => {
+      const next = prev.filter((o) => o.id !== orderId && o.order_number !== orderId && o.work_number !== orderId);
+      try {
+        localStorage.setItem('washdoor_orders_cache', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    try {
+      await deleteOrderFromSupabase(orderId);
+    } catch (err) {
+      console.warn('Supabase delete order note:', err);
     }
   }, []);
 
@@ -519,6 +536,7 @@ export default function App() {
             onOrderCreated={loadOrders}
             onNavigateTab={setActiveTab}
             onUpdateOrder={handleUpdateOrderRecord}
+            onDeleteOrder={handleDeleteOrderRecord}
           />
         ) : (
           <CustomerManagement showToast={showToast} />
