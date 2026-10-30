@@ -1479,13 +1479,24 @@ export default function SideEditPanel({
                 </div>
 
                 <div className="side-edit-field">
-                  <label className="side-edit-label">Invoice Number</label>
-                  <input
-                    type="text"
-                    className="side-edit-input"
-                    value={invoiceNo}
-                    onChange={(e) => setInvoiceNo(e.target.value)}
-                  />
+                  <label className="side-edit-label">UPI Instant Pay</label>
+                  <button
+                    type="button"
+                    className="btn-show-qr"
+                    onClick={() => setShowQRModal(true)}
+                    title="Display UPI QR code to scan and pay"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="14" width="7" height="7"></rect>
+                      <rect x="3" y="14" width="7" height="7"></rect>
+                      <path d="M7 7h.01"></path>
+                      <path d="M17 7h.01"></path>
+                      <path d="M7 17h.01"></path>
+                    </svg>
+                    <span>SHOW QR</span>
+                  </button>
                 </div>
               </div>
 
@@ -1776,6 +1787,104 @@ export default function SideEditPanel({
           </div>
         </div>
       </div>
+
+      {/* ── UPI Payment QR Code Modal in Side Edit ── */}
+      {showQRModal && (
+        <div className="pos-held-modal-backdrop" style={{ zIndex: 11000 }} onClick={() => setShowQRModal(false)}>
+          <div
+            className="pos-dialog-modal pos-qr-dialog-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="pos-dialog-header">
+              <div className="pos-dialog-title">
+                <span style={{ fontSize: '18px' }}>📱</span>
+                <span>UPI Payment QR Code</span>
+              </div>
+              <button
+                type="button"
+                className="pos-dialog-close-btn"
+                onClick={() => setShowQRModal(false)}
+                title="Close QR"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="pos-qr-order-banner">
+              <div style={{ fontSize: '13px', fontWeight: 800, color: '#38bdf8' }}>
+                #{order?.order_number || order?.order_id || 'ORDER'}
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary, #94a3b8)', marginTop: '2px' }}>
+                {customerName || 'Customer'}
+              </div>
+              <div style={{ marginTop: '8px', fontSize: '24px', fontWeight: 800, color: '#10b981' }}>
+                {currencySymbol}{(balanceDue > 0 ? balanceDue : grandTotal).toFixed(2)}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary, #94a3b8)', marginTop: '2px' }}>
+                Scan to Pay via any UPI App
+              </div>
+            </div>
+
+            {/* QR Code Container */}
+            <div className="pos-qr-image-wrapper">
+              <img
+                src="/sample-qr.png"
+                alt="UPI Payment QR Code"
+                className="pos-qr-image"
+              />
+            </div>
+
+            <div className="pos-qr-apps-badge">
+              <span>Google Pay</span>
+              <span>•</span>
+              <span>PhonePe</span>
+              <span>•</span>
+              <span>Paytm</span>
+              <span>•</span>
+              <span>BHIM UPI</span>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+              <button
+                type="button"
+                className="pos-btn-secondary"
+                style={{ flex: 1, padding: '9px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}
+                onClick={() => setShowQRModal(false)}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                style={{
+                  flex: 1.2,
+                  padding: '9px 14px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  background: '#10b981',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)'
+                }}
+                onClick={() => {
+                  setPaymentStatus('Paid in Full');
+                  setAdvancePaid(grandTotal);
+                  setShowQRModal(false);
+                  showToast?.('✓ Payment received via QR & marked as Fully Paid!');
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Mark Paid via QR</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Photo Preview Lightbox Modal ── */}
       {previewPhoto && (

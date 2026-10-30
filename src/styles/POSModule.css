@@ -4105,3 +4105,98 @@ body.light-theme .pos-dialog-order-captured-time,
 }
 
 
+
+/* ── Show QR Button in Payments Tab ── */
+.btn-show-qr {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  height: 36px;
+  padding: 0 14px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-show-qr:hover {
+  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-show-qr:active {
+  transform: translateY(0);
+}
+
+body.light-theme .btn-show-qr,
+[data-theme="light"] .btn-show-qr {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+}
+
+/* ── UPI Payment QR Modal ── */
+.pos-qr-dialog-modal {
+  max-width: 390px !important;
+  text-align: center;
+}
+
+.pos-qr-order-banner {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
+body.light-theme .pos-qr-order-banner,
+[data-theme="light"] .pos-qr-order-banner {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.pos-qr-image-wrapper {
+  background: #ffffff;
+  padding: 16px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 4px auto 14px;
+  border: 1.5px solid #e2e8f0;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+
+.pos-qr-image {
+  width: 220px;
+  height: 220px;
+  display: block;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.pos-qr-apps-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #94a3b8);
+  margin-bottom: 4px;
+}
+
+.pos-qr-apps-badge span {
+  display: inline-flex;
+  align-items: center;
+}

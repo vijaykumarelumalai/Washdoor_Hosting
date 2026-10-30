@@ -101,6 +101,7 @@ export default function POSModule({
   // Static Side Edit Panel Target Order
   const [sideEditTargetOrder, setSideEditTargetOrder] = useState(null);
   const [confirmDeleteOrder, setConfirmDeleteOrder] = useState(null);
+  const [qrModalData, setQrModalData] = useState(null);
 
   // Shared Read: Fetch freshest order from Supabase when opening Side Edit
   const handleOpenSideEdit = (ord) => {
@@ -3005,7 +3006,7 @@ export default function POSModule({
                                           </div>
 
                                           {/* Payment Fields */}
-                                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+                                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', alignItems: 'flex-end' }}>
                                             <div>
                                               <label className="pos-edit-label">
                                                 Payment Status
@@ -3048,6 +3049,37 @@ export default function POSModule({
                                                 value={editFormData.advance_paid || 0}
                                                 onChange={(e) => setEditFormData({ ...editFormData, advance_paid: e.target.value })}
                                               />
+                                            </div>
+
+                                            <div>
+                                              <label className="pos-edit-label" style={{ opacity: 0.9 }}>
+                                                UPI Instant Pay
+                                              </label>
+                                              <button
+                                                type="button"
+                                                className="btn-show-qr"
+                                                onClick={() => {
+                                                  const bal = Math.max(0, editCartGrandTotal - Number(editFormData.advance_paid || 0));
+                                                  setQrModalData({
+                                                    orderNumber: editingOrderRecord?.order_number || editingOrderRecord?.order_id || 'ORDER',
+                                                    customerName: editFormData.customer_name || editingOrderRecord?.customer_name || 'Customer',
+                                                    amount: bal > 0 ? bal : editCartGrandTotal,
+                                                    grandTotal: editCartGrandTotal,
+                                                  });
+                                                }}
+                                                title="Display UPI QR code to scan and pay"
+                                              >
+                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                                  <rect x="3" y="3" width="7" height="7"></rect>
+                                                  <rect x="14" y="3" width="7" height="7"></rect>
+                                                  <rect x="14" y="14" width="7" height="7"></rect>
+                                                  <rect x="3" y="14" width="7" height="7"></rect>
+                                                  <path d="M7 7h.01"></path>
+                                                  <path d="M17 7h.01"></path>
+                                                  <path d="M7 17h.01"></path>
+                                                </svg>
+                                                <span>SHOW QR</span>
+                                              </button>
                                             </div>
                                           </div>
                                         </div>
@@ -4186,6 +4218,107 @@ export default function POSModule({
                   Confirm Assignment
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── UPI Payment QR Code Modal ── */}
+      {qrModalData && (
+        <div className="pos-held-modal-backdrop" onClick={() => setQrModalData(null)}>
+          <div
+            className="pos-dialog-modal pos-qr-dialog-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="pos-dialog-header">
+              <div className="pos-dialog-title">
+                <span style={{ fontSize: '18px' }}>📱</span>
+                <span>UPI Payment QR Code</span>
+              </div>
+              <button
+                type="button"
+                className="pos-dialog-close-btn"
+                onClick={() => setQrModalData(null)}
+                title="Close QR"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="pos-qr-order-banner">
+              <div style={{ fontSize: '13px', fontWeight: 800, color: '#38bdf8' }}>
+                #{qrModalData.orderNumber}
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary, #94a3b8)', marginTop: '2px' }}>
+                {qrModalData.customerName || 'Customer'}
+              </div>
+              <div style={{ marginTop: '8px', fontSize: '24px', fontWeight: 800, color: '#10b981' }}>
+                {currencySymbol}{Number(qrModalData.amount || 0).toFixed(2)}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary, #94a3b8)', marginTop: '2px' }}>
+                Scan to Pay via any UPI App
+              </div>
+            </div>
+
+            {/* QR Code Container */}
+            <div className="pos-qr-image-wrapper">
+              <img
+                src="/sample-qr.png"
+                alt="UPI Payment QR Code"
+                className="pos-qr-image"
+              />
+            </div>
+
+            <div className="pos-qr-apps-badge">
+              <span>Google Pay</span>
+              <span>•</span>
+              <span>PhonePe</span>
+              <span>•</span>
+              <span>Paytm</span>
+              <span>•</span>
+              <span>BHIM UPI</span>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+              <button
+                type="button"
+                className="pos-btn-secondary"
+                style={{ flex: 1, padding: '9px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}
+                onClick={() => setQrModalData(null)}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                style={{
+                  flex: 1.2,
+                  padding: '9px 14px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  background: '#10b981',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)'
+                }}
+                onClick={() => {
+                  setEditFormData((prev) => prev ? ({
+                    ...prev,
+                    payment_status: 'Paid',
+                    advance_paid: editCartGrandTotal,
+                  }) : prev);
+                  setQrModalData(null);
+                  showToast?.('✓ Payment received via QR & marked as Fully Paid!');
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Mark Paid via QR</span>
+              </button>
             </div>
           </div>
         </div>
