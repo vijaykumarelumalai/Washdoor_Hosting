@@ -50,12 +50,7 @@ export default function App() {
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed)) {
-          // Filter out any legacy hardcoded mock order IDs (ORD00001 - ORD00010)
-          const realOnly = parsed.filter((o) => {
-            const num = String(o.order_number || o.id || o.order_id || '');
-            return !num.match(/^ORD0{3,4}\d$/);
-          });
-          return realOnly.map((o) => {
+          return parsed.map((o) => {
             const s = String(o.order_status || o.status || '').toLowerCase();
             let norm = 'In Progress';
             if (s.includes('cancel')) norm = 'Cancelled';

@@ -6,7 +6,7 @@
 -- 1. Create Work Order Sequence
 CREATE SEQUENCE IF NOT EXISTS public.customer_work_seq START WITH 1 INCREMENT BY 1;
 
--- 2. Auto-generating work order number function (Format: WORK-00001)
+-- 2. Auto-generating work order number function (Format: ORD00001)
 CREATE OR REPLACE FUNCTION public.generate_customer_work_number()
 RETURNS TEXT
 LANGUAGE plpgsql
@@ -15,7 +15,7 @@ DECLARE
   next_val BIGINT;
 BEGIN
   next_val := nextval('public.customer_work_seq');
-  RETURN 'WORK-' || lpad(next_val::TEXT, 5, '0');
+  RETURN 'ORD' || lpad(next_val::TEXT, 5, '0');
 END;
 $$;
 

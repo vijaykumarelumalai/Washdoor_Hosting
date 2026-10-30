@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import CustomerSearchPanel from './CustomerSearchPanel';
 import CustomerForm from './CustomerForm';
-import { createOrderWithCustomer, getNextOrderId, getNextCustomerId } from '../services/customerService';
+import { createOrderWithCustomer, getNextOrderId, getNextCustomerId, formatOrderId } from '../services/customerService';
 import { friendlySupabaseError } from '../utils/validation';
 
 export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, showToast }) {
@@ -12,7 +12,7 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
   const [view, setView] = useState('LOOKUP');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [nextOrderNumber, setNextOrderNumber] = useState('ORDER-00001');
+  const [nextOrderNumber, setNextOrderNumber] = useState('ORD00001');
   const [nextCustomerId, setNextCustomerId] = useState('CUST-00001');
 
   useEffect(() => {
@@ -91,8 +91,11 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
       return;
     }
 
-    const orderNumber = data?.order_number || (data?.order_id ? `ORDER-${data.order_id}` : 'ORDER-00001');
-    showToast(`✅ Order ${orderNumber} created successfully!`);
+    const orderNumber = data?.order_number ? formatOrderId(data.order_number) : (data?.order_id ? formatOrderId(data.order_id) : 'ORD00001');
+    const toastMsg = data?.isNewCustomer
+      ? `✅ New Customer registered & Order ${orderNumber} created!`
+      : `✅ Order ${orderNumber} created for ${customerData?.customer_name || 'customer'}!`;
+    showToast(toastMsg);
     
     const isPickup = (orderType === 'pickup' || orderType === 'pickup & delivery' || orderType === 'home delivery');
     const initialStatus = isPickup ? 'Received' : 'In Progress';

@@ -7,7 +7,7 @@
 -- 1. Create order number sequence
 create sequence if not exists public.order_number_seq start with 1 increment by 1;
 
--- 2. Create auto-generating order number function (ORDER-00001 format)
+-- 2. Create auto-generating order number function (ORD00001 format)
 create or replace function public.generate_order_number()
 returns text
 language plpgsql
@@ -16,7 +16,7 @@ declare
   next_val bigint;
 begin
   next_val := nextval('public.order_number_seq');
-  return 'ORDER-' || lpad(next_val::text, 5, '0');
+  return 'ORD' || lpad(next_val::text, 5, '0');
 end;
 $$;
 

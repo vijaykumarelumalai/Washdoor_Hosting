@@ -269,21 +269,21 @@ export function formatCustomerId(id) {
   return str.toUpperCase().startsWith('CUST-') ? str.toUpperCase() : `CUST-${str.toUpperCase()}`;
 }
 
-// Helper to format any Order ID into canonical ORDER-00001 (5-digit padded, starting with ORDER)
+// Helper to format any Order ID into standardized ORD00001 (5-digit zero padded, starting with ORD)
 export function formatOrderId(id) {
-  if (!id) return 'ORDER-00001';
+  if (!id) return 'ORD00001';
   const str = String(id).trim();
-  const match = str.match(/ORDER-(\d+)/i) || str.match(/\d+/);
+  const match = str.match(/(?:ORD|ORDER|WORK)-?(\d+)/i) || str.match(/\d+/);
   if (match) {
     const num = parseInt(match[1] || match[0], 10);
-    return `ORDER-${String(num).padStart(5, '0')}`;
+    return `ORD${String(num).padStart(5, '0')}`;
   }
-  return str.toUpperCase().startsWith('ORDER-') ? str.toUpperCase() : `ORDER-${str.toUpperCase()}`;
+  return str.toUpperCase().startsWith('ORD') ? str.toUpperCase() : `ORD${str.toUpperCase()}`;
 }
 
 /**
- * Computes the next unique sequential order identifier starting from ORDER-00001
- * by querying real existing records in washdoor_orders_master.
+ * Computes the next unique sequential order identifier starting from ORD00001
+ * by querying real existing records in customer_works and washdoor_orders_master.
  */
 export async function getNextOrderId() {
   try {
@@ -298,9 +298,9 @@ export async function getNextOrderId() {
         if (worksData && worksData.length > 0) {
           worksData.forEach((row) => {
             if (row.work_number) {
-              const match = row.work_number.match(/ORDER-(\d+)/i);
+              const match = String(row.work_number).match(/(?:ORD|ORDER|WORK)-?(\d+)/i) || String(row.work_number).match(/\d+/);
               if (match) {
-                const num = parseInt(match[1], 10);
+                const num = parseInt(match[1] || match[0], 10);
                 if (num > maxNum) maxNum = num;
               }
             }
@@ -317,9 +317,9 @@ export async function getNextOrderId() {
         if (masterData && masterData.length > 0) {
           masterData.forEach((row) => {
             if (row.order_number) {
-              const match = row.order_number.match(/ORDER-(\d+)/i);
+              const match = String(row.order_number).match(/(?:ORD|ORDER|WORK)-?(\d+)/i) || String(row.order_number).match(/\d+/);
               if (match) {
-                const num = parseInt(match[1], 10);
+                const num = parseInt(match[1] || match[0], 10);
                 if (num > maxNum) maxNum = num;
               }
             }
@@ -327,18 +327,14 @@ export async function getNextOrderId() {
         }
       } catch {}
 
-      return `ORDER-${String(maxNum + 1).padStart(5, '0')}`;
+      return `ORD${String(maxNum + 1).padStart(5, '0')}`;
     }
   } catch (err) {
     console.warn('getNextOrderId lookup note:', err);
   }
-  return 'ORDER-00003';
+  return 'ORD00001';
 }
 
-/**
- * Computes the next unique sequential customer identifier in the format CUST-00001
- * by querying real existing records in washdoor_orders_master.
- */
 export async function getNextCustomerId() {
   try {
     if (isSupabaseConfigured()) {
@@ -465,7 +461,7 @@ export function mapCustomerWorkRow(row) {
 
 // Convert washdoor_orders_master row into UI shape
 function mapMasterRowToOrder(row) {
-  const orderNum = row.order_number ? formatOrderId(row.order_number) : (row.order_id ? formatOrderId(row.order_id) : 'ORDER-00001');
+  const orderNum = row.order_number ? formatOrderId(row.order_number) : (row.order_id ? formatOrderId(row.order_id) : 'ORD00001');
   const custId = formatCustomerId(row.customer_id);
 
   const rawStatus = row.order_status || 'Order in Progress';
@@ -573,7 +569,38 @@ export async function searchCustomers(query) {
     const seen = new Set();
     const uniqueCustomers = [];
 
-    // 1. Search primary customer_works table
+    // 1. Search customers table
+    try {
+      const { data: cData } = await supabase
+        .from('customers')
+        .select('*')
+        .or(`customer_name.ilike.%${q}%,mobile_number.ilike.%${q}%,address.ilike.%${q}%`)
+        .limit(30);
+
+      if (cData && cData.length > 0) {
+        cData.forEach((r) => {
+          const custId = r.customer_id || (r.id ? formatCustomerId(r.id) : null);
+          const phone = r.mobile_number || '';
+          const key = custId || phone;
+          if (key && !seen.has(key)) {
+            seen.add(key);
+            uniqueCustomers.push({
+              id: custId,
+              customer_id: custId,
+              customerId: custId,
+              customer_name: r.customer_name || '',
+              mobile_number: phone,
+              address: r.address || '',
+              email: r.email || '',
+              city: r.city || '',
+              pincode: r.pincode || '',
+            });
+          }
+        });
+      }
+    } catch {}
+
+    // 2. Search primary customer_works table
     try {
       const { data: worksData, error: worksError } = await supabase
         .from('customer_works')
@@ -585,7 +612,7 @@ export async function searchCustomers(query) {
       if (!worksError && worksData) {
         worksData.forEach((r) => {
           const c = mapCustomerWorkRow(r);
-          const key = c.customer_id;
+          const key = c.customer_id || c.mobile_number;
           if (key && !seen.has(key)) {
             seen.add(key);
             uniqueCustomers.push(c);
@@ -627,7 +654,7 @@ export async function searchCustomers(query) {
 
 // Convert customer_works row into UI Order shape
 function mapCustomerWorkRowToOrder(row) {
-  const orderNum = row.work_number || (row.work_id ? `ORDER-${String(row.work_id).slice(-5)}` : 'ORDER-00001');
+  const orderNum = row.work_number ? formatOrderId(row.work_number) : (row.work_id ? `ORD${String(row.work_id).slice(-5)}` : 'ORD00001');
   const custId = formatCustomerId(row.customer_id || 'CUST-00001');
   const rawStatus = row.work_status || 'Order in Progress';
 
@@ -1022,10 +1049,59 @@ export async function createOrderWithCustomer({
     
     // Resolve customer ID in standard CUST-00001 format
     let finalCustId = existingCustomerId || cleanCust.customer_code || cleanCust.customerId || cleanCust.customer_id || cleanCust.id;
-    if (finalCustId && String(finalCustId).toUpperCase().includes('CUST-')) {
+    let isNewCustomer = false;
+
+    const normMobile = String(cleanCust.mobile_number || '').replace(/\D/g, '').slice(-10);
+
+    // If no existingCustomerId passed, check if a customer with this normalized 10-digit mobile already exists
+    if (!finalCustId && normMobile.length === 10) {
+      try {
+        // 1. Check customers table
+        const { data: cMatches } = await supabase
+          .from('customers')
+          .select('id, customer_name, mobile_number')
+          .ilike('mobile_number', `%${normMobile}%`)
+          .limit(1);
+        if (cMatches && cMatches.length > 0) {
+          finalCustId = cMatches[0].customer_id || (cMatches[0].id ? formatCustomerId(cMatches[0].id) : null);
+        }
+      } catch {}
+
+      // 2. If not found in customers table, check customer_works
+      if (!finalCustId) {
+        try {
+          const { data: wMatches } = await supabase
+            .from('customer_works')
+            .select('customer_id, customer_name')
+            .ilike('mobile_number', `%${normMobile}%`)
+            .order('created_at', { ascending: false })
+            .limit(1);
+          if (wMatches && wMatches.length > 0 && wMatches[0].customer_id) {
+            finalCustId = formatCustomerId(wMatches[0].customer_id);
+          }
+        } catch {}
+      }
+    }
+
+    if (finalCustId) {
       finalCustId = formatCustomerId(finalCustId);
     } else {
       finalCustId = await getNextCustomerId();
+      isNewCustomer = true;
+    }
+
+    // Try creating record in customers table if it is a newly registered customer
+    if (isNewCustomer) {
+      try {
+        await supabase.from('customers').insert([{
+          customer_name: cleanCust.customer_name,
+          mobile_number: cleanCust.mobile_number,
+          email: cleanCust.email || null,
+          address: cleanCust.address || null,
+          city: cleanCust.city || null,
+          pincode: cleanCust.pincode || null,
+        }]);
+      } catch {}
     }
 
     const calculatedItemCount = (items && items.length > 0)
@@ -1090,9 +1166,10 @@ export async function createOrderWithCustomer({
     const initialWorkStatus = normalizedIntake === 'Pickup & Delivery' ? 'Received' : 'In Progress';
 
     try {
-      // Omit work_number and created_at to allow PostgreSQL sequence/default triggers to assign canonical backend metadata
+      // Assign standardized ORD00001 order identifier to work_number
       // Omit balance_due because PostgreSQL has it defined as a generated column
       const workRow = {
+        work_number: generatedOrderNumber,
         customer_id: finalCustId,
         customer_name: cleanCust.customer_name,
         mobile_number: cleanCust.mobile_number,
@@ -1153,6 +1230,7 @@ export async function createOrderWithCustomer({
         order_id: insertedOrderId,
         order_number: insertedOrderNum,
         customer_id: finalCustId,
+        isNewCustomer,
         status: 'success',
       },
       error: null,
@@ -1183,12 +1261,14 @@ export async function updateOrderStatus(orderIdentifier, newStatus, progressPerc
       updated_at: new Date().toISOString(),
     };
     try {
+      const numMatch = String(formattedId).match(/\d+/);
+      const num = numMatch ? parseInt(numMatch[0], 10) : null;
+      const ordId = num ? `ORD${String(num).padStart(5, '0')}` : formattedId;
+      const workId = num ? `WORK-${String(num).padStart(5, '0')}` : formattedId;
+      const orderIdPattern = num ? `ORDER-${String(num).padStart(5, '0')}` : formattedId;
+
       let wQuery = supabase.from('customer_works').update(workUpdate);
-      if (formattedId.startsWith('ORDER-')) {
-        wQuery = wQuery.eq('work_number', formattedId);
-      } else {
-        wQuery = wQuery.or(`work_number.eq.${formattedId},work_id.eq.${formattedId}`);
-      }
+      wQuery = wQuery.or(`work_number.eq.${ordId},work_number.eq.${workId},work_number.eq.${orderIdPattern},work_id.eq.${formattedId}`);
       await wQuery;
     } catch {}
 
@@ -1317,12 +1397,14 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       workUpdate.total_pieces = updatePayload.items.reduce((s, i) => s + (Number(i.qty) || 1), 0);
     }
     try {
+      const numMatch = String(formattedId).match(/\d+/);
+      const num = numMatch ? parseInt(numMatch[0], 10) : null;
+      const ordId = num ? `ORD${String(num).padStart(5, '0')}` : formattedId;
+      const workId = num ? `WORK-${String(num).padStart(5, '0')}` : formattedId;
+      const orderIdPattern = num ? `ORDER-${String(num).padStart(5, '0')}` : formattedId;
+
       let wQuery = supabase.from('customer_works').update(workUpdate);
-      if (formattedId.startsWith('ORDER-') || formattedId.startsWith('WD-')) {
-        wQuery = wQuery.eq('work_number', formattedId);
-      } else {
-        wQuery = wQuery.or(`work_number.eq.${formattedId},work_id.eq.${formattedId}`);
-      }
+      wQuery = wQuery.or(`work_number.eq.${ordId},work_number.eq.${workId},work_number.eq.${orderIdPattern},work_id.eq.${formattedId}`);
       await wQuery;
     } catch {}
 

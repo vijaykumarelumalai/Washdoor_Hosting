@@ -4,14 +4,16 @@ import assert from 'node:assert/strict';
 import { validateCustomer, friendlySupabaseError, formatPhoneDisplay, formatDOB, parseDOBInput, normalizeMobileNumber, isMobileNumberQuery, getAgeFromDOB } from '../utils/validation.js';
 import { formatOrderId, formatCustomerId } from '../services/customerService.js';
 
-test('formatOrderId generates canonical 5-digit padded order identifier starting with ORDER', () => {
-  assert.equal(formatOrderId(null), 'ORDER-00001');
-  assert.equal(formatOrderId(''), 'ORDER-00001');
-  assert.equal(formatOrderId(1), 'ORDER-00001');
-  assert.equal(formatOrderId('2'), 'ORDER-00002');
-  assert.equal(formatOrderId('ORDER-00005'), 'ORDER-00005');
-  assert.equal(formatOrderId('ORDER-12'), 'ORDER-00012');
-  assert.equal(formatOrderId('order-99'), 'ORDER-00099');
+test('formatOrderId generates standardized 5-digit zero-padded order identifier starting with ORD', () => {
+  assert.equal(formatOrderId(null), 'ORD00001');
+  assert.equal(formatOrderId(''), 'ORD00001');
+  assert.equal(formatOrderId(1), 'ORD00001');
+  assert.equal(formatOrderId('2'), 'ORD00002');
+  assert.equal(formatOrderId('ORD00005'), 'ORD00005');
+  assert.equal(formatOrderId('ORD-00005'), 'ORD00005');
+  assert.equal(formatOrderId('WORK-00005'), 'ORD00005');
+  assert.equal(formatOrderId('ORDER-12'), 'ORD00012');
+  assert.equal(formatOrderId('order-99'), 'ORD00099');
 });
 
 test('formatCustomerId generates canonical 5-digit padded customer identifier starting with CUST', () => {

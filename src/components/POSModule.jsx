@@ -1338,16 +1338,21 @@ export default function POSModule({
                         const srv = ord.service_category || ord.service_type || ord.preference || 'Normal Wash';
                         const workStatus = normalizeOrderStatus(ord.order_status || ord.status || 'Received');
 
-                        // Services Allocated list
-                        const servicesAllocated = ord.services_allocated || (
-                          Array.isArray(items) && items.length > 0
-                            ? items.map((it) => ({
-                                name: it.service || it.name || srv,
-                                count: Number(it.qty) || 1,
-                                icon: '👕',
-                              }))
-                            : [{ name: srv, count: itemCount, icon: '👕' }]
-                        );
+                        // Determine if order is On-Call or Walk-In
+                        const orderTypeLower = (ord.order_type || '').toLowerCase();
+                        const isOnCall = orderTypeLower.includes('call') || orderTypeLower.includes('phone') || orderTypeLower.includes('pickup') || orderTypeLower.includes('delivery');
+                        const orderTypeBadgeText = isOnCall ? 'On-Call' : 'Walk-In';
+
+                        // Services Allocated list: empty when no items or services allocated
+                        const servicesAllocated = (Array.isArray(ord.services_allocated) && ord.services_allocated.length > 0)
+                          ? ord.services_allocated
+                          : (Array.isArray(items) && items.length > 0
+                              ? items.map((it) => ({
+                                  name: it.service || it.name || it.item_name || srv,
+                                  count: Number(it.qty || it.quantity) || 1,
+                                  icon: '👕',
+                                }))
+                              : []);
 
                         // Status colors & style (Only Received, In Progress, Ready, Delivered, Cancelled)
                         let statusBg = '#eff6ff';
@@ -1415,49 +1420,32 @@ export default function POSModule({
                               className={`pos-order-row ${isEditingThisOrder ? 'pos-order-row-editing' : ''}`}
                               style={isEditingThisOrder ? { background: '#f8fafc' } : {}}
                             >
-                            {/* 1. Order ID (with Calendar, Clock, and Type Pill) */}
+                            {/* 1. Order ID Column (Prominent ID, Walk-In/On-Call Badge directly below, date & time removed) */}
                             <td style={{ borderLeft: isEditingThisOrder ? '4px solid #2563eb' : `4px solid ${accentColor}`, paddingLeft: '14px', verticalAlign: 'top', paddingTop: '14px' }}>
-                              <div className="pos-ticket-cell" style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                              <div className="pos-ticket-cell" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                 <span
                                   className="pos-ticket-num"
                                   onClick={() => onOpenOrderStatus?.(ord, false)}
                                   title={`View details for ${orderNum}`}
-                                  style={{ cursor: 'pointer', fontWeight: 800, fontSize: '13.5px', color: '#2563eb' }}
+                                  style={{ cursor: 'pointer', fontWeight: 800, fontSize: '14px', color: '#2563eb' }}
                                 >
                                   {orderNum}
                                 </span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', color: '#64748b' }}>
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.2">
-                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                                    <line x1="16" y1="2" x2="16" y2="6" />
-                                    <line x1="8" y1="2" x2="8" y2="6" />
-                                    <line x1="3" y1="10" x2="21" y2="10" />
-                                  </svg>
-                                  <span>{capturedDateStr}</span>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: '#94a3b8' }}>
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2">
-                                    <circle cx="12" cy="12" r="10" />
-                                    <polyline points="12 6 12 12 16 14" />
-                                  </svg>
-                                  <span>{capturedTimeStr}</span>
-                                </div>
                                 <div style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   gap: '4px',
-                                  padding: '2px 7px',
+                                  padding: '2px 8px',
                                   borderRadius: '4px',
                                   fontSize: '11px',
                                   fontWeight: 650,
                                   width: 'fit-content',
-                                  marginTop: '2px',
-                                  background: isDeliveryType ? '#dcfce7' : '#eff6ff',
-                                  color: isDeliveryType ? '#15803d' : '#2563eb',
-                                  border: isDeliveryType ? '1px solid #bbf7d0' : '1px solid #bfdbfe'
+                                  background: '#eff6ff',
+                                  color: '#2563eb',
+                                  border: '1px solid #bfdbfe'
                                 }}>
-                                  <span>{isDeliveryType ? '🚚' : '＋'}</span>
-                                  <span>{orderTypeStr}</span>
+                                  <span>+</span>
+                                  <span>{orderTypeBadgeText}</span>
                                 </div>
                               </div>
                             </td>
@@ -1507,48 +1495,143 @@ export default function POSModule({
                               </div>
                             </td>
 
-                            {/* 4. Services Allocated (Visual chips & counts) */}
-                            <td style={{ verticalAlign: 'top', paddingTop: '14px' }}>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                                {servicesAllocated.slice(0, 3).map((srvItem, sIdx) => (
-                                  <div key={sIdx} style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    gap: '8px',
-                                    background: '#f8fafc',
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: '6px',
-                                    padding: '3px 8px',
-                                    fontSize: '12px',
-                                    color: '#1e293b',
-                                    width: 'fit-content',
-                                    whiteSpace: 'nowrap'
-                                  }}>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                                      <span>{srvItem.icon || '👕'}</span>
-                                      <span>{srvItem.name}</span>
-                                    </span>
-                                    <span style={{ fontWeight: 700, color: '#2563eb', background: '#dbeafe', padding: '1px 6px', borderRadius: '4px', fontSize: '11px' }}>
-                                      {srvItem.count}
-                                    </span>
-                                  </div>
-                                ))}
-                                {servicesAllocated.length > 3 && (
-                                  <span style={{
-                                    fontSize: '11px',
-                                    fontWeight: 700,
-                                    color: '#2563eb',
-                                    background: '#eff6ff',
-                                    border: '1px solid #bfdbfe',
-                                    padding: '2px 6px',
-                                    borderRadius: '4px',
-                                    width: 'fit-content'
-                                  }}>
-                                    +{servicesAllocated.length - 3} more
+                            {/* 4. Services Allocated (Neat badges or compact empty state, Assign Pickup only for On-Call) */}
+                            <td style={{ verticalAlign: 'top', paddingTop: '14px', maxWidth: '175px' }}>
+                              {servicesAllocated.length === 0 ? (
+                                <div style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: '4px',
+                                  background: '#f8fafc',
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: '8px',
+                                  padding: '8px 10px',
+                                  width: '135px',
+                                  boxSizing: 'border-box'
+                                }}>
+                                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M20.38 3.46L16 2a4 4 0 01-8 0L3.62 3.46a2 2 0 00-1.34 2.23l.58 3.47a1 1 0 00.99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 002-2V10h2.15a1 1 0 00.99-.84l.58-3.47a2 2 0 00-1.34-2.23z" />
+                                  </svg>
+                                  <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                    No services allocated
                                   </span>
-                                )}
-                              </div>
+                                  {isOnCall && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setAssignDriverTarget(ord);
+                                      }}
+                                      title={`Assign Pickup for ${orderNum}`}
+                                      style={{
+                                        marginTop: '4px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '4px',
+                                        padding: '4px 8px',
+                                        borderRadius: '6px',
+                                        background: '#ffffff',
+                                        border: '1px solid #3b82f6',
+                                        color: '#2563eb',
+                                        fontSize: '11px',
+                                        fontWeight: 650,
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 2px rgba(37,99,235,0.08)',
+                                        width: '100%',
+                                        whiteSpace: 'nowrap'
+                                      }}
+                                    >
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="1" y="3" width="15" height="13"></rect>
+                                        <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                                        <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                                        <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                                      </svg>
+                                      <span>Assign Pickup</span>
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', width: 'fit-content' }}>
+                                  {servicesAllocated.slice(0, 3).map((srvItem, sIdx) => (
+                                    <div key={sIdx} style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      gap: '8px',
+                                      background: '#f8fafc',
+                                      border: '1px solid #e2e8f0',
+                                      borderRadius: '6px',
+                                      padding: '3px 8px',
+                                      fontSize: '12px',
+                                      color: '#1e293b',
+                                      width: 'fit-content',
+                                      whiteSpace: 'nowrap'
+                                    }}>
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                        <span>{srvItem.icon || '👕'}</span>
+                                        <span>{srvItem.name}</span>
+                                      </span>
+                                      <span style={{ fontWeight: 700, color: '#2563eb', background: '#dbeafe', padding: '1px 6px', borderRadius: '4px', fontSize: '11px' }}>
+                                        x{srvItem.count}
+                                      </span>
+                                    </div>
+                                  ))}
+                                  {servicesAllocated.length > 3 && (
+                                    <span style={{
+                                      fontSize: '11px',
+                                      fontWeight: 700,
+                                      color: '#2563eb',
+                                      background: '#eff6ff',
+                                      border: '1px solid #bfdbfe',
+                                      padding: '2px 6px',
+                                      borderRadius: '4px',
+                                      width: 'fit-content'
+                                    }}>
+                                      +{servicesAllocated.length - 3} more
+                                    </span>
+                                  )}
+                                  {isOnCall && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setAssignDriverTarget(ord);
+                                      }}
+                                      title={`Assign Pickup for ${orderNum}`}
+                                      style={{
+                                        marginTop: '3px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '4px',
+                                        padding: '3px 8px',
+                                        borderRadius: '6px',
+                                        background: '#ffffff',
+                                        border: '1px solid #3b82f6',
+                                        color: '#2563eb',
+                                        fontSize: '11px',
+                                        fontWeight: 650,
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 2px rgba(37,99,235,0.08)',
+                                        width: 'fit-content',
+                                        whiteSpace: 'nowrap'
+                                      }}
+                                    >
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="1" y="3" width="15" height="13"></rect>
+                                        <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                                        <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                                        <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                                      </svg>
+                                      <span>Assign Pickup</span>
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </td>
 
                             {/* 5. Status (Icon badge & processing subtext) */}
