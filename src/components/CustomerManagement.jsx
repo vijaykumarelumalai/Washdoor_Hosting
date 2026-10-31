@@ -29,6 +29,11 @@ export default function CustomerManagement({ showToast }) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
+  // ── Customer Pagination ──
+  const [custsPageSizeKey, setCustsPageSizeKey] = useState('5');
+  const [custPage, setCustPage] = useState(1);
+  const CUSTS_PER_PAGE = custsPageSizeKey === 'all' ? Math.max(customers.length, 1) : parseInt(custsPageSizeKey, 10);
+
   // Toggle expandable drop-down card view
   const toggleExpandCustomer = (id) => {
     if (!id) return;
@@ -154,6 +159,11 @@ export default function CustomerManagement({ showToast }) {
     loadData(query);
   }, [loadData, query]);
 
+  // Reset to page 1 whenever search query or page size changes
+  useEffect(() => {
+    setCustPage(1);
+  }, [query, custsPageSizeKey]);
+
   const handleUpdate = async ({ customerData, existingCustomerId }) => {
     const targetId = existingCustomerId || editingCustomer?.customerId || editingCustomer?.customer_id || customerData?.customer_id;
     const { error } = await updateCustomer(targetId, customerData);
@@ -179,6 +189,12 @@ export default function CustomerManagement({ showToast }) {
     showToast('✅ Customer deleted successfully.');
     loadData(query);
   };
+
+  // ── Pagination computed values ──
+  const custTotalPages = Math.max(1, Math.ceil(customers.length / CUSTS_PER_PAGE));
+  const paginatedCustomers = custsPageSizeKey === 'all'
+    ? customers
+    : customers.slice((custPage - 1) * CUSTS_PER_PAGE, custPage * CUSTS_PER_PAGE);
 
   return (
     <div>
@@ -279,7 +295,7 @@ export default function CustomerManagement({ showToast }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', whiteSpace: 'nowrap' }}>
           <span className="cust-count-badge">
-            {customers.length} customer record{customers.length === 1 ? '' : 's'} loaded
+            {customers.length} customer record{customers.length === 1 ? '' : 's'} loaded{custTotalPages > 1 ? ` · Page ${custPage}/${custTotalPages}` : ''}
           </span>
           <button
             type="button"
@@ -576,7 +592,7 @@ export default function CustomerManagement({ showToast }) {
         </div>
       ) : (
         <div className="orders">
-          {customers.map((c) => {
+          {paginatedCustomers.map((c) => {
             const custId = c.customerId || c.customer_code || c.customer_id || c.id || '';
             const status = c.customerStatus || c.customer_status || '';
             const displayMembershipId = c.membershipId || c.membership_id || '';
@@ -980,6 +996,72 @@ export default function CustomerManagement({ showToast }) {
               </div>
             );
           })}
+          {/* ── Customer Pagination Bar ── */}
+          <div className="pagination-bar">
+            <span className="pagination-info">
+              Showing {customers.length === 0 ? 0 : ((custPage - 1) * CUSTS_PER_PAGE) + 1}–{Math.min(custPage * CUSTS_PER_PAGE, customers.length)} of {customers.length} customers
+            </span>
+            <div className="pagination-right">
+              <div className="pagination-size-wrap">
+                <label className="pagination-size-label">Show:</label>
+                <select
+                  className="pagination-size-select"
+                  value={custsPageSizeKey}
+                  onChange={(e) => { setCustsPageSizeKey(e.target.value); setCustPage(1); }}
+                >
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                  <option value="all">All</option>
+                </select>
+              </div>
+              <div className="pagination-controls">
+                <button
+                  className="pagination-btn"
+                  onClick={() => setCustPage(1)}
+                  disabled={custPage === 1}
+                  title="First page"
+                >«</button>
+                <button
+                  className="pagination-btn"
+                  onClick={() => setCustPage(p => Math.max(1, p - 1))}
+                  disabled={custPage === 1}
+                  title="Previous page"
+                >‹</button>
+                {Array.from({ length: custTotalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === custTotalPages || Math.abs(p - custPage) <= 1)
+                  .reduce((acc, p, idx, arr) => {
+                    if (idx > 0 && arr[idx - 1] !== p - 1) acc.push('...');
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((item, idx) =>
+                    item === '...' ? (
+                      <span key={`ellipsis-${idx}`} className="pagination-ellipsis">…</span>
+                    ) : (
+                      <button
+                        key={item}
+                        className={`pagination-btn pagination-num ${item === custPage ? 'active' : ''}`}
+                        onClick={() => setCustPage(item)}
+                      >{item}</button>
+                    )
+                  )}
+                <button
+                  className="pagination-btn"
+                  onClick={() => setCustPage(p => Math.min(custTotalPages, p + 1))}
+                  disabled={custPage === custTotalPages}
+                  title="Next page"
+                >›</button>
+                <button
+                  className="pagination-btn"
+                  onClick={() => setCustPage(custTotalPages)}
+                  disabled={custPage === custTotalPages}
+                  title="Last page"
+                >»</button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

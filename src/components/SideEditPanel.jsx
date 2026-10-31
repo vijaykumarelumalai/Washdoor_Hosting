@@ -4,6 +4,8 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import ClothIllustration from './ClothIllustration';
+import GarmentInspectionSection from './GarmentInspectionSection';
+import { updateOrderInSupabase } from '../services/customerService';
 import '../styles/SideEditPanel.css';
 
 // 16 Standard Catalog Items strictly matching reference mockup display order
@@ -97,46 +99,49 @@ export default function SideEditPanel({
         ]
   );
 
-  // 4. Garment Inspection State
-  const [inspectionGarment, setInspectionGarment] = useState('Shirt');
-  const [inspectionColor, setInspectionColor] = useState('Navy blue');
-  const [inspectionStains, setInspectionStains] = useState('Oil stain on sleeve');
-  const [inspectionMake, setInspectionMake] = useState('Raymond Ready-to-Wear');
-  const [inspectionBrand, setInspectionBrand] = useState('Raymond');
-  const [inspectionFabric, setInspectionFabric] = useState('Cotton');
-  const [inspectionNotes, setInspectionNotes] = useState('Gentle spot stain treatment requested for left cuff.');
+  // 4. Dynamic Garment-by-Garment Inspection State
+  const [inspections, setInspections] = useState(() => {
+    if (order?.garment_inspections && typeof order.garment_inspections === 'object') {
+      return { ...order.garment_inspections };
+    }
+    if (order?.inspections && typeof order.inspections === 'object' && !Array.isArray(order.inspections)) {
+      return { ...order.inspections };
+    }
+    if (order?.items && Array.isArray(order.items)) {
+      const parsed = {};
+      order.items.forEach((it) => {
+        if (it.inspections && Array.isArray(it.inspections)) {
+          it.inspections.forEach((insp) => {
+            if (insp.id) parsed[insp.id] = insp;
+          });
+        }
+      });
+      if (Object.keys(parsed).length > 0) return parsed;
+    }
+    return {};
+  });
 
-  // Enhanced Garment Photos State & Lightbox Preview
-  const photoInputRef = useRef(null);
+  useEffect(() => {
+    if (order) {
+      if (order.garment_inspections && typeof order.garment_inspections === 'object') {
+        setInspections({ ...order.garment_inspections });
+      } else if (order.inspections && typeof order.inspections === 'object' && !Array.isArray(order.inspections)) {
+        setInspections({ ...order.inspections });
+      } else if (order.items && Array.isArray(order.items)) {
+        const parsed = {};
+        order.items.forEach((it) => {
+          if (it.inspections && Array.isArray(it.inspections)) {
+            it.inspections.forEach((insp) => {
+              if (insp.id) parsed[insp.id] = insp;
+            });
+          }
+        });
+        if (Object.keys(parsed).length > 0) setInspections(parsed);
+      }
+    }
+  }, [order]);
+
   const [previewPhoto, setPreviewPhoto] = useState(null);
-  const [garmentPhotos, setGarmentPhotos] = useState(
-    order?.inspection?.photos || [
-      {
-        id: 'photo_1',
-        name: 'sleeve_oil_stain.jpg',
-        url: 'https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=500&auto=format&fit=crop&q=80',
-        tag: 'Oil Stain on Sleeve',
-        timestamp: '28 Oct 2026, 10:45 AM',
-        size: '1.2 MB',
-      },
-      {
-        id: 'photo_2',
-        name: 'collar_wear_condition.jpg',
-        url: 'https://images.unsplash.com/photo-1582533561751-ef6f6ab93a2e?w=500&auto=format&fit=crop&q=80',
-        tag: 'Collar & Care Tag',
-        timestamp: '28 Oct 2026, 10:47 AM',
-        size: '850 KB',
-      },
-      {
-        id: 'photo_3',
-        name: 'formal_pant_crease.jpg',
-        url: 'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?w=500&auto=format&fit=crop&q=80',
-        tag: 'Hem & Seam Inspection',
-        timestamp: '28 Oct 2026, 11:05 AM',
-        size: '920 KB',
-      },
-    ]
-  );
 
   // 5. Active Tab
   const [activeTab, setActiveTab] = useState('1. Order Details');
@@ -166,6 +171,7 @@ export default function SideEditPanel({
   const [invoiceNo, setInvoiceNo] = useState('INV-WD-2026-0042');
   const [discountAmount, setDiscountAmount] = useState(0);
   const [paymentNote, setPaymentNote] = useState('Advance received via GPay. Balance to be collected upon doorstep delivery.');
+  const [showQRModal, setShowQRModal] = useState(false);
 
   // 9. Customer Messages Fields (Tab 5)
   const [notifyWhatsapp, setNotifyWhatsapp] = useState(true);
@@ -319,27 +325,6 @@ export default function SideEditPanel({
     setCartItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  // Handlers for Garment Photos
-  const handlePhotoUpload = (e) => {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-    const newPhotos = files.map((file, idx) => ({
-      id: `photo_${Date.now()}_${idx}`,
-      name: file.name,
-      url: URL.createObjectURL(file),
-      tag: 'Inspection Evidence',
-      timestamp: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
-      size: `${(file.size / 1024).toFixed(0)} KB`,
-    }));
-    setGarmentPhotos((prev) => [...prev, ...newPhotos]);
-    showToast?.(`📸 Attached ${files.length} garment condition photo(s)`);
-  };
-
-  const handleRemovePhoto = (id) => {
-    setGarmentPhotos((prev) => prev.filter((p) => p.id !== id));
-    showToast?.('🗑️ Garment photo removed');
-  };
-
   // Handler for adding audit log
   const handleAddAuditLog = () => {
     if (!newAuditNote.trim()) return;
@@ -423,6 +408,7 @@ export default function SideEditPanel({
         quantity: c.qty,
         total: c.rate * c.qty,
         icon: c.icon || '👕',
+        inspections: Object.values(inspections).filter((p) => p.cartItemId === c.id),
       })),
       services_allocated: cartItems.map((c) => ({
         name: c.name,
@@ -432,15 +418,18 @@ export default function SideEditPanel({
       item_count: totalPieces,
       total_pieces: totalPieces,
       cart: cartItems,
+      garment_inspections: inspections,
+      inspections: inspections,
+      photos: Object.values(inspections).flatMap((p) => p.photos || []),
       inspection: {
-        garment: inspectionGarment,
-        color: inspectionColor,
-        stains: inspectionStains,
-        make: inspectionMake,
-        brand: inspectionBrand,
-        fabric: inspectionFabric,
-        notes: inspectionNotes,
-        photos: garmentPhotos,
+        garment: Object.values(inspections)[0]?.name || 'Shirt',
+        color: Object.values(inspections)[0]?.color || '',
+        stains: Object.values(inspections)[0]?.stains || '',
+        make: Object.values(inspections)[0]?.make || '',
+        brand: Object.values(inspections)[0]?.brand || '',
+        fabric: Object.values(inspections)[0]?.fabric || 'Cotton',
+        notes: Object.values(inspections)[0]?.notes || '',
+        photos: Object.values(inspections).flatMap((p) => p.photos || []),
       },
       logistics: {
         factoryPlant,
@@ -489,6 +478,24 @@ export default function SideEditPanel({
 
     if (onUpdateOrder) {
       onUpdateOrder(updatedOrder);
+    }
+
+    // Direct Supabase update
+    const saveKey = updatedOrder.order_number || updatedOrder.id || updatedOrder.work_number;
+    if (saveKey) {
+      updateOrderInSupabase(saveKey, {
+        status: updatedOrder.status,
+        customerName: updatedOrder.customer_name,
+        mobileNumber: updatedOrder.mobile_number,
+        address: updatedOrder.address,
+        serviceCategory: updatedOrder.service_category,
+        orderNotes: updatedOrder.comments,
+        totalAmount: updatedOrder.total_amount || updatedOrder.grand_total,
+        advancePaid: updatedOrder.advance_paid,
+        paymentStatus: updatedOrder.payment_status,
+        items: updatedOrder.items,
+        garment_inspections: inspections,
+      }).catch((e) => console.warn('Supabase SideEdit update note:', e));
     }
 
     // Persist to local cache so updates remain immediate
@@ -918,193 +925,13 @@ export default function SideEditPanel({
                 </div>
               </div>
 
-              {/* Card 3: Garment-by-Garment Inspection & Dedicated Photos Section */}
-              <div className="side-edit-card side-edit-inspection-card">
-                <div className="side-edit-card-head" style={{ color: '#1d4ed8' }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                  </svg>
-                  <span>Garment-by-Garment Inspection &amp; Care Details</span>
-                </div>
-
-                {/* Row 1: 4 columns */}
-                <div className="side-edit-row-4col">
-                  <div className="side-edit-field">
-                    <label className="side-edit-label">
-                      Garment <span className="side-edit-req">*</span>
-                    </label>
-                    <select
-                      className="side-edit-select"
-                      value={inspectionGarment}
-                      onChange={(e) => setInspectionGarment(e.target.value)}
-                    >
-                      <option value="Shirt">Shirt</option>
-                      <option value="Formal Pant">Formal Pant</option>
-                      <option value="T-Shirt">T-Shirt</option>
-                      <option value="Jeans">Jeans</option>
-                      <option value="Saree">Saree</option>
-                      <option value="Kurti">Kurti</option>
-                      <option value="Towel">Towel</option>
-                      <option value="Jacket">Jacket</option>
-                      <option value="Blazer">Blazer</option>
-                    </select>
-                  </div>
-
-                  <div className="side-edit-field">
-                    <label className="side-edit-label">Color</label>
-                    <input
-                      type="text"
-                      className="side-edit-input"
-                      value={inspectionColor}
-                      onChange={(e) => setInspectionColor(e.target.value)}
-                      placeholder="e.g. Navy blue"
-                    />
-                  </div>
-
-                  <div className="side-edit-field">
-                    <label className="side-edit-label">Stains / Marks</label>
-                    <input
-                      type="text"
-                      className="side-edit-input"
-                      value={inspectionStains}
-                      onChange={(e) => setInspectionStains(e.target.value)}
-                      placeholder="e.g. Oil stain on sleeve"
-                    />
-                  </div>
-
-                  <div className="side-edit-field">
-                    <label className="side-edit-label">Make</label>
-                    <input
-                      type="text"
-                      className="side-edit-input"
-                      value={inspectionMake}
-                      onChange={(e) => setInspectionMake(e.target.value)}
-                      placeholder="Manufacturer / make"
-                    />
-                  </div>
-                </div>
-
-                {/* Row 2: Brand, Fabric Type, Garment Notes */}
-                <div className="side-edit-row-3col">
-                  <div className="side-edit-field">
-                    <label className="side-edit-label">Brand</label>
-                    <input
-                      type="text"
-                      className="side-edit-input"
-                      value={inspectionBrand}
-                      onChange={(e) => setInspectionBrand(e.target.value)}
-                      placeholder="Garment brand"
-                    />
-                  </div>
-
-                  <div className="side-edit-field">
-                    <label className="side-edit-label">Fabric Type</label>
-                    <select
-                      className="side-edit-select"
-                      value={inspectionFabric}
-                      onChange={(e) => setInspectionFabric(e.target.value)}
-                    >
-                      <option value="Cotton">Cotton (Standard)</option>
-                      <option value="Polyester Blend">Polyester Blend</option>
-                      <option value="Silk">Silk / Delicate</option>
-                      <option value="Wool">Wool / Knitwear</option>
-                      <option value="Linen">Linen</option>
-                      <option value="Denim">Denim / Heavy Fabric</option>
-                      <option value="Chiffon">Chiffon</option>
-                      <option value="Rayon">Rayon</option>
-                    </select>
-                  </div>
-
-                  <div className="side-edit-field">
-                    <label className="side-edit-label">Garment Notes</label>
-                    <textarea
-                      rows={2}
-                      className="side-edit-textarea"
-                      value={inspectionNotes}
-                      onChange={(e) => setInspectionNotes(e.target.value)}
-                      placeholder="Damage, special handling, customer instructions..."
-                    />
-                  </div>
-                </div>
-
-                {/* Row 3: Professional Garment Photos Gallery & Uploader */}
-                <div className="side-edit-photos-section">
-                  <div className="side-edit-photos-head">
-                    <div className="side-edit-photos-title">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                        <circle cx="12" cy="13" r="4"></circle>
-                      </svg>
-                      <span>Garment Photos &amp; Condition Evidence</span>
-                      <span className="side-edit-photos-badge">{garmentPhotos.length} attached</span>
-                    </div>
-
-                    <input
-                      ref={photoInputRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      style={{ display: 'none' }}
-                      onChange={handlePhotoUpload}
-                    />
-
-                    <button
-                      type="button"
-                      className="side-edit-btn-upload"
-                      onClick={() => photoInputRef.current?.click()}
-                    >
-                      <span>📷</span>
-                      <span>Attach Photos</span>
-                    </button>
-                  </div>
-
-                  {/* Dropzone area */}
-                  <div
-                    className="side-edit-photos-dropzone"
-                    onClick={() => photoInputRef.current?.click()}
-                  >
-                    <div className="side-edit-dropzone-info">
-                      <div className="side-edit-dropzone-icon">📷</div>
-                      <div className="side-edit-dropzone-text">
-                        <strong>Click to select or drag garment condition photos</strong>
-                        <span>Supports JPG, PNG, WEBP up to 10MB each · Useful for stain tracking &amp; warranty evidence</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Photos Grid */}
-                  <div className="side-edit-photos-grid">
-                    {garmentPhotos.map((photo) => (
-                      <div key={photo.id} className="side-edit-photo-thumb-card">
-                        <button
-                          type="button"
-                          className="side-edit-photo-del-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemovePhoto(photo.id);
-                          }}
-                          title="Remove photo"
-                        >
-                          ✕
-                        </button>
-                        <div
-                          className="side-edit-photo-img-wrap"
-                          onClick={() => setPreviewPhoto(photo)}
-                          title="Click to zoom preview"
-                        >
-                          <img src={photo.url} alt={photo.name} />
-                          <div className="side-edit-photo-zoom-overlay">🔍</div>
-                        </div>
-                        <div className="side-edit-photo-meta">
-                          <span className="side-edit-photo-tag">{photo.tag || 'Inspection Photo'}</span>
-                          <span className="side-edit-photo-filename" title={photo.name}>{photo.name}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              {/* Dynamic Garment-by-Garment Inspection & Care Section */}
+              <GarmentInspectionSection
+                cart={cartItems}
+                inspections={inspections}
+                onChangeInspections={setInspections}
+                showToast={showToast}
+              />
             </>
           )}
 

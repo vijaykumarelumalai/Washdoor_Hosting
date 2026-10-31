@@ -662,6 +662,25 @@ function mapCustomerWorkRowToOrder(row) {
   const items = Array.isArray(row.items) ? row.items : [];
   const itemCount = row.total_pieces !== undefined && row.total_pieces !== null ? Number(row.total_pieces) : (items.length || 1);
 
+  let garmentInspections = {};
+  if (row.internal_notes) {
+    try {
+      const parsed = typeof row.internal_notes === 'string' ? JSON.parse(row.internal_notes) : row.internal_notes;
+      if (parsed?.garment_inspections && typeof parsed.garment_inspections === 'object') {
+        garmentInspections = parsed.garment_inspections;
+      }
+    } catch {}
+  }
+  if (Object.keys(garmentInspections).length === 0 && Array.isArray(items)) {
+    items.forEach((it) => {
+      if (it.inspections && Array.isArray(it.inspections)) {
+        it.inspections.forEach((insp) => {
+          if (insp.id) garmentInspections[insp.id] = insp;
+        });
+      }
+    });
+  }
+
   return {
     id: orderNum,
     order_id: row.work_id || orderNum,
@@ -684,6 +703,8 @@ function mapCustomerWorkRowToOrder(row) {
     item_count: itemCount,
     total_pieces: itemCount,
     items: items,
+    garment_inspections: garmentInspections,
+    inspections: garmentInspections,
     customer_history: { items: items },
     intake_date: row.intake_date || row.created_at,
     created_at: row.created_at,
@@ -1268,9 +1289,14 @@ export async function updateOrderStatus(orderIdentifier, newStatus, progressPerc
       const ordId = num ? `ORD${String(num).padStart(5, '0')}` : formattedId;
       const workId = num ? `WORK-${String(num).padStart(5, '0')}` : formattedId;
       const orderIdPattern = num ? `ORDER-${String(num).padStart(5, '0')}` : formattedId;
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(formattedId);
 
       let wQuery = supabase.from('customer_works').update(workUpdate);
-      wQuery = wQuery.or(`work_number.eq.${ordId},work_number.eq.${workId},work_number.eq.${orderIdPattern},work_id.eq.${formattedId}`);
+      if (isUuid) {
+        wQuery = wQuery.or(`work_number.eq.${ordId},work_number.eq.${workId},work_number.eq.${orderIdPattern},work_id.eq.${formattedId}`);
+      } else {
+        wQuery = wQuery.or(`work_number.eq.${ordId},work_number.eq.${workId},work_number.eq.${orderIdPattern},work_number.eq.${formattedId}`);
+      }
       await wQuery;
     } catch {}
 
@@ -1398,15 +1424,28 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       workUpdate.items = updatePayload.items;
       workUpdate.total_pieces = updatePayload.items.reduce((s, i) => s + (Number(i.qty) || 1), 0);
     }
+    if (updatePayload.garment_inspections !== undefined || updatePayload.inspections !== undefined) {
+      const inspData = updatePayload.garment_inspections || updatePayload.inspections || {};
+      workUpdate.internal_notes = JSON.stringify({ garment_inspections: inspData });
+      updateObj.customer_history = {
+        ...(updateObj.customer_history || {}),
+        garment_inspections: inspData,
+      };
+    }
     try {
       const numMatch = String(formattedId).match(/\d+/);
       const num = numMatch ? parseInt(numMatch[0], 10) : null;
       const ordId = num ? `ORD${String(num).padStart(5, '0')}` : formattedId;
       const workId = num ? `WORK-${String(num).padStart(5, '0')}` : formattedId;
       const orderIdPattern = num ? `ORDER-${String(num).padStart(5, '0')}` : formattedId;
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(formattedId);
 
       let wQuery = supabase.from('customer_works').update(workUpdate);
-      wQuery = wQuery.or(`work_number.eq.${ordId},work_number.eq.${workId},work_number.eq.${orderIdPattern},work_id.eq.${formattedId}`);
+      if (isUuid) {
+        wQuery = wQuery.or(`work_number.eq.${ordId},work_number.eq.${workId},work_number.eq.${orderIdPattern},work_id.eq.${formattedId}`);
+      } else {
+        wQuery = wQuery.or(`work_number.eq.${ordId},work_number.eq.${workId},work_number.eq.${orderIdPattern},work_number.eq.${formattedId}`);
+      }
       await wQuery;
     } catch {}
 
@@ -1433,32 +1472,36 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
 
     // Instant local cache sync
     try {
-      const cachedRaw = localStorage.getItem('washdoor_orders_cache');
-      if (cachedRaw) {
-        const cachedList = JSON.parse(cachedRaw);
-        const updatedList = cachedList.map((o) => {
-          if (o.order_number === formattedId || o.id === formattedId || o.order_id === formattedId) {
-            return {
-              ...o,
-              total_amount: updatePayload.totalAmount !== undefined ? updatePayload.totalAmount : o.total_amount,
-              item_count: updatePayload.itemCount !== undefined ? updatePayload.itemCount : o.item_count,
-              preference: updatePayload.serviceCategory || o.preference,
-              service_category: updatePayload.serviceCategory || o.service_category,
-              preference_notes: updatePayload.orderNotes !== undefined ? updatePayload.orderNotes : o.preference_notes,
-              customer_name: updatePayload.customerName || o.customer_name,
-              mobile_number: updatePayload.mobileNumber || o.mobile_number,
-              status: updatePayload.status || o.status,
-              order_status: updatePayload.status || o.order_status,
-              items: updatePayload.items || o.items,
-              customer_history: {
-                ...(o.customer_history || {}),
-                items: updatePayload.items || o.customer_history?.items || [],
-              },
-            };
-          }
-          return o;
-        });
-        localStorage.setItem('washdoor_orders_cache', JSON.stringify(updatedList));
+      if (typeof localStorage !== 'undefined') {
+        const cachedRaw = localStorage.getItem('washdoor_orders_cache');
+        if (cachedRaw) {
+          const cachedList = JSON.parse(cachedRaw);
+          const updatedList = cachedList.map((o) => {
+            if (o.order_number === formattedId || o.id === formattedId || o.order_id === formattedId) {
+              return {
+                ...o,
+                total_amount: updatePayload.totalAmount !== undefined ? updatePayload.totalAmount : o.total_amount,
+                item_count: updatePayload.itemCount !== undefined ? updatePayload.itemCount : o.item_count,
+                preference: updatePayload.serviceCategory || o.preference,
+                service_category: updatePayload.serviceCategory || o.service_category,
+                preference_notes: updatePayload.orderNotes !== undefined ? updatePayload.orderNotes : o.preference_notes,
+                customer_name: updatePayload.customerName || o.customer_name,
+                mobile_number: updatePayload.mobileNumber || o.mobile_number,
+                status: updatePayload.status || o.status,
+                order_status: updatePayload.status || o.order_status,
+                items: updatePayload.items || o.items,
+                garment_inspections: updatePayload.garment_inspections || o.garment_inspections,
+                inspections: updatePayload.garment_inspections || o.inspections,
+                customer_history: {
+                  ...(o.customer_history || {}),
+                  items: updatePayload.items || o.customer_history?.items || [],
+                },
+              };
+            }
+            return o;
+          });
+          localStorage.setItem('washdoor_orders_cache', JSON.stringify(updatedList));
+        }
       }
     } catch (cacheErr) {
       console.warn('Cache sync error:', cacheErr);

@@ -6,14 +6,13 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import ClothIllustration from './ClothIllustration';
 import OrderReviewCard from './OrderReviewCard';
 import SideEditPanel from './SideEditPanel';
+import GarmentInspectionSection from './GarmentInspectionSection';
 import {
   getProducts,
   searchCustomers,
   createOrderWithCustomer,
   getNextOrderId,
   updateOrderInSupabase,
-  getOrderById,
-  deleteOrderFromSupabase,
 } from '../services/customerService';
 import {
   normalizeMobileNumber,
@@ -76,11 +75,11 @@ export default function POSModule({
   onCreateOrder,
   currencySymbol = '₹',
   showToast,
+  onOpenOrderStatus,
   onEditOrder,
   onOrderCreated,
   onNavigateTab,
   onUpdateOrder,
-  onDeleteOrder,
 }) {
   // Top Header, Search Toolbar & Status Tab State (matching reference mockup)
   const [topSearchQuery, setTopSearchQuery] = useState('');
@@ -100,134 +99,6 @@ export default function POSModule({
 
   // Static Side Edit Panel Target Order
   const [sideEditTargetOrder, setSideEditTargetOrder] = useState(null);
-  const [confirmDeleteOrder, setConfirmDeleteOrder] = useState(null);
-  const [qrModalData, setQrModalData] = useState(null);
-
-  // Shared Read: Fetch freshest order from Supabase when opening Side Edit
-  const handleOpenSideEdit = (ord) => {
-    if (!ord) return;
-    setSideEditTargetOrder(ord);
-
-    const key = ord.order_number || ord.id || ord.work_number;
-    if (key) {
-      getOrderById(key).then(({ data }) => {
-        if (data) {
-          setSideEditTargetOrder((prev) =>
-            prev && (prev.id === data.id || prev.order_number === data.order_number) ? { ...prev, ...data } : prev
-          );
-        }
-      }).catch(() => {});
-    }
-  };
-
-  // Shared Delete: Transaction-safe confirmation & deletion
-  const handleConfirmDelete = async () => {
-    if (!confirmDeleteOrder) return;
-    const target = confirmDeleteOrder;
-    const orderId = target.order_number || target.order_id || target.id || target.work_number;
-
-    if (onDeleteOrder) {
-      await onDeleteOrder(orderId);
-    } else {
-      try {
-        await deleteOrderFromSupabase(orderId);
-        const cached = localStorage.getItem('washdoor_orders_cache');
-        if (cached) {
-          const list = JSON.parse(cached);
-          const next = list.filter((o) => o.id !== target.id && o.order_number !== target.order_number);
-          localStorage.setItem('washdoor_orders_cache', JSON.stringify(next));
-        }
-      } catch {}
-      onOrderCreated?.();
-    }
-
-    if (editingOrderRecord && (editingOrderRecord.id === target.id || editingOrderRecord.order_number === target.order_number)) {
-      setEditingOrderRecord(null);
-      setEditFormData(null);
-    }
-    if (sideEditTargetOrder && (sideEditTargetOrder.id === target.id || sideEditTargetOrder.order_number === target.order_number)) {
-      setSideEditTargetOrder(null);
-    }
-
-    setConfirmDeleteOrder(null);
-    showToast?.(`🗑️ Order ${orderId} deleted successfully!`);
-  };
-
-  // Shared Update: Consistent validation, payload mapping & bi-directional sync
-  const handleSaveSharedOrder = (updatedOrder) => {
-    if (!updatedOrder) return false;
-
-    // 1. Shared Validation
-    const custName = updatedOrder.customer_name || updatedOrder.customer?.customer_name;
-    const phone = updatedOrder.mobile_number || updatedOrder.customer?.mobile_number;
-    if (!custName || !String(custName).trim()) {
-      showToast?.('⚠️ Customer Name is required.');
-      return false;
-    }
-    const cleanPhone = String(phone || '').replace(/\D/g, '');
-    if (!cleanPhone || cleanPhone.length < 10) {
-      showToast?.('⚠️ A valid 10-digit mobile number is required.');
-      return false;
-    }
-
-    // 2. Synchronize to parent state & Supabase
-    if (onUpdateOrder) {
-      onUpdateOrder(updatedOrder);
-    } else {
-      try {
-        const cached = localStorage.getItem('washdoor_orders_cache');
-        if (cached) {
-          const list = JSON.parse(cached);
-          const nextList = list.map((o) =>
-            o.id === updatedOrder.id || o.order_number === updatedOrder.order_number ? updatedOrder : o
-          );
-          localStorage.setItem('washdoor_orders_cache', JSON.stringify(nextList));
-        }
-      } catch {}
-      onOrderCreated?.(updatedOrder);
-    }
-
-    // Direct Supabase update
-    const saveKey = updatedOrder.order_number || updatedOrder.id || updatedOrder.work_number;
-    if (saveKey) {
-      updateOrderInSupabase(saveKey, {
-        status: updatedOrder.order_status || updatedOrder.status,
-        customerName: updatedOrder.customer_name || updatedOrder.customer?.customer_name,
-        mobileNumber: updatedOrder.mobile_number || updatedOrder.customer?.mobile_number,
-        address: updatedOrder.address || updatedOrder.delivery_address || updatedOrder.customer?.address,
-        serviceCategory: updatedOrder.service_category || updatedOrder.service_type || updatedOrder.preference,
-        orderNotes: updatedOrder.order_notes || updatedOrder.special_instructions || updatedOrder.comments,
-        totalAmount: updatedOrder.total_amount,
-        advancePaid: updatedOrder.advance_paid,
-        paymentStatus: updatedOrder.payment_status,
-        paymentMethod: updatedOrder.payment_method,
-        items: updatedOrder.items,
-      }).catch((e) => console.warn('Supabase saveOrder update note:', e));
-    }
-
-    // 3. Bi-directional Synchronization between both editing surfaces
-    if (editingOrderRecord && (editingOrderRecord.id === updatedOrder.id || editingOrderRecord.order_number === updatedOrder.order_number)) {
-      setEditingOrderRecord(updatedOrder);
-      setEditFormData((prev) => (prev ? {
-        ...prev,
-        ...updatedOrder,
-        customer_name: updatedOrder.customer_name,
-        mobile_number: updatedOrder.mobile_number,
-        address: updatedOrder.address,
-        status: updatedOrder.status,
-        order_status: updatedOrder.status,
-        items: updatedOrder.items,
-        total_amount: updatedOrder.total_amount,
-      } : null));
-    }
-
-    if (sideEditTargetOrder && (sideEditTargetOrder.id === updatedOrder.id || sideEditTargetOrder.order_number === updatedOrder.order_number)) {
-      setSideEditTargetOrder(updatedOrder);
-    }
-
-    showToast?.(`✅ Order ${updatedOrder.order_number || updatedOrder.id} updated successfully!`);
-    return true;
-  };
 
   // Expanded Inline Edit Order States (Matching 3-panel UI)
   const [editCatalogCategory, setEditCatalogCategory] = useState('All');
@@ -248,6 +119,7 @@ export default function POSModule({
     photosCount: 0,
   });
   const [editInspectionPhotos, setEditInspectionPhotos] = useState([]);
+  const [editInspections, setEditInspections] = useState({});
   const [photoPreviewModal, setPhotoPreviewModal] = useState(null);
   const editPhotoInputRef = useRef(null);
   const [editActiveTab, setEditActiveTab] = useState('details');
@@ -409,22 +281,27 @@ export default function POSModule({
       notes: '',
       photosCount: initialPhotos.length,
     });
+
+    // Parse existing garment inspection records
+    let initialInspections = {};
+    if (ord.garment_inspections && typeof ord.garment_inspections === 'object') {
+      initialInspections = { ...ord.garment_inspections };
+    } else if (ord.inspections && typeof ord.inspections === 'object' && !Array.isArray(ord.inspections)) {
+      initialInspections = { ...ord.inspections };
+    } else if (ord.items && Array.isArray(ord.items)) {
+      ord.items.forEach((it) => {
+        if (it.inspections && Array.isArray(it.inspections)) {
+          it.inspections.forEach((insp) => {
+            if (insp.id) initialInspections[insp.id] = insp;
+          });
+        }
+      });
+    }
+    setEditInspections(initialInspections);
+
     setEditActiveTab('details');
 
     setEditingOrderRecord(ord);
-
-    // Read: Fetch freshest order record from Supabase in background
-    const editKey = ord.order_number || ord.id || ord.work_number;
-    if (editKey) {
-      getOrderById(editKey).then(({ data }) => {
-        if (data) {
-          setEditingOrderRecord((prev) =>
-            prev && (prev.id === data.id || prev.order_number === data.order_number) ? { ...prev, ...data } : prev
-          );
-        }
-      }).catch(() => {});
-    }
-
     setEditFormData({
       id: ord.id || ord.order_number,
       order_number: ord.order_number || ord.order_id || ord.id,
@@ -529,7 +406,10 @@ export default function POSModule({
       comments: editFormData.comments,
       special_instructions: editFormData.comments,
       notes: editFormData.comments,
-      items: editCart,
+      items: editCart.map((it) => ({
+        ...it,
+        inspections: Object.values(editInspections).filter((p) => p.cartItemId === it.id),
+      })),
       services_allocated: editCart.map((it) => ({
         name: it.name,
         count: it.qty,
@@ -549,11 +429,13 @@ export default function POSModule({
         mobile_number: editFormData.mobile_number,
         address: editFormData.address,
       },
-      photos: editInspectionPhotos,
+      photos: Object.values(editInspections).flatMap((p) => p.photos || []),
+      garment_inspections: editInspections,
+      inspections: editInspections,
       inspection: {
         ...editInspection,
-        photos: editInspectionPhotos,
-        photosCount: editInspectionPhotos.length,
+        photos: Object.values(editInspections).flatMap((p) => p.photos || []),
+        photosCount: Object.values(editInspections).flatMap((p) => p.photos || []).length,
       },
       assigned_driver: editFormData.assigned_driver || editingOrderRecord.assigned_driver,
       assigned_driver_full: editFormData.assigned_driver_full || editingOrderRecord.assigned_driver_full,
@@ -563,39 +445,50 @@ export default function POSModule({
       logs: editFormData.logs || editingOrderRecord.logs || [],
     };
 
-    const ok = handleSaveSharedOrder(updatedOrder);
-    if (ok) {
-      setEditingOrderRecord(null);
-      setEditFormData(null);
+    if (onUpdateOrder) {
+      onUpdateOrder(updatedOrder);
+    } else {
+      try {
+        const cached = localStorage.getItem('washdoor_orders_cache');
+        if (cached) {
+          const list = JSON.parse(cached);
+          const nextList = list.map((o) => (o.id === updatedOrder.id || o.order_number === updatedOrder.order_number) ? updatedOrder : o);
+          localStorage.setItem('washdoor_orders_cache', JSON.stringify(nextList));
+        }
+      } catch {}
+      onOrderCreated?.(updatedOrder);
     }
+
+    // Direct Supabase update
+    const saveKey = updatedOrder.order_number || updatedOrder.id || updatedOrder.work_number;
+    if (saveKey) {
+      updateOrderInSupabase(saveKey, {
+        status: updatedOrder.status,
+        customerName: updatedOrder.customer_name,
+        mobileNumber: updatedOrder.mobile_number,
+        address: updatedOrder.address,
+        serviceCategory: updatedOrder.service_category,
+        orderNotes: updatedOrder.comments,
+        totalAmount: updatedOrder.total_amount,
+        advancePaid: updatedOrder.advance_paid,
+        paymentStatus: updatedOrder.payment_status,
+        items: updatedOrder.items,
+        garment_inspections: editInspections,
+      }).catch((e) => console.warn('Supabase saveOrder update note:', e));
+    }
+
+    showToast?.(`✅ Order ${updatedOrder.order_number || updatedOrder.id} updated successfully!`);
+    setEditingOrderRecord(null);
+    setEditFormData(null);
   };
 
   // Graphical Action Modal States
   const [scheduleOrderTarget, setScheduleOrderTarget] = useState(null);
   const [assignDriverTarget, setAssignDriverTarget] = useState(null);
-  const [scheduleType, setScheduleType] = useState('Pickup');
+  const [scheduleType, setScheduleType] = useState('Delivery');
   const [scheduleDate, setScheduleDate] = useState('2026-10-30');
-  const [scheduleTime, setScheduleTime] = useState('14:00');
-  const [scheduleSlot, setScheduleSlot] = useState('Afternoon (01:00 PM - 04:00 PM)');
+  const [scheduleSlot, setScheduleSlot] = useState('Evening (04:00 PM - 07:00 PM)');
   const [selectedDriver, setSelectedDriver] = useState('Ramesh Kumar (Van #1 • Zone 1)');
-
-  const handleOpenScheduleModal = (ord) => {
-    if (!ord) return;
-    setScheduleOrderTarget(ord);
-    setScheduleType(ord.scheduled_type || (ord.order_type?.toLowerCase().includes('call') ? 'Pickup' : 'Delivery'));
-    
-    // Set scheduled date or default to today/order date
-    const defDate = ord.scheduled_date || (ord.created_at ? new Date(ord.created_at).toISOString().split('T')[0] : '2026-10-30');
-    setScheduleDate(defDate);
-
-    // Set scheduled time
-    const defTime = ord.scheduled_time || '14:00';
-    setScheduleTime(defTime);
-
-    // Set scheduled slot
-    const defSlot = ord.scheduled_slot || (defTime < '12:00' ? 'Morning (09:00 AM - 12:00 PM)' : defTime < '16:00' ? 'Afternoon (01:00 PM - 04:00 PM)' : 'Evening (04:00 PM - 07:00 PM)');
-    setScheduleSlot(defSlot);
-  };
 
   // Catalog State
   const [catalogItems, setCatalogItems] = useState(DEFAULT_PRODUCTS);
@@ -769,6 +662,23 @@ export default function POSModule({
       return true;
     });
   }, [orders, activeStatusTab, topSearchQuery, serviceFilter, dateFilter]);
+
+  // ── Orders Pagination ──
+  const [ordersPageSizeKey, setOrdersPageSizeKey] = useState('5');
+  const [ordersPage, setOrdersPage] = useState(1);
+  const ORDERS_PER_PAGE = ordersPageSizeKey === 'all' ? Math.max(filteredOrders.length, 1) : parseInt(ordersPageSizeKey, 10);
+
+  // Reset to page 1 whenever filters or page size change
+  useEffect(() => {
+    setOrdersPage(1);
+  }, [activeStatusTab, topSearchQuery, serviceFilter, dateFilter, ordersPageSizeKey]);
+
+  const ordersTotalPages = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PER_PAGE));
+  const paginatedOrders = useMemo(() => {
+    if (ordersPageSizeKey === 'all') return filteredOrders;
+    const start = (ordersPage - 1) * ORDERS_PER_PAGE;
+    return filteredOrders.slice(start, start + ORDERS_PER_PAGE);
+  }, [filteredOrders, ordersPage, ordersPageSizeKey, ORDERS_PER_PAGE]);
 
   // Filter products by category and search
   const filteredProducts = useMemo(() => {
@@ -1032,6 +942,9 @@ export default function POSModule({
     };
 
     onOrderCreated?.(createdRecord);
+    if (onOpenOrderStatus) {
+      onOpenOrderStatus(createdRecord, true);
+    }
 
     handleResetRegister();
     setPosViewMode('orders');
@@ -1225,6 +1138,7 @@ export default function POSModule({
               type="button"
               className={`pos-toolbar-btn ${activeTopDropdown === 'filters' ? 'active' : ''}`}
               onClick={() => setActiveTopDropdown((prev) => (prev === 'filters' ? null : 'filters'))}
+              style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '8px 14px', color: '#334155', fontWeight: 600, fontSize: '12.5px' }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
@@ -1267,6 +1181,7 @@ export default function POSModule({
               showToast?.('↻ Syncing orders...');
             }}
             title="Reload records"
+            style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '8px 10px' }}
           >
             <svg
               className={loadingOrders ? 'sync-spinner' : ''}
@@ -1430,24 +1345,92 @@ export default function POSModule({
                 </div>
               )}
               {orderDisplayLayout === 'cards' ? (
-                <div className="pos-orders-cards-list">
-                  {filteredOrders.map((ord) => (
-                    <OrderReviewCard
-                      key={ord.id || ord.order_number}
-                      order={ord}
-                      isExpanded={expandedOrderId === (ord.id || ord.order_number)}
-                      onToggleExpand={() => {
-                        const key = ord.id || ord.order_number;
-                        setExpandedOrderId((prev) => (prev === key ? null : key));
-                      }}
-                      onEdit={(orderToEdit) => onEditOrder?.(orderToEdit)}
-                      onOpenStatus={(orderStatus) => handleOpenSideEdit(orderStatus)}
-                      onOpenBill={() => showToast?.('bill viewed!')}
-                      showToast={showToast}
-                      currencySymbol={currencySymbol}
-                    />
-                  ))}
-                </div>
+                <>
+                  <div className="pos-orders-cards-list">
+                    {paginatedOrders.map((ord) => (
+                      <OrderReviewCard
+                        key={ord.id || ord.order_number}
+                        order={ord}
+                        isExpanded={expandedOrderId === (ord.id || ord.order_number)}
+                        onToggleExpand={() => {
+                          const key = ord.id || ord.order_number;
+                          setExpandedOrderId((prev) => (prev === key ? null : key));
+                        }}
+                        onEdit={(orderToEdit) => onEditOrder?.(orderToEdit)}
+                        onOpenStatus={(orderStatus) => onOpenOrderStatus?.(orderStatus, false)}
+                        onOpenBill={() => showToast?.('bill viewed!')}
+                        showToast={showToast}
+                        currencySymbol={currencySymbol}
+                      />
+                    ))}
+                  </div>
+                  {/* ── Cards View Pagination Bar ── */}
+                  <div className="pagination-bar">
+                    <span className="pagination-info">
+                      Showing {filteredOrders.length === 0 ? 0 : ((ordersPage - 1) * ORDERS_PER_PAGE) + 1}–{Math.min(ordersPage * ORDERS_PER_PAGE, filteredOrders.length)} of {filteredOrders.length} orders
+                    </span>
+                    <div className="pagination-right">
+                      <div className="pagination-size-wrap">
+                        <label className="pagination-size-label">Show:</label>
+                        <select
+                          className="pagination-size-select"
+                          value={ordersPageSizeKey}
+                          onChange={(e) => { setOrdersPageSizeKey(e.target.value); setOrdersPage(1); }}
+                        >
+                          <option value="5">5</option>
+                          <option value="10">10</option>
+                          <option value="20">20</option>
+                          <option value="50">50</option>
+                          <option value="all">All</option>
+                        </select>
+                      </div>
+                      <div className="pagination-controls">
+                        <button
+                          className="pagination-btn"
+                          onClick={() => setOrdersPage(1)}
+                          disabled={ordersPage === 1}
+                          title="First page"
+                        >«</button>
+                        <button
+                          className="pagination-btn"
+                          onClick={() => setOrdersPage(p => Math.max(1, p - 1))}
+                          disabled={ordersPage === 1}
+                          title="Previous page"
+                        >‹</button>
+                        {Array.from({ length: ordersTotalPages }, (_, i) => i + 1)
+                          .filter(p => p === 1 || p === ordersTotalPages || Math.abs(p - ordersPage) <= 1)
+                          .reduce((acc, p, idx, arr) => {
+                            if (idx > 0 && arr[idx - 1] !== p - 1) acc.push('...');
+                            acc.push(p);
+                            return acc;
+                          }, [])
+                          .map((item, idx) =>
+                            item === '...' ? (
+                              <span key={`ellipsis-c-${idx}`} className="pagination-ellipsis">…</span>
+                            ) : (
+                              <button
+                                key={item}
+                                className={`pagination-btn pagination-num ${item === ordersPage ? 'active' : ''}`}
+                                onClick={() => setOrdersPage(item)}
+                              >{item}</button>
+                            )
+                          )}
+                        <button
+                          className="pagination-btn"
+                          onClick={() => setOrdersPage(p => Math.min(ordersTotalPages, p + 1))}
+                          disabled={ordersPage === ordersTotalPages}
+                          title="Next page"
+                        >›</button>
+                        <button
+                          className="pagination-btn"
+                          onClick={() => setOrdersPage(ordersTotalPages)}
+                          disabled={ordersPage === ordersTotalPages}
+                          title="Last page"
+                        >»</button>
+                      </div>
+                    </div>
+                  </div>
+                </>
               ) : (
                 <>
                   <div className="pos-orders-table-card" ref={tableScrollRef}>
@@ -1465,7 +1448,7 @@ export default function POSModule({
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredOrders.map((ord) => {
+                      {paginatedOrders.map((ord) => {
                         const custName = ord.customer_name || ord.customer?.customer_name || 'Walk-in Customer';
                         const phone = ord.formatted_mobile || formatPhoneDisplay(ord.mobile_number || ord.customer?.mobile_number) || '—';
                         const orderNum = ord.order_number || ord.order_id || ord.work_number || (ord.id ? String(ord.id) : '—');
@@ -1557,30 +1540,37 @@ export default function POSModule({
                           (editingOrderRecord.id === ord.id || editingOrderRecord.order_number === ord.order_number)
                         );
                         const isOrderReady = normalizeOrderStatus(ord.order_status || ord.status) === 'Ready';
-                        const statusClass =
-                          workStatus === 'In Progress' ? 'status-in-progress' :
-                          workStatus === 'Ready' ? 'status-ready' :
-                          workStatus === 'Delivered' ? 'status-delivered' :
-                          workStatus === 'Cancelled' ? 'status-cancelled' :
-                          'status-order-received';
 
                         return (
                           <React.Fragment key={ord.id || ord.order_number}>
                             <tr
                               className={`pos-order-row ${isEditingThisOrder ? 'pos-order-row-editing' : ''}`}
+                              style={isEditingThisOrder ? { background: '#f8fafc' } : {}}
                             >
                             {/* 1. Order ID Column (Prominent ID, Walk-In/On-Call Badge directly below, date & time removed) */}
                             <td style={{ borderLeft: isEditingThisOrder ? '4px solid #2563eb' : `4px solid ${accentColor}`, paddingLeft: '14px', verticalAlign: 'top', paddingTop: '14px' }}>
                               <div className="pos-ticket-cell" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                 <span
                                   className="pos-ticket-num"
-                                  onClick={() => handleOpenSideEdit(ord)}
-                                  title={`Edit order ${orderNum}`}
-                                  style={{ cursor: 'pointer', fontWeight: 800, fontSize: '15px' }}
+                                  onClick={() => onOpenOrderStatus?.(ord, false)}
+                                  title={`View details for ${orderNum}`}
+                                  style={{ cursor: 'pointer', fontWeight: 800, fontSize: '15px', color: '#1d4ed8' }}
                                 >
                                   {orderNum}
                                 </span>
-                                <div className="pos-order-type-pill">
+                                <div style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                  padding: '3px 8px',
+                                  borderRadius: '6px',
+                                  fontSize: '11.5px',
+                                  fontWeight: 650,
+                                  width: 'fit-content',
+                                  background: '#eff6ff',
+                                  color: '#2563eb',
+                                  border: '1px solid #dbeafe'
+                                }}>
                                   {isOnCall ? (
                                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                                       <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
@@ -1612,11 +1602,11 @@ export default function POSModule({
                                 }}>
                                   {custName.charAt(0).toUpperCase() || 'C'}
                                 </div>
-                                <div className="pos-cust-cell">
-                                  <div className="pos-cust-name">
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                  <div style={{ fontWeight: 750, color: '#0f172a', fontSize: '13.5px' }}>
                                     {custName}
                                   </div>
-                                  <div className="pos-cust-phone" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#475569' }}>
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                                       <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
                                     </svg>
@@ -1634,11 +1624,11 @@ export default function POSModule({
                                   <circle cx="12" cy="10" r="3" fill="#ffffff"></circle>
                                 </svg>
                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                  <span className="pos-address-main">
+                                  <span style={{ fontWeight: 650, color: '#1e293b', fontSize: '13px' }}>
                                     {custAddress.split(',')[0]?.trim() || custAddress}
                                   </span>
                                   {custAddress.includes(',') && (
-                                    <span className="pos-address-sub" style={{ marginTop: '1px' }}>
+                                    <span style={{ fontSize: '11.5px', color: '#64748b', marginTop: '1px' }}>
                                       {custAddress.split(',').slice(1).join(',').trim()}
                                     </span>
                                   )}
@@ -1653,14 +1643,30 @@ export default function POSModule({
                                   isPickupAssigned ? (
                                     <button
                                       type="button"
-                                      className="pos-pickup-btn pos-driver-assigned-btn"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setAssignDriverTarget(ord);
                                       }}
                                       title={`Assigned to ${ord.assigned_driver || 'Driver'}. Click to re-assign`}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        padding: '7px 14px',
+                                        borderRadius: '8px',
+                                        border: '1.5px solid #22c55e',
+                                        background: '#f0fdf4',
+                                        color: '#15803d',
+                                        fontSize: '12px',
+                                        fontWeight: 650,
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 2px rgba(34,197,94,0.1)',
+                                        transition: 'all 0.15s ease',
+                                        whiteSpace: 'nowrap'
+                                      }}
                                     >
-                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                                         <polyline points="20 6 9 17 4 12" />
                                       </svg>
                                       <span>Assigned for Pickup</span>
@@ -1668,16 +1674,32 @@ export default function POSModule({
                                   ) : (
                                     <button
                                       type="button"
-                                      className="pos-pickup-btn"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setAssignDriverTarget(ord);
                                       }}
                                       title={`Assign Pickup for ${orderNum}`}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '8px',
+                                        padding: '7px 16px',
+                                        borderRadius: '8px',
+                                        border: '1.5px solid #60a5fa',
+                                        background: '#ffffff',
+                                        color: '#2563eb',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
+                                        transition: 'all 0.15s ease',
+                                        whiteSpace: 'nowrap'
+                                      }}
                                     >
-                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                         <rect x="1" y="3" width="15" height="13"></rect>
-                                        <polygon points="16 8 20 8 23 11 23 16 16 8"></polygon>
+                                        <polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon>
                                         <circle cx="5.5" cy="18.5" r="2.5"></circle>
                                         <circle cx="18.5" cy="18.5" r="2.5"></circle>
                                       </svg>
@@ -1691,30 +1713,73 @@ export default function POSModule({
                                 )
                               ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', width: 'fit-content' }}>
-                                  {servicesAllocated.map((srvItem, sIdx) => (
-                                    <div key={sIdx} className="pos-service-allocated-item">
+                                  {servicesAllocated.slice(0, 3).map((srvItem, sIdx) => (
+                                    <div key={sIdx} style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      gap: '8px',
+                                      background: '#f8fafc',
+                                      border: '1px solid #e2e8f0',
+                                      borderRadius: '6px',
+                                      padding: '3px 8px',
+                                      fontSize: '12px',
+                                      color: '#1e293b',
+                                      width: 'fit-content',
+                                      whiteSpace: 'nowrap'
+                                    }}>
                                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
                                         <span>{srvItem.icon || '👕'}</span>
                                         <span>{srvItem.name}</span>
                                       </span>
-                                      <span className="pos-service-allocated-count">
+                                      <span style={{ fontWeight: 700, color: '#2563eb', background: '#dbeafe', padding: '1px 6px', borderRadius: '4px', fontSize: '11px' }}>
                                         x{srvItem.count}
                                       </span>
                                     </div>
                                   ))}
+                                  {servicesAllocated.length > 3 && (
+                                    <span style={{
+                                      fontSize: '11px',
+                                      fontWeight: 700,
+                                      color: '#2563eb',
+                                      background: '#eff6ff',
+                                      border: '1px solid #bfdbfe',
+                                      padding: '2px 6px',
+                                      borderRadius: '4px',
+                                      width: 'fit-content'
+                                    }}>
+                                      +{servicesAllocated.length - 3} more
+                                    </span>
+                                  )}
                                   {isOnCall && (
                                     isPickupAssigned ? (
                                       <button
                                         type="button"
-                                        className="pos-pickup-btn pos-driver-assigned-btn"
-                                        style={{ marginTop: '3px' }}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setAssignDriverTarget(ord);
                                         }}
                                         title={`Assigned to ${ord.assigned_driver || 'Driver'}. Click to re-assign`}
+                                        style={{
+                                          marginTop: '3px',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          gap: '6px',
+                                          padding: '5px 12px',
+                                          borderRadius: '6px',
+                                          background: '#f0fdf4',
+                                          border: '1.5px solid #22c55e',
+                                          color: '#15803d',
+                                          fontSize: '11.5px',
+                                          fontWeight: 650,
+                                          cursor: 'pointer',
+                                          boxShadow: '0 1px 2px rgba(34,197,94,0.1)',
+                                          width: 'fit-content',
+                                          whiteSpace: 'nowrap'
+                                        }}
                                       >
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                                           <polyline points="20 6 9 17 4 12" />
                                         </svg>
                                         <span>Assigned for Pickup</span>
@@ -1722,17 +1787,33 @@ export default function POSModule({
                                     ) : (
                                       <button
                                         type="button"
-                                        className="pos-pickup-btn"
-                                        style={{ marginTop: '3px' }}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setAssignDriverTarget(ord);
                                         }}
                                         title={`Assign Pickup for ${orderNum}`}
+                                        style={{
+                                          marginTop: '3px',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          gap: '6px',
+                                          padding: '5px 12px',
+                                          borderRadius: '6px',
+                                          background: '#ffffff',
+                                          border: '1.5px solid #60a5fa',
+                                          color: '#2563eb',
+                                          fontSize: '11.5px',
+                                          fontWeight: 650,
+                                          cursor: 'pointer',
+                                          boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
+                                          width: 'fit-content',
+                                          whiteSpace: 'nowrap'
+                                        }}
                                       >
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                           <rect x="1" y="3" width="15" height="13"></rect>
-                                          <polygon points="16 8 20 8 23 11 23 16 16 8"></polygon>
+                                          <polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon>
                                           <circle cx="5.5" cy="18.5" r="2.5"></circle>
                                           <circle cx="18.5" cy="18.5" r="2.5"></circle>
                                         </svg>
@@ -1747,7 +1828,18 @@ export default function POSModule({
                             {/* 5. Status (Icon badge & processing subtext) */}
                             <td style={{ verticalAlign: 'top', paddingTop: '14px' }}>
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
-                                <div className={`pos-order-status-badge ${statusClass}`}>
+                                <div style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '7px',
+                                  padding: '5px 12px',
+                                  borderRadius: '8px',
+                                  fontSize: '12.5px',
+                                  fontWeight: 650,
+                                  background: statusBg,
+                                  color: statusColor,
+                                  border: `1px solid ${statusBorder}`
+                                }}>
                                   <span style={{ fontSize: '13px', lineHeight: 1 }}>
                                     {workStatus === 'In Progress' ? '⏱' : workStatus === 'Cancelled' ? '✕' : workStatus === 'Ready' ? '✓' : workStatus === 'Delivered' ? '✓' : '📥'}
                                   </span>
@@ -1758,11 +1850,11 @@ export default function POSModule({
 
                             {/* 6. Order Details (Captured Time) */}
                             <td style={{ verticalAlign: 'top', paddingTop: '14px' }}>
-                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, marginTop: '2px', opacity: 0.7 }}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '12px', color: '#475569' }}>
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" style={{ flexShrink: 0, marginTop: '2px' }}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
-                                  <span className="pos-time-label">Order Captured:</span>
-                                  <span className="pos-time-val">{orderCapturedStr}</span>
+                                  <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>Order Captured:</span>
+                                  <span style={{ fontSize: '12.5px', color: '#1e293b', fontWeight: 650 }}>{orderCapturedStr}</span>
                                 </div>
                               </div>
                             </td>
@@ -1772,22 +1864,47 @@ export default function POSModule({
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '130px' }}>
                                 {isPickupAssigned ? (
                                   <>
-                                    <div className="pos-assigned-banner">
-                                      <span className="pos-assigned-banner-title">
+                                    <div style={{
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      gap: '2px',
+                                      padding: '6px 10px',
+                                      background: '#f0fdf4',
+                                      border: '1.5px solid #86efac',
+                                      borderRadius: '8px',
+                                      boxShadow: '0 1px 2px rgba(34,197,94,0.08)'
+                                    }}>
+                                      <span style={{ fontSize: '10px', color: '#166534', fontWeight: 750, letterSpacing: '0.3px', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                         <span>🚚</span> Assigned for Pickup
                                       </span>
-                                      <span className="pos-assigned-banner-driver">
+                                      <span style={{ fontSize: '12px', color: '#14532d', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                         {ord.assigned_driver || 'Driver Assigned'}
                                       </span>
                                     </div>
                                     <button
                                       type="button"
-                                      className="pos-pickup-btn pos-change-driver-btn"
+                                      className="pos-pickup-btn pos-driver-btn"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setAssignDriverTarget(ord);
                                       }}
                                       title={`Re-assign Driver for ${orderNum}`}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        padding: '5px 12px',
+                                        borderRadius: '7px',
+                                        border: '1.5px solid #94a3b8',
+                                        background: '#ffffff',
+                                        color: '#475569',
+                                        fontSize: '11.5px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                                        whiteSpace: 'nowrap'
+                                      }}
                                     >
                                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -1798,33 +1915,38 @@ export default function POSModule({
                                   </>
                                 ) : (
                                   <>
-                                    {ord.scheduled_date && (
-                                      <div className="pos-scheduled-banner">
-                                        <span className="pos-scheduled-banner-title">
-                                          <span>{ord.scheduled_type === 'Delivery' ? '🚚' : '📦'}</span>
-                                          Scheduled {ord.scheduled_type || 'Pickup'}
-                                        </span>
-                                        <span className="pos-scheduled-banner-datetime">
-                                          {ord.scheduled_date_display || ord.scheduled_date} • {ord.scheduled_time_display || ord.scheduled_time || '02:00 PM'}
-                                        </span>
-                                      </div>
-                                    )}
                                     <button
                                       type="button"
                                       className="pos-pickup-btn pos-schedule-btn"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleOpenScheduleModal(ord);
+                                        setScheduleOrderTarget(ord);
                                       }}
                                       title={`Schedule Pickup/Delivery for ${orderNum}`}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        padding: '6px 14px',
+                                        borderRadius: '8px',
+                                        border: '1.5px solid #60a5fa',
+                                        background: '#ffffff',
+                                        color: '#2563eb',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
+                                        whiteSpace: 'nowrap'
+                                      }}
                                     >
-                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                         <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
                                         <line x1="16" y1="2" x2="16" y2="6" />
                                         <line x1="8" y1="2" x2="8" y2="6" />
                                         <line x1="3" y1="10" x2="21" y2="10" />
                                       </svg>
-                                      <span>{ord.scheduled_date ? 'Reschedule' : 'Schedule'}</span>
+                                      <span>Schedule</span>
                                     </button>
 
                                     <button
@@ -1835,8 +1957,24 @@ export default function POSModule({
                                         setAssignDriverTarget(ord);
                                       }}
                                       title={`Assign Driver for ${orderNum}`}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        padding: '6px 14px',
+                                        borderRadius: '8px',
+                                        border: '1.5px solid #60a5fa',
+                                        background: '#ffffff',
+                                        color: '#2563eb',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
+                                        whiteSpace: 'nowrap'
+                                      }}
                                     >
-                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                                         <circle cx="12" cy="7" r="4" />
                                       </svg>
@@ -1859,6 +1997,23 @@ export default function POSModule({
                                       showToast?.('bill viewed!');
                                     }}
                                     title="bill viewed!"
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      gap: '5px',
+                                      padding: '5px 12px',
+                                      width: '82px',
+                                      borderRadius: '6px',
+                                      border: '1.5px solid #7c3aed',
+                                      background: '#f5f3ff',
+                                      color: '#6d28d9',
+                                      fontWeight: 650,
+                                      fontSize: '12px',
+                                      cursor: 'pointer',
+                                      boxShadow: '0 1px 2px rgba(124, 58, 237, 0.08)',
+                                      transition: 'all 0.15s ease'
+                                    }}
                                   >
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                                       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -1877,6 +2032,23 @@ export default function POSModule({
                                       handleOpenEditModal(ord);
                                     }}
                                     title={isEditingThisOrder ? `Close Edit for ${orderNum}` : `Edit Order ${orderNum}`}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      gap: '5px',
+                                      padding: '5px 12px',
+                                      width: '82px',
+                                      borderRadius: '6px',
+                                      border: isEditingThisOrder ? '1.5px solid #2563eb' : '1.5px solid #cbd5e1',
+                                      background: isEditingThisOrder ? '#eff6ff' : '#ffffff',
+                                      color: isEditingThisOrder ? '#2563eb' : '#334155',
+                                      fontWeight: 650,
+                                      fontSize: '12px',
+                                      cursor: 'pointer',
+                                      boxShadow: isEditingThisOrder ? '0 1px 3px rgba(37, 99, 235, 0.2)' : '0 1px 2px rgba(0, 0, 0, 0.04)',
+                                      transition: 'all 0.15s ease'
+                                    }}
                                   >
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -1890,7 +2062,7 @@ export default function POSModule({
                                     className="pos-table-action-btn btn-side-action"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleOpenSideEdit(ord);
+                                      setSideEditTargetOrder(ord);
                                     }}
                                     title={`Open Side Edit Panel for ${orderNum}`}
                                     style={{
@@ -2050,6 +2222,38 @@ export default function POSModule({
                                             </div>
                                           </div>
 
+                                          {/* Expected Delivery with Calendar icon */}
+                                          <div>
+                                            <label className="pos-edit-label">
+                                              Expected Delivery <span className="required">*</span>
+                                            </label>
+                                            <div style={{ position: 'relative' }}>
+                                              <input
+                                                type="text"
+                                                className="pos-edit-field"
+                                                style={{ paddingLeft: '34px' }}
+                                                value={editFormData.expected_delivery || ''}
+                                                onChange={(e) => setEditFormData({ ...editFormData, expected_delivery: e.target.value })}
+                                                placeholder="e.g. 30 Oct 2026, 05:00 PM"
+                                                required
+                                              />
+                                              <svg
+                                                width="14"
+                                                height="14"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="2.2"
+                                                style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', opacity: 0.6, pointerEvents: 'none' }}
+                                              >
+                                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                                <line x1="16" y1="2" x2="16" y2="6" />
+                                                <line x1="8" y1="2" x2="8" y2="6" />
+                                                <line x1="3" y1="10" x2="21" y2="10" />
+                                              </svg>
+                                            </div>
+                                          </div>
+
                                           {/* Comments Textarea */}
                                           <div>
                                             <label className="pos-edit-label">
@@ -2062,6 +2266,73 @@ export default function POSModule({
                                               onChange={(e) => setEditFormData({ ...editFormData, comments: e.target.value })}
                                               placeholder="Customer special notes, delicate fabric instructions, or delivery directions..."
                                             />
+                                          </div>
+
+                                          {/* Live Status Quick Action & Pills */}
+                                          <div className="pos-edit-sub-panel" style={{ marginTop: '4px', gap: '8px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                              <span style={{ fontSize: '11.5px', fontWeight: 700, color: 'var(--text-primary)' }}>Live Status Actions</span>
+                                              <button
+                                                type="button"
+                                                onClick={() => handleQuickStatusUpdate(editFormData.status || editFormData.order_status)}
+                                                style={{
+                                                  height: '28px',
+                                                  padding: '0 10px',
+                                                  background: '#2563eb',
+                                                  color: '#ffffff',
+                                                  border: 'none',
+                                                  borderRadius: '5px',
+                                                  fontSize: '11px',
+                                                  fontWeight: 700,
+                                                  cursor: 'pointer',
+                                                  display: 'inline-flex',
+                                                  alignItems: 'center',
+                                                  gap: '4px'
+                                                }}
+                                              >
+                                                <span>⚡</span>
+                                                <span>Apply Status</span>
+                                              </button>
+                                            </div>
+
+                                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                              {[
+                                                { label: 'Order Received', color: '#1d4ed8', bg: '#eff6ff', border: '#bfdbfe' },
+                                                { label: 'In Progress', color: '#b45309', bg: '#fef3c7', border: '#fde68a' },
+                                                { label: 'Ready', color: '#15803d', bg: '#dcfce7', border: '#bbf7d0' },
+                                                { label: 'Delivered', color: '#0369a1', bg: '#e0f2fe', border: '#bae6fd' },
+                                                { label: 'Cancelled', color: '#b91c1c', bg: '#fee2e2', border: '#fecaca' },
+                                              ].map((st) => {
+                                                const isCur = normalizeOrderStatus(editFormData.status || editFormData.order_status) === st.label;
+                                                return (
+                                                  <button
+                                                    key={st.label}
+                                                    type="button"
+                                                    onClick={() => {
+                                                      setEditFormData({ ...editFormData, status: st.label, order_status: st.label });
+                                                      handleQuickStatusUpdate(st.label);
+                                                    }}
+                                                    style={{
+                                                      padding: '3px 9px',
+                                                      borderRadius: '12px',
+                                                      fontSize: '11px',
+                                                      fontWeight: 700,
+                                                      cursor: 'pointer',
+                                                      border: isCur ? `2px solid ${st.color}` : `1px solid ${st.border}`,
+                                                      background: isCur ? st.color : st.bg,
+                                                      color: isCur ? '#ffffff' : st.color,
+                                                      transition: 'all 0.15s ease',
+                                                      display: 'inline-flex',
+                                                      alignItems: 'center',
+                                                      gap: '3px'
+                                                    }}
+                                                  >
+                                                    <span>{isCur ? '✓' : '●'}</span>
+                                                    <span>{st.label}</span>
+                                                  </button>
+                                                );
+                                              })}
+                                            </div>
                                           </div>
                                         </div>
                                       </div>
@@ -2451,244 +2722,15 @@ export default function POSModule({
                                     </div>
 
                                     {/* ══════════════════════════════════════════════════════════════════
-                                        SECTION 2: GARMENT-BY-GARMENT INSPECTION & CARE
+                                        SECTION 2: DYNAMIC GARMENT-BY-GARMENT INSPECTION & CARE
                                        ══════════════════════════════════════════════════════════════════ */}
-                                    <div className="pos-edit-section-card" style={{ marginBottom: '16px' }}>
-                                      <div className="pos-edit-section-title">
-                                        <span style={{ color: '#2563eb' }}>🔍</span>
-                                        <span>Garment-by-Garment Inspection &amp; Care</span>
-                                      </div>
-
-                                      {/* Row 1: 4 Columns (Garment *, Color, Stains / Marks, Make) */}
-                                      <div className="pos-edit-inspection-row-4col">
-                                        <div>
-                                          <label className="pos-edit-label">
-                                            Garment <span className="required">*</span>
-                                          </label>
-                                          <select
-                                            className="pos-edit-field"
-                                            value={editInspection.garment || 'Shirt'}
-                                            onChange={(e) => setEditInspection({ ...editInspection, garment: e.target.value })}
-                                          >
-                                            {editCart.length > 0
-                                              ? editCart.map((it, i) => (
-                                                  <option key={`${it.id}_${i}`} value={it.name}>
-                                                    {it.name}
-                                                  </option>
-                                                ))
-                                              : ['Shirt', 'Formal Pant', 'T-Shirt', 'Jeans', 'Saree', 'Kurta'].map((g) => (
-                                                  <option key={g} value={g}>
-                                                    {g}
-                                                  </option>
-                                                ))}
-                                          </select>
-                                        </div>
-
-                                        <div>
-                                          <label className="pos-edit-label">Color</label>
-                                          <input
-                                            type="text"
-                                            className="pos-edit-field"
-                                            value={editInspection.color || ''}
-                                            onChange={(e) => setEditInspection({ ...editInspection, color: e.target.value })}
-                                            placeholder="e.g. Navy blue"
-                                          />
-                                        </div>
-
-                                        <div>
-                                          <label className="pos-edit-label">Stains / Marks</label>
-                                          <input
-                                            type="text"
-                                            className="pos-edit-field"
-                                            value={editInspection.stains || ''}
-                                            onChange={(e) => setEditInspection({ ...editInspection, stains: e.target.value })}
-                                            placeholder="e.g. Oil stain on sleeve"
-                                          />
-                                        </div>
-
-                                        <div>
-                                          <label className="pos-edit-label">Make</label>
-                                          <select
-                                            className="pos-edit-field"
-                                            value={editInspection.make || 'Manufacturer / make'}
-                                            onChange={(e) => setEditInspection({ ...editInspection, make: e.target.value })}
-                                          >
-                                            <option value="Manufacturer / make">Manufacturer / make</option>
-                                            <option value="Readymade">Readymade</option>
-                                            <option value="Tailored / Custom">Tailored / Custom</option>
-                                            <option value="Designer / Boutique">Designer / Boutique</option>
-                                            <option value="Imported">Imported</option>
-                                          </select>
-                                        </div>
-                                      </div>
-
-                                      {/* Row 2: 3 Columns (Brand, Fabric Type, Garment Notes) */}
-                                      <div className="pos-edit-inspection-row-3col" style={{ marginBottom: '14px' }}>
-                                        <div>
-                                          <label className="pos-edit-label">Brand</label>
-                                          <input
-                                            type="text"
-                                            className="pos-edit-field"
-                                            value={editInspection.brand || ''}
-                                            onChange={(e) => setEditInspection({ ...editInspection, brand: e.target.value })}
-                                            placeholder="e.g. Van Heusen / Raymond"
-                                          />
-                                        </div>
-
-                                        <div>
-                                          <label className="pos-edit-label">Fabric Type</label>
-                                          <select
-                                            className="pos-edit-field"
-                                            value={editInspection.fabric || 'Select fabric'}
-                                            onChange={(e) => setEditInspection({ ...editInspection, fabric: e.target.value })}
-                                          >
-                                            <option value="Select fabric">Select fabric</option>
-                                            <option value="100% Cotton">100% Cotton</option>
-                                            <option value="Pure Silk">Pure Silk</option>
-                                            <option value="Linen">Linen</option>
-                                            <option value="Wool / Cashmere">Wool / Cashmere</option>
-                                            <option value="Polyester blend">Polyester blend</option>
-                                            <option value="Denim">Denim</option>
-                                            <option value="Rayon / Viscose">Rayon / Viscose</option>
-                                          </select>
-                                        </div>
-
-                                        <div>
-                                          <label className="pos-edit-label">Garment Notes</label>
-                                          <input
-                                            type="text"
-                                            className="pos-edit-field"
-                                            value={editInspection.notes || ''}
-                                            onChange={(e) => setEditInspection({ ...editInspection, notes: e.target.value })}
-                                            placeholder="Damage, special handling, customer instructions..."
-                                          />
-                                        </div>
-                                      </div>
-
-                                      {/* Row 3: Dedicated Garment Photos Section */}
-                                      <div className="pos-edit-photos-panel">
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                                          <div>
-                                            <label style={{ fontSize: '12.5px', fontWeight: 750, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                              <span>📸 Garment Photos &amp; Visual Evidence</span>
-                                              <span style={{ fontSize: '11px', fontWeight: 650, color: '#2563eb', background: 'rgba(37, 99, 235, 0.1)', padding: '2px 8px', borderRadius: '12px', border: '1px solid rgba(37, 99, 235, 0.3)' }}>
-                                                {editInspectionPhotos.length} / 6 Attached
-                                              </span>
-                                            </label>
-                                            <p style={{ margin: '3px 0 0 0', fontSize: '11.5px', color: 'var(--text-muted)' }}>
-                                              Upload visual condition photos to verify pre-existing stains, torn seams, or brand labels before processing.
-                                            </p>
-                                          </div>
-
-                                          <button
-                                            type="button"
-                                            onClick={() => editPhotoInputRef.current?.click()}
-                                            style={{
-                                              padding: '7px 14px',
-                                              borderRadius: '6px',
-                                              border: '1.5px solid #2563eb',
-                                              background: 'rgba(37, 99, 235, 0.1)',
-                                              color: '#2563eb',
-                                              fontSize: '12px',
-                                              fontWeight: 700,
-                                              cursor: 'pointer',
-                                              display: 'inline-flex',
-                                              alignItems: 'center',
-                                              gap: '6px',
-                                              transition: 'all 0.15s ease'
-                                            }}
-                                          >
-                                            <span>+ Add Photo</span>
-                                          </button>
-                                        </div>
-
-                                        <input
-                                          ref={editPhotoInputRef}
-                                          type="file"
-                                          multiple
-                                          accept="image/*"
-                                          onChange={handlePhotoUpload}
-                                          style={{ display: 'none' }}
-                                        />
-
-                                        {/* Photo Gallery Grid */}
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '10px', marginTop: '10px' }}>
-                                          {editInspectionPhotos.map((photo) => (
-                                            <div
-                                              key={photo.id}
-                                              className="pos-edit-photo-thumb-card"
-                                            >
-                                              <img
-                                                src={photo.url}
-                                                alt={photo.name}
-                                                onClick={() => setPhotoPreviewModal(photo)}
-                                                style={{
-                                                  width: '100%',
-                                                  height: '84px',
-                                                  objectFit: 'cover',
-                                                  cursor: 'pointer',
-                                                  display: 'block'
-                                                }}
-                                                title="Click to zoom photo"
-                                              />
-                                              <button
-                                                type="button"
-                                                onClick={() => handleRemovePhoto(photo.id)}
-                                                style={{
-                                                  position: 'absolute',
-                                                  top: '4px',
-                                                  right: '4px',
-                                                  width: '20px',
-                                                  height: '20px',
-                                                  borderRadius: '50%',
-                                                  background: 'rgba(239, 68, 68, 0.9)',
-                                                  color: '#ffffff',
-                                                  border: 'none',
-                                                  cursor: 'pointer',
-                                                  display: 'flex',
-                                                  alignItems: 'center',
-                                                  justifyContent: 'center',
-                                                  fontSize: '11px',
-                                                  fontWeight: 700,
-                                                  lineHeight: 1
-                                                }}
-                                                title="Remove photo"
-                                              >
-                                                ✕
-                                              </button>
-                                              <div className="pos-edit-photo-tag-bar">
-                                                <span style={{ fontSize: '10px', fontWeight: 650, color: '#2563eb', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                  {photo.tag || 'Defect Note'}
-                                                </span>
-                                              </div>
-                                            </div>
-                                          ))}
-
-                                          {/* Upload Placeholder if under limit */}
-                                          {editInspectionPhotos.length < 6 && (
-                                            <div
-                                              onClick={() => editPhotoInputRef.current?.click()}
-                                              style={{
-                                                height: '108px',
-                                                borderRadius: '6px',
-                                                border: '1.5px dashed var(--border, #93c5fd)',
-                                                background: 'var(--bg-hover, #f0f7ff)',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '4px',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.15s ease'
-                                              }}
-                                            >
-                                              <span style={{ fontSize: '20px', color: '#2563eb' }}>📷</span>
-                                              <span style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb' }}>Upload More</span>
-                                              <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Up to 6</span>
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
+                                    <div style={{ marginBottom: '16px' }}>
+                                      <GarmentInspectionSection
+                                        cart={editCart}
+                                        inspections={editInspections}
+                                        onChangeInspections={setEditInspections}
+                                        showToast={showToast}
+                                      />
                                     </div>
 
                                     {/* ══════════════════════════════════════════════════════════════════
@@ -3006,7 +3048,7 @@ export default function POSModule({
                                           </div>
 
                                           {/* Payment Fields */}
-                                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', alignItems: 'flex-end' }}>
+                                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
                                             <div>
                                               <label className="pos-edit-label">
                                                 Payment Status
@@ -3049,37 +3091,6 @@ export default function POSModule({
                                                 value={editFormData.advance_paid || 0}
                                                 onChange={(e) => setEditFormData({ ...editFormData, advance_paid: e.target.value })}
                                               />
-                                            </div>
-
-                                            <div>
-                                              <label className="pos-edit-label" style={{ opacity: 0.9 }}>
-                                                UPI Instant Pay
-                                              </label>
-                                              <button
-                                                type="button"
-                                                className="btn-show-qr"
-                                                onClick={() => {
-                                                  const bal = Math.max(0, editCartGrandTotal - Number(editFormData.advance_paid || 0));
-                                                  setQrModalData({
-                                                    orderNumber: editingOrderRecord?.order_number || editingOrderRecord?.order_id || 'ORDER',
-                                                    customerName: editFormData.customer_name || editingOrderRecord?.customer_name || 'Customer',
-                                                    amount: bal > 0 ? bal : editCartGrandTotal,
-                                                    grandTotal: editCartGrandTotal,
-                                                  });
-                                                }}
-                                                title="Display UPI QR code to scan and pay"
-                                              >
-                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                                  <rect x="3" y="3" width="7" height="7"></rect>
-                                                  <rect x="14" y="3" width="7" height="7"></rect>
-                                                  <rect x="14" y="14" width="7" height="7"></rect>
-                                                  <rect x="3" y="14" width="7" height="7"></rect>
-                                                  <path d="M7 7h.01"></path>
-                                                  <path d="M17 7h.01"></path>
-                                                  <path d="M7 17h.01"></path>
-                                                </svg>
-                                                <span>SHOW QR</span>
-                                              </button>
                                             </div>
                                           </div>
                                         </div>
@@ -3237,7 +3248,7 @@ export default function POSModule({
                                               ✕
                                             </button>
                                           </div>
-                                          <div style={{ padding: '16px', display: 'flex', justifyContent: 'center', background: 'var(--bg-app)' }}>
+                                          <div style={{ padding: '16px', display: 'flex', justifyContent: 'center', background: '#0a101d' }}>
                                             <img
                                               src={photoPreviewModal.url}
                                               alt={photoPreviewModal.name}
@@ -3252,18 +3263,6 @@ export default function POSModule({
                                         FOOTER ACTION BUTTONS (Bottom Right)
                                        ══════════════════════════════════════════════════════════════════ */}
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px' }}>
-                                      <button
-                                        type="button"
-                                        className="pos-edit-delete-btn"
-                                        onClick={() => setConfirmDeleteOrder(editingOrderRecord)}
-                                        title="Delete this order"
-                                      >
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                          <polyline points="3 6 5 6 21 6"></polyline>
-                                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                        </svg>
-                                        <span>Delete Order</span>
-                                      </button>
                                       <button
                                         type="button"
                                         className="pos-edit-cancel-btn"
@@ -3295,6 +3294,72 @@ export default function POSModule({
                     </tbody>
                   </table>
                 </div>
+                {/* ── Orders Pagination Bar ── */}
+                <div className="pagination-bar">
+                    <span className="pagination-info">
+                      Showing {filteredOrders.length === 0 ? 0 : ((ordersPage - 1) * ORDERS_PER_PAGE) + 1}–{Math.min(ordersPage * ORDERS_PER_PAGE, filteredOrders.length)} of {filteredOrders.length} orders
+                    </span>
+                    <div className="pagination-right">
+                      <div className="pagination-size-wrap">
+                        <label className="pagination-size-label">Show:</label>
+                        <select
+                          className="pagination-size-select"
+                          value={ordersPageSizeKey}
+                          onChange={(e) => { setOrdersPageSizeKey(e.target.value); setOrdersPage(1); }}
+                        >
+                          <option value="5">5</option>
+                          <option value="10">10</option>
+                          <option value="20">20</option>
+                          <option value="50">50</option>
+                          <option value="all">All</option>
+                        </select>
+                      </div>
+                      <div className="pagination-controls">
+                        <button
+                          className="pagination-btn"
+                          onClick={() => setOrdersPage(1)}
+                          disabled={ordersPage === 1}
+                          title="First page"
+                        >«</button>
+                        <button
+                          className="pagination-btn"
+                          onClick={() => setOrdersPage(p => Math.max(1, p - 1))}
+                          disabled={ordersPage === 1}
+                          title="Previous page"
+                        >‹</button>
+                        {Array.from({ length: ordersTotalPages }, (_, i) => i + 1)
+                          .filter(p => p === 1 || p === ordersTotalPages || Math.abs(p - ordersPage) <= 1)
+                          .reduce((acc, p, idx, arr) => {
+                            if (idx > 0 && arr[idx - 1] !== p - 1) acc.push('...');
+                            acc.push(p);
+                            return acc;
+                          }, [])
+                          .map((item, idx) =>
+                            item === '...' ? (
+                              <span key={`ellipsis-${idx}`} className="pagination-ellipsis">…</span>
+                            ) : (
+                              <button
+                                key={item}
+                                className={`pagination-btn pagination-num ${item === ordersPage ? 'active' : ''}`}
+                                onClick={() => setOrdersPage(item)}
+                              >{item}</button>
+                            )
+                          )}
+                        <button
+                          className="pagination-btn"
+                          onClick={() => setOrdersPage(p => Math.min(ordersTotalPages, p + 1))}
+                          disabled={ordersPage === ordersTotalPages}
+                          title="Next page"
+                        >›</button>
+                        <button
+                          className="pagination-btn"
+                          onClick={() => setOrdersPage(ordersTotalPages)}
+                          disabled={ordersPage === ordersTotalPages}
+                          title="Last page"
+                        >»</button>
+                      </div>
+                    </div>
+                  </div>
                 </>
               )}
             </>
@@ -3773,15 +3838,14 @@ export default function POSModule({
       {/* ── Held Orders Modal ── */}
       {isHeldModalOpen && (
         <div className="pos-held-modal-backdrop" onClick={() => setIsHeldModalOpen(false)}>
-          <div className="pos-dialog-modal" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="pos-dialog-header">
-              <div className="pos-dialog-title">
-                <span>⏸</span>
-                <span>Parked / Held Orders ({heldOrders.length})</span>
+          <div className="pos-held-modal" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: '16px', fontWeight: 750, color: '#fff' }}>
+                ⏸ Parked / Held Orders ({heldOrders.length})
               </div>
               <button
                 type="button"
-                className="pos-dialog-close-btn"
+                className="pos-cart-del-btn"
                 onClick={() => setIsHeldModalOpen(false)}
               >
                 ✕
@@ -3789,7 +3853,7 @@ export default function POSModule({
             </div>
 
             {heldOrders.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--text-muted)' }}>
+              <div style={{ textAlign: 'center', padding: '30px 10px', color: '#64748b' }}>
                 No held orders at the moment.
               </div>
             ) : (
@@ -3797,19 +3861,28 @@ export default function POSModule({
                 {heldOrders.map((item) => (
                   <div
                     key={item.id}
-                    className="pos-held-card"
+                    style={{
+                      background: '#040a14',
+                      border: '1px solid #172a44',
+                      borderRadius: '10px',
+                      padding: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                    }}
                   >
                     <div>
-                      <div className="pos-driver-name">
+                      <div style={{ fontWeight: 650, color: '#f1f5f9', fontSize: '13.5px' }}>
                         {item.selectedCustomer?.customer_name || item.walkinName || 'Walk-In Customer'}
                       </div>
-                      <div className="pos-driver-meta" style={{ color: '#2563eb' }}>
+                      <div style={{ fontSize: '11.5px', color: '#7dd3fc', marginTop: '2px' }}>
                         {item.totalItemsCount} items • Held at {item.heldAt}
                       </div>
                     </div>
 
                     <div className="pos-status-actions-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <strong style={{ fontSize: '14px', color: '#2563eb' }}>
+                      <strong style={{ fontSize: '14px', color: '#38bdf8' }}>
                         {currencySymbol}{item.grandTotal?.toFixed(2)}
                       </strong>
                       <button
@@ -3841,52 +3914,38 @@ export default function POSModule({
       {scheduleOrderTarget && (
         <div className="pos-held-modal-backdrop" onClick={() => setScheduleOrderTarget(null)}>
           <div
-            className="pos-dialog-modal"
+            className="pos-held-modal"
             onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '440px', padding: '22px', background: '#0b172a', border: '1px solid #1e3a5f', borderRadius: '16px', color: '#f1f5f9' }}
           >
-            <div className="pos-dialog-header">
-              <div className="pos-dialog-title">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', borderBottom: '1px solid #1e293b', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 750, fontSize: '15px', color: '#f8fafc' }}>
                 <span style={{ fontSize: '18px' }}>📅</span>
                 <span>Schedule Pickup / Delivery</span>
               </div>
               <button
                 type="button"
-                className="pos-dialog-close-btn"
+                className="pos-cart-del-btn"
                 onClick={() => setScheduleOrderTarget(null)}
+                style={{ fontSize: '16px', color: '#94a3b8' }}
               >
                 ✕
               </button>
             </div>
 
-            <div className="pos-dialog-order-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
-                <div>
-                  <div className="pos-dialog-order-num">
-                    {scheduleOrderTarget.order_number || scheduleOrderTarget.order_id || 'ORDER'}
-                  </div>
-                  <div className="pos-dialog-order-cust">
-                    {scheduleOrderTarget.customer_name || scheduleOrderTarget.customer?.customer_name} • {scheduleOrderTarget.mobile_number || scheduleOrderTarget.customer?.mobile_number}
-                  </div>
-                  {scheduleOrderTarget.address && (
-                    <div className="pos-dialog-order-addr" style={{ marginTop: '3px' }}>
-                      📍 {scheduleOrderTarget.address}
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
-                  <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Order Captured:</span>
-                  <span className="pos-dialog-order-captured-time" style={{ fontSize: '12px', fontWeight: 750, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    <span>{scheduleOrderTarget.order_captured || (scheduleOrderTarget.created_at ? new Date(scheduleOrderTarget.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '30 Oct 2026, 02:04 pm')}</span>
-                  </span>
-                </div>
+            <div style={{ background: '#030b15', padding: '10px 14px', borderRadius: '8px', border: '1px solid #17253d', marginBottom: '16px' }}>
+              <div style={{ fontWeight: 700, fontSize: '13px', color: '#38bdf8' }}>
+                {scheduleOrderTarget.order_number || scheduleOrderTarget.order_id || 'ORDER'}
+              </div>
+              <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '2px' }}>
+                {scheduleOrderTarget.customer_name || scheduleOrderTarget.customer?.customer_name} • {scheduleOrderTarget.mobile_number || scheduleOrderTarget.customer?.mobile_number}
               </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label className="pos-dialog-label">
-                  Schedule Type
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#94a3b8', marginBottom: '6px' }}>
+                  SCHEDULE TYPE
                 </label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   {['Pickup', 'Delivery'].map((type) => (
@@ -3894,7 +3953,17 @@ export default function POSModule({
                       key={type}
                       type="button"
                       onClick={() => setScheduleType(type)}
-                      className={`pos-dialog-type-btn ${scheduleType === type ? 'active' : ''}`}
+                      style={{
+                        flex: 1,
+                        padding: '8px',
+                        borderRadius: '8px',
+                        border: scheduleType === type ? '1.5px solid #3b82f6' : '1px solid #1e293b',
+                        background: scheduleType === type ? '#1d4ed8' : '#0f172a',
+                        color: '#fff',
+                        fontWeight: 650,
+                        fontSize: '13px',
+                        cursor: 'pointer'
+                      }}
                     >
                       {type === 'Pickup' ? '📦 Pickup' : '🚚 Delivery'}
                     </button>
@@ -3902,47 +3971,42 @@ export default function POSModule({
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label className="pos-dialog-label" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                    <span>Scheduled Date</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={scheduleDate}
-                    onChange={(e) => setScheduleDate(e.target.value)}
-                    className="pos-dialog-input"
-                  />
-                </div>
-                <div>
-                  <label className="pos-dialog-label" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    <span>Scheduled Time</span>
-                  </label>
-                  <input
-                    type="time"
-                    value={scheduleTime}
-                    onChange={(e) => setScheduleTime(e.target.value)}
-                    className="pos-dialog-input"
-                  />
-                </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#94a3b8', marginBottom: '6px' }}>
+                  SCHEDULED DATE
+                </label>
+                <input
+                  type="date"
+                  value={scheduleDate}
+                  onChange={(e) => setScheduleDate(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #1e293b',
+                    background: '#040b17',
+                    color: '#f8fafc',
+                    fontSize: '13px'
+                  }}
+                />
               </div>
 
               <div>
-                <label className="pos-dialog-label">
-                  Time Slot Preset
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#94a3b8', marginBottom: '6px' }}>
+                  TIME SLOT
                 </label>
                 <select
                   value={scheduleSlot}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setScheduleSlot(val);
-                    if (val.includes('09:00 AM')) setScheduleTime('10:00');
-                    else if (val.includes('01:00 PM')) setScheduleTime('14:00');
-                    else if (val.includes('04:00 PM')) setScheduleTime('17:00');
+                  onChange={(e) => setScheduleSlot(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #1e293b',
+                    background: '#040b17',
+                    color: '#f8fafc',
+                    fontSize: '13px'
                   }}
-                  className="pos-dialog-select"
                 >
                   <option value="Morning (09:00 AM - 12:00 PM)">Morning (09:00 AM - 12:00 PM)</option>
                   <option value="Afternoon (01:00 PM - 04:00 PM)">Afternoon (01:00 PM - 04:00 PM)</option>
@@ -3954,107 +4018,35 @@ export default function POSModule({
                 <button
                   type="button"
                   onClick={() => setScheduleOrderTarget(null)}
-                  className="pos-dialog-cancel-btn"
+                  style={{
+                    flex: 1,
+                    padding: '9px',
+                    borderRadius: '8px',
+                    border: '1px solid #334155',
+                    background: 'transparent',
+                    color: '#94a3b8',
+                    fontWeight: 650,
+                    cursor: 'pointer'
+                  }}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    const formattedDisplayDate = scheduleDate ? new Date(scheduleDate + 'T12:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : scheduleDate;
-                    
-                    // Format 24h time to 12h display
-                    let formattedDisplayTime = scheduleTime || '02:00 PM';
-                    if (scheduleTime && scheduleTime.includes(':')) {
-                      const [h, m] = scheduleTime.split(':');
-                      const hourNum = parseInt(h, 10);
-                      const ampm = hourNum >= 12 ? 'PM' : 'AM';
-                      const formattedHour = hourNum % 12 || 12;
-                      formattedDisplayTime = `${String(formattedHour).padStart(2, '0')}:${m} ${ampm}`;
-                    }
-
-                    const orderIdStr = scheduleOrderTarget.order_number || scheduleOrderTarget.order_id || scheduleOrderTarget.id || 'ORDER';
-                    const nowFormatted = new Date().toLocaleDateString('en-IN', {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    });
-
-                    const scheduleLog = {
-                      id: `log_sched_${Date.now()}`,
-                      title: `${scheduleType} Scheduled`,
-                      detail: `${scheduleType} scheduled on ${formattedDisplayDate} at ${formattedDisplayTime} (${scheduleSlot})`,
-                      author: 'Store Dispatcher',
-                      time: nowFormatted,
-                      type: 'schedule',
-                      status: `Scheduled for ${scheduleType}`,
-                    };
-
-                    const prevLogs = scheduleOrderTarget.audit_logs || scheduleOrderTarget.logs || [];
-                    const updatedLogs = [scheduleLog, ...prevLogs.filter((l) => !l.title?.includes('Scheduled'))];
-
-                    const updatedOrder = {
-                      ...scheduleOrderTarget,
-                      is_scheduled: true,
-                      scheduled_for_pickup: scheduleType === 'Pickup',
-                      scheduled_for_delivery: scheduleType === 'Delivery',
-                      scheduled_type: scheduleType,
-                      scheduled_date: scheduleDate,
-                      scheduled_date_display: formattedDisplayDate,
-                      scheduled_time: scheduleTime,
-                      scheduled_time_display: formattedDisplayTime,
-                      scheduled_slot: scheduleSlot,
-                      pickup_delivery: `Scheduled ${scheduleType}: ${formattedDisplayDate} (${formattedDisplayTime})`,
-                      audit_logs: updatedLogs,
-                      logs: updatedLogs,
-                      timeline: updatedLogs,
-                      updated_at: new Date().toISOString(),
-                    };
-
-                    if (onUpdateOrder) {
-                      onUpdateOrder(updatedOrder);
-                    } else {
-                      try {
-                        const cached = localStorage.getItem('washdoor_orders_cache');
-                        if (cached) {
-                          const list = JSON.parse(cached);
-                          const nextList = list.map((o) =>
-                            (o.id === updatedOrder.id || o.order_number === updatedOrder.order_number) ? updatedOrder : o
-                          );
-                          localStorage.setItem('washdoor_orders_cache', JSON.stringify(nextList));
-                        }
-                      } catch {}
-                      onOrderCreated?.(updatedOrder);
-                    }
-
-                    if (editingOrderRecord && (editingOrderRecord.id === updatedOrder.id || editingOrderRecord.order_number === updatedOrder.order_number)) {
-                      setEditingOrderRecord(updatedOrder);
-                      setEditFormData((prev) => prev ? {
-                        ...prev,
-                        is_scheduled: true,
-                        scheduled_for_pickup: scheduleType === 'Pickup',
-                        scheduled_for_delivery: scheduleType === 'Delivery',
-                        scheduled_type: scheduleType,
-                        scheduled_date: scheduleDate,
-                        scheduled_date_display: formattedDisplayDate,
-                        scheduled_time: scheduleTime,
-                        scheduled_time_display: formattedDisplayTime,
-                        scheduled_slot: scheduleSlot,
-                        pickup_delivery: `Scheduled ${scheduleType}: ${formattedDisplayDate} (${formattedDisplayTime})`,
-                        audit_logs: updatedLogs,
-                        logs: updatedLogs,
-                      } : null);
-                    }
-                    if (sideEditTargetOrder && (sideEditTargetOrder.id === updatedOrder.id || sideEditTargetOrder.order_number === updatedOrder.order_number)) {
-                      setSideEditTargetOrder(updatedOrder);
-                    }
-
-                    showToast?.(`✅ ${scheduleType} scheduled for ${formattedDisplayDate} at ${formattedDisplayTime}!`);
+                    showToast?.(`✅ ${scheduleType} scheduled for ${scheduleDate} (${scheduleSlot.split(' ')[0]})`);
                     setScheduleOrderTarget(null);
                   }}
-                  className="pos-dialog-confirm-btn"
+                  style={{
+                    flex: 1,
+                    padding: '9px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: '#2563eb',
+                    color: '#fff',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
                 >
                   Confirm Schedule
                 </button>
@@ -4068,39 +4060,41 @@ export default function POSModule({
       {assignDriverTarget && (
         <div className="pos-held-modal-backdrop" onClick={() => setAssignDriverTarget(null)}>
           <div
-            className="pos-dialog-modal"
+            className="pos-held-modal"
             onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '440px', padding: '22px', background: '#0b172a', border: '1px solid #1e3a5f', borderRadius: '16px', color: '#f1f5f9' }}
           >
-            <div className="pos-dialog-header">
-              <div className="pos-dialog-title">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', borderBottom: '1px solid #1e293b', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 750, fontSize: '15px', color: '#f8fafc' }}>
                 <span style={{ fontSize: '18px' }}>👤</span>
                 <span>Assign Driver &amp; Route</span>
               </div>
               <button
                 type="button"
-                className="pos-dialog-close-btn"
+                className="pos-cart-del-btn"
                 onClick={() => setAssignDriverTarget(null)}
+                style={{ fontSize: '16px', color: '#94a3b8' }}
               >
                 ✕
               </button>
             </div>
 
-            <div className="pos-dialog-order-card">
-              <div className="pos-dialog-order-num">
+            <div style={{ background: '#030b15', padding: '10px 14px', borderRadius: '8px', border: '1px solid #17253d', marginBottom: '16px' }}>
+              <div style={{ fontWeight: 700, fontSize: '13px', color: '#38bdf8' }}>
                 {assignDriverTarget.order_number || assignDriverTarget.order_id || 'ORDER'}
               </div>
-              <div className="pos-dialog-order-cust">
+              <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '2px' }}>
                 Customer: {assignDriverTarget.customer_name || assignDriverTarget.customer?.customer_name}
               </div>
-              <div className="pos-dialog-order-addr">
+              <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '2px' }}>
                 📍 {assignDriverTarget.address || 'Katpadi, Vellore'}
               </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label className="pos-dialog-label">
-                  Available Drivers &amp; Fleet
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#94a3b8', marginBottom: '8px' }}>
+                  AVAILABLE DRIVERS &amp; FLEET
                 </label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {[
@@ -4115,13 +4109,22 @@ export default function POSModule({
                       <div
                         key={drv.name}
                         onClick={() => setSelectedDriver(val)}
-                        className={`pos-driver-card ${isSelected ? 'selected' : ''}`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '10px 12px',
+                          borderRadius: '8px',
+                          border: isSelected ? '1.5px solid #3b82f6' : '1px solid #1e293b',
+                          background: isSelected ? '#1e293b' : '#040b17',
+                          cursor: 'pointer'
+                        }}
                       >
                         <div>
-                          <div className="pos-driver-name">{drv.name}</div>
-                          <div className="pos-driver-meta">{drv.vehicle} • {drv.zone}</div>
+                          <div style={{ fontWeight: 650, fontSize: '13px', color: '#f8fafc' }}>{drv.name}</div>
+                          <div style={{ fontSize: '11px', color: '#94a3b8' }}>{drv.vehicle} • {drv.zone}</div>
                         </div>
-                        {isSelected && <span className="pos-driver-check">✓</span>}
+                        {isSelected && <span style={{ color: '#38bdf8', fontWeight: 700 }}>✓</span>}
                       </div>
                     );
                   })}
@@ -4132,7 +4135,16 @@ export default function POSModule({
                 <button
                   type="button"
                   onClick={() => setAssignDriverTarget(null)}
-                  className="pos-dialog-cancel-btn"
+                  style={{
+                    flex: 1,
+                    padding: '9px',
+                    borderRadius: '8px',
+                    border: '1px solid #334155',
+                    background: 'transparent',
+                    color: '#94a3b8',
+                    fontWeight: 650,
+                    cursor: 'pointer'
+                  }}
                 >
                   Cancel
                 </button>
@@ -4213,177 +4225,20 @@ export default function POSModule({
                     showToast?.(`🚚 Order ${orderIdStr}: Assigned for pickup to ${driverName}!`);
                     setAssignDriverTarget(null);
                   }}
-                  className="pos-dialog-confirm-btn"
+                  style={{
+                    flex: 1,
+                    padding: '9px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: '#2563eb',
+                    color: '#fff',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
                 >
                   Confirm Assignment
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── UPI Payment QR Code Modal ── */}
-      {qrModalData && (
-        <div className="pos-held-modal-backdrop" onClick={() => setQrModalData(null)}>
-          <div
-            className="pos-dialog-modal pos-qr-dialog-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="pos-dialog-header">
-              <div className="pos-dialog-title">
-                <span style={{ fontSize: '18px' }}>📱</span>
-                <span>UPI Payment QR Code</span>
-              </div>
-              <button
-                type="button"
-                className="pos-dialog-close-btn"
-                onClick={() => setQrModalData(null)}
-                title="Close QR"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="pos-qr-order-banner">
-              <div style={{ fontSize: '13px', fontWeight: 800, color: '#38bdf8' }}>
-                #{qrModalData.orderNumber}
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary, #94a3b8)', marginTop: '2px' }}>
-                {qrModalData.customerName || 'Customer'}
-              </div>
-              <div style={{ marginTop: '8px', fontSize: '24px', fontWeight: 800, color: '#10b981' }}>
-                {currencySymbol}{Number(qrModalData.amount || 0).toFixed(2)}
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary, #94a3b8)', marginTop: '2px' }}>
-                Scan to Pay via any UPI App
-              </div>
-            </div>
-
-            {/* QR Code Container */}
-            <div className="pos-qr-image-wrapper">
-              <img
-                src="/sample-qr.png"
-                alt="UPI Payment QR Code"
-                className="pos-qr-image"
-              />
-            </div>
-
-            <div className="pos-qr-apps-badge">
-              <span>Google Pay</span>
-              <span>•</span>
-              <span>PhonePe</span>
-              <span>•</span>
-              <span>Paytm</span>
-              <span>•</span>
-              <span>BHIM UPI</span>
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-              <button
-                type="button"
-                className="pos-btn-secondary"
-                style={{ flex: 1, padding: '9px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}
-                onClick={() => setQrModalData(null)}
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                style={{
-                  flex: 1.2,
-                  padding: '9px 14px',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  background: '#10b981',
-                  color: '#ffffff',
-                  border: 'none',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)'
-                }}
-                onClick={() => {
-                  setEditFormData((prev) => prev ? ({
-                    ...prev,
-                    payment_status: 'Paid',
-                    advance_paid: editCartGrandTotal,
-                  }) : prev);
-                  setQrModalData(null);
-                  showToast?.('✓ Payment received via QR & marked as Fully Paid!');
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                <span>Mark Paid via QR</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Standalone Static Side Edit Panel (matching reference mockup) ── */}
-      {/* ── Unified Delete Order Confirmation Modal ── */}
-      {confirmDeleteOrder && (
-        <div className="pos-held-modal-backdrop" onClick={() => setConfirmDeleteOrder(null)}>
-          <div className="pos-dialog-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
-            <div className="pos-dialog-header">
-              <div className="pos-dialog-title" style={{ color: '#ef4444' }}>
-                <span style={{ fontSize: '18px' }}>🗑️</span>
-                <span>Delete Order Confirmation</span>
-              </div>
-              <button
-                type="button"
-                className="pos-dialog-close-btn"
-                onClick={() => setConfirmDeleteOrder(null)}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="pos-dialog-order-card" style={{ borderLeft: '4px solid #ef4444' }}>
-              <div className="pos-dialog-order-num" style={{ color: '#ef4444' }}>
-                {confirmDeleteOrder.order_number || confirmDeleteOrder.order_id || confirmDeleteOrder.id}
-              </div>
-              <div className="pos-dialog-order-cust">
-                {confirmDeleteOrder.customer_name || confirmDeleteOrder.customer?.customer_name} • {confirmDeleteOrder.mobile_number || confirmDeleteOrder.customer?.mobile_number}
-              </div>
-              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-                Total: {currencySymbol}{confirmDeleteOrder.total_amount || 0} • Pieces: {confirmDeleteOrder.item_count || confirmDeleteOrder.total_pieces || 0}
-              </div>
-            </div>
-
-            <p style={{ fontSize: '13px', color: '#94a3b8', margin: '14px 0 20px', lineHeight: 1.5 }}>
-              Are you sure you want to permanently delete this order? This action will remove the record from Supabase and cannot be undone.
-            </p>
-
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                type="button"
-                className="pos-dialog-cancel-btn"
-                onClick={() => setConfirmDeleteOrder(null)}
-              >
-                No, Keep Order
-              </button>
-              <button
-                type="button"
-                style={{
-                  flex: 1,
-                  padding: '9px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: '#dc2626',
-                  color: '#ffffff',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease'
-                }}
-                onClick={handleConfirmDelete}
-              >
-                Yes, Delete Order
-              </button>
             </div>
           </div>
         </div>
@@ -4394,12 +4249,53 @@ export default function POSModule({
         isOpen={Boolean(sideEditTargetOrder)}
         order={sideEditTargetOrder}
         onClose={() => setSideEditTargetOrder(null)}
-        onDelete={() => setConfirmDeleteOrder(sideEditTargetOrder)}
         showToast={showToast}
         currencySymbol={currencySymbol}
         onUpdateOrder={(updated) => {
-          handleSaveSharedOrder(updated);
-          setSideEditTargetOrder(null);
+          if (onUpdateOrder) {
+            onUpdateOrder(updated);
+          } else {
+            try {
+              const cached = localStorage.getItem('washdoor_orders_cache');
+              if (cached) {
+                const list = JSON.parse(cached);
+                const nextList = list.map((o) =>
+                  o.id === updated.id || o.order_number === updated.order_number ? updated : o
+                );
+                localStorage.setItem('washdoor_orders_cache', JSON.stringify(nextList));
+              }
+            } catch {}
+            onOrderCreated?.(updated);
+          }
+
+          // Bidirectional sync: If inline edit is open for this order, synchronize its state
+          if (editingOrderRecord && (editingOrderRecord.id === updated.id || editingOrderRecord.order_number === updated.order_number)) {
+            setEditingOrderRecord(updated);
+            if (updated.items && Array.isArray(updated.items)) {
+              setEditCart(updated.items);
+            }
+            if (updated.garment_inspections) {
+              setEditInspections(updated.garment_inspections);
+            }
+          }
+
+          // Direct Supabase update
+          const saveKey = updated.order_number || updated.id || updated.work_number;
+          if (saveKey) {
+            updateOrderInSupabase(saveKey, {
+              status: updated.status,
+              customerName: updated.customer_name,
+              mobileNumber: updated.mobile_number,
+              address: updated.address,
+              serviceCategory: updated.service_category,
+              orderNotes: updated.comments,
+              totalAmount: updated.total_amount,
+              advancePaid: updated.advance_paid,
+              paymentStatus: updated.payment_status,
+              items: updated.items,
+              garment_inspections: updated.garment_inspections || updated.inspections,
+            }).catch((e) => console.warn('Supabase SideEdit update note:', e));
+          }
         }}
       />
     </div>

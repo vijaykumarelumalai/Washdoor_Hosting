@@ -36,7 +36,11 @@ button {
 
 .app {
   min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   background: radial-gradient(ellipse at 60% 30%, #0b1730 0, #070d19 60%);
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Topbar ── */
@@ -47,6 +51,12 @@ button {
   gap: 12px;
   padding: 0 20px;
   border-bottom: 1px solid #18263b;
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  background: #08111f;
+  flex-shrink: 0;
+  width: 100%;
 }
 
 .brand {
@@ -297,12 +307,16 @@ button {
 /* ── Sidebar ── */
 .sidebar {
   width: 175px;
-  position: absolute;
-  top: 63px;
+  position: fixed;
+  top: 62px;
   bottom: 0;
+  left: 0;
+  height: calc(100vh - 62px);
   padding: 10px 6px;
   border-right: 1px solid #17253a;
   background: #08111f;
+  z-index: 100;
+  overflow-y: auto;
 }
 
 .nav {
@@ -333,6 +347,12 @@ button {
 .main {
   margin-left: 175px;
   padding: 22px 26px;
+  height: calc(100vh - 62px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: #1e2e45 transparent;
 }
 
 .page-head {
@@ -1371,7 +1391,7 @@ h1 {
   background: #6366f1 !important;
 }
 
-/* ── Hide default browser scrollbars globally ── */
+/* ── Hide default browser scrollbars globally (except orders table) ── */
 ::-webkit-scrollbar {
   display: none;
   width: 0;
@@ -1381,6 +1401,43 @@ h1 {
 * {
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+/* ── Restore scrollbar for orders table card (horizontal + vertical) ── */
+.pos-orders-table-card {
+  scrollbar-width: thin !important;
+  -ms-overflow-style: auto !important;
+}
+
+.pos-orders-table-card::-webkit-scrollbar {
+  display: block !important;
+  width: 6px !important;
+  height: 10px !important;
+}
+
+/* ── Restore scrollbar for cloth items grid (Create Order modal) ── */
+.cloth-grid-scroll {
+  scrollbar-width: thin !important;
+  -ms-overflow-style: auto !important;
+}
+
+.cloth-grid-scroll::-webkit-scrollbar {
+  display: block !important;
+  width: 5px !important;
+}
+
+.cloth-grid-scroll::-webkit-scrollbar-track {
+  background: #060e1b !important;
+  border-radius: 4px !important;
+}
+
+.cloth-grid-scroll::-webkit-scrollbar-thumb {
+  background: #1e3352 !important;
+  border-radius: 4px !important;
+}
+
+.cloth-grid-scroll::-webkit-scrollbar-thumb:hover {
+  background: #3b82f6 !important;
 }
 
 .modal-head {
@@ -6369,4 +6426,188 @@ body.light-theme select option,
 [data-theme="light"] select option {
   background-color: #ffffff !important;
   color: #0f172a !important;
+}
+
+
+/* ── Pagination Bar (Customer Management & Global) ────────────── */
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 4px 4px 4px;
+  margin-top: 8px;
+  border-top: 1px solid #1c2e4a;
+}
+
+.pagination-info {
+  font-size: 12.5px;
+  color: #8fa5c2;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pagination-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1.5px solid #1c2e4a;
+  background: #0b1a2f;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: #152744;
+  border-color: #2e476e;
+  color: #ffffff;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.pagination-btn.pagination-num.active {
+  background: #1d72fe;
+  border-color: #3b82f6;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(29, 114, 254, 0.35);
+}
+
+.pagination-ellipsis {
+  color: #64748b;
+  font-size: 13px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Light theme pagination */
+body.light-theme .pagination-bar,
+[data-theme="light"] .pagination-bar {
+  border-top: 1px solid #e2e8f0;
+}
+
+body.light-theme .pagination-info,
+[data-theme="light"] .pagination-info {
+  color: #64748b;
+}
+
+body.light-theme .pagination-btn,
+[data-theme="light"] .pagination-btn {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  color: #475569;
+}
+
+body.light-theme .pagination-btn:hover:not(:disabled),
+[data-theme="light"] .pagination-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+body.light-theme .pagination-btn.pagination-num.active,
+[data-theme="light"] .pagination-btn.pagination-num.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+}
+
+
+/* ── Pagination Show Dropdown (Global) ────────────────── */
+.pagination-size-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pagination-size-label {
+  font-size: 12.5px;
+  color: #8fa5c2;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.pagination-size-select {
+  height: 32px;
+  padding: 0 28px 0 10px;
+  border-radius: 8px;
+  border: 1.5px solid #1c2e4a;
+  background: #0b1a2f;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+  min-width: 68px;
+}
+
+.pagination-size-select:hover,
+.pagination-size-select:focus {
+  border-color: #2e476e;
+  background-color: #152744;
+  color: #ffffff;
+}
+
+.pagination-size-select option {
+  background: #0b1a2f;
+  color: #e2e8f0;
+}
+
+/* Light theme */
+body.light-theme .pagination-size-label,
+[data-theme="light"] .pagination-size-label {
+  color: #64748b;
+}
+
+body.light-theme .pagination-size-select,
+[data-theme="light"] .pagination-size-select {
+  background-color: #ffffff;
+  border-color: #e2e8f0;
+  color: #475569;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+
+body.light-theme .pagination-size-select:hover,
+body.light-theme .pagination-size-select:focus,
+[data-theme="light"] .pagination-size-select:hover,
+[data-theme="light"] .pagination-size-select:focus {
+  border-color: #94a3b8;
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+body.light-theme .pagination-size-select option,
+[data-theme="light"] .pagination-size-select option {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+
+/* ── Pagination Right Group (Show dropdown + nav buttons together) ── */
+.pagination-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }

@@ -1,0 +1,724 @@
+/* src/styles/GarmentInspection.css */
+/* Professional Dynamic Garment-by-Garment Inspection styling for Washdoor POS */
+/* Matches washdoor_dynamic_garment_inspection_preview.html with full Light/Dark theme support */
+
+.inspection-wrap {
+  margin-top: 16px;
+  background: #091322;
+  border: 1px solid #1c2b42;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.inspection-header {
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #1c2b42;
+  background: #081220;
+}
+
+.inspection-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.inspection-header h2 {
+  font-size: 15px;
+  font-weight: 750;
+  color: #f1f5f9;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inspection-header p {
+  font-size: 11.5px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.inspection-summary {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.inspection-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.inspection-badge.blue {
+  background: #172554;
+  color: #93c5fd;
+  border: 1px solid #1e40af;
+}
+
+.inspection-badge.green {
+  background: #064e3b;
+  color: #6ee7b7;
+  border: 1px solid #047857;
+}
+
+.inspection-badge.amber {
+  background: #451a03;
+  color: #fcd34d;
+  border: 1px solid #b45309;
+}
+
+.inspection-list {
+  padding: 14px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+/* Individual Garment Card */
+.garment-card {
+  border: 1px solid #1c2b42;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0b172a;
+  transition: all 0.15s ease;
+}
+
+.garment-card:hover {
+  border-color: #2563eb;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.garment-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  background: #0d1b30;
+  border-bottom: 1px solid #1c2b42;
+}
+
+.garment-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.garment-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #172554;
+  border: 1px solid #1e40af;
+  color: #60a5fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.garment-thumb-img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.garment-title-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.garment-title-info strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 750;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.garment-title-info small {
+  color: #94a3b8;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.garment-title-info small .code-pill {
+  font-family: monospace;
+  background: #060d18;
+  border: 1px solid #1a2a40;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: #38bdf8;
+  font-size: 10px;
+}
+
+.garment-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.collapse-btn {
+  border: 1px solid #1e3352;
+  border-radius: 7px;
+  background: #091322;
+  padding: 5px 10px;
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.collapse-btn:hover {
+  background: #1e293b;
+  color: #38bdf8;
+  border-color: #38bdf8;
+}
+
+.garment-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.garment-fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.garment-fields .field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  margin: 0;
+}
+
+.garment-fields .field label {
+  font-size: 10.5px;
+  font-weight: 750;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.garment-fields .field label .required {
+  color: #f87171;
+}
+
+.garment-fields .field input,
+.garment-fields .field select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  box-sizing: border-box;
+  border: 1px solid #1a2a40;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #060d18;
+  color: #f1f5f9;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.garment-fields .field select {
+  cursor: pointer;
+}
+
+.garment-fields .field input:focus,
+.garment-fields .field select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.garment-fields .span2 {
+  grid-column: span 2;
+}
+
+/* Photo Section */
+.photo-section {
+  border: 1px dashed #1e3a66;
+  background: #060e1b;
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 4px;
+}
+
+.photo-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.photo-head-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 750;
+  font-size: 12px;
+  color: #f1f5f9;
+}
+
+.photo-head-count {
+  font-size: 10.5px;
+  color: #38bdf8;
+  background: #0c1c38;
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid #1e3a66;
+}
+
+.photo-help {
+  color: #94a3b8;
+  font-size: 11px;
+  margin-bottom: 10px;
+}
+
+.photo-btn-add {
+  padding: 5px 11px;
+  border-radius: 7px;
+  border: 1px solid #2563eb;
+  background: rgba(37, 99, 235, 0.15);
+  color: #60a5fa;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.photo-btn-add:hover {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.photo-grid {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.photo-tile {
+  height: 74px;
+  width: 86px;
+  border: 1px solid #1c2b42;
+  border-radius: 8px;
+  background: #0b172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  color: #94a3b8;
+  font-size: 10px;
+  overflow: hidden;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.photo-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.photo-tile img:hover {
+  transform: scale(1.05);
+}
+
+.photo-remove {
+  position: absolute;
+  right: 3px;
+  top: 3px;
+  border: 0;
+  border-radius: 50%;
+  background: #ef4444;
+  color: #ffffff;
+  width: 19px;
+  height: 19px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  transition: background 0.15s;
+}
+
+.photo-remove:hover {
+  background: #dc2626;
+  transform: scale(1.1);
+}
+
+.photo-tile.upload {
+  border: 1.5px dashed #3b82f6;
+  background: #08162e;
+  color: #60a5fa;
+  cursor: pointer;
+  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  transition: all 0.15s ease;
+}
+
+.photo-tile.upload:hover {
+  background: #0c234a;
+  border-color: #60a5fa;
+  color: #ffffff;
+}
+
+.photo-tile.upload .emoji {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.empty-inspection {
+  padding: 32px 20px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 12.5px;
+  background: #081220;
+  border-radius: 10px;
+  border: 1px dashed #1c2b42;
+  margin: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.empty-inspection-icon {
+  font-size: 28px;
+}
+
+/* Lightbox Modal for Photo Zoom */
+.garment-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(4px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.garment-lightbox-card {
+  background: #0b172a;
+  border: 1px solid #1c2b42;
+  border-radius: 14px;
+  max-width: 650px;
+  width: 100%;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+}
+
+.garment-lightbox-head {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #1c2b42;
+  background: #081220;
+}
+
+.garment-lightbox-body {
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #040811;
+  max-height: 70vh;
+  overflow: hidden;
+}
+
+.garment-lightbox-body img {
+  max-width: 100%;
+  max-height: 65vh;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+/* ==============================================================================
+   LIGHT THEME OVERRIDES
+   ============================================================================== */
+
+body.light-theme .inspection-wrap,
+[data-theme="light"] .inspection-wrap {
+  background: #ffffff !important;
+  border-color: #dbe4f0 !important;
+  box-shadow: 0 4px 16px rgba(27, 52, 94, 0.06) !important;
+}
+
+body.light-theme .inspection-header,
+[data-theme="light"] .inspection-header {
+  background: #f8faff !important;
+  border-bottom-color: #e2eaf5 !important;
+}
+
+body.light-theme .inspection-header h2,
+[data-theme="light"] .inspection-header h2 {
+  color: #17233c !important;
+}
+
+body.light-theme .inspection-header p,
+[data-theme="light"] .inspection-header p {
+  color: #65748b !important;
+}
+
+body.light-theme .inspection-badge.blue,
+[data-theme="light"] .inspection-badge.blue {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+  border-color: #bfdbfe !important;
+}
+
+body.light-theme .inspection-badge.green,
+[data-theme="light"] .inspection-badge.green {
+  background: #ecfdf5 !important;
+  color: #047857 !important;
+  border-color: #a7f3d0 !important;
+}
+
+body.light-theme .garment-card,
+[data-theme="light"] .garment-card {
+  background: #ffffff !important;
+  border-color: #d9e3ef !important;
+}
+
+body.light-theme .garment-card:hover,
+[data-theme="light"] .garment-card:hover {
+  border-color: #8bb3ff !important;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.08) !important;
+}
+
+body.light-theme .garment-top,
+[data-theme="light"] .garment-top {
+  background: #f8faff !important;
+  border-bottom-color: #e2eaf5 !important;
+}
+
+body.light-theme .garment-thumb,
+[data-theme="light"] .garment-thumb {
+  background: #eaf2ff !important;
+  border-color: #bfdbfe !important;
+  color: #1d4ed8 !important;
+}
+
+body.light-theme .garment-title-info strong,
+[data-theme="light"] .garment-title-info strong {
+  color: #17233c !important;
+}
+
+body.light-theme .garment-title-info small,
+[data-theme="light"] .garment-title-info small {
+  color: #65748b !important;
+}
+
+body.light-theme .garment-title-info small .code-pill,
+[data-theme="light"] .garment-title-info small .code-pill {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #1e40af !important;
+}
+
+body.light-theme .collapse-btn,
+[data-theme="light"] .collapse-btn {
+  background: #ffffff !important;
+  border-color: #cfdaea !important;
+  color: #42526b !important;
+}
+
+body.light-theme .collapse-btn:hover,
+[data-theme="light"] .collapse-btn:hover {
+  background: #f1f5f9 !important;
+  color: #2563eb !important;
+  border-color: #8bb3ff !important;
+}
+
+body.light-theme .garment-fields .field label,
+[data-theme="light"] .garment-fields .field label {
+  color: #53627a !important;
+}
+
+body.light-theme .garment-fields .field input,
+body.light-theme .garment-fields .field select,
+[data-theme="light"] .garment-fields .field input,
+[data-theme="light"] .garment-fields .field select {
+  background: #ffffff !important;
+  border-color: #ccd8e7 !important;
+  color: #17233c !important;
+}
+
+body.light-theme .garment-fields .field input:focus,
+body.light-theme .garment-fields .field select:focus,
+[data-theme="light"] .garment-fields .field input:focus,
+[data-theme="light"] .garment-fields .field select:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15) !important;
+}
+
+body.light-theme .photo-section,
+[data-theme="light"] .photo-section {
+  border-color: #bfd0e5 !important;
+  background: #f9fbff !important;
+}
+
+body.light-theme .photo-head-title,
+[data-theme="light"] .photo-head-title {
+  color: #17233c !important;
+}
+
+body.light-theme .photo-head-count,
+[data-theme="light"] .photo-head-count {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+  border-color: #bfdbfe !important;
+}
+
+body.light-theme .photo-help,
+[data-theme="light"] .photo-help {
+  color: #65748b !important;
+}
+
+body.light-theme .photo-tile,
+[data-theme="light"] .photo-tile {
+  background: #ffffff !important;
+  border-color: #dbe4f0 !important;
+  color: #61728b !important;
+}
+
+body.light-theme .photo-tile.upload,
+[data-theme="light"] .photo-tile.upload {
+  background: #ffffff !important;
+  border-color: #8bb3ff !important;
+  color: #2563eb !important;
+}
+
+body.light-theme .photo-tile.upload:hover,
+[data-theme="light"] .photo-tile.upload:hover {
+  background: #eff6ff !important;
+  border-color: #2563eb !important;
+}
+
+body.light-theme .empty-inspection,
+[data-theme="light"] .empty-inspection {
+  background: #fbfcfe !important;
+  border-color: #dbe4f0 !important;
+  color: #65748b !important;
+}
+
+body.light-theme .garment-lightbox-card,
+[data-theme="light"] .garment-lightbox-card {
+  background: #ffffff !important;
+  border-color: #dbe4f0 !important;
+}
+
+body.light-theme .garment-lightbox-head,
+[data-theme="light"] .garment-lightbox-head {
+  background: #f8faff !important;
+  border-bottom-color: #e2eaf5 !important;
+}
+
+body.light-theme .garment-lightbox-body,
+[data-theme="light"] .garment-lightbox-body {
+  background: #f1f5f9 !important;
+}
+
+/* ==============================================================================
+   RESPONSIVE BREAKPOINTS (Mobile, Tablet, Desktop)
+   ============================================================================== */
+
+@media (max-width: 1200px) {
+  .garment-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .inspection-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .garment-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+  .garment-fields .span2 {
+    grid-column: span 2;
+  }
+  .garment-top {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .garment-fields {
+    grid-template-columns: 1fr;
+  }
+  .garment-fields .span2 {
+    grid-column: span 1;
+  }
+  .garment-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .garment-actions {
+    justify-content: space-between;
+  }
+  .photo-grid {
+    gap: 8px;
+  }
+  .photo-tile {
+    width: calc(33.33% - 6px);
+    height: 70px;
+  }
+}
