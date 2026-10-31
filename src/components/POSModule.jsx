@@ -7,6 +7,7 @@ import ClothIllustration from './ClothIllustration';
 import OrderReviewCard from './OrderReviewCard';
 import SideEditPanel from './SideEditPanel';
 import GarmentInspectionSection from './GarmentInspectionSection';
+import ViewOrderModal from './ViewOrderModal';
 import {
   getProducts,
   searchCustomers,
@@ -99,6 +100,9 @@ export default function POSModule({
 
   // Static Side Edit Panel Target Order
   const [sideEditTargetOrder, setSideEditTargetOrder] = useState(null);
+
+  // Quick View Order Modal Target Order
+  const [viewOrderTarget, setViewOrderTarget] = useState(null);
 
   // Expanded Inline Edit Order States (Matching 3-panel UI)
   const [editCatalogCategory, setEditCatalogCategory] = useState('All');
@@ -221,7 +225,7 @@ export default function POSModule({
     const capturedDateStr = ord.captured_date || (ord.created_at ? new Date(ord.created_at).toISOString().slice(0, 10) : '2026-10-28');
     const capturedTimeStr = ord.captured_time || '10:15 AM';
     const orderTypeStr = ord.order_type || 'Walk-in';
-    const expectedDeliveryStr = ord.expected_delivery || '30 Oct 2026, 05:00 PM';
+    const expectedDeliveryStr = ord.expected_delivery || ord.delivery_date || (ord.target_delivery_date ? new Date(ord.target_delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '') || '30 Oct 2026, 05:00 PM';
     const pickupDeliveryStr = ord.pickup_delivery || '--------';
     const commentsStr = ord.comments || ord.preference_notes || ord.special_instructions || ord.notes || '';
     const totalAmount = Number(ord.total_amount || 0);
@@ -229,7 +233,7 @@ export default function POSModule({
     const balanceDue = Number(ord.balance_due !== undefined ? ord.balance_due : Math.max(0, totalAmount - advancePaid));
     const paymentStatus = ord.payment_status || (balanceDue <= 0 ? 'Paid' : advancePaid > 0 ? 'Partially Paid' : 'Unpaid');
 
-    // Parse order items or fallback to initial items matching the screenshot
+    // Parse order items or fallback to empty cart
     let initialCart = [];
     if (ord.items && Array.isArray(ord.items) && ord.items.length > 0) {
       initialCart = ord.items.map((it) => ({
@@ -247,9 +251,9 @@ export default function POSModule({
         qty: Number(s.count || 1),
         rate: 20,
         serviceType: 'Laundry + Iron',
-        icon: s.icon || (s.name.toLowerCase().includes('steam') ? '♨️' : s.name.toLowerCase().includes('dry') ? '✨' : s.name.toLowerCase().includes('starch') ? '👔' : s.name.toLowerCase().includes('fabric') ? '🌸' : s.name.toLowerCase().includes('hanger') ? '🏷' : '🧺'),
+        icon: s.icon || (s.name?.toLowerCase().includes('steam') ? '♨️' : s.name?.toLowerCase().includes('dry') ? '✨' : s.name?.toLowerCase().includes('starch') ? '👔' : s.name?.toLowerCase().includes('fabric') ? '🌸' : s.name?.toLowerCase().includes('hanger') ? '🏷' : '🧺'),
       }));
-    } else {
+    } else if (!ord.items && !ord.services_allocated) {
       // 6 standard lines matching the user's screenshot (total 9 pieces)
       initialCart = [
         { id: 'normal_wash', name: 'Normal Wash', qty: 3, rate: 20, serviceType: 'Laundry + Iron', icon: '🧺' },
@@ -265,11 +269,7 @@ export default function POSModule({
       ? ord.photos
       : (ord.inspection?.photos && ord.inspection.photos.length > 0)
       ? ord.inspection.photos
-      : [
-          { id: 'p1', name: 'Collar_Stain.jpg', tag: 'Stain / Defect', url: 'https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=300&auto=format&fit=crop&q=80' },
-          { id: 'p2', name: 'Brand_Tag.jpg', tag: 'Brand Tag', url: 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=300&auto=format&fit=crop&q=80' },
-          { id: 'p3', name: 'Prewash_Overview.jpg', tag: 'Pre-wash Condition', url: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=300&auto=format&fit=crop&q=80' }
-        ];
+      : [];
     setEditInspectionPhotos(initialPhotos);
     setEditInspection(ord.inspection || {
       garment: 'Shirt',
@@ -464,14 +464,22 @@ export default function POSModule({
     if (saveKey) {
       updateOrderInSupabase(saveKey, {
         status: updatedOrder.status,
+        orderStatus: updatedOrder.status,
         customerName: updatedOrder.customer_name,
         mobileNumber: updatedOrder.mobile_number,
         address: updatedOrder.address,
+        orderType: updatedOrder.order_type,
+        expectedDelivery: updatedOrder.expected_delivery,
+        deliveryDate: updatedOrder.expected_delivery,
         serviceCategory: updatedOrder.service_category,
         orderNotes: updatedOrder.comments,
-        totalAmount: updatedOrder.total_amount,
-        advancePaid: updatedOrder.advance_paid,
-        paymentStatus: updatedOrder.payment_status,
+        subtotal: subtotal,
+        taxAmount: taxAmount,
+        totalAmount: grandTotal,
+        advancePaid: Number(editFormData.advance_paid || 0),
+        paymentStatus: editFormData.payment_status,
+        paymentMethod: updatedOrder.payment_method || 'Cash',
+        assignedStaff: updatedOrder.assigned_driver,
         items: updatedOrder.items,
         garment_inspections: editInspections,
       }).catch((e) => console.warn('Supabase saveOrder update note:', e));
@@ -1552,8 +1560,8 @@ export default function POSModule({
                               <div className="pos-ticket-cell" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                 <span
                                   className="pos-ticket-num"
-                                  onClick={() => onOpenOrderStatus?.(ord, false)}
-                                  title={`View details for ${orderNum}`}
+                                  onClick={() => setViewOrderTarget(ord)}
+                                  title={`Quick View Order ${orderNum}`}
                                   style={{ cursor: 'pointer', fontWeight: 800, fontSize: '15px', color: '#1d4ed8' }}
                                 >
                                   {orderNum}
@@ -2022,6 +2030,39 @@ export default function POSModule({
                                       <line x1="16" y1="17" x2="8" y2="17"></line>
                                     </svg>
                                     <span>Bill</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="pos-table-action-btn btn-view-order"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setViewOrderTarget(ord);
+                                    }}
+                                    title={`Quick View Order ${orderNum}`}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      gap: '5px',
+                                      padding: '5px 12px',
+                                      width: '82px',
+                                      borderRadius: '6px',
+                                      border: '1.5px solid #0284c7',
+                                      background: '#f0f9ff',
+                                      color: '#0284c7',
+                                      fontWeight: 650,
+                                      fontSize: '12px',
+                                      cursor: 'pointer',
+                                      boxShadow: '0 1px 2px rgba(2, 132, 199, 0.08)',
+                                      transition: 'all 0.15s ease'
+                                    }}
+                                  >
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                      <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
+                                    <span>View</span>
                                   </button>
 
                                   <button
@@ -4284,19 +4325,44 @@ export default function POSModule({
           if (saveKey) {
             updateOrderInSupabase(saveKey, {
               status: updated.status,
+              orderStatus: updated.status,
               customerName: updated.customer_name,
               mobileNumber: updated.mobile_number,
+              alternatePhone: updated.alternate_phone,
+              email: updated.email,
               address: updated.address,
               serviceCategory: updated.service_category,
+              orderType: updated.order_type,
+              expectedDelivery: updated.expected_delivery,
+              deliveryDate: updated.expected_delivery,
+              priority: updated.priority || 'Normal',
               orderNotes: updated.comments,
-              totalAmount: updated.total_amount,
+              subtotal: updated.subtotal || updated.payment?.subtotal,
+              discountAmount: updated.discount_amount || updated.payment?.discount,
+              taxAmount: updated.tax_amount || updated.payment?.tax,
+              totalAmount: updated.total_amount || updated.grand_total,
               advancePaid: updated.advance_paid,
               paymentStatus: updated.payment_status,
+              paymentMethod: updated.payment_method || updated.payment?.mode || 'Cash',
+              assignedStaff: updated.assigned_driver,
               items: updated.items,
               garment_inspections: updated.garment_inspections || updated.inspections,
             }).catch((e) => console.warn('Supabase SideEdit update note:', e));
           }
         }}
+      />
+
+      {/* ── Standalone Quick View Order Modal (without opening Edit) ── */}
+      <ViewOrderModal
+        isOpen={Boolean(viewOrderTarget)}
+        order={viewOrderTarget}
+        onClose={() => setViewOrderTarget(null)}
+        onOpenEdit={(ordToEdit) => {
+          setViewOrderTarget(null);
+          handleOpenEditModal(ordToEdit);
+        }}
+        currencySymbol={currencySymbol}
+        showToast={showToast}
       />
     </div>
   );

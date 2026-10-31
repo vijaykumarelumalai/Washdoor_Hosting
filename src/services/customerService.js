@@ -652,7 +652,7 @@ export async function searchCustomers(query) {
   }
 }
 
-// Convert customer_works row into UI Order shape
+// Convert customer_works row into UI Order shape with full fidelity
 function mapCustomerWorkRowToOrder(row) {
   const orderNum = row.work_number ? formatOrderId(row.work_number) : (row.work_id ? `ORD${String(row.work_id).slice(-5)}` : 'ORD00001');
   const custId = formatCustomerId(row.customer_id || 'CUST-00001');
@@ -663,11 +663,15 @@ function mapCustomerWorkRowToOrder(row) {
   const itemCount = row.total_pieces !== undefined && row.total_pieces !== null ? Number(row.total_pieces) : (items.length || 1);
 
   let garmentInspections = {};
+  let internalNotesObj = {};
   if (row.internal_notes) {
     try {
       const parsed = typeof row.internal_notes === 'string' ? JSON.parse(row.internal_notes) : row.internal_notes;
-      if (parsed?.garment_inspections && typeof parsed.garment_inspections === 'object') {
-        garmentInspections = parsed.garment_inspections;
+      if (parsed && typeof parsed === 'object') {
+        internalNotesObj = parsed;
+        if (parsed.garment_inspections && typeof parsed.garment_inspections === 'object') {
+          garmentInspections = parsed.garment_inspections;
+        }
       }
     } catch {}
   }
@@ -681,34 +685,81 @@ function mapCustomerWorkRowToOrder(row) {
     });
   }
 
+  const allPhotos = Object.values(garmentInspections).flatMap((p) => p.photos || []);
+
+  const totalAmount = Number(row.total_amount || 0);
+  const advancePaid = Number(row.advance_paid || 0);
+  const subtotal = Number(row.subtotal !== undefined && row.subtotal !== null ? row.subtotal : (totalAmount ? +(totalAmount / 1.05).toFixed(2) : 0));
+  const discountAmount = Number(row.discount_amount || 0);
+  const taxAmount = Number(row.tax_amount !== undefined && row.tax_amount !== null ? row.tax_amount : +(subtotal * 0.05).toFixed(2));
+  const balanceDue = row.balance_due !== undefined && row.balance_due !== null ? Number(row.balance_due) : Math.max(0, totalAmount - advancePaid);
+
+  const formattedExpectedDelivery = internalNotesObj.expected_delivery_display || (row.target_delivery_date ? new Date(row.target_delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
+
   return {
     id: orderNum,
     order_id: row.work_id || orderNum,
     order_number: orderNum,
-    order_type: row.intake_method ? row.intake_method.toLowerCase() : 'walk-in',
+    work_number: row.work_number || orderNum,
+    work_id: row.work_id,
+    order_type: row.intake_method ? row.intake_method : 'Walk-in',
+    intake_method: row.intake_method || 'Walk-In',
     customer_name: row.customer_name || '',
     mobile_number: row.mobile_number || '',
+    alternate_phone: row.alternate_phone || '',
+    email: row.email || '',
+    address: row.delivery_address || '',
+    delivery_address: row.delivery_address || '',
     service_category: row.service_type || 'Wash & Steam Press',
     service_type: row.service_type || 'Wash & Steam Press',
     preference: row.service_type || 'Wash & Steam Press',
     preference_notes: row.special_instructions || '',
     order_notes: row.special_instructions || '',
+    special_instructions: row.special_instructions || '',
+    comments: row.special_instructions || '',
     order_status: displayStatus,
     status: displayStatus,
+    priority: row.priority || 'Normal',
     progress: rawStatus === 'Ready' ? 75 : rawStatus === 'Delivered' ? 100 : 25,
-    total_amount: Number(row.total_amount || 0),
-    advance_paid: Number(row.advance_paid || 0),
-    payment_status: row.payment_status || 'Unpaid',
-    payment_method: row.payment_method || 'Cash',
+    subtotal: subtotal,
+    discount: discountAmount,
+    discount_amount: discountAmount,
+    tax: taxAmount,
+    tax_amount: taxAmount,
+    total_amount: totalAmount,
+    grand_total: totalAmount,
+    advance_paid: advancePaid,
+    balance_due: balanceDue,
+    payment_status: row.payment_status || (balanceDue <= 0 ? 'Paid' : advancePaid > 0 ? 'Partially Paid' : 'Unpaid'),
+    payment_method: internalNotesObj.payment_method_display || row.payment_method || 'Cash',
+    payment: {
+      status: row.payment_status || (balanceDue <= 0 ? 'Paid' : advancePaid > 0 ? 'Partially Paid' : 'Unpaid'),
+      mode: internalNotesObj.payment_method_display || row.payment_method || 'Cash',
+      advancePaid: advancePaid,
+      balanceDue: balanceDue,
+      subtotal: subtotal,
+      tax: taxAmount,
+      discount: discountAmount,
+      grandTotal: totalAmount,
+    },
     item_count: itemCount,
     total_pieces: itemCount,
     items: items,
     garment_inspections: garmentInspections,
     inspections: garmentInspections,
+    photos: allPhotos,
     customer_history: { items: items },
     intake_date: row.intake_date || row.created_at,
     created_at: row.created_at,
     target_delivery_date: row.target_delivery_date,
+    delivery_date: formattedExpectedDelivery,
+    expected_delivery: formattedExpectedDelivery,
+    assigned_staff: row.assigned_staff || '',
+    assigned_driver: row.assigned_staff || internalNotesObj.assigned_driver || '',
+    assigned_driver_full: internalNotesObj.assigned_driver_full || row.assigned_staff || '',
+    rack_shelf_location: row.rack_shelf_location || '',
+    staff_notes: internalNotesObj.staff_notes || '',
+    flags: internalNotesObj.flags || {},
     customer: {
       id: custId,
       customerId: custId,
@@ -719,6 +770,8 @@ function mapCustomerWorkRowToOrder(row) {
       countryCode: '+91',
       mobile_number: row.mobile_number,
       mobileNumber: row.mobile_number,
+      alternate_phone: row.alternate_phone || null,
+      email: row.email || null,
       address: row.delivery_address || '',
       streetArea: row.delivery_address || '',
       area_service_zone: 'Zone 1',
@@ -1329,7 +1382,52 @@ export async function updateOrderStatus(orderIdentifier, newStatus, progressPerc
 }
 
 /**
- * Updates order details, cart items, customer contact, service type and pricing in Supabase washdoor_orders_master.
+ * Helper normalizers matching customer_works PostgreSQL constraints:
+ */
+function normalizeDbStatus(val) {
+  if (!val) return 'Received';
+  const s = String(val).trim();
+  if (s === 'Order Received' || s === 'Received') return 'Received';
+  if (['In Progress', 'Ready', 'Delivered', 'Cancelled'].includes(s)) return s;
+  return 'Received';
+}
+
+function normalizeDbIntakeMethod(val) {
+  if (!val) return 'Walk-In';
+  const lower = String(val).toLowerCase();
+  if (lower.includes('pickup') || lower.includes('delivery')) return 'Pickup & Delivery';
+  if (lower.includes('call')) return 'On-Call';
+  return 'Walk-In';
+}
+
+function normalizeDbPriority(val) {
+  if (!val) return 'Normal';
+  const lower = String(val).toLowerCase();
+  if (lower.includes('urgent') || lower.includes('high') || lower.includes('express')) return 'Urgent';
+  return 'Normal';
+}
+
+function normalizeDbPaymentStatus(val) {
+  if (!val) return 'Unpaid';
+  const lower = String(val).toLowerCase();
+  if (lower.includes('part')) return 'Partially Paid';
+  if (lower.includes('refund')) return 'Refunded';
+  if (lower.includes('paid')) return 'Paid';
+  return 'Unpaid';
+}
+
+function normalizeDbPaymentMethod(val) {
+  if (!val) return 'Cash';
+  const lower = String(val).toLowerCase();
+  if (lower.includes('cash')) return 'Cash';
+  if (lower.includes('card')) return 'Card';
+  if (lower.includes('bank')) return 'Net Banking';
+  if (lower.includes('wallet') || lower.includes('upi') || lower.includes('pay') || lower.includes('qr')) return 'Wallet';
+  return 'Cash';
+}
+
+/**
+ * Updates order details, cart items, customer contact, service type and pricing in Supabase customer_works.
  */
 export async function updateOrder(orderIdentifier, updatePayload = {}) {
   if (!isSupabaseConfigured()) {
@@ -1343,95 +1441,157 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       updated_at: new Date().toISOString(),
     };
 
-    if (updatePayload.totalAmount !== undefined && updatePayload.totalAmount !== null) {
-      updateObj.total_amount = Number(updatePayload.totalAmount);
+    // 1. Build workUpdate for customer_works (Primary Table)
+    const workUpdate = {
+      updated_at: new Date().toISOString(),
+    };
+
+    const grandTotal = updatePayload.totalAmount ?? updatePayload.total_amount ?? updatePayload.grand_total;
+    if (grandTotal !== undefined && grandTotal !== null) {
+      workUpdate.total_amount = Number(grandTotal);
+      updateObj.total_amount = Number(grandTotal);
     }
+
+    if (updatePayload.subtotal !== undefined && updatePayload.subtotal !== null) {
+      workUpdate.subtotal = Number(updatePayload.subtotal);
+    }
+
+    const discountVal = updatePayload.discountAmount ?? updatePayload.discount ?? updatePayload.discount_amount;
+    if (discountVal !== undefined && discountVal !== null) {
+      workUpdate.discount_amount = Number(discountVal);
+    }
+
+    const taxVal = updatePayload.taxAmount ?? updatePayload.tax ?? updatePayload.tax_amount;
+    if (taxVal !== undefined && taxVal !== null) {
+      workUpdate.tax_amount = Number(taxVal);
+    }
+
     if (updatePayload.itemCount !== undefined && updatePayload.itemCount !== null) {
+      workUpdate.total_pieces = Number(updatePayload.itemCount);
       updateObj.item_count = Number(updatePayload.itemCount);
+    } else if (updatePayload.total_pieces !== undefined && updatePayload.total_pieces !== null) {
+      workUpdate.total_pieces = Number(updatePayload.total_pieces);
     }
+
     if (updatePayload.serviceCategory) {
+      workUpdate.service_type = updatePayload.serviceCategory;
       updateObj.service_category = updatePayload.serviceCategory;
+    } else if (updatePayload.service_type) {
+      workUpdate.service_type = updatePayload.service_type;
     }
-    if (updatePayload.orderNotes !== undefined) {
-      updateObj.order_notes = updatePayload.orderNotes || null;
+
+    if (updatePayload.customerName || updatePayload.customer_name) {
+      const cName = updatePayload.customerName || updatePayload.customer_name;
+      workUpdate.customer_name = cName;
+      updateObj.customer_name = cName;
     }
-    if (updatePayload.customerName) {
-      updateObj.customer_name = updatePayload.customerName;
+
+    if (updatePayload.mobileNumber || updatePayload.mobile_number) {
+      const raw = String(updatePayload.mobileNumber || updatePayload.mobile_number).replace(/\D/g, '');
+      const cleanPhone = raw.length === 12 && raw.startsWith('91') ? raw.slice(2) : raw.length === 11 && raw.startsWith('0') ? raw.slice(1) : raw;
+      workUpdate.mobile_number = cleanPhone;
+      updateObj.mobile_number = cleanPhone;
     }
-    if (updatePayload.mobileNumber) {
-      const raw = String(updatePayload.mobileNumber).replace(/\D/g, '');
-      updateObj.mobile_number = raw.length === 12 && raw.startsWith('91') ? raw.slice(2) : raw.length === 11 && raw.startsWith('0') ? raw.slice(1) : raw;
+
+    if (updatePayload.alternatePhone !== undefined || updatePayload.alternate_phone !== undefined) {
+      const raw = String(updatePayload.alternatePhone ?? updatePayload.alternate_phone ?? '').replace(/\D/g, '');
+      const cleanAlt = raw ? (raw.length === 12 && raw.startsWith('91') ? raw.slice(2) : raw.length === 11 && raw.startsWith('0') ? raw.slice(1) : raw) : null;
+      workUpdate.alternate_phone = cleanAlt;
+      updateObj.alternate_phone = cleanAlt;
     }
-    if (updatePayload.alternatePhone !== undefined) {
-      const raw = String(updatePayload.alternatePhone || '').replace(/\D/g, '');
-      updateObj.alternate_phone = raw ? (raw.length === 12 && raw.startsWith('91') ? raw.slice(2) : raw.length === 11 && raw.startsWith('0') ? raw.slice(1) : raw) : null;
-    }
+
     if (updatePayload.email !== undefined) {
+      workUpdate.email = updatePayload.email || null;
       updateObj.email = updatePayload.email || null;
     }
-    if (updatePayload.address !== undefined) {
-      updateObj.street_area = updatePayload.address || null;
+
+    if (updatePayload.address !== undefined || updatePayload.delivery_address !== undefined) {
+      const addr = updatePayload.address ?? updatePayload.delivery_address ?? null;
+      workUpdate.delivery_address = addr;
+      updateObj.street_area = addr;
     }
-    if (updatePayload.taxExemption !== undefined) {
-      updateObj.tax_exemption = Boolean(updatePayload.taxExemption);
+
+    if (updatePayload.orderNotes !== undefined || updatePayload.comments !== undefined || updatePayload.special_instructions !== undefined) {
+      const notes = updatePayload.orderNotes ?? updatePayload.comments ?? updatePayload.special_instructions ?? null;
+      workUpdate.special_instructions = notes;
+      updateObj.order_notes = notes;
     }
-    if (updatePayload.status) {
-      updateObj.order_status = updatePayload.status;
+
+    if (updatePayload.status || updatePayload.order_status) {
+      const rawSt = updatePayload.status || updatePayload.order_status;
+      workUpdate.work_status = normalizeDbStatus(rawSt);
+      updateObj.order_status = rawSt;
     }
+
+    if (updatePayload.priority) {
+      workUpdate.priority = normalizeDbPriority(updatePayload.priority);
+    }
+
+    if (updatePayload.orderType || updatePayload.order_type || updatePayload.intake_method) {
+      const intakeVal = updatePayload.orderType || updatePayload.order_type || updatePayload.intake_method;
+      workUpdate.intake_method = normalizeDbIntakeMethod(intakeVal);
+    }
+
+    if (updatePayload.advancePaid !== undefined || updatePayload.advance_paid !== undefined) {
+      workUpdate.advance_paid = Number(updatePayload.advancePaid ?? updatePayload.advance_paid ?? 0);
+    }
+
+    if (updatePayload.paymentStatus || updatePayload.payment_status) {
+      workUpdate.payment_status = normalizeDbPaymentStatus(updatePayload.paymentStatus || updatePayload.payment_status);
+    }
+
+    if (updatePayload.paymentMethod || updatePayload.payment_method || updatePayload.paymentMode) {
+      const rawMethod = updatePayload.paymentMethod || updatePayload.payment_method || updatePayload.paymentMode;
+      workUpdate.payment_method = normalizeDbPaymentMethod(rawMethod);
+    }
+
+    if (updatePayload.assignedStaff || updatePayload.assigned_staff || updatePayload.assignedDriver || updatePayload.assigned_driver) {
+      workUpdate.assigned_staff = updatePayload.assignedStaff || updatePayload.assigned_staff || updatePayload.assignedDriver || updatePayload.assigned_driver;
+    }
+
+    if (updatePayload.rackShelfLocation || updatePayload.rack_shelf_location) {
+      workUpdate.rack_shelf_location = updatePayload.rackShelfLocation || updatePayload.rack_shelf_location;
+    }
+
+    // Delivery date parsing
+    const rawDelivery = updatePayload.deliveryDate || updatePayload.expectedDelivery || updatePayload.target_delivery_date;
+    const expectedDeliveryDisplay = rawDelivery || '';
+    if (rawDelivery) {
+      const d = new Date(rawDelivery);
+      if (!isNaN(d.getTime())) {
+        workUpdate.target_delivery_date = d.toISOString();
+      }
+    }
+
     if (updatePayload.items) {
+      workUpdate.items = updatePayload.items;
+      workUpdate.total_pieces = updatePayload.items.reduce((s, i) => s + (Number(i.qty) || 1), 0);
       updateObj.customer_history = {
+        ...(updateObj.customer_history || {}),
         items: updatePayload.items,
         updated_at: new Date().toISOString(),
       };
     }
 
-    // 1. Update customer_works
-    const workUpdate = {
-      updated_at: new Date().toISOString(),
+    // Internal notes & garment inspection preservation
+    const inspData = updatePayload.garment_inspections || updatePayload.inspections || {};
+    const notesPayload = {
+      garment_inspections: inspData,
+      expected_delivery_display: expectedDeliveryDisplay,
+      payment_method_display: updatePayload.paymentMethod || updatePayload.payment_method || updatePayload.paymentMode || '',
+      assigned_driver: updatePayload.assigned_driver || updatePayload.assignedStaff || '',
+      assigned_driver_full: updatePayload.assigned_driver_full || '',
+      staff_notes: updatePayload.staff_notes || '',
+      flags: updatePayload.flags || {},
     };
-    if (updatePayload.totalAmount !== undefined && updatePayload.totalAmount !== null) {
-      workUpdate.total_amount = Number(updatePayload.totalAmount);
-    }
-    if (updatePayload.itemCount !== undefined && updatePayload.itemCount !== null) {
-      workUpdate.total_pieces = Number(updatePayload.itemCount);
-    }
-    if (updatePayload.serviceCategory) {
-      workUpdate.service_type = updatePayload.serviceCategory;
-    }
-    if (updatePayload.customerName) {
-      workUpdate.customer_name = updatePayload.customerName;
-    }
-    if (updatePayload.mobileNumber) {
-      const raw = String(updatePayload.mobileNumber).replace(/\D/g, '');
-      workUpdate.mobile_number = raw.length === 12 && raw.startsWith('91') ? raw.slice(2) : raw.length === 11 && raw.startsWith('0') ? raw.slice(1) : raw;
-    }
-    if (updatePayload.address !== undefined) {
-      workUpdate.delivery_address = updatePayload.address || null;
-    }
-    if (updatePayload.orderNotes !== undefined) {
-      workUpdate.special_instructions = updatePayload.orderNotes || null;
-    }
-    if (updatePayload.status) {
-      workUpdate.work_status = updatePayload.status === 'Order Received' ? 'Received' : updatePayload.status;
-    }
-    if (updatePayload.advancePaid !== undefined) {
-      workUpdate.advance_paid = Number(updatePayload.advancePaid);
-    }
-    if (updatePayload.paymentStatus) {
-      workUpdate.payment_status = updatePayload.paymentStatus;
-    }
-    if (updatePayload.items) {
-      workUpdate.items = updatePayload.items;
-      workUpdate.total_pieces = updatePayload.items.reduce((s, i) => s + (Number(i.qty) || 1), 0);
-    }
-    if (updatePayload.garment_inspections !== undefined || updatePayload.inspections !== undefined) {
-      const inspData = updatePayload.garment_inspections || updatePayload.inspections || {};
-      workUpdate.internal_notes = JSON.stringify({ garment_inspections: inspData });
-      updateObj.customer_history = {
-        ...(updateObj.customer_history || {}),
-        garment_inspections: inspData,
-      };
-    }
+    workUpdate.internal_notes = JSON.stringify(notesPayload);
+    updateObj.customer_history = {
+      ...(updateObj.customer_history || {}),
+      garment_inspections: inspData,
+      ...notesPayload,
+    };
+
+    // Execute customer_works update
     try {
       const numMatch = String(formattedId).match(/\d+/);
       const num = numMatch ? parseInt(numMatch[0], 10) : null;
@@ -1447,7 +1607,9 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
         wQuery = wQuery.or(`work_number.eq.${ordId},work_number.eq.${workId},work_number.eq.${orderIdPattern},work_number.eq.${formattedId}`);
       }
       await wQuery;
-    } catch {}
+    } catch (cwErr) {
+      console.warn('customer_works update error:', cwErr);
+    }
 
     // 2. Also try washdoor_orders_master if present
     try {
@@ -1480,18 +1642,38 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
             if (o.order_number === formattedId || o.id === formattedId || o.order_id === formattedId) {
               return {
                 ...o,
-                total_amount: updatePayload.totalAmount !== undefined ? updatePayload.totalAmount : o.total_amount,
-                item_count: updatePayload.itemCount !== undefined ? updatePayload.itemCount : o.item_count,
-                preference: updatePayload.serviceCategory || o.preference,
-                service_category: updatePayload.serviceCategory || o.service_category,
-                preference_notes: updatePayload.orderNotes !== undefined ? updatePayload.orderNotes : o.preference_notes,
-                customer_name: updatePayload.customerName || o.customer_name,
-                mobile_number: updatePayload.mobileNumber || o.mobile_number,
-                status: updatePayload.status || o.status,
-                order_status: updatePayload.status || o.order_status,
+                total_amount: workUpdate.total_amount !== undefined ? workUpdate.total_amount : o.total_amount,
+                subtotal: workUpdate.subtotal !== undefined ? workUpdate.subtotal : o.subtotal,
+                discount_amount: workUpdate.discount_amount !== undefined ? workUpdate.discount_amount : o.discount_amount,
+                tax_amount: workUpdate.tax_amount !== undefined ? workUpdate.tax_amount : o.tax_amount,
+                advance_paid: workUpdate.advance_paid !== undefined ? workUpdate.advance_paid : o.advance_paid,
+                balance_due: workUpdate.total_amount !== undefined && workUpdate.advance_paid !== undefined ? Math.max(0, workUpdate.total_amount - workUpdate.advance_paid) : o.balance_due,
+                item_count: workUpdate.total_pieces !== undefined ? workUpdate.total_pieces : o.item_count,
+                total_pieces: workUpdate.total_pieces !== undefined ? workUpdate.total_pieces : o.total_pieces,
+                preference: updatePayload.serviceCategory || updatePayload.service_type || o.preference,
+                service_category: updatePayload.serviceCategory || updatePayload.service_type || o.service_category,
+                service_type: updatePayload.serviceCategory || updatePayload.service_type || o.service_type,
+                preference_notes: updatePayload.orderNotes || updatePayload.comments || o.preference_notes,
+                order_notes: updatePayload.orderNotes || updatePayload.comments || o.order_notes,
+                special_instructions: updatePayload.orderNotes || updatePayload.comments || o.special_instructions,
+                comments: updatePayload.comments || updatePayload.orderNotes || o.comments,
+                customer_name: updatePayload.customerName || updatePayload.customer_name || o.customer_name,
+                mobile_number: updatePayload.mobileNumber || updatePayload.mobile_number || o.mobile_number,
+                alternate_phone: updatePayload.alternatePhone || updatePayload.alternate_phone || o.alternate_phone,
+                email: updatePayload.email || o.email,
+                address: updatePayload.address || updatePayload.delivery_address || o.address,
+                delivery_address: updatePayload.address || updatePayload.delivery_address || o.delivery_address,
+                status: updatePayload.status || updatePayload.order_status || o.status,
+                order_status: updatePayload.status || updatePayload.order_status || o.order_status,
+                order_type: updatePayload.orderType || updatePayload.order_type || o.order_type,
+                intake_method: updatePayload.orderType || updatePayload.order_type || o.intake_method,
+                expected_delivery: expectedDeliveryDisplay || o.expected_delivery,
+                delivery_date: expectedDeliveryDisplay || o.delivery_date,
+                payment_status: updatePayload.paymentStatus || updatePayload.payment_status || o.payment_status,
+                payment_method: updatePayload.paymentMethod || updatePayload.payment_method || updatePayload.paymentMode || o.payment_method,
                 items: updatePayload.items || o.items,
-                garment_inspections: updatePayload.garment_inspections || o.garment_inspections,
-                inspections: updatePayload.garment_inspections || o.inspections,
+                garment_inspections: inspData,
+                inspections: inspData,
                 customer_history: {
                   ...(o.customer_history || {}),
                   items: updatePayload.items || o.customer_history?.items || [],
@@ -1537,18 +1719,21 @@ export async function getOrderById(identifier) {
     const ordId = num ? `ORD${String(num).padStart(5, '0')}` : identifier;
     const workId = num ? `WORK-${String(num).padStart(5, '0')}` : identifier;
     const orderIdPattern = num ? `ORDER-${String(num).padStart(5, '0')}` : identifier;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
 
-    const { data, error } = await supabase
-      .from('customer_works')
-      .select('*')
-      .or(`work_number.eq.${ordId},work_number.eq.${workId},work_number.eq.${orderIdPattern},work_id.eq.${identifier}`)
-      .limit(1)
-      .maybeSingle();
+    let query = supabase.from('customer_works').select('*');
+    if (isUuid) {
+      query = query.or(`work_number.eq.${ordId},work_number.eq.${workId},work_number.eq.${orderIdPattern},work_id.eq.${identifier}`);
+    } else {
+      query = query.or(`work_number.eq.${ordId},work_number.eq.${workId},work_number.eq.${orderIdPattern},work_number.eq.${identifier}`);
+    }
+
+    const { data, error } = await query.limit(1).maybeSingle();
 
     if (error || !data) {
       return { data: null, error: error?.message || 'Order not found' };
     }
-    return { data: mapCustomerWorkRow(data), error: null };
+    return { data: mapCustomerWorkRowToOrder(data), error: null };
   } catch (err) {
     return { data: null, error: err.message };
   }
@@ -1567,12 +1752,16 @@ export async function deleteOrderFromSupabase(identifier) {
     const ordId = num ? `ORD${String(num).padStart(5, '0')}` : identifier;
     const workId = num ? `WORK-${String(num).padStart(5, '0')}` : identifier;
     const orderIdPattern = num ? `ORDER-${String(num).padStart(5, '0')}` : identifier;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
 
     // 1. Delete from customer_works
-    const { error: workErr } = await supabase
-      .from('customer_works')
-      .delete()
-      .or(`work_number.eq.${ordId},work_number.eq.${workId},work_number.eq.${orderIdPattern},work_id.eq.${identifier}`);
+    let delQuery = supabase.from('customer_works').delete();
+    if (isUuid) {
+      delQuery = delQuery.or(`work_number.eq.${ordId},work_number.eq.${workId},work_number.eq.${orderIdPattern},work_id.eq.${identifier}`);
+    } else {
+      delQuery = delQuery.or(`work_number.eq.${ordId},work_number.eq.${workId},work_number.eq.${orderIdPattern},work_number.eq.${identifier}`);
+    }
+    const { error: workErr } = await delQuery;
 
     // 2. Also best-effort delete from washdoor_orders_master if present
     try {
@@ -1586,9 +1775,9 @@ export async function deleteOrderFromSupabase(identifier) {
       console.warn('Supabase deleteOrder warning:', workErr);
       return { success: false, error: workErr.message };
     }
-    return { success: true };
+    return { success: true, error: null };
   } catch (err) {
-    console.error('Error in deleteOrderFromSupabase:', err);
+    console.error('deleteOrderFromSupabase catch:', err);
     return { success: false, error: err.message };
   }
 }

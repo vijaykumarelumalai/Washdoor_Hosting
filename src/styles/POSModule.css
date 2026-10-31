@@ -2594,6 +2594,33 @@ body.light-theme .pos-pickup-btn:hover,
   color: #1d4ed8 !important;
 }
 
+/* Quick View Order Button */
+.pos-table-action-btn.btn-view-order {
+  border: 1.5px solid rgba(56, 189, 248, 0.4) !important;
+  background: rgba(2, 132, 199, 0.15) !important;
+  color: #38bdf8 !important;
+}
+
+.pos-table-action-btn.btn-view-order:hover {
+  background: rgba(2, 132, 199, 0.28) !important;
+  border-color: #38bdf8 !important;
+  color: #7dd3fc !important;
+}
+
+body.light-theme .pos-table-action-btn.btn-view-order,
+[data-theme="light"] .pos-table-action-btn.btn-view-order {
+  border: 1.5px solid #bae6fd !important;
+  background: #f0f9ff !important;
+  color: #0284c7 !important;
+}
+
+body.light-theme .pos-table-action-btn.btn-view-order:hover,
+[data-theme="light"] .pos-table-action-btn.btn-view-order:hover {
+  background: #e0f2fe !important;
+  border-color: #7dd3fc !important;
+  color: #0369a1 !important;
+}
+
 .pos-table-action-btn.btn-edit-order {
   display: inline-flex;
   align-items: center;
@@ -2643,7 +2670,6 @@ body.light-theme .pos-table-action-btn.btn-edit-order.active-edit-btn,
   background: #eff6ff !important;
   color: #2563eb !important;
 }
-*/
 
 body.light-theme .pos-status-badge-wrap,
 [data-theme="light"] .pos-status-badge-wrap {

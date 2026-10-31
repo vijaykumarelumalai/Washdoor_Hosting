@@ -81,7 +81,7 @@ export default function SideEditPanel({
   const [quantity, setQuantity] = useState(1);
   const [ratePerPiece, setRatePerPiece] = useState(20.00);
 
-  // 3. Cart State (Editable measures matching mockup)
+  // 3. Cart State (Editable measures)
   const [cartItems, setCartItems] = useState(
     order?.items?.length
       ? order.items.map((it, idx) => ({
@@ -90,13 +90,9 @@ export default function SideEditPanel({
           service: it.service || it.service_type || 'Laundry',
           rate: Number(it.rate || it.price || 20),
           qty: Number(it.qty || it.quantity || 1),
-          icon: '🧺',
+          icon: it.icon || '🧺',
         }))
-      : [
-          { id: 1, name: 'Normal Wash', service: 'Laundry', rate: 15.00, qty: 3, icon: '👑' },
-          { id: 2, name: 'Steam Press', service: 'Laundry', rate: 15.00, qty: 2, icon: '🔥' },
-          { id: 3, name: 'Dry Clean', service: 'Laundry', rate: 15.00, qty: 1, icon: '📦' },
-        ]
+      : []
   );
 
   // 4. Dynamic Garment-by-Garment Inspection State
@@ -164,12 +160,12 @@ export default function SideEditPanel({
   const [statusRemark, setStatusRemark] = useState('Garments inspected. Pre-spotting applied for collar stains.');
 
   // 8. Payments Fields (Tab 4)
-  const [paymentStatus, setPaymentStatus] = useState('Partially Paid');
-  const [paymentMode, setPaymentMode] = useState('UPI / Google Pay');
-  const [advancePaid, setAdvancePaid] = useState(100.00);
+  const [paymentStatus, setPaymentStatus] = useState(order?.payment_status || order?.payment?.status || 'Unpaid');
+  const [paymentMode, setPaymentMode] = useState(order?.payment_method || order?.payment?.mode || 'Cash');
+  const [advancePaid, setAdvancePaid] = useState(Number(order?.advance_paid !== undefined ? order.advance_paid : (order?.payment?.advancePaid || 0)));
   const [transactionRef, setTransactionRef] = useState('UPI/2026/8941729831');
   const [invoiceNo, setInvoiceNo] = useState('INV-WD-2026-0042');
-  const [discountAmount, setDiscountAmount] = useState(0);
+  const [discountAmount, setDiscountAmount] = useState(Number(order?.discount_amount !== undefined ? order.discount_amount : (order?.discount || order?.payment?.discount || 0)));
   const [paymentNote, setPaymentNote] = useState('Advance received via GPay. Balance to be collected upon doorstep delivery.');
   const [showQRModal, setShowQRModal] = useState(false);
 
@@ -257,9 +253,29 @@ export default function SideEditPanel({
     if (order) {
       setCustomerName(order.customer_name || order.customer?.customer_name || '');
       setMobileNumber(order.mobile_number || order.customer?.mobile_number || '');
+      setAlternatePhone(order.alternate_phone || order.customer?.alternate_phone || '');
+      setEmail(order.email || order.customer?.email || '');
       setAddress(order.address || order.delivery_address || order.customer?.address || '');
       setStatus(order.status || order.order_status || 'In Progress');
       setOrderType(order.order_type || 'Walk-in');
+      setExpectedDelivery(order.expected_delivery || order.delivery_date || '');
+      setComments(order.comments || order.order_notes || order.special_instructions || '');
+      if (order.items && Array.isArray(order.items)) {
+        setCartItems(order.items.map((it, idx) => ({
+          id: it.id || idx + 1,
+          name: it.name || it.item_name || 'Garment',
+          service: it.service || it.service_type || 'Laundry',
+          rate: Number(it.rate || it.price || 20),
+          qty: Number(it.qty || it.quantity || 1),
+          icon: it.icon || '🧺',
+        })));
+      } else {
+        setCartItems([]);
+      }
+      setPaymentStatus(order.payment_status || order.payment?.status || 'Unpaid');
+      setPaymentMode(order.payment_method || order.payment?.mode || 'Cash');
+      setAdvancePaid(Number(order.advance_paid !== undefined ? order.advance_paid : (order.payment?.advancePaid || 0)));
+      setDiscountAmount(Number(order.discount_amount !== undefined ? order.discount_amount : (order.discount || order.payment?.discount || 0)));
       if (order.assigned_driver) setAssignedRider(order.assigned_driver);
       if (order.assigned_driver_full) setVehicleNo(order.assigned_driver_full);
       if (order.pickup_status) setLogisticsStatus(order.pickup_status);
@@ -283,10 +299,9 @@ export default function SideEditPanel({
     });
   }, [activeCategory, searchQuery]);
 
-  // Cart Calculations matching mockup figures
+  // Cart Calculations purely dynamic
   const subtotal = useMemo(() => {
-    const raw = cartItems.reduce((sum, item) => sum + (item.rate * item.qty), 0);
-    return raw > 0 ? (raw === 90 ? 242.00 : raw) : 0;
+    return cartItems.reduce((sum, item) => sum + (Number(item.rate || 0) * Number(item.qty || 0)), 0);
   }, [cartItems]);
 
   const taxAmount = useMemo(() => {
@@ -302,8 +317,7 @@ export default function SideEditPanel({
   }, [grandTotal, advancePaid]);
 
   const totalCartCount = useMemo(() => {
-    const rawCount = cartItems.reduce((sum, item) => sum + item.qty, 0);
-    return rawCount === 6 ? 16 : rawCount;
+    return cartItems.reduce((sum, item) => sum + Number(item.qty || 0), 0);
   }, [cartItems]);
 
   // Handlers for Cart
@@ -485,14 +499,30 @@ export default function SideEditPanel({
     if (saveKey) {
       updateOrderInSupabase(saveKey, {
         status: updatedOrder.status,
+        orderStatus: updatedOrder.status,
         customerName: updatedOrder.customer_name,
         mobileNumber: updatedOrder.mobile_number,
+        alternatePhone: updatedOrder.alternate_phone,
+        email: updatedOrder.email,
         address: updatedOrder.address,
         serviceCategory: updatedOrder.service_category,
+        orderType: updatedOrder.order_type,
+        expectedDelivery: updatedOrder.expected_delivery,
+        deliveryDate: updatedOrder.expected_delivery,
+        priority: updatedOrder.priority || 'Normal',
         orderNotes: updatedOrder.comments,
-        totalAmount: updatedOrder.total_amount || updatedOrder.grand_total,
-        advancePaid: updatedOrder.advance_paid,
-        paymentStatus: updatedOrder.payment_status,
+        subtotal: subtotal,
+        discountAmount: Number(discountAmount || 0),
+        taxAmount: taxAmount,
+        totalAmount: grandTotal,
+        grandTotal: grandTotal,
+        advancePaid: Number(advancePaid || 0),
+        paymentStatus: paymentStatus,
+        paymentMethod: paymentMode,
+        assignedStaff: assignedRider,
+        assigned_driver_full: `${assignedRider} (${vehicleNo})`,
+        staff_notes: staffNote,
+        flags: flags,
         items: updatedOrder.items,
         garment_inspections: inspections,
       }).catch((e) => console.warn('Supabase SideEdit update note:', e));
