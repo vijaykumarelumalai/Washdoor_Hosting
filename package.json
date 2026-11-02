@@ -8,7 +8,7 @@
     "build": "vite build",
     "start:cra": "react-scripts start",
     "build:cra": "react-scripts build",
-    "test": "node --test src/__tests__/validation.node.test.js"
+    "test": "node --test src/__tests__/*.node.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

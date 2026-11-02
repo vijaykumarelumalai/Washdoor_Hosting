@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import CustomerManagement from './components/CustomerManagement';
 import POSModule from './components/POSModule';
+import DashboardModule from './components/DashboardModule';
 import CreateOrderModal from './components/CreateOrderModal';
 import EditOrderModal from './components/EditOrderModal';
 import { getOrders, updateOrderInSupabase, deleteOrderFromSupabase } from './services/customerService';
@@ -32,11 +33,122 @@ const SAMPLE_LANGUAGES = [
   { code: 'es', name: 'Spanish', native: 'Español' },
 ];
 
+const NAV_ITEMS = [
+  {
+    id: 'dashboard',
+    label: 'dashboard',
+    title: 'dashboard',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="7" height="7"></rect>
+        <rect x="14" y="3" width="7" height="7"></rect>
+        <rect x="14" y="14" width="7" height="7"></rect>
+        <rect x="3" y="14" width="7" height="7"></rect>
+      </svg>
+    ),
+  },
+  {
+    id: 'order',
+    label: 'Order',
+    title: 'Order',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+        <polyline points="14 2 14 8 20 8"></polyline>
+        <line x1="16" y1="13" x2="8" y2="13"></line>
+        <line x1="16" y1="17" x2="8" y2="17"></line>
+        <polyline points="10 9 9 9 8 9"></polyline>
+      </svg>
+    ),
+  },
+  {
+    id: 'customer',
+    label: 'Customer',
+    title: 'Customer',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+        <circle cx="9" cy="7" r="4"></circle>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+      </svg>
+    ),
+  },
+  {
+    id: 'report',
+    label: 'Report',
+    title: 'Report',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10"></line>
+        <line x1="12" y1="20" x2="12" y2="4"></line>
+        <line x1="6" y1="20" x2="6" y2="14"></line>
+      </svg>
+    ),
+  },
+  {
+    id: 'apps',
+    label: 'Apps',
+    title: 'Apps',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="2" width="8" height="8" rx="2"></rect>
+        <rect x="14" y="2" width="8" height="8" rx="2"></rect>
+        <rect x="2" y="14" width="8" height="8" rx="2"></rect>
+        <rect x="14" y="14" width="8" height="8" rx="2"></rect>
+      </svg>
+    ),
+  },
+  {
+    id: 'help',
+    label: 'Help',
+    title: 'Help',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+    ),
+  },
+  {
+    id: 'account',
+    label: 'Account',
+    title: 'Account',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="7" r="4"></circle>
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+      </svg>
+    ),
+  },
+];
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState('pos');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Extension panel (sidebar collapsed state)
+  const [isNavCollapsed, setIsNavCollapsed] = useState(() => {
+    try {
+      const saved = localStorage.getItem('washdoor_nav_collapsed');
+      return saved === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleNavCollapse = () => {
+    setIsNavCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('washdoor_nav_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   // Orders state with cache support (authentically loaded from database, no hardcoded mock records)
   const [orders, setOrders] = useState(() => {
@@ -214,14 +326,48 @@ export default function App() {
     <div className="app">
       {/* ── Topbar ── */}
       <header className="topbar">
-        <div className="brand">
-          <div className="logo">W</div>
-          <div>
-            <div className="brand-name">Washdoor</div>
-            <span className="sub" style={{ fontSize: '11px', color: '#8aa0be', fontWeight: '600' }}>
-              Ranipet
-            </span>
+        <div className={`brand-container ${isNavCollapsed ? 'collapsed' : ''}`}>
+          <div className="brand" title="Washdoor • Laundry & Dry Clean">
+            <div className="logo" aria-label="Washdoor Logo">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z" />
+              </svg>
+            </div>
+            {!isNavCollapsed && (
+              <div className="brand-text-wrap">
+                <div className="brand-name">Washdoor</div>
+                <span className="sub" style={{ fontSize: '11px', color: '#8aa0be', fontWeight: '600' }}>
+                  Laundry &amp; Dry Clean
+                </span>
+              </div>
+            )}
           </div>
+
+          {/* Extension panel toggle button (circle with < or > on border) */}
+          <button
+            type="button"
+            className="sidebar-toggle-btn"
+            onClick={toggleNavCollapse}
+            title={isNavCollapsed ? 'Expand navigation menu (Extension panel)' : 'Collapse navigation menu (Extension panel)'}
+            aria-label={isNavCollapsed ? 'Expand navigation menu' : 'Collapse navigation menu'}
+          >
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              {isNavCollapsed ? (
+                <polyline points="9 18 15 12 9 6" />
+              ) : (
+                <polyline points="15 18 9 12 15 6" />
+              )}
+            </svg>
+          </button>
         </div>
 
         <div className="spacer"></div>
@@ -465,7 +611,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* ── Sidebar: Orders & POS, Customers ── */}
+      {/* ── Sidebar Navigation ── */}
       {/* Mobile overlay backdrop */}
       {sidebarOpen && (
         <div
@@ -475,40 +621,49 @@ export default function App() {
         />
       )}
 
-      <aside className={`sidebar${sidebarOpen ? ' mobile-open' : ''}`}>
-        <button
-          type="button"
-          className={`nav ${activeTab === 'pos' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('pos'); setSidebarOpen(false); }}
-          title="Orders & POS Intake Register"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="16" y1="13" x2="8" y2="13"></line>
-            <line x1="16" y1="17" x2="8" y2="17"></line>
-            <polyline points="10 9 9 9 8 9"></polyline>
-          </svg>
-          <span className="nav-label">Orders &amp; POS</span>
-        </button>
-
-        <button
-          type="button"
-          className={`nav ${activeTab === 'customers' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('customers'); setSidebarOpen(false); }}
-          title="Customer Records & Master Data"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-            <circle cx="12" cy="7" r="4"></circle>
-          </svg>
-          <span className="nav-label">Customers</span>
-        </button>
+      <aside className={`sidebar${isNavCollapsed ? ' collapsed' : ''}${sidebarOpen ? ' mobile-open' : ''}`} aria-label="Main Navigation">
+        {NAV_ITEMS.map((item) => {
+          const isActive =
+            activeTab === item.id ||
+            (item.id === 'order' && activeTab === 'pos') ||
+            (item.id === 'customer' && activeTab === 'customers');
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className={`nav ${isActive ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab(item.id);
+                setSidebarOpen(false);
+              }}
+              title={item.title}
+              data-nav={item.id}
+            >
+              {item.icon}
+              <span className="nav-label">{item.label}</span>
+            </button>
+          );
+        })}
       </aside>
 
       {/* ── Main Content ── */}
-      <main className="main">
-        {activeTab === 'pos' ? (
+      <main className={`main ${isNavCollapsed ? 'sidebar-collapsed' : ''}`}>
+        {activeTab === 'dashboard' ? (
+          <DashboardModule
+            orders={orders}
+            loadingOrders={loadingOrders}
+            currencySymbol={currentCurrency?.symbol || '₹'}
+            onCreateOrder={() => setIsModalOpen(true)}
+            onNavigateTab={(tab) => {
+              if (tab === 'pos' || tab === 'orders') setActiveTab('order');
+              else if (tab === 'customers') setActiveTab('customer');
+              else setActiveTab(tab);
+            }}
+            onRefreshOrders={loadOrders}
+            onEditOrder={(orderToEdit) => setEditingOrder(orderToEdit)}
+            showToast={showToast}
+          />
+        ) : (activeTab === 'order' || activeTab === 'pos') ? (
           <POSModule
             orders={orders}
             loadingOrders={loadingOrders}
@@ -518,12 +673,54 @@ export default function App() {
             showToast={showToast}
             onEditOrder={(orderToEdit) => setEditingOrder(orderToEdit)}
             onOrderCreated={loadOrders}
-            onNavigateTab={setActiveTab}
+            onNavigateTab={(tab) => {
+              if (tab === 'pos' || tab === 'orders') setActiveTab('order');
+              else if (tab === 'customers') setActiveTab('customer');
+              else setActiveTab(tab);
+            }}
             onUpdateOrder={handleUpdateOrderRecord}
             onDeleteOrder={handleDeleteOrderRecord}
           />
-        ) : (
+        ) : (activeTab === 'customer' || activeTab === 'customers') ? (
           <CustomerManagement showToast={showToast} />
+        ) : (
+          <div className="welcome-screen-wrap">
+            <div className="welcome-screen-card">
+              <div className="welcome-screen-logo-badge">
+                <div className="welcome-logo-icon">W</div>
+                <span className="welcome-brand-text">Washdoor Ranipet</span>
+              </div>
+              <h1 className="welcome-heading">Welcom to washdoor</h1>
+              <p className="welcome-subtitle">
+                Welcome to washdoor • Laundry &amp; Dry Cleaning Management Portal
+              </p>
+              {activeTab !== 'dashboard' && (
+                <div className="welcome-tab-pill">
+                  <span>Current Section:</span>
+                  <strong>{NAV_ITEMS.find((item) => item.id === activeTab)?.label || activeTab}</strong>
+                </div>
+              )}
+              <div className="welcome-quick-actions">
+                <button
+                  type="button"
+                  className="welcome-action-btn primary"
+                  onClick={() => setActiveTab('order')}
+                >
+                  <span>Go to Order</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="welcome-action-btn secondary"
+                  onClick={() => setActiveTab('customer')}
+                >
+                  <span>Go to Customer</span>
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </main>
 
