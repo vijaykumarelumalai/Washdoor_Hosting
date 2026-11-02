@@ -1,7 +1,7 @@
 // src/App.jsx
 // Washdoor POS & Customer Management Application
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import CustomerManagement from './components/CustomerManagement';
 import POSModule from './components/POSModule';
 import DashboardModule from './components/DashboardModule';
@@ -36,52 +36,49 @@ const SAMPLE_LANGUAGES = [
 const NAV_ITEMS = [
   {
     id: 'dashboard',
-    label: 'dashboard',
-    title: 'dashboard',
+    label: 'Dashboard',
+    title: 'Dashboard Overview',
     icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="7" height="7"></rect>
-        <rect x="14" y="3" width="7" height="7"></rect>
-        <rect x="14" y="14" width="7" height="7"></rect>
-        <rect x="3" y="14" width="7" height="7"></rect>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+        <polyline points="9 22 9 12 15 12 15 22"></polyline>
       </svg>
     ),
   },
   {
     id: 'order',
-    label: 'Order',
-    title: 'Order',
+    label: 'Orders',
+    title: 'Orders & POS Intake',
     icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-        <polyline points="14 2 14 8 20 8"></polyline>
-        <line x1="16" y1="13" x2="8" y2="13"></line>
-        <line x1="16" y1="17" x2="8" y2="17"></line>
-        <polyline points="10 9 9 9 8 9"></polyline>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect>
+        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+        <path d="M9 12h6"></path>
+        <path d="M9 16h6"></path>
       </svg>
     ),
   },
   {
     id: 'customer',
-    label: 'Customer',
-    title: 'Customer',
+    label: 'Customers',
+    title: 'Customer Master Directory',
     icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
         <circle cx="9" cy="7" r="4"></circle>
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
         <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
       </svg>
     ),
   },
   {
     id: 'report',
-    label: 'Report',
-    title: 'Report',
+    label: 'Reports',
+    title: 'Reports & Analytics',
     icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="18" y1="20" x2="18" y2="10"></line>
-        <line x1="12" y1="20" x2="12" y2="4"></line>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="12" y1="20" x2="12" y2="10"></line>
+        <line x1="18" y1="20" x2="18" y2="4"></line>
         <line x1="6" y1="20" x2="6" y2="14"></line>
       </svg>
     ),
@@ -89,36 +86,24 @@ const NAV_ITEMS = [
   {
     id: 'apps',
     label: 'Apps',
-    title: 'Apps',
+    title: 'Apps & Add-ons',
     icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="2" width="8" height="8" rx="2"></rect>
-        <rect x="14" y="2" width="8" height="8" rx="2"></rect>
-        <rect x="2" y="14" width="8" height="8" rx="2"></rect>
-        <rect x="14" y="14" width="8" height="8" rx="2"></rect>
-      </svg>
-    ),
-  },
-  {
-    id: 'help',
-    label: 'Help',
-    title: 'Help',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10"></circle>
-        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <rect width="7" height="7" x="3" y="3" rx="1.5"></rect>
+        <rect width="7" height="7" x="14" y="3" rx="1.5"></rect>
+        <rect width="7" height="7" x="14" y="14" rx="1.5"></rect>
+        <rect width="7" height="7" x="3" y="14" rx="1.5"></rect>
       </svg>
     ),
   },
   {
     id: 'account',
     label: 'Account',
-    title: 'Account',
+    title: 'Account Settings',
     icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="7" r="4"></circle>
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="8" r="4"></circle>
+        <path d="M20 21a8 8 0 1 0-16 0"></path>
       </svg>
     ),
   },
@@ -129,6 +114,10 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Centralized Global Search Bar State
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
 
   // Extension panel (sidebar collapsed state)
   const [isNavCollapsed, setIsNavCollapsed] = useState(() => {
@@ -308,6 +297,7 @@ export default function App() {
   }, []);
 
   // Keyboard shortcut: Press 'N' or 'n' to open Create Order
+  // Keyboard shortcuts: 'N' for new order, 'Ctrl+K' / 'Cmd+K' for global search
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.key === 'n' || e.key === 'N') && !isModalOpen) {
@@ -316,58 +306,210 @@ export default function App() {
           e.preventDefault();
           setIsModalOpen(true);
         }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        const searchInput = document.querySelector('.topbar-search-input');
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.select();
+        }
+      } else if (e.key === 'Escape') {
+        setIsSearchDropdownOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isModalOpen]);
 
+  // Click outside to dismiss search results popover
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.topbar-search-wrap')) {
+        setIsSearchDropdownOpen(false);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  // Compute live search matches across customer name, phone number, and order ID
+  const searchMatches = useMemo(() => {
+    if (!globalSearchQuery || !globalSearchQuery.trim()) return [];
+    const rawQ = globalSearchQuery.trim().toLowerCase();
+    const cleanDigits = rawQ.replace(/\D/g, '');
+
+    return orders.filter((o) => {
+      const num = String(o.order_number || o.id || '').toLowerCase();
+      const numDigits = num.replace(/\D/g, '');
+      const name = String(o.customer_name || o.customer?.customer_name || '').toLowerCase();
+      const phone = String(o.mobile_number || o.customer?.mobile_number || '').replace(/\D/g, '');
+      const addr = String(o.address || o.delivery_address || o.customer?.address || '').toLowerCase();
+      const srv = String(o.service_category || o.preference || o.service_type || '').toLowerCase();
+
+      const matchNum = num.includes(rawQ) || (cleanDigits.length > 0 && numDigits.includes(cleanDigits));
+      const matchName = name.includes(rawQ);
+      const matchPhone = cleanDigits.length > 0 && phone.includes(cleanDigits);
+      const matchAddr = addr.includes(rawQ);
+      const matchSrv = srv.includes(rawQ);
+
+      return matchNum || matchName || matchPhone || matchAddr || matchSrv;
+    });
+  }, [orders, globalSearchQuery]);
+
   return (
     <div className="app">
       {/* ── Topbar ── */}
-      <header className="topbar">
-        <div className={`brand-container ${isNavCollapsed ? 'collapsed' : ''}`}>
-          <div className="brand" title="Washdoor • Laundry & Dry Clean">
-            <div className="logo" aria-label="Washdoor Logo">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z" />
-              </svg>
-            </div>
-            {!isNavCollapsed && (
-              <div className="brand-text-wrap">
-                <div className="brand-name">Washdoor</div>
-                <span className="sub" style={{ fontSize: '11px', color: '#8aa0be', fontWeight: '600' }}>
-                  Laundry &amp; Dry Clean
-                </span>
-              </div>
-            )}
-          </div>
+      <header className={`topbar ${isNavCollapsed ? 'sidebar-collapsed' : ''}`}>
+        {/* Mobile menu toggle */}
+        <button
+          type="button"
+          className="topbar-mobile-menu-btn"
+          onClick={() => setSidebarOpen((prev) => !prev)}
+          title="Toggle Navigation Menu"
+          aria-label="Toggle navigation menu"
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
 
-          {/* Extension panel toggle button (circle with < or > on border) */}
-          <button
-            type="button"
-            className="sidebar-toggle-btn"
-            onClick={toggleNavCollapse}
-            title={isNavCollapsed ? 'Expand navigation menu (Extension panel)' : 'Collapse navigation menu (Extension panel)'}
-            aria-label={isNavCollapsed ? 'Expand navigation menu' : 'Collapse navigation menu'}
-          >
+        {/* Mobile-only brand */}
+        <div className="topbar-mobile-brand">
+          <div className="topbar-mobile-logo">
+            <img src="/logo.png" alt="Washdoor Logo" />
+          </div>
+          <span className="topbar-mobile-name">Washdoor</span>
+        </div>
+
+        {/* ── Centralized Global Search Bar ── */}
+        <div className="topbar-search-wrap">
+          <div className="topbar-search-box">
             <svg
-              width="13"
-              height="13"
+              className="topbar-search-icon"
+              width="16"
+              height="16"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="2.8"
+              strokeWidth="2.4"
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              {isNavCollapsed ? (
-                <polyline points="9 18 15 12 9 6" />
-              ) : (
-                <polyline points="15 18 9 12 15 6" />
-              )}
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
-          </button>
+            <input
+              type="text"
+              className="topbar-search-input"
+              placeholder="Search by Order ID, Customer Name, or Phone Number..."
+              value={globalSearchQuery}
+              onChange={(e) => {
+                setGlobalSearchQuery(e.target.value);
+                setIsSearchDropdownOpen(true);
+              }}
+              onFocus={() => {
+                if (globalSearchQuery.trim()) setIsSearchDropdownOpen(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setActiveTab('order');
+                  setIsSearchDropdownOpen(false);
+                } else if (e.key === 'Escape') {
+                  setIsSearchDropdownOpen(false);
+                }
+              }}
+              aria-label="Centralized Search"
+            />
+            {globalSearchQuery && (
+              <button
+                type="button"
+                className="topbar-search-clear-btn"
+                onClick={() => {
+                  setGlobalSearchQuery('');
+                  setIsSearchDropdownOpen(false);
+                }}
+                title="Clear search"
+                aria-label="Clear search"
+              >
+                ✕
+              </button>
+            )}
+            <div className="topbar-search-shortcut" title="Press Ctrl+K or ⌘K to search">
+              <kbd>⌘K</kbd>
+            </div>
+          </div>
+
+          {/* Live Search Results Dropdown */}
+          {isSearchDropdownOpen && globalSearchQuery.trim() && (
+            <div className="topbar-search-dropdown" role="listbox">
+              <div className="topbar-search-dropdown-head">
+                <span>Matching Orders &amp; Customers</span>
+                <span className="topbar-search-count-badge">
+                  {searchMatches.length} {searchMatches.length === 1 ? 'match' : 'matches'}
+                </span>
+              </div>
+
+              {searchMatches.length === 0 ? (
+                <div className="topbar-search-empty">
+                  <div style={{ fontSize: '20px', marginBottom: '4px' }}>🔍</div>
+                  <div style={{ fontWeight: 650, color: 'inherit' }}>No matching records found</div>
+                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                    Try searching by full 10-digit number, customer name, or order ID (e.g. ORD-00020).
+                  </div>
+                </div>
+              ) : (
+                <div className="topbar-search-results-list">
+                  {searchMatches.slice(0, 6).map((ord) => {
+                    const custName = ord.customer_name || ord.customer?.customer_name || 'Walk-in Customer';
+                    const orderNum = ord.order_number || ord.order_id || ord.id || '—';
+                    const phone = ord.formatted_mobile || ord.mobile_number || ord.customer?.mobile_number || '—';
+                    const status = ord.order_status || ord.status || 'Received';
+                    const total = ord.total_amount || ord.grand_total || ord.bill_amount || 0;
+
+                    return (
+                      <div
+                        key={ord.id || orderNum}
+                        className="topbar-search-result-item"
+                        onClick={() => {
+                          setActiveTab('order');
+                          setIsSearchDropdownOpen(false);
+                        }}
+                      >
+                        <div className="topbar-search-item-left">
+                          <span className="topbar-search-order-pill">{orderNum}</span>
+                          <div className="topbar-search-cust-info">
+                            <span className="topbar-search-cust-name">{custName}</span>
+                            <span className="topbar-search-cust-phone">
+                              📞 {phone}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="topbar-search-item-right">
+                          <span className="topbar-search-status-tag">{status}</span>
+                          <span className="topbar-search-amount">
+                            {currentCurrency?.symbol || '₹'}{Number(total).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div
+                className="topbar-search-dropdown-footer"
+                onClick={() => {
+                  setActiveTab('order');
+                  setIsSearchDropdownOpen(false);
+                }}
+              >
+                <span>View all matching orders in Orders Register</span>
+                <kbd>↵ Enter</kbd>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="spacer"></div>
@@ -622,28 +764,123 @@ export default function App() {
       )}
 
       <aside className={`sidebar${isNavCollapsed ? ' collapsed' : ''}${sidebarOpen ? ' mobile-open' : ''}`} aria-label="Main Navigation">
-        {NAV_ITEMS.map((item) => {
-          const isActive =
-            activeTab === item.id ||
-            (item.id === 'order' && activeTab === 'pos') ||
-            (item.id === 'customer' && activeTab === 'customers');
-          return (
-            <button
-              key={item.id}
-              type="button"
-              className={`nav ${isActive ? 'active' : ''}`}
-              onClick={() => {
-                setActiveTab(item.id);
-                setSidebarOpen(false);
-              }}
-              title={item.title}
-              data-nav={item.id}
+        {/* Circular Extension Panel Toggle Button (positioned on right border) */}
+        <button
+          type="button"
+          className="sidebar-toggle-btn"
+          onClick={toggleNavCollapse}
+          title={isNavCollapsed ? 'Expand navigation menu (Extension panel)' : 'Collapse navigation menu (Extension panel)'}
+          aria-label={isNavCollapsed ? 'Expand navigation menu' : 'Collapse navigation menu'}
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            {isNavCollapsed ? (
+              <polyline points="9 18 15 12 9 6" />
+            ) : (
+              <polyline points="15 18 9 12 15 6" />
+            )}
+          </svg>
+        </button>
+
+        {/* Sidebar Brand Header */}
+        <div className="sidebar-brand-header">
+          <div className="sidebar-brand-logo" title="Washdoor">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z" />
+            </svg>
+          </div>
+          {!isNavCollapsed && (
+            <div className="sidebar-brand-info">
+              <span className="sidebar-brand-name">Washdoor</span>
+              <span className="sidebar-brand-sub">Laundry &amp; Dry Clean POS</span>
+            </div>
+          )}
+        </div>
+
+        {/* Navigation Items */}
+        <div className="sidebar-nav-items">
+          {NAV_ITEMS.map((item) => {
+            const isActive =
+              activeTab === item.id ||
+              (item.id === 'order' && (activeTab === 'pos' || activeTab === 'orders')) ||
+              (item.id === 'customer' && (activeTab === 'customers' || activeTab === 'customer'));
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={`nav ${isActive ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveTab(item.id);
+                  setSidebarOpen(false);
+                }}
+                title={item.title}
+                data-nav={item.id}
+              >
+                {item.icon}
+                {!isNavCollapsed && <span className="nav-label">{item.label}</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ── Sidebar Bottom: Store Status Card & Sign Out Button ── */}
+        <div className="sidebar-bottom">
+          <div className="sidebar-store-card" title="Ranipet Store #1 • Live Counter Active">
+            <div className="sidebar-store-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7" />
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4" />
+                <path d="M2 7h20" />
+                <path d="M22 7v3a2 2 0 0 1-2 2v0a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12v0a2 2 0 0 1-2-2V7" />
+              </svg>
+            </div>
+            {!isNavCollapsed && (
+              <div className="sidebar-store-info">
+                <div className="sidebar-store-name">Ranipet Store #1</div>
+                <div className="sidebar-store-status">
+                  <span className="sidebar-store-dot">●</span> Live Counter Active
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            className="sidebar-signout-btn nav-signout"
+            onClick={() => {
+              showToast('Signed out of session');
+              setActiveTab('dashboard');
+              setSidebarOpen(false);
+            }}
+            title="Sign Out"
+            aria-label="Sign Out"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              {item.icon}
-              <span className="nav-label">{item.label}</span>
-            </button>
-          );
-        })}
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            {!isNavCollapsed && <span>Sign Out</span>}
+          </button>
+        </div>
       </aside>
 
       {/* ── Main Content ── */}
@@ -662,6 +899,8 @@ export default function App() {
             onRefreshOrders={loadOrders}
             onEditOrder={(orderToEdit) => setEditingOrder(orderToEdit)}
             showToast={showToast}
+            searchQuery={globalSearchQuery}
+            onClearSearch={() => setGlobalSearchQuery('')}
           />
         ) : (activeTab === 'order' || activeTab === 'pos') ? (
           <POSModule
@@ -680,9 +919,15 @@ export default function App() {
             }}
             onUpdateOrder={handleUpdateOrderRecord}
             onDeleteOrder={handleDeleteOrderRecord}
+            searchQuery={globalSearchQuery}
+            onSearchChange={setGlobalSearchQuery}
           />
         ) : (activeTab === 'customer' || activeTab === 'customers') ? (
-          <CustomerManagement showToast={showToast} />
+          <CustomerManagement
+            showToast={showToast}
+            searchQuery={globalSearchQuery}
+            onSearchChange={setGlobalSearchQuery}
+          />
         ) : (
           <div className="welcome-screen-wrap">
             <div className="welcome-screen-card">

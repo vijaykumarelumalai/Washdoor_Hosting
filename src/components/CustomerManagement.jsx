@@ -6,7 +6,7 @@ import { getAllCustomers, searchCustomers, updateCustomer, deleteCustomer, creat
 import CustomerForm from './CustomerForm';
 import { friendlySupabaseError, formatPhoneDisplay, isMobileNumberQuery, formatDOB, getAgeFromDOB, normalizeMobileNumber } from '../utils/validation';
 
-export default function CustomerManagement({ showToast }) {
+export default function CustomerManagement({ showToast, searchQuery = '', onSearchChange }) {
   // Stale-while-revalidate: instant local cache for 0ms load time
   const [customers, setCustomers] = useState(() => {
     try {
@@ -19,7 +19,14 @@ export default function CustomerManagement({ showToast }) {
     return [];
   });
   const [loading, setLoading] = useState(false);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(searchQuery || '');
+
+  // Sync with global centralized search query
+  useEffect(() => {
+    if (searchQuery !== undefined) {
+      setQuery(searchQuery);
+    }
+  }, [searchQuery]);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [isRegisteringNew, setIsRegisteringNew] = useState(false);
   const [nextCustId, setNextCustId] = useState('');
@@ -230,7 +237,10 @@ export default function CustomerManagement({ showToast }) {
               className="toolbar-search-input"
               placeholder="Search by customer name, ID, mobile, address, city…"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                onSearchChange?.(e.target.value);
+              }}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -247,7 +257,10 @@ export default function CustomerManagement({ showToast }) {
             {query && (
               <button
                 type="button"
-                onClick={() => setQuery('')}
+                onClick={() => {
+                  setQuery('');
+                  onSearchChange?.('');
+                }}
                 aria-label="Clear search"
                 title="Clear search"
                 style={{

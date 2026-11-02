@@ -81,9 +81,18 @@ export default function POSModule({
   onOrderCreated,
   onNavigateTab,
   onUpdateOrder,
+  searchQuery = '',
+  onSearchChange,
 }) {
   // Top Header, Search Toolbar & Status Tab State (matching reference mockup)
-  const [topSearchQuery, setTopSearchQuery] = useState('');
+  const [topSearchQuery, setTopSearchQuery] = useState(searchQuery || '');
+
+  // Synchronize with centralized search bar
+  useEffect(() => {
+    if (searchQuery !== undefined) {
+      setTopSearchQuery(searchQuery);
+    }
+  }, [searchQuery]);
   const [activeStatusTab, setActiveStatusTab] = useState('All');
   const [activeTopDropdown, setActiveTopDropdown] = useState(null); // 'filters' | 'date' | null
   const [serviceFilter, setServiceFilter] = useState('All Services');
@@ -631,13 +640,24 @@ export default function POSModule({
         if (norm !== activeStatusTab) return false;
       }
 
-      // 2. Search Filter
+      // 2. Search Filter (Centralized search: Order ID, Customer Name, Mobile Number, Address, Services)
       if (topSearchQuery && topSearchQuery.trim()) {
-        const q = topSearchQuery.toLowerCase().trim();
-        const num = String(o.order_number || o.id || '').toLowerCase();
+        const rawQ = topSearchQuery.trim().toLowerCase();
+        const cleanDigits = rawQ.replace(/\D/g, '');
+        const num = String(o.order_number || o.order_id || o.id || '').toLowerCase();
+        const numDigits = num.replace(/\D/g, '');
         const name = String(o.customer_name || o.customer?.customer_name || '').toLowerCase();
-        const phone = String(o.mobile_number || o.customer?.mobile_number || '').replace(/\D/g, '');
-        if (!num.includes(q) && !name.includes(q) && !phone.includes(q)) return false;
+        const phone = String(o.mobile_number || o.customer?.mobile_number || o.formatted_mobile || '').replace(/\D/g, '');
+        const addr = String(o.address || o.delivery_address || o.customer?.address || o.customer?.streetArea || '').toLowerCase();
+        const srv = String(o.service_category || o.preference || o.service_type || '').toLowerCase();
+
+        const matchNum = num.includes(rawQ) || (cleanDigits.length > 0 && numDigits.includes(cleanDigits));
+        const matchName = name.includes(rawQ);
+        const matchPhone = cleanDigits.length > 0 && phone.includes(cleanDigits);
+        const matchAddr = addr.includes(rawQ);
+        const matchSrv = srv.includes(rawQ);
+
+        if (!matchNum && !matchName && !matchPhone && !matchAddr && !matchSrv) return false;
       }
 
       // 3. Service Filter
@@ -979,13 +999,19 @@ export default function POSModule({
               className="pos-search-input toolbar-search-input"
               placeholder="Search by Order ID, customer name or mobile number..."
               value={topSearchQuery}
-              onChange={(e) => setTopSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setTopSearchQuery(e.target.value);
+                onSearchChange?.(e.target.value);
+              }}
             />
             {topSearchQuery && (
               <button
                 type="button"
                 className="pos-search-clear-btn"
-                onClick={() => setTopSearchQuery('')}
+                onClick={() => {
+                  setTopSearchQuery('');
+                  onSearchChange?.('');
+                }}
                 title="Clear search"
               >
                 ✕
@@ -1446,13 +1472,14 @@ export default function POSModule({
                     <thead>
                       <tr>
                         <th>Order ID</th>
-                        <th>Customer (Name &amp; Number)</th>
+                        <th>Customer</th>
                         <th>Address</th>
-                        <th>Services Allocated</th>
+                        <th>Service / Items</th>
                         <th>Status</th>
-                        <th>Order Details (Captured Time)</th>
+                        <th>Payment</th>
                         <th>Pickup &amp; Delivery</th>
-                        <th style={{ textAlign: 'right', paddingRight: '24px' }}>Bill</th>
+                        <th>Order Details</th>
+                        <th style={{ textAlign: 'right', paddingRight: '20px' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1846,7 +1873,8 @@ export default function POSModule({
                                   fontWeight: 650,
                                   background: statusBg,
                                   color: statusColor,
-                                  border: `1px solid ${statusBorder}`
+                                  border: `1px solid ${statusBorder}`,
+                                  whiteSpace: 'nowrap'
                                 }}>
                                   <span style={{ fontSize: '13px', lineHeight: 1 }}>
                                     {workStatus === 'In Progress' ? '⏱' : workStatus === 'Cancelled' ? '✕' : workStatus === 'Ready' ? '✓' : workStatus === 'Delivered' ? '✓' : '📥'}
@@ -1856,19 +1884,52 @@ export default function POSModule({
                               </div>
                             </td>
 
-                            {/* 6. Order Details (Captured Time) */}
-                            <td style={{ verticalAlign: 'top', paddingTop: '14px' }}>
-                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '12px', color: '#475569' }}>
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" style={{ flexShrink: 0, marginTop: '2px' }}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
-                                  <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>Order Captured:</span>
-                                  <span style={{ fontSize: '12.5px', color: '#1e293b', fontWeight: 650 }}>{orderCapturedStr}</span>
-                                </div>
-                              </div>
+                            {/* 6. Payment (Total Bill, Payment Status Pill, and Mode) */}
+                            <td style={{ verticalAlign: 'top', paddingTop: '14px', whiteSpace: 'nowrap' }}>
+                              {(() => {
+                                const rawTotal = Number(ord.total_amount || ord.grand_total || ord.bill_amount || ord.amount || 0);
+                                const rawAdvance = Number(ord.advance_paid || ord.payment?.advance || 0);
+                                const rawBalance = Number(ord.balance_due ?? (rawTotal - rawAdvance));
+                                const payStatus = String(
+                                  ord.payment_status ||
+                                  ord.payment?.status ||
+                                  (rawTotal > 0 && rawBalance <= 0 ? 'Paid' : rawAdvance > 0 ? 'Partially Paid' : 'Unpaid')
+                                );
+                                const payMode = ord.payment_method || ord.payment?.mode || 'Cash';
+
+                                const isPaid = payStatus.toLowerCase().includes('paid') && !payStatus.toLowerCase().includes('partial') && !payStatus.toLowerCase().includes('unpaid');
+                                const isPartial = payStatus.toLowerCase().includes('partial');
+
+                                return (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                                    <div style={{ fontWeight: 800, fontSize: '14px', color: '#0f172a' }}>
+                                      {currencySymbol}{rawTotal.toFixed(2)}
+                                    </div>
+                                    <div style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '5px',
+                                      padding: '2px 8px',
+                                      borderRadius: '6px',
+                                      fontSize: '11px',
+                                      fontWeight: 700,
+                                      background: isPaid ? '#dcfce7' : isPartial ? '#fef3c7' : '#fee2e2',
+                                      color: isPaid ? '#15803d' : isPartial ? '#b45309' : '#b91c1c',
+                                      border: `1px solid ${isPaid ? '#bbf7d0' : isPartial ? '#fde68a' : '#fecaca'}`
+                                    }}>
+                                      <span>●</span>
+                                      <span>{isPaid ? 'Paid' : isPartial ? 'Partially Paid' : 'Unpaid'}</span>
+                                    </div>
+                                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>
+                                      via {payMode}
+                                    </span>
+                                  </div>
+                                );
+                              })()}
                             </td>
 
                             {/* 7. Pickup & Delivery (Stacked Action Buttons or Assigned status) */}
-                            <td style={{ verticalAlign: 'middle', padding: '10px 14px' }}>
+                            <td style={{ verticalAlign: 'top', paddingTop: '14px' }}>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '130px' }}>
                                 {isPickupAssigned ? (
                                   <>
@@ -1993,8 +2054,24 @@ export default function POSModule({
                               </div>
                             </td>
 
-                            {/* 8. Bill / Actions (Bill + Edit stacked + More icon) */}
-                            <td style={{ textAlign: 'right', paddingRight: '16px', verticalAlign: 'middle' }}>
+                            {/* 8. Order Details (Captured Time & Target Delivery) */}
+                            <td style={{ verticalAlign: 'top', paddingTop: '14px' }}>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '12px', color: '#475569' }}>
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" style={{ flexShrink: 0, marginTop: '2px' }}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                  <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>Order Captured:</span>
+                                  <span style={{ fontSize: '12.5px', color: '#1e293b', fontWeight: 650, whiteSpace: 'nowrap' }}>{orderCapturedStr}</span>
+                                  {expectedDeliveryStr && expectedDeliveryStr !== '--------' && (
+                                    <span style={{ fontSize: '11px', color: '#0369a1', fontWeight: 600, marginTop: '2px' }}>
+                                      Target: {expectedDeliveryStr}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* 9. Actions (Bill, View, Edit buttons) */}
+                            <td style={{ textAlign: 'right', paddingRight: '16px', verticalAlign: 'top', paddingTop: '14px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
                                   <button
@@ -2004,7 +2081,7 @@ export default function POSModule({
                                       e.stopPropagation();
                                       showToast?.('bill viewed!');
                                     }}
-                                    title="bill viewed!"
+                                    title="View Bill / Invoice"
                                     style={{
                                       display: 'inline-flex',
                                       alignItems: 'center',
@@ -2140,7 +2217,7 @@ export default function POSModule({
                           {/* ── Inline Edit Dropdown Accordion Row ── */}
                           {isEditingThisOrder && editFormData && (
                             <tr key={`${orderNum}_edit_dropdown_card`} className="pos-edit-dropdown-row">
-                              <td colSpan={8} className="pos-inline-edit-wrap">
+                              <td colSpan={9} className="pos-inline-edit-wrap">
                                 <div className="pos-inline-edit-card">
                                   {/* ── Header ── */}
                                   <div className="pos-edit-header-bar">

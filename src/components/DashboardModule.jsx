@@ -13,6 +13,8 @@ export default function DashboardModule({
   onRefreshOrders,
   onEditOrder,
   showToast,
+  searchQuery = '',
+  onClearSearch,
 }) {
   // Compute dynamic KPI metrics from real orders
   const metrics = useMemo(() => {
@@ -82,10 +84,31 @@ export default function DashboardModule({
     };
   }, [orders]);
 
-  // Recent 5-6 orders
+  // Recent orders (filtered by global search query if active)
   const recentOrders = useMemo(() => {
-    return [...orders].slice(0, 6);
-  }, [orders]);
+    let list = [...orders];
+    if (searchQuery && searchQuery.trim()) {
+      const rawQ = searchQuery.trim().toLowerCase();
+      const cleanDigits = rawQ.replace(/\D/g, '');
+      list = list.filter((o) => {
+        const num = String(o.order_number || o.order_id || o.id || '').toLowerCase();
+        const numDigits = num.replace(/\D/g, '');
+        const name = String(o.customer_name || o.customer?.customer_name || '').toLowerCase();
+        const phone = String(o.mobile_number || o.customer?.mobile_number || o.formatted_mobile || '').replace(/\D/g, '');
+        const addr = String(o.address || o.delivery_address || o.customer?.address || '').toLowerCase();
+        const srv = String(o.service_category || o.preference || o.service_type || '').toLowerCase();
+
+        const matchNum = num.includes(rawQ) || (cleanDigits.length > 0 && numDigits.includes(cleanDigits));
+        const matchName = name.includes(rawQ);
+        const matchPhone = cleanDigits.length > 0 && phone.includes(cleanDigits);
+        const matchAddr = addr.includes(rawQ);
+        const matchSrv = srv.includes(rawQ);
+
+        return matchNum || matchName || matchPhone || matchAddr || matchSrv;
+      });
+    }
+    return list.slice(0, 8);
+  }, [orders, searchQuery]);
 
   // Formatted date
   const todayFormatted = new Date().toLocaleDateString('en-IN', {
@@ -100,7 +123,9 @@ export default function DashboardModule({
       {/* ── Top Welcome Banner ── */}
       <section className="dashboard-welcome-banner">
         <div className="dashboard-welcome-left">
-          <div className="dashboard-welcome-avatar">W</div>
+          <div className="dashboard-welcome-avatar" title="Washdoor">
+            <img src="/logo.png" alt="Washdoor" />
+          </div>
           <div>
             <h1 className="dashboard-welcome-title">Welcome to washdoor</h1>
             <p className="dashboard-welcome-sub">
@@ -298,17 +323,34 @@ export default function DashboardModule({
         {/* Recent Orders Register */}
         <div className="dashboard-panel-card">
           <div className="dashboard-card-head">
-            <h2 className="dashboard-card-title">
+            <h2 className="dashboard-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span>📋 Recent Orders</span>
+              {searchQuery && (
+                <span style={{ fontSize: '11.5px', fontWeight: 650, color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', padding: '2px 8px', borderRadius: '6px' }}>
+                  Search: "{searchQuery}" ({recentOrders.length})
+                </span>
+              )}
             </h2>
-            <button
-              type="button"
-              className="dash-btn secondary"
-              onClick={() => onNavigateTab && onNavigateTab('order')}
-              style={{ fontSize: '12px', padding: '5px 12px' }}
-            >
-              <span>View All ({metrics.total})</span>
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {searchQuery && (
+                <button
+                  type="button"
+                  className="dash-btn"
+                  onClick={onClearSearch}
+                  style={{ fontSize: '11px', padding: '4px 8px', color: '#64748b' }}
+                >
+                  Clear Search
+                </button>
+              )}
+              <button
+                type="button"
+                className="dash-btn secondary"
+                onClick={() => onNavigateTab && onNavigateTab('order')}
+                style={{ fontSize: '12px', padding: '5px 12px' }}
+              >
+                <span>View All ({metrics.total})</span>
+              </button>
+            </div>
           </div>
 
           {recentOrders.length === 0 ? (

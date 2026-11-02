@@ -117,7 +117,7 @@ body.light-theme *,
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3b82f6;
+  background: #475d82;
 }
 
 body.light-theme ::-webkit-scrollbar-thumb,

@@ -47,14 +47,22 @@
   width: 52px;
   height: 52px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #0879f9, #3b82f6);
-  color: #ffffff;
+  background: rgba(8, 121, 249, 0.15);
+  border: 1px solid rgba(8, 121, 249, 0.3);
   display: grid;
   place-items: center;
-  font-size: 24px;
-  font-weight: 800;
-  box-shadow: 0 4px 16px rgba(8, 121, 249, 0.4);
+  box-shadow: 0 4px 16px rgba(8, 121, 249, 0.25);
   flex-shrink: 0;
+  padding: 5px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.dashboard-welcome-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .dashboard-welcome-title {
