@@ -249,7 +249,7 @@ export default function DashboardModule({
         <div className="dashboard-card-head">
           <h2 className="dashboard-card-title">
             <span>🧺 Operations Stage Pipeline</span>
-            <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#94a3b8' }}>
+            <span style={{ fontSize: '12px', fontWeight: 'normal', color: 'var(--text-muted, #64748b)' }}>
               ({metrics.activeInShop} active units)
             </span>
           </h2>
@@ -397,7 +397,7 @@ export default function DashboardModule({
                           <div className="dash-cust-phone">{o.mobile_number || 'No phone'}</div>
                         </td>
                         <td>
-                          <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+                          <span style={{ fontSize: '12px', color: 'var(--text-secondary, #475569)' }}>
                             {o.service_category || o.service_type || 'Wash & Steam'}
                           </span>
                         </td>
@@ -471,14 +471,14 @@ export default function DashboardModule({
             )}
           </div>
 
-          <div style={{ marginTop: '20px', borderTop: '1px solid #1a293f', paddingTop: '16px' }}>
-            <h3 style={{ fontSize: '13.5px', fontWeight: '750', color: '#cbd5e1', margin: '0 0 10px' }}>
+          <div style={{ marginTop: '20px', borderTop: '1px solid var(--border, #e2e8f0)', paddingTop: '16px' }}>
+            <h3 style={{ fontSize: '13.5px', fontWeight: '750', color: 'var(--text-primary, #0f172a)', margin: '0 0 10px' }}>
               💳 Payment Status Distribution
             </h3>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <span className="dash-status-pill ready">Paid: {metrics.paid}</span>
               <span className="dash-status-pill progress">Partial: {metrics.partial}</span>
-              <span className="dash-status-pill received" style={{ background: '#7f1d1d', color: '#fca5a5' }}>
+              <span className="dash-status-pill unpaid">
                 Unpaid: {metrics.unpaid}
               </span>
             </div>

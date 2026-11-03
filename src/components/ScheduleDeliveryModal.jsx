@@ -29,37 +29,36 @@ export default function ScheduleDeliveryModal({ order, isOpen, onClose, onConfir
   return (
     <div className="pos-held-modal-backdrop" onClick={onClose}>
       <div
-        className="pos-held-modal"
+        className="pos-dialog-modal"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: '440px', padding: '22px', background: '#0b172a', border: '1px solid #1e3a5f', borderRadius: '16px', color: '#f1f5f9' }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', borderBottom: '1px solid #1e293b', paddingBottom: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 750, fontSize: '15px', color: '#f8fafc' }}>
+        <div className="pos-dialog-header">
+          <div className="pos-dialog-title">
             <span style={{ fontSize: '18px' }}>📅</span>
             <span>{t('modal_schedule_title', 'Schedule Pickup / Delivery')}</span>
           </div>
           <button
             type="button"
-            className="pos-cart-del-btn"
+            className="pos-dialog-close-btn"
             onClick={onClose}
-            style={{ fontSize: '16px', color: '#94a3b8' }}
+            aria-label="Close"
           >
             ✕
           </button>
         </div>
 
-        <div style={{ background: '#030b15', padding: '10px 14px', borderRadius: '8px', border: '1px solid #17253d', marginBottom: '16px' }}>
-          <div style={{ fontWeight: 700, fontSize: '13px', color: '#38bdf8' }}>
+        <div className="pos-dialog-order-card">
+          <div className="pos-dialog-order-num">
             {orderNum}
           </div>
-          <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '2px' }}>
+          <div className="pos-dialog-order-cust">
             {custName} {custPhone ? `• ${custPhone}` : ''}
           </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#94a3b8', marginBottom: '6px' }}>
+            <label className="pos-dialog-label">
               SCHEDULE TYPE
             </label>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -68,17 +67,7 @@ export default function ScheduleDeliveryModal({ order, isOpen, onClose, onConfir
                   key={type}
                   type="button"
                   onClick={() => setScheduleType(type)}
-                  style={{
-                    flex: 1,
-                    padding: '8px',
-                    borderRadius: '8px',
-                    border: scheduleType === type ? '1.5px solid #3b82f6' : '1px solid #1e293b',
-                    background: scheduleType === type ? '#1d4ed8' : '#0f172a',
-                    color: '#fff',
-                    fontWeight: 650,
-                    fontSize: '13px',
-                    cursor: 'pointer'
-                  }}
+                  className={`pos-dialog-type-btn ${scheduleType === type ? 'active' : ''}`}
                 >
                   {type === 'Pickup' ? '📦 Pickup' : '🚚 Delivery'}
                 </button>
@@ -87,7 +76,7 @@ export default function ScheduleDeliveryModal({ order, isOpen, onClose, onConfir
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#94a3b8', marginBottom: '6px' }}>
+            <label className="pos-dialog-label">
               SCHEDULED DATE
             </label>
             <input
@@ -95,34 +84,18 @@ export default function ScheduleDeliveryModal({ order, isOpen, onClose, onConfir
               value={scheduleDate}
               min={new Date().toISOString().split('T')[0]}
               onChange={(e) => setScheduleDate(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                borderRadius: '8px',
-                border: '1px solid #1e293b',
-                background: '#040b17',
-                color: '#f8fafc',
-                fontSize: '13px'
-              }}
+              className="pos-dialog-input"
             />
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#94a3b8', marginBottom: '6px' }}>
+            <label className="pos-dialog-label">
               TIME SLOT
             </label>
             <select
               value={scheduleSlot}
               onChange={(e) => setScheduleSlot(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                borderRadius: '8px',
-                border: '1px solid #1e293b',
-                background: '#040b17',
-                color: '#f8fafc',
-                fontSize: '13px'
-              }}
+              className="pos-dialog-select"
             >
               <option value="Morning (09:00 AM - 12:00 PM)">Morning (09:00 AM - 12:00 PM)</option>
               <option value="Afternoon (01:00 PM - 04:00 PM)">Afternoon (01:00 PM - 04:00 PM)</option>
@@ -133,33 +106,15 @@ export default function ScheduleDeliveryModal({ order, isOpen, onClose, onConfir
           <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
             <button
               type="button"
+              className="pos-dialog-cancel-btn"
               onClick={onClose}
-              style={{
-                flex: 1,
-                padding: '9px',
-                borderRadius: '8px',
-                border: '1px solid #334155',
-                background: 'transparent',
-                color: '#94a3b8',
-                fontWeight: 650,
-                cursor: 'pointer'
-              }}
             >
               Cancel
             </button>
             <button
               type="button"
+              className="pos-dialog-confirm-btn"
               onClick={handleConfirm}
-              style={{
-                flex: 1,
-                padding: '9px',
-                borderRadius: '8px',
-                border: 'none',
-                background: '#2563eb',
-                color: '#fff',
-                fontWeight: 700,
-                cursor: 'pointer'
-              }}
             >
               {t('btn_confirm_schedule', 'Confirm Schedule')}
             </button>

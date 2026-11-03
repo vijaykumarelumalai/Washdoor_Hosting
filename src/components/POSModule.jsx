@@ -1867,7 +1867,7 @@ export default function POSModule({
                                     </button>
                                   )
                                 ) : (
-                                  <span style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic', display: 'inline-block', paddingTop: '4px' }}>
+                                  <span style={{ fontSize: '12px', color: '#64748b', fontStyle: 'italic', display: 'inline-block', paddingTop: '4px' }}>
                                     No services allocated
                                   </span>
                                 )
@@ -3716,7 +3716,7 @@ export default function POSModule({
             {cart.length === 0 ? (
               <div className="pos-cart-empty">
                 <div className="pos-cart-empty-icon">🧺</div>
-                <div style={{ fontWeight: 650, color: '#94a3b8', fontSize: '14px' }}>Cart is Empty</div>
+                <div style={{ fontWeight: 650, color: 'var(--text-secondary, #475569)', fontSize: '14px' }}>Cart is Empty</div>
                 <div style={{ fontSize: '12.5px' }}>
                   Select garments from the catalog to build an intake order.
                 </div>
@@ -3870,7 +3870,7 @@ export default function POSModule({
                     📞 <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{formatPhoneDisplay(selectedCustomer.mobile_number)}</span>
                   </div>
                   {selectedCustomer.address && (
-                    <div style={{ fontSize: '11.5px', color: '#94a3b8' }}>
+                    <div style={{ fontSize: '11.5px', color: 'var(--text-muted, #64748b)' }}>
                       📍 {selectedCustomer.address}
                     </div>
                   )}
@@ -3931,14 +3931,14 @@ export default function POSModule({
                             onClick={() => handleSelectCustomer(c)}
                           >
                             <div>
-                              <div style={{ fontWeight: '650', color: '#fff', fontSize: '13px' }}>
+                              <div className="pos-search-result-name">
                                 {c.customer_name}
                               </div>
-                              <div style={{ fontSize: '11.5px', color: '#7dd3fc' }}>
+                              <div className="pos-search-result-phone">
                                 {formatPhoneDisplay(c.mobile_number)}
                               </div>
                             </div>
-                            <span style={{ fontSize: '11px', color: '#a5b4fc', fontFamily: 'monospace' }}>
+                            <span className="pos-search-result-id">
                               {c.customer_id}
                             </span>
                           </div>
@@ -4080,21 +4080,22 @@ export default function POSModule({
       {isHeldModalOpen && (
         <div className="pos-held-modal-backdrop" onClick={() => setIsHeldModalOpen(false)}>
           <div className="pos-held-modal" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ fontSize: '16px', fontWeight: 750, color: '#fff' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border, #e2e8f0)', paddingBottom: '12px', marginBottom: '8px' }}>
+              <div className="pos-dialog-title" style={{ fontSize: '16px' }}>
                 ⏸ Parked / Held Orders ({heldOrders.length})
               </div>
               <button
                 type="button"
-                className="pos-cart-del-btn"
+                className="pos-dialog-close-btn"
                 onClick={() => setIsHeldModalOpen(false)}
+                aria-label="Close"
               >
                 ✕
               </button>
             </div>
 
             {heldOrders.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '30px 10px', color: '#64748b' }}>
+              <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--text-muted, #64748b)' }}>
                 No held orders at the moment.
               </div>
             ) : (
@@ -4102,28 +4103,19 @@ export default function POSModule({
                 {heldOrders.map((item) => (
                   <div
                     key={item.id}
-                    style={{
-                      background: '#040a14',
-                      border: '1px solid #172a44',
-                      borderRadius: '10px',
-                      padding: '12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '12px',
-                    }}
+                    className="pos-held-card"
                   >
                     <div>
-                      <div style={{ fontWeight: 650, color: '#f1f5f9', fontSize: '13.5px' }}>
+                      <div className="pos-held-order-title">
                         {item.selectedCustomer?.customer_name || item.walkinName || 'Walk-In Customer'}
                       </div>
-                      <div style={{ fontSize: '11.5px', color: '#7dd3fc', marginTop: '2px' }}>
+                      <div className="pos-held-order-meta">
                         {item.totalItemsCount} items • Held at {item.heldAt}
                       </div>
                     </div>
 
                     <div className="pos-status-actions-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <strong style={{ fontSize: '14px', color: '#38bdf8' }}>
+                      <strong className="pos-held-order-amount">
                         {currencySymbol}{item.grandTotal?.toFixed(2)}
                       </strong>
                       <button

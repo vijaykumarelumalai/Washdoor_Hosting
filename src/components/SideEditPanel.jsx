@@ -929,7 +929,7 @@ export default function SideEditPanel({
                             </div>
                           ))}
                           {cartItems.length === 0 && (
-                            <div style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center', padding: '8px 0', fontStyle: 'italic' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted, #64748b)', textAlign: 'center', padding: '8px 0', fontStyle: 'italic' }}>
                               No garments in cart. Select above to add.
                             </div>
                           )}

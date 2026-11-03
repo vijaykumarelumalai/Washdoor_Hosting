@@ -7,6 +7,7 @@ import POSModule from './components/POSModule';
 import DashboardModule from './components/DashboardModule';
 import CreateOrderModal from './components/CreateOrderModal';
 import EditOrderModal from './components/EditOrderModal';
+import AuditLogModule from './components/AuditLogModule';
 import { getOrders, updateOrderInSupabase, deleteOrderFromSupabase } from './services/customerService';
 import { isSupabaseConfigured } from './lib/supabaseClient';
 import { useLanguage } from './context/LanguageContext';
@@ -105,6 +106,20 @@ const NAV_ITEMS = [
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="8" r="4"></circle>
         <path d="M20 21a8 8 0 1 0-16 0"></path>
+      </svg>
+    ),
+  },
+  {
+    id: 'audit',
+    label: 'Audit Log',
+    title: 'Audit Log & History',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+        <polyline points="14 2 14 8 20 8"></polyline>
+        <path d="M16 13H8"></path>
+        <path d="M16 17H8"></path>
+        <path d="M10 9H8"></path>
       </svg>
     ),
   },
@@ -829,7 +844,8 @@ export default function App() {
             const isActive =
               activeTab === item.id ||
               (item.id === 'order' && (activeTab === 'pos' || activeTab === 'orders')) ||
-              (item.id === 'customer' && (activeTab === 'customers' || activeTab === 'customer'));
+              (item.id === 'customer' && (activeTab === 'customers' || activeTab === 'customer')) ||
+              (item.id === 'audit' && (activeTab === 'audit' || activeTab === 'audit_log' || activeTab === 'auditlog'));
             return (
               <button
                 key={item.id}
@@ -839,7 +855,7 @@ export default function App() {
                   setActiveTab(item.id);
                   setSidebarOpen(false);
                 }}
-                title={item.id === 'order' ? t('nav_orders_pos_title') : item.id === 'customer' ? t('nav_customers_title') : item.title}
+                title={item.id === 'order' ? t('nav_orders_pos_title') : item.id === 'customer' ? t('nav_customers_title') : item.id === 'audit' ? t('nav_audit_log_title', 'System Activity & Audit Trail') : item.title}
                 data-nav={item.id}
               >
                 {item.icon}
@@ -849,6 +865,8 @@ export default function App() {
                       ? t('nav_orders_pos')
                       : item.id === 'customer'
                       ? t('nav_customers')
+                      : item.id === 'audit'
+                      ? t('nav_audit_log', 'Audit Log')
                       : item.label}
                   </span>
                 )}
@@ -953,6 +971,17 @@ export default function App() {
             showToast={showToast}
             searchQuery={globalSearchQuery}
             onSearchChange={setGlobalSearchQuery}
+          />
+        ) : (activeTab === 'audit' || activeTab === 'audit_log' || activeTab === 'auditlog') ? (
+          <AuditLogModule
+            orders={orders}
+            loadingOrders={loadingOrders}
+            currencySymbol={currentCurrency?.symbol || '₹'}
+            onNavigateTab={(tab) => {
+              if (tab === 'pos' || tab === 'orders' || tab === 'order') setActiveTab('order');
+              else if (tab === 'customers' || tab === 'customer') setActiveTab('customer');
+            }}
+            showToast={showToast}
           />
         ) : (
           <div className="welcome-screen-wrap">

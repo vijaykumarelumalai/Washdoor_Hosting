@@ -39,6 +39,8 @@ export const translations = {
     nav_customers: 'Customers',
     nav_orders_pos_title: 'Orders & POS Intake Register',
     nav_customers_title: 'Customer Records & Master Data',
+    nav_audit_log: 'Audit Log',
+    nav_audit_log_title: 'System Activity & Audit Trail',
 
     // Customer Management
     cust_master_title: 'Customer Master Records',

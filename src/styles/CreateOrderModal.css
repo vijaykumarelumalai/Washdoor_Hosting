@@ -766,3 +766,134 @@ textarea.form-control {
   .modal { border-radius: var(--radius-lg) var(--radius-lg) 0 0; max-height: 100vh; align-self: flex-end; }
   .order-type-group { flex-direction: column; }
 }
+
+/* ── Light Mode Color and Text Contrast Refinements ─────────── */
+body.light-theme .modal,
+[data-theme="light"] .modal {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.12) !important;
+}
+
+body.light-theme .modal-header,
+[data-theme="light"] .modal-header {
+  border-bottom-color: #e2e8f0 !important;
+  background: #ffffff !important;
+}
+
+body.light-theme .modal-header h2,
+[data-theme="light"] .modal-header h2 {
+  color: #0f172a !important;
+}
+
+body.light-theme .modal-footer,
+[data-theme="light"] .modal-footer {
+  border-top-color: #e2e8f0 !important;
+  background: #ffffff !important;
+}
+
+body.light-theme .section-title,
+[data-theme="light"] .section-title {
+  color: #475569 !important;
+  font-weight: 700 !important;
+}
+
+body.light-theme .order-type-btn,
+[data-theme="light"] .order-type-btn {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #334155 !important;
+}
+
+body.light-theme .order-type-btn:hover,
+[data-theme="light"] .order-type-btn:hover {
+  border-color: #2563eb !important;
+  color: #2563eb !important;
+  background: #f8fafc !important;
+}
+
+body.light-theme .order-type-btn.active,
+[data-theme="light"] .order-type-btn.active {
+  background: #eff6ff !important;
+  border-color: #2563eb !important;
+  color: #2563eb !important;
+  font-weight: 650 !important;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.15) !important;
+}
+
+body.light-theme .customer-card,
+[data-theme="light"] .customer-card {
+  border-bottom-color: #f1f5f9 !important;
+}
+
+body.light-theme .customer-card:hover,
+[data-theme="light"] .customer-card:hover {
+  background: #f8fafc !important;
+}
+
+body.light-theme .customer-card.selected,
+[data-theme="light"] .customer-card.selected {
+  background: #eff6ff !important;
+  border-left-color: #2563eb !important;
+}
+
+body.light-theme .customer-card-name,
+[data-theme="light"] .customer-card-name {
+  color: #0f172a !important;
+}
+
+body.light-theme .customer-card-meta span,
+[data-theme="light"] .customer-card-meta span {
+  color: #475569 !important;
+}
+
+body.light-theme .badge-city,
+[data-theme="light"] .badge-city {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+  border: 1px solid #bfdbfe !important;
+}
+
+body.light-theme .badge-orders,
+[data-theme="light"] .badge-orders {
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+body.light-theme .new-customer-option,
+[data-theme="light"] .new-customer-option {
+  color: #2563eb !important;
+  background: #ffffff !important;
+  border-top-color: #e2e8f0 !important;
+}
+
+body.light-theme .new-customer-option:hover,
+[data-theme="light"] .new-customer-option:hover {
+  background: #eff6ff !important;
+}
+
+body.light-theme .new-customer-option .nc-icon,
+[data-theme="light"] .new-customer-option .nc-icon {
+  background: #dbeafe !important;
+  color: #1d4ed8 !important;
+}
+
+body.light-theme .form-label,
+[data-theme="light"] .form-label {
+  color: #334155 !important;
+  font-weight: 600 !important;
+}
+
+body.light-theme .form-control,
+[data-theme="light"] .form-control {
+  background: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+body.light-theme .form-control:focus,
+[data-theme="light"] .form-control:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+}

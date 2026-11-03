@@ -61,31 +61,9 @@ export default function ThermalReceiptModal({ order, isOpen, onClose }) {
       <div
         className="pos-receipt-modal"
         onClick={(e) => e.stopPropagation()}
-        style={{
-          backgroundColor: '#0f172a',
-          borderRadius: '16px',
-          border: '1px solid #334155',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-          maxWidth: '520px',
-          width: '100%',
-          maxHeight: '90vh',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          color: '#f8fafc',
-        }}
       >
         {/* Top Control Bar (Screen only) */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '16px 20px',
-            borderBottom: '1px solid #1e293b',
-            background: '#1e293b',
-          }}
-        >
+        <div className="pos-receipt-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '15px' }}>
             <span>🧾</span>
             <span>Thermal Invoice &amp; Receipt</span>
@@ -93,36 +71,18 @@ export default function ThermalReceiptModal({ order, isOpen, onClose }) {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {/* Paper Size Selector */}
-            <div style={{ display: 'flex', background: '#0f172a', borderRadius: '6px', padding: '2px', border: '1px solid #334155' }}>
+            <div className="pos-receipt-size-selector">
               <button
                 type="button"
                 onClick={() => setReceiptSize('80mm')}
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: '4px',
-                  border: 'none',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  background: receiptSize === '80mm' ? '#2563eb' : 'transparent',
-                  color: receiptSize === '80mm' ? '#fff' : '#94a3b8',
-                }}
+                className={`pos-receipt-size-btn ${receiptSize === '80mm' ? 'active' : ''}`}
               >
                 80mm (Counter)
               </button>
               <button
                 type="button"
                 onClick={() => setReceiptSize('58mm')}
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: '4px',
-                  border: 'none',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  background: receiptSize === '58mm' ? '#2563eb' : 'transparent',
-                  color: receiptSize === '58mm' ? '#fff' : '#94a3b8',
-                }}
+                className={`pos-receipt-size-btn ${receiptSize === '58mm' ? 'active' : ''}`}
               >
                 58mm (Mobile)
               </button>
@@ -130,15 +90,9 @@ export default function ThermalReceiptModal({ order, isOpen, onClose }) {
 
             <button
               type="button"
+              className="pos-dialog-close-btn"
               onClick={onClose}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#94a3b8',
-                fontSize: '18px',
-                cursor: 'pointer',
-                padding: '4px 8px',
-              }}
+              aria-label="Close"
             >
               ✕
             </button>
@@ -146,16 +100,7 @@ export default function ThermalReceiptModal({ order, isOpen, onClose }) {
         </div>
 
         {/* Scrollable Receipt Preview Area */}
-        <div
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '24px',
-            display: 'flex',
-            justifyContent: 'center',
-            background: '#090d16',
-          }}
-        >
+        <div className="pos-receipt-preview-wrap">
           {/* Printable Receipt Paper */}
           <div
             id="washdoor-thermal-receipt"
@@ -313,53 +258,25 @@ export default function ThermalReceiptModal({ order, isOpen, onClose }) {
         </div>
 
         {/* Bottom Actions Bar */}
-        <div
-          style={{
-            padding: '16px 20px',
-            borderTop: '1px solid #1e293b',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            background: '#0f172a',
-          }}
-        >
-          <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+        <div className="pos-receipt-footer">
+          <span className="pos-receipt-footer-text">
             Ready to print on {receiptSize} thermal printer
           </span>
 
           <div style={{ display: 'flex', gap: '10px' }}>
             <button
               type="button"
+              className="pos-dialog-cancel-btn"
               onClick={onClose}
-              style={{
-                padding: '9px 16px',
-                borderRadius: '8px',
-                border: '1px solid #334155',
-                background: 'transparent',
-                color: '#94a3b8',
-                fontWeight: 650,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
+              style={{ flex: 'initial', padding: '9px 16px' }}
             >
               Close
             </button>
             <button
               type="button"
+              className="pos-dialog-confirm-btn"
               onClick={handlePrint}
-              style={{
-                padding: '9px 20px',
-                borderRadius: '8px',
-                border: 'none',
-                background: '#2563eb',
-                color: '#ffffff',
-                fontWeight: 700,
-                fontSize: '13px',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
+              style={{ flex: 'initial', padding: '9px 20px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
             >
               <span>🖨️</span>
               <span>Print Receipt</span>

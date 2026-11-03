@@ -328,7 +328,7 @@ export default function ViewOrderModal({
                     <span style={{ width: '16px' }}>📝</span>
                     <div>
                       <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Special Instructions / Notes</span>
-                      <div style={{ fontStyle: 'italic', marginTop: '2px', color: '#cbd5e1' }}>
+                      <div style={{ fontStyle: 'italic', marginTop: '2px', color: 'var(--text-primary, #1e293b)' }}>
                         "{notes}"
                       </div>
                     </div>
@@ -494,7 +494,7 @@ export default function ViewOrderModal({
                     <span className={`view-order-badge ${paymentStatus === 'Paid' ? 'status-ready' : paymentStatus === 'Partially Paid' ? 'status-progress' : 'status-cancelled'}`}>
                       ● {paymentStatus}
                     </span>
-                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>({paymentMethod})</span>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted, #64748b)' }}>({paymentMethod})</span>
                   </div>
                 </div>
 
