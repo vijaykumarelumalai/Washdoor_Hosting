@@ -137,15 +137,20 @@ export default function App() {
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
 
-  // Extension panel (sidebar collapsed state & hover-overlap expansion)
-  const [isNavCollapsed, setIsNavCollapsed] = useState(false);
+  // Collapsible Navigation Menu (State 1: Collapsed 68px, State 2: Expanded 230px)
+  const [isNavCollapsed, setIsNavCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('washdoor_nav_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [isNavHovered, setIsNavHovered] = useState(false);
 
   const toggleNavCollapse = (e) => {
     if (e && e.stopPropagation) e.stopPropagation();
     setIsNavCollapsed((prev) => {
       const next = !prev;
-      setIsNavHovered(false);
       try {
         localStorage.setItem('washdoor_nav_collapsed', String(next));
       } catch {}
@@ -153,7 +158,7 @@ export default function App() {
     });
   };
 
-  // Centralized tab navigation: auto-collapses navigation menu whenever navigating to any module
+  // Centralized tab navigation: preserves current state (collapsed or expanded) without unexpected resets
   const navigateToTab = (tab) => {
     if (tab === 'pos' || tab === 'orders' || tab === 'order') setActiveTab('order');
     else if (tab === 'customers' || tab === 'customer') setActiveTab('customer');
@@ -163,10 +168,9 @@ export default function App() {
     else setActiveTab(tab);
 
     setSidebarOpen(false);
-    setIsNavHovered(false);
   };
 
-  const isSidebarExpanded = !isNavCollapsed || isNavHovered;
+  const isSidebarExpanded = !isNavCollapsed;
 
   // Orders state with cache support (authentically loaded from database, no hardcoded mock records)
   const [orders, setOrders] = useState(() => {
@@ -393,29 +397,46 @@ export default function App() {
 
   return (
     <div className="app">
-      {/* ── Topbar ── */}
+      {/* ── Topbar (Pixel-Perfect Match to media_1793708574273_d2d528e0.png) ── */}
       <header className={`topbar ${isNavCollapsed ? 'sidebar-collapsed' : ''}`}>
-        {/* Mobile menu toggle */}
-        <button
-          type="button"
-          className="topbar-mobile-menu-btn"
-          onClick={() => setSidebarOpen((prev) => !prev)}
-          title="Toggle Navigation Menu"
-          aria-label="Toggle navigation menu"
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="3" y1="12" x2="21" y2="12"></line>
-            <line x1="3" y1="6" x2="21" y2="6"></line>
-            <line x1="3" y1="18" x2="21" y2="18"></line>
-          </svg>
-        </button>
-
-        {/* Mobile-only brand */}
-        <div className="topbar-mobile-brand">
-          <div className="topbar-mobile-logo">
-            <img src="/logo.png" alt="Washdoor Logo" />
+        {/* Brand Logo & Store Info */}
+        <div className="topbar-brand-section">
+          <div className="topbar-brand-logo" title="Washdoor">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#ffffff">
+              <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z" />
+            </svg>
           </div>
-          <span className="topbar-mobile-name">Washdoor</span>
+          <div className="topbar-brand-text">
+            <span className="topbar-brand-name">Washdoor</span>
+            <span className="topbar-brand-sub">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+              Ranipet
+            </span>
+          </div>
+
+          {/* Extension Panel / Sidebar Collapse Toggle Button */}
+          <button
+            type="button"
+            className="topbar-sidebar-toggle-btn sidebar-toggle-btn topbar-mobile-menu-btn"
+            onClick={() => {
+              if (window.innerWidth <= 840) {
+                setSidebarOpen((prev) => !prev);
+              } else {
+                toggleNavCollapse();
+              }
+            }}
+            title={isNavCollapsed ? 'Expand Navigation Menu' : 'Collapse Navigation Menu'}
+            aria-label="Toggle navigation menu"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="4" y1="7" x2="20" y2="7"></line>
+              <line x1="4" y1="12" x2="20" y2="12"></line>
+              <line x1="4" y1="17" x2="20" y2="17"></line>
+            </svg>
+          </button>
         </div>
 
         {/* ── Centralized Global Search Bar ── */}
@@ -423,12 +444,12 @@ export default function App() {
           <div className="topbar-search-box">
             <svg
               className="topbar-search-icon"
-              width="16"
-              height="16"
+              width="15"
+              height="15"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="2.4"
+              strokeWidth="2.2"
               strokeLinecap="round"
               strokeLinejoin="round"
             >
@@ -438,7 +459,7 @@ export default function App() {
             <input
               type="text"
               className="topbar-search-input"
-              placeholder="Search by Order ID, Customer Name, or Phone Number..."
+              placeholder="Search by Order ID, Customer Name, or Mobile Number..."
               value={globalSearchQuery}
               onChange={(e) => {
                 setGlobalSearchQuery(e.target.value);
@@ -570,17 +591,11 @@ export default function App() {
             target="_blank"
             rel="noopener noreferrer"
             className="top-pill top-pill-status"
-            style={{
-              fontSize: '12px',
-              textDecoration: 'none',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-            }}
             title="Open Supabase Table Editor in new tab"
           >
-            <span className="top-pill-label-full">● {t('supabase_live')}</span>
-            <span className="top-pill-label-short">● Live</span>
+            <span className="topbar-live-dot"></span>
+            <span className="top-pill-label-full">{t('supabase_live', 'Supabase Live')}</span>
+            <span className="top-pill-label-short">Live</span>
           </a>
         ) : (
           <a
@@ -588,20 +603,11 @@ export default function App() {
             target="_blank"
             rel="noopener noreferrer"
             className="top-pill top-pill-status"
-            style={{
-              color: '#ffd768',
-              borderColor: '#59430f',
-              background: '#332608',
-              fontSize: '12px',
-              textDecoration: 'none',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-            }}
             title="Open Supabase Table Editor in new tab (Configure Supabase in .env.local)"
           >
-            <span className="top-pill-label-full">● Local Master Mode</span>
-            <span className="top-pill-label-short">● Local</span>
+            <span className="topbar-live-dot local"></span>
+            <span className="top-pill-label-full">Local Master Mode</span>
+            <span className="top-pill-label-short">Local</span>
           </a>
         )}
 
@@ -874,32 +880,6 @@ export default function App() {
           setIsNavHovered(false);
         }}
       >
-        {/* Circular Extension Panel Toggle Button (positioned on right border) */}
-        <button
-          type="button"
-          className="sidebar-toggle-btn"
-          onClick={toggleNavCollapse}
-          title={isNavCollapsed ? 'Expand navigation menu (Extension panel)' : 'Collapse navigation menu (Extension panel)'}
-          aria-label={isNavCollapsed ? 'Expand navigation menu' : 'Collapse navigation menu'}
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            {isNavCollapsed && !isNavHovered ? (
-              <polyline points="9 18 15 12 9 6" />
-            ) : (
-              <polyline points="15 18 9 12 15 6" />
-            )}
-          </svg>
-        </button>
-
         {/* Sidebar Brand Header */}
         <div className="sidebar-brand-header">
           <div className="sidebar-brand-logo" title="Washdoor">
@@ -913,6 +893,34 @@ export default function App() {
               <span className="sidebar-brand-sub" title="Laundry &amp; Dry Clean POS">{t('brand_subtitle', 'Ranipet')}</span>
             </div>
           )}
+          {/* Extension panel toggle button (hidden: permanent full sidebar layout) */}
+          <button
+            type="button"
+            className="sidebar-toggle-btn"
+            onClick={toggleNavCollapse}
+            style={{ display: 'none' }}
+            aria-hidden="true"
+            tabIndex={-1}
+            title={isNavCollapsed ? 'Expand navigation menu (Extension panel)' : 'Collapse navigation menu (Extension panel)'}
+            aria-label={isNavCollapsed ? 'Expand navigation menu' : 'Collapse navigation menu'}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              {isNavCollapsed ? (
+                <polyline points="9 18 15 12 9 6" />
+              ) : (
+                <polyline points="15 18 9 12 15 6" />
+              )}
+            </svg>
+          </button>
         </div>
 
         {/* Navigation Items */}
