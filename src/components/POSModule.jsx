@@ -1042,7 +1042,14 @@ export default function POSModule({
       service_category: serviceCategory,
       notes: specialNotes,
       item_count: totalItemsCount,
+      subtotal: subtotal,
+      discount_amount: discountAmount,
+      tax_amount: gstAmount,
       total_amount: grandTotal,
+      intake_type: intakeType,
+      payment_method: paymentMode,
+      payment_status: paymentMode === 'Cash' || paymentMode === 'UPI / QR Code' ? 'Paid' : 'Unpaid',
+      advance_paid: paymentMode === 'Cash' || paymentMode === 'UPI / QR Code' ? grandTotal : 0,
     };
 
     const existingCustId = selectedCustomer?.customer_id || selectedCustomer?.customerId || selectedCustomer?.id;
@@ -1597,7 +1604,6 @@ export default function POSModule({
                         <th scope="col">{t('th_status')}</th>
                         <th scope="col">{t('th_payment', 'Payment')}</th>
                         <th scope="col">{t('th_pickup_delivery', 'Pickup & Delivery')}</th>
-                        <th scope="col">{t('th_order_details', 'Order Details')}</th>
                         <th scope="col" style={{ textAlign: 'right', paddingRight: '20px' }}>{t('th_actions')}</th>
                       </tr>
                     </thead>
@@ -2179,22 +2185,6 @@ export default function POSModule({
                               </div>
                             </td>
 
-                            {/* 8. Order Details (Captured Time & Target Delivery) */}
-                            <td style={{ verticalAlign: 'top', paddingTop: '14px' }}>
-                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '12px', color: '#475569' }}>
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" style={{ flexShrink: 0, marginTop: '2px' }}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                  <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>Order Captured:</span>
-                                  <span style={{ fontSize: '12.5px', color: '#1e293b', fontWeight: 650, whiteSpace: 'nowrap' }}>{orderCapturedStr}</span>
-                                  {expectedDeliveryStr && expectedDeliveryStr !== '--------' && (
-                                    <span style={{ fontSize: '11px', color: '#0369a1', fontWeight: 600, marginTop: '2px' }}>
-                                      Target: {expectedDeliveryStr}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-
                             {/* 9. Actions (Bill, View, Edit buttons) */}
                             <td style={{ textAlign: 'right', paddingRight: '16px', verticalAlign: 'top', paddingTop: '14px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
@@ -2344,7 +2334,7 @@ export default function POSModule({
                           {/* ── Inline Edit Dropdown Accordion Row ── */}
                           {isEditingThisOrder && editFormData && (
                             <tr key={`${orderNum}_edit_dropdown_card`} className="pos-edit-dropdown-row">
-                              <td colSpan={9} className="pos-inline-edit-wrap">
+                              <td colSpan={8} className="pos-inline-edit-wrap">
                                 <div className="pos-inline-edit-card">
                                   {/* ── Header ── */}
                                   <div className="pos-edit-header-bar">

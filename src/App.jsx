@@ -12,7 +12,7 @@ import { isSupabaseConfigured } from './lib/supabaseClient';
 import { useLanguage } from './context/LanguageContext';
 
 const SAMPLE_CURRENCIES = [
-  { code: 'IN', symbol: '₹', label: 'IN • ₹', name: 'India (INR - ₹)' },
+  { code: 'IN', symbol: '₹', label: 'INR ₹', name: 'India (INR - ₹)' },
   { code: 'US', symbol: '$', label: 'US • $', name: 'United States (USD - $)' },
   { code: 'AE', symbol: 'AED', label: 'AE • AED', name: 'UAE (AED - د.إ)' },
   { code: 'UK', symbol: '£', label: 'UK • £', name: 'United Kingdom (GBP - £)' },
@@ -169,7 +169,7 @@ export default function App() {
 
   // Topbar dropdown states
   const [activeDropdown, setActiveDropdown] = useState(null); // 'currency' | 'language' | 'admin' | null
-  const [currentCurrency, setCurrentCurrency] = useState(SAMPLE_CURRENCIES[0] || { symbol: '₹', code: 'IN', label: 'IN • ₹' });
+  const [currentCurrency, setCurrentCurrency] = useState(SAMPLE_CURRENCIES[0] || { symbol: '₹', code: 'IN', label: 'INR ₹' });
   // Language context
   const { language: currentLanguage, setLanguage: setCurrentLanguage, SAMPLE_LANGUAGES, t } = useLanguage();
 
@@ -444,7 +444,7 @@ export default function App() {
               </button>
             )}
             <div className="topbar-search-shortcut" title="Press Ctrl+K or ⌘K to search">
-              <kbd>⌘K</kbd>
+              <kbd>Ctrl + K</kbd>
             </div>
           </div>
 
@@ -521,6 +521,21 @@ export default function App() {
 
         <div className="spacer"></div>
 
+        {/* Notification Bell Icon */}
+        <button
+          type="button"
+          className="topbar-notification-btn"
+          title="Notifications"
+          aria-label="Notifications"
+          onClick={() => showToast('No new notifications')}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+          <span className="topbar-notification-dot" aria-hidden="true"></span>
+        </button>
+
         {isSupabaseConfigured() ? (
           <a
             href="https://supabase.com/dashboard/project/eunguuboxwbblioljwmy/editor/17680?schema=public&sort=customer_id:asc"
@@ -528,9 +543,6 @@ export default function App() {
             rel="noopener noreferrer"
             className="top-pill top-pill-status"
             style={{
-              color: '#4ee2af',
-              borderColor: '#175438',
-              background: '#0b2923',
               fontSize: '12px',
               textDecoration: 'none',
               cursor: 'pointer',
@@ -576,7 +588,6 @@ export default function App() {
             }}
             title="Select Sample Currency"
           >
-            <span>📍</span>
             <span className="top-pill-label-full">{currentCurrency.label}</span>
             <span className="top-pill-label-short">{currentCurrency.symbol}</span>
             <svg
@@ -807,7 +818,7 @@ export default function App() {
           {!isNavCollapsed && (
             <div className="sidebar-brand-info">
               <span className="sidebar-brand-name">{t('brand_name', 'Washdoor')}</span>
-              <span className="sidebar-brand-sub">{t('brand_subtitle', 'Laundry &amp; Dry Clean POS')}</span>
+              <span className="sidebar-brand-sub" title="Laundry &amp; Dry Clean POS">{t('brand_subtitle', 'Ranipet')}</span>
             </div>
           )}
         </div>

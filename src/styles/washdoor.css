@@ -7542,3 +7542,266 @@ body.light-theme .welcome-action-btn.secondary:hover {
   background: #e2e8f0 !important;
   color: #0f172a !important;
 }
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   Washdoor UI Polish & Reference Alignment (Sidebar, Header, Search & Notification)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* 1. Header Layout & Topbar */
+.topbar {
+  display: flex !important;
+  align-items: center !important;
+  padding: 0 20px !important;
+  gap: 12px !important;
+  height: 60px !important;
+  background: #ffffff !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+/* 2. Topbar Search Bar: ~45-50% width, beautifully aligned */
+.topbar-search-wrap {
+  flex: 0 1 48% !important;
+  max-width: 540px !important;
+  min-width: 260px !important;
+  margin: 0 !important;
+  position: relative !important;
+}
+
+.topbar-search-box {
+  height: 38px !important;
+  border-radius: 10px !important;
+  background: #f8fafc !important;
+  border: 1.5px solid #e2e8f0 !important;
+  padding: 0 12px !important;
+  gap: 8px !important;
+  box-shadow: none !important;
+}
+
+.topbar-search-box:focus-within {
+  background: #ffffff !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+}
+
+.topbar-search-input {
+  font-size: 13px !important;
+  color: #0f172a !important;
+}
+
+.topbar-search-input::placeholder {
+  color: #64748b !important;
+  font-size: 12.5px !important;
+}
+
+.topbar-search-shortcut kbd {
+  font-family: inherit !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #64748b !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 6px !important;
+  padding: 2px 7px !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* 3. Notification Bell Icon */
+.topbar-notification-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 8px !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #ffffff !important;
+  color: #475569 !important;
+  cursor: pointer !important;
+  position: relative !important;
+  transition: all 0.15s ease !important;
+  flex-shrink: 0 !important;
+  padding: 0 !important;
+}
+
+.topbar-notification-btn:hover {
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+.topbar-notification-dot {
+  position: absolute !important;
+  top: 7px !important;
+  right: 7px !important;
+  width: 7px !important;
+  height: 7px !important;
+  background: #ef4444 !important;
+  border-radius: 50% !important;
+  box-shadow: 0 0 0 1.5px #ffffff !important;
+}
+
+/* Dark mode notification fallback */
+body:not(.light-theme):not([data-theme="light"]) .topbar-notification-btn {
+  background: #0f1c30 !important;
+  border-color: #1e3352 !important;
+  color: #94a3b8 !important;
+}
+body:not(.light-theme):not([data-theme="light"]) .topbar-notification-btn:hover {
+  background: #172a48 !important;
+  color: #ffffff !important;
+}
+body:not(.light-theme):not([data-theme="light"]) .topbar-notification-dot {
+  box-shadow: 0 0 0 1.5px #0f1c30 !important;
+}
+
+/* 4. Supabase Live Pill in Light Mode */
+body.light-theme .top-pill-status,
+[data-theme="light"] .top-pill-status {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #0f172a !important;
+  font-weight: 600 !important;
+  border-radius: 9999px !important;
+  padding: 6px 14px !important;
+}
+body.light-theme .top-pill-status:hover,
+[data-theme="light"] .top-pill-status:hover {
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* 5. Sidebar Polish & Alignment */
+body.light-theme .sidebar,
+[data-theme="light"] .sidebar {
+  background: #ffffff !important;
+  border-right: 1px solid #e2e8f0 !important;
+}
+
+body.light-theme .sidebar-brand-header,
+[data-theme="light"] .sidebar-brand-header {
+  border-bottom: 1px solid #f1f5f9 !important;
+  padding: 4px 0 16px 0 !important;
+  min-height: 48px !important;
+}
+
+body.light-theme .sidebar-brand-logo,
+[data-theme="light"] .sidebar-brand-logo {
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  background: #2563eb !important;
+  color: #ffffff !important;
+  border-radius: 10px !important;
+  display: grid !important;
+  place-items: center !important;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25) !important;
+}
+
+body.light-theme .sidebar-brand-logo svg,
+[data-theme="light"] .sidebar-brand-logo svg {
+  fill: #ffffff !important;
+  color: #ffffff !important;
+  width: 20px !important;
+  height: 20px !important;
+}
+
+body.light-theme .sidebar-brand-name,
+[data-theme="light"] .sidebar-brand-name {
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  color: #0f172a !important;
+  line-height: 1.15 !important;
+}
+
+body.light-theme .sidebar-brand-sub,
+[data-theme="light"] .sidebar-brand-sub {
+  font-size: 12px !important;
+  font-weight: 550 !important;
+  color: #64748b !important;
+  margin-top: 1px !important;
+}
+
+body.light-theme .sidebar-toggle-btn,
+[data-theme="light"] .sidebar-toggle-btn {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #475569 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+  top: 30px !important;
+}
+
+body.light-theme .sidebar-toggle-btn:hover,
+[data-theme="light"] .sidebar-toggle-btn:hover {
+  background: #f8fafc !important;
+  border-color: #2563eb !important;
+  color: #2563eb !important;
+}
+
+/* Nav items spacing & active styling */
+.sidebar-nav-items {
+  gap: 6px !important;
+  margin-top: 14px !important;
+}
+
+body.light-theme .nav,
+[data-theme="light"] .nav {
+  padding: 10px 14px !important;
+  border-radius: 10px !important;
+  font-weight: 550 !important;
+  color: #475569 !important;
+  transition: all 0.15s ease !important;
+}
+
+body.light-theme .nav:hover,
+[data-theme="light"] .nav:hover {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+body.light-theme .nav.active,
+[data-theme="light"] .nav.active {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.25) !important;
+}
+
+/* Sidebar Bottom (Store Info Card & Sign Out) */
+body.light-theme .sidebar-store-card,
+[data-theme="light"] .sidebar-store-card {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+  padding: 10px 12px !important;
+}
+
+body.light-theme .sidebar-store-icon,
+[data-theme="light"] .sidebar-store-icon {
+  background: #eff6ff !important;
+  color: #2563eb !important;
+  border-radius: 8px !important;
+}
+
+body.light-theme .sidebar-store-name,
+[data-theme="light"] .sidebar-store-name {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+}
+
+body.light-theme .sidebar-signout-btn,
+[data-theme="light"] .sidebar-signout-btn {
+  background: #fff5f5 !important;
+  border: 1px solid #fee2e2 !important;
+  color: #ef4444 !important;
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+  padding: 9px 12px !important;
+}
+body.light-theme .sidebar-signout-btn:hover,
+[data-theme="light"] .sidebar-signout-btn:hover {
+  background: #fee2e2 !important;
+  color: #dc2626 !important;
+}

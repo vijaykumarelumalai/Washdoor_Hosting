@@ -770,6 +770,9 @@ function mapCustomerWorkRowToOrder(row) {
     assigned_driver: row.assigned_staff || internalNotesObj.assigned_driver || '',
     assigned_driver_full: internalNotesObj.assigned_driver_full || row.assigned_staff || '',
     rack_shelf_location: row.rack_shelf_location || '',
+    weight_kg: row.weight_kg !== undefined && row.weight_kg !== null ? Number(row.weight_kg) : null,
+    completed_at: row.completed_at || null,
+    delivered_at: row.delivered_at || null,
     staff_notes: internalNotesObj.staff_notes || '',
     flags: internalNotesObj.flags || {},
     customer: {
@@ -950,30 +953,81 @@ export async function createCustomer(payload) {
     };
 
     // 2. Prepare customer_works row
-    const workRow = {
-      customer_id: custId,
-      customer_name: clean.customer_name,
-      mobile_number: clean.mobile_number,
-      alternate_phone: clean.alternate_phone || null,
-      email: clean.email || null,
-      delivery_address: clean.address || (clean.city ? `${clean.city}${clean.pincode ? ' - ' + clean.pincode : ''}` : 'Counter Walk-In'),
-      service_type: clean.service_category || clean.order_preference || clean.orderPreference || 'Wash & Steam Press',
-      work_status: 'Received',
-      priority: 'Normal',
-      intake_method: clean.intake_type || 'Walk-In',
-      items: [customerProfileItem],
-      total_pieces: 0,
-      subtotal: 0.00,
-      discount_amount: 0.00,
-      tax_amount: 0.00,
-      total_amount: 0.00,
-      advance_paid: 0.00,
-      payment_status: 'Unpaid',
-      payment_method: 'Cash',
-      internal_notes: clean.internal_comments || 'Customer Registered',
-    };
+    // Compute exact financial metrics
+      const calculatedSubtotal = cleanCust.subtotal !== undefined && cleanCust.subtotal !== null
+        ? Number(cleanCust.subtotal)
+        : (items && items.length > 0)
+        ? items.reduce((sum, it) => sum + (Number(it.qty || 1) * Number(it.rate || it.price || 0)), 0)
+        : Number(totalAmount) || 0.00;
 
-    Object.keys(workRow).forEach((k) => workRow[k] === undefined && delete workRow[k]);
+      const calculatedDiscount = Number(cleanCust.discount_amount || cleanCust.discount || 0);
+
+      const calculatedTax = cleanCust.tax_amount !== undefined && cleanCust.tax_amount !== null
+        ? Number(cleanCust.tax_amount)
+        : (cleanCust.tax_exemption || cleanCust.taxExempt) ? 0.00 : +(calculatedSubtotal * 0.05).toFixed(2);
+
+      const calculatedGrandTotal = Number(totalAmount) || +(calculatedSubtotal + calculatedTax - calculatedDiscount).toFixed(2);
+      const advancePaidVal = Number(cleanCust.advance_paid || 0.00);
+      const calculatedPaymentStatus = cleanCust.payment_status || (advancePaidVal >= calculatedGrandTotal && calculatedGrandTotal > 0 ? 'Paid' : advancePaidVal > 0 ? 'Partially Paid' : 'Unpaid');
+      const calculatedPaymentMethod = cleanCust.payment_method || cleanCust.payment_mode || 'Cash';
+
+      // Parse target delivery date
+      let targetDeliveryDateIso = null;
+      const rawDelivery = cleanCust.target_delivery_date || cleanCust.deliveryDate || cleanCust.delivery_date || cleanCust.expected_delivery || cleanCust.expectedDelivery;
+      if (rawDelivery) {
+        const d = new Date(rawDelivery);
+        if (!isNaN(d.getTime())) {
+          targetDeliveryDateIso = d.toISOString();
+        }
+      }
+
+      // Weight & shelf location
+      const weightVal = cleanCust.weight_kg !== undefined && cleanCust.weight_kg !== null
+        ? Number(cleanCust.weight_kg)
+        : cleanCust.product_weight ? Number(cleanCust.product_weight) : null;
+      const rackLocation = cleanCust.rack_shelf_location || cleanCust.rackShelfLocation || null;
+
+      // Structured internal notes for inspections and extra metadata
+      const structuredInternalNotes = {
+        garment_inspections: cleanCust.garment_inspections || cleanCust.inspections || {},
+        expected_delivery_display: rawDelivery || '',
+        payment_method_display: calculatedPaymentMethod,
+        assigned_driver: cleanCust.assigned_driver || cleanCust.assigned_staff || '',
+        assigned_driver_full: cleanCust.assigned_driver_full || '',
+        staff_notes: cleanCust.internal_comments || cleanCust.notes || '',
+        flags: cleanCust.flags || {},
+      };
+
+      const workRow = {
+        work_number: generatedOrderNumber,
+        customer_id: finalCustId,
+        customer_name: cleanCust.customer_name,
+        mobile_number: cleanCust.mobile_number,
+        alternate_phone: cleanCust.alternate_phone || null,
+        email: cleanCust.email || null,
+        delivery_address: cleanCust.address || cleanCust.street_area || (normalizedIntake === 'Walk-In' ? 'Counter Walk-In' : 'Pending Address'),
+        service_type: orderPreference || cleanCust.service_category || 'Wash & Steam Press',
+        work_status: initialWorkStatus,
+        priority: cleanCust.priority || 'Normal',
+        intake_method: normalizedIntake,
+        items: items || [],
+        total_pieces: calculatedItemCount || 1,
+        weight_kg: weightVal,
+        rack_shelf_location: rackLocation,
+        subtotal: Number(calculatedSubtotal.toFixed(2)),
+        discount_amount: Number(calculatedDiscount.toFixed(2)),
+        tax_amount: Number(calculatedTax.toFixed(2)),
+        total_amount: Number(calculatedGrandTotal.toFixed(2)),
+        advance_paid: Number(advancePaidVal.toFixed(2)),
+        payment_status: calculatedPaymentStatus,
+        payment_method: calculatedPaymentMethod,
+        intake_date: cleanCust.intake_date ? new Date(cleanCust.intake_date).toISOString() : new Date().toISOString(),
+        target_delivery_date: targetDeliveryDateIso,
+        assigned_staff: cleanCust.assigned_staff || cleanCust.assigned_driver || null,
+        special_instructions: orderPreferenceNotes || cleanCust.notes || cleanCust.special_instructions || null,
+        internal_notes: JSON.stringify(structuredInternalNotes),
+      };
+      Object.keys(workRow).forEach((k) => workRow[k] === undefined && delete workRow[k]);
 
     // 3. Primary Insert into customer_works table
     const { data: workData, error: workError } = await supabase
@@ -1183,12 +1237,22 @@ export async function createOrderWithCustomer({
         await supabase.from('customers').insert([{
           customer_name: cleanCust.customer_name,
           mobile_number: cleanCust.mobile_number,
+          alternate_phone: cleanCust.alternate_phone || null,
           email: cleanCust.email || null,
           address: cleanCust.address || null,
           city: cleanCust.city || null,
           pincode: cleanCust.pincode || null,
+          communication_pref: cleanCust.communication_pref || null,
+          communication_lang: cleanCust.communication_lang || null,
+          tax_exemption: Boolean(cleanCust.tax_exemption),
+          customer_classification: cleanCust.customer_classification || 'Regular Customer',
+          customer_status: cleanCust.customer_status || 'Active',
+          tier: cleanCust.tier || 'SILVER',
+          notes: cleanCust.notes || cleanCust.internal_comments || null,
         }]);
-      } catch {}
+      } catch (custErr) {
+        console.warn('Customer master auto-insert note:', custErr);
+      }
     }
 
     const calculatedItemCount = (items && items.length > 0)
@@ -1253,6 +1317,51 @@ export async function createOrderWithCustomer({
     const initialWorkStatus = 'Received';
 
     try {
+      // Compute exact financial metrics
+      const calculatedSubtotal = cleanCust.subtotal !== undefined && cleanCust.subtotal !== null
+        ? Number(cleanCust.subtotal)
+        : (items && items.length > 0)
+        ? items.reduce((sum, it) => sum + (Number(it.qty || 1) * Number(it.rate || it.price || 0)), 0)
+        : Number(totalAmount) || 0.00;
+
+      const calculatedDiscount = Number(cleanCust.discount_amount || cleanCust.discount || 0);
+
+      const calculatedTax = cleanCust.tax_amount !== undefined && cleanCust.tax_amount !== null
+        ? Number(cleanCust.tax_amount)
+        : (cleanCust.tax_exemption || cleanCust.taxExempt) ? 0.00 : +(calculatedSubtotal * 0.05).toFixed(2);
+
+      const calculatedGrandTotal = Number(totalAmount) || +(calculatedSubtotal + calculatedTax - calculatedDiscount).toFixed(2);
+      const advancePaidVal = Number(cleanCust.advance_paid || 0.00);
+      const calculatedPaymentStatus = cleanCust.payment_status || (advancePaidVal >= calculatedGrandTotal && calculatedGrandTotal > 0 ? 'Paid' : advancePaidVal > 0 ? 'Partially Paid' : 'Unpaid');
+      const calculatedPaymentMethod = normalizeDbPaymentMethod(cleanCust.payment_method || cleanCust.payment_mode || 'Cash');
+
+      // Parse target delivery date
+      let targetDeliveryDateIso = null;
+      const rawDelivery = cleanCust.target_delivery_date || cleanCust.deliveryDate || cleanCust.delivery_date || cleanCust.expected_delivery || cleanCust.expectedDelivery;
+      if (rawDelivery) {
+        const d = new Date(rawDelivery);
+        if (!isNaN(d.getTime())) {
+          targetDeliveryDateIso = d.toISOString();
+        }
+      }
+
+      // Weight & shelf location
+      const weightVal = cleanCust.weight_kg !== undefined && cleanCust.weight_kg !== null
+        ? Number(cleanCust.weight_kg)
+        : cleanCust.product_weight ? Number(cleanCust.product_weight) : null;
+      const rackLocation = cleanCust.rack_shelf_location || cleanCust.rackShelfLocation || null;
+
+      // Structured internal notes for inspections and extra metadata
+      const structuredInternalNotes = {
+        garment_inspections: cleanCust.garment_inspections || cleanCust.inspections || {},
+        expected_delivery_display: rawDelivery || '',
+        payment_method_display: cleanCust.payment_method || cleanCust.payment_mode || 'Cash',
+        assigned_driver: cleanCust.assigned_driver || cleanCust.assigned_staff || '',
+        assigned_driver_full: cleanCust.assigned_driver_full || '',
+        staff_notes: cleanCust.internal_comments || cleanCust.notes || '',
+        flags: cleanCust.flags || {},
+      };
+
       // Assign standardized ORD00001 order identifier to work_number
       // Omit balance_due because PostgreSQL has it defined as a generated column
       const workRow = {
@@ -1265,17 +1374,24 @@ export async function createOrderWithCustomer({
         delivery_address: cleanCust.address || cleanCust.street_area || (normalizedIntake === 'Walk-In' ? 'Counter Walk-In' : 'Pending Address'),
         service_type: orderPreference || cleanCust.service_category || 'Wash & Steam Press',
         work_status: initialWorkStatus,
-        priority: 'Normal',
+        priority: cleanCust.priority || 'Normal',
         intake_method: normalizedIntake,
         items: items || [],
         total_pieces: calculatedItemCount || 1,
-        subtotal: Number(totalAmount) || 0.00,
-        total_amount: Number(totalAmount) || 0.00,
-        advance_paid: 0.00,
-        payment_status: 'Unpaid',
-        payment_method: 'Cash',
-        special_instructions: orderPreferenceNotes || cleanCust.notes || null,
-        internal_notes: cleanCust.internal_comments || null,
+        weight_kg: weightVal,
+        rack_shelf_location: rackLocation,
+        subtotal: Number(calculatedSubtotal.toFixed(2)),
+        discount_amount: Number(calculatedDiscount.toFixed(2)),
+        tax_amount: Number(calculatedTax.toFixed(2)),
+        total_amount: Number(calculatedGrandTotal.toFixed(2)),
+        advance_paid: Number(advancePaidVal.toFixed(2)),
+        payment_status: calculatedPaymentStatus,
+        payment_method: calculatedPaymentMethod,
+        intake_date: cleanCust.intake_date ? new Date(cleanCust.intake_date).toISOString() : new Date().toISOString(),
+        target_delivery_date: targetDeliveryDateIso,
+        assigned_staff: cleanCust.assigned_staff || cleanCust.assigned_driver || null,
+        special_instructions: orderPreferenceNotes || cleanCust.notes || cleanCust.special_instructions || null,
+        internal_notes: JSON.stringify(structuredInternalNotes),
       };
       Object.keys(workRow).forEach((k) => workRow[k] === undefined && delete workRow[k]);
       const { data: wData, error: wErr } = await supabase.from('customer_works').insert([workRow]).select().single();
@@ -1568,6 +1684,24 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
 
     if (updatePayload.rackShelfLocation || updatePayload.rack_shelf_location) {
       workUpdate.rack_shelf_location = updatePayload.rackShelfLocation || updatePayload.rack_shelf_location;
+    }
+
+    if (updatePayload.weight_kg !== undefined || updatePayload.product_weight !== undefined) {
+      workUpdate.weight_kg = Number(updatePayload.weight_kg ?? updatePayload.product_weight);
+    }
+
+    // Auto-capture completion and delivery timestamps
+    if ((workUpdate.work_status === 'Ready' || updatePayload.status === 'Ready') && !updatePayload.completed_at) {
+      workUpdate.completed_at = new Date().toISOString();
+    }
+    if ((workUpdate.work_status === 'Delivered' || updatePayload.status === 'Delivered') && !updatePayload.delivered_at) {
+      workUpdate.delivered_at = new Date().toISOString();
+    }
+    if (updatePayload.completed_at) {
+      workUpdate.completed_at = new Date(updatePayload.completed_at).toISOString();
+    }
+    if (updatePayload.delivered_at) {
+      workUpdate.delivered_at = new Date(updatePayload.delivered_at).toISOString();
     }
 
     // Delivery date parsing

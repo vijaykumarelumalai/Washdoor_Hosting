@@ -4320,3 +4320,142 @@ body.rtl-layout .pagination-right,
   }
 }
 
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   Orders Table & Filters Reference Alignment
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Status Toolbar Row */
+.pos-status-toolbar-row {
+  margin-bottom: 16px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+}
+
+/* Status Filter Pills */
+.pos-status-pills-bar {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+body.light-theme .pos-status-pill,
+[data-theme="light"] .pos-status-pill {
+  padding: 6px 14px !important;
+  border-radius: 9999px !important;
+  font-size: 13px !important;
+  font-weight: 550 !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #ffffff !important;
+  color: #475569 !important;
+}
+
+body.light-theme .pos-status-pill.active,
+[data-theme="light"] .pos-status-pill.active {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25) !important;
+}
+
+/* Orders Table Card */
+.pos-orders-table-card {
+  border-radius: 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+  background: #ffffff !important;
+  overflow-x: auto !important;
+}
+
+/* Table Dimensions & Layout */
+.pos-orders-table {
+  min-width: 980px !important;
+  width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+body.light-theme .pos-orders-table thead th,
+[data-theme="light"] .pos-orders-table thead th {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  padding: 12px 14px !important;
+}
+
+body.light-theme .pos-orders-table tbody td,
+[data-theme="light"] .pos-orders-table tbody td {
+  border-bottom: 1px solid #f1f5f9 !important;
+  padding: 14px 14px !important;
+  vertical-align: middle !important;
+}
+
+/* Row hover */
+body.light-theme .pos-orders-table tbody tr.pos-order-row:hover,
+[data-theme="light"] .pos-orders-table tbody tr.pos-order-row:hover {
+  background: #f8fafc !important;
+}
+
+/* Clean Pagination Alignment */
+.pagination-bar {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 12px 8px !important;
+  margin-top: 8px !important;
+  border-top: 1px solid #e2e8f0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+body.light-theme .pagination-info,
+[data-theme="light"] .pagination-info {
+  font-size: 13px !important;
+  color: #64748b !important;
+  font-weight: 500 !important;
+}
+
+.pagination-right {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+body.light-theme .pagination-size-select,
+[data-theme="light"] .pagination-size-select {
+  height: 30px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px !important;
+  padding: 0 24px 0 8px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: #334155 !important;
+  background-color: #ffffff !important;
+}
+
+body.light-theme .pagination-btn,
+[data-theme="light"] .pagination-btn {
+  min-width: 28px !important;
+  height: 28px !important;
+  border-radius: 6px !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #ffffff !important;
+  color: #475569 !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+body.light-theme .pagination-btn.pagination-num.active,
+[data-theme="light"] .pagination-btn.pagination-num.active {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.25) !important;
+}
