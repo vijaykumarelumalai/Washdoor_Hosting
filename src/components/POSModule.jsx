@@ -24,6 +24,7 @@ import {
   friendlySupabaseError,
 } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
+import { exportToExcel, exportToPdf, exportToCsv } from '../services/exportService';
 import '../styles/POSModule.css';
 
 const DEFAULT_PRODUCTS = [
@@ -107,6 +108,7 @@ export default function POSModule({
   const [orderDisplayLayout, setOrderDisplayLayout] = useState('table'); // 'table' | 'cards'
   const [expandedOrderId, setExpandedOrderId] = useState(null);
   const [expandedServicesOrderId, setExpandedServicesOrderId] = useState(null);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const tableScrollRef = useRef(null);
 
   // Inline Order Edit Modal State (List View Fields, Read-Only when Ready)
@@ -1011,6 +1013,99 @@ export default function POSModule({
     showToast?.('✨ POS register ready for next customer');
   };
 
+  // ── Export Orders with Live Audit Trail ──
+  const handleExportPOSOrders = (format) => {
+    if (!orders || orders.length === 0) {
+      showToast?.('No orders available to export.');
+      return;
+    }
+    const formatted = orders.map((o) => {
+      let tot = Number(o.total_amount) || 0;
+      if (tot === 0 && Array.isArray(o.items) && o.items.length > 0) {
+        tot = o.items.reduce((s, it) => s + (Number(it.amount) || Number(it.rate || 0) * Number(it.qty || 1)), 0);
+      }
+      const adv = Number(o.advance_paid) || 0;
+      const bal = o.balance_due !== undefined ? Number(o.balance_due) : Math.max(0, tot - adv);
+      const pieces = Number(o.total_pieces || o.item_count) || (Array.isArray(o.items) ? o.items.reduce((s, it) => s + (Number(it.qty) || 1), 0) : 1);
+      return {
+        order_number: o.order_number || (o.id ? `ORD-${o.id}` : 'ORD-00000'),
+        customer_name: o.customer_name || o.customer?.customer_name || 'Walk-in Customer',
+        mobile_number: o.mobile_number || o.customer?.mobile_number || '-',
+        service: o.service_category || o.service_type || 'Wash & Steam Press',
+        status: o.order_status || o.status || 'Received',
+        pieces,
+        total: tot,
+        advance: adv,
+        balance: bal,
+        payment_status: bal <= 0 && tot > 0 ? 'Paid' : adv > 0 ? 'Partial' : tot === 0 ? 'Promo' : 'Unpaid',
+        delivery_date: (o.target_delivery_date || o.delivery_date || '').slice(0, 10) || '-',
+        driver: o.assigned_driver || o.assigned_rider || 'Unassigned',
+      };
+    });
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const cols = [
+      { header: 'Order ID', key: 'order_number', width: 28 },
+      { header: 'Customer Name', key: 'customer_name', width: 38 },
+      { header: 'Mobile Number', key: 'mobile_number', width: 30 },
+      { header: 'Service Type', key: 'service', width: 34 },
+      { header: 'Status', key: 'status', width: 24 },
+      { header: 'Pieces', key: 'pieces', width: 16 },
+      { header: `Total (${currencySymbol})`, key: 'total', width: 24, accessor: (d) => `${currencySymbol}${d.total.toFixed(2)}` },
+      { header: `Balance (${currencySymbol})`, key: 'balance', width: 24, accessor: (d) => `${currencySymbol}${d.balance.toFixed(2)}` },
+      { header: 'Payment Status', key: 'payment_status', width: 24 },
+      { header: 'Target Delivery', key: 'delivery_date', width: 26 },
+      { header: 'Driver', key: 'driver', width: 28 },
+    ];
+
+    try {
+      if (format === 'EXCEL') {
+        exportToExcel({
+          filename: `Washdoor_POS_Orders_${dateStr}.xlsx`,
+          sheetName: 'POS Orders',
+          data: formatted,
+          columns: cols,
+          title: 'POS Orders & Intake Register',
+          module: 'POS Orders & Counter',
+          tenant: 'Ranipet Store #1',
+        });
+      } else if (format === 'PDF') {
+        exportToPdf({
+          filename: `Washdoor_POS_Orders_${dateStr}.pdf`,
+          title: 'Washdoor POS Orders Register',
+          subtitle: `Counter Intake & Live Order Statuses • Tenant: Ranipet Store #1`,
+          data: formatted,
+          columns: [
+            { header: 'Order ID', key: 'order_number', width: 26 },
+            { header: 'Customer', key: 'customer_name', width: 38 },
+            { header: 'Service', key: 'service', width: 32 },
+            { header: 'Status', key: 'status', width: 22 },
+            { header: 'Pcs', key: 'pieces', width: 14 },
+            { header: 'Total', key: 'total', width: 22, accessor: (d) => `${currencySymbol}${d.total}` },
+            { header: 'Due', key: 'balance', width: 22, accessor: (d) => `${currencySymbol}${d.balance}` },
+            { header: 'Payment', key: 'payment_status', width: 20 },
+          ],
+          module: 'POS Orders & Counter',
+          tenant: 'Ranipet Store #1',
+          currencySymbol,
+        });
+      } else {
+        exportToCsv({
+          filename: `Washdoor_POS_Orders_${dateStr}.csv`,
+          data: formatted,
+          columns: cols,
+          title: 'POS Orders Register',
+          module: 'POS Orders & Counter',
+          tenant: 'Ranipet Store #1',
+        });
+      }
+      setIsExportMenuOpen(false);
+      showToast?.(`✓ Orders exported (${format}) and audited for Ranipet Store #1!`);
+    } catch (e) {
+      showToast?.(`❌ Export failed: ${e.message}`);
+    }
+  };
+
   // Submit and create order
   const handleBookOrder = async () => {
     if (cart.length === 0) {
@@ -1205,6 +1300,69 @@ export default function POSModule({
             <span className="pos-btn-label-short">Order</span>
             <span className="pos-key-badge">N</span>
           </button>
+
+          {/* Export Orders Dropdown Button */}
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              className="pos-toolbar-btn"
+              onClick={() => setIsExportMenuOpen((prev) => !prev)}
+              title="Export Orders (Excel, PDF, CSV) with Audit Trail"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              <span>Export</span>
+            </button>
+            {isExportMenuOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '6px',
+                  background: 'var(--panel-bg, #1e293b)',
+                  border: '1px solid var(--border-color, #334155)',
+                  borderRadius: '10px',
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.4)',
+                  padding: '6px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                  zIndex: 100,
+                  minWidth: '150px',
+                }}
+              >
+                <button
+                  type="button"
+                  className="dash-export-btn excel"
+                  onClick={() => handleExportPOSOrders('EXCEL')}
+                  style={{ width: '100%', justifyContent: 'flex-start' }}
+                >
+                  Excel (.xlsx)
+                </button>
+                <button
+                  type="button"
+                  className="dash-export-btn pdf"
+                  onClick={() => handleExportPOSOrders('PDF')}
+                  style={{ width: '100%', justifyContent: 'flex-start' }}
+                >
+                  PDF (.pdf)
+                </button>
+                <button
+                  type="button"
+                  className="dash-export-btn csv"
+                  onClick={() => handleExportPOSOrders('CSV')}
+                  style={{ width: '100%', justifyContent: 'flex-start' }}
+                >
+                  CSV (.csv)
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
       </div>

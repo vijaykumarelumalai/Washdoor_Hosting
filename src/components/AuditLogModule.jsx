@@ -3,6 +3,8 @@
 
 import React, { useState, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import { getStoredAuditLogs } from '../services/auditService';
+import { exportToExcel, exportToPdf, exportToCsv } from '../services/exportService';
 import '../styles/AuditLog.css';
 
 export default function AuditLogModule({
@@ -34,6 +36,24 @@ export default function AuditLogModule({
       action: 'Session Authentication & Counter Intake Active',
       details: 'Counter operator authenticated session. Connected to Supabase real-time database.',
       severity: 'info',
+    });
+
+    // Stored Report Download Audit Trail Events
+    const storedLogs = getStoredAuditLogs();
+    storedLogs.forEach((s) => {
+      list.push({
+        id: s.id,
+        timestamp: s.timestamp,
+        displayTime: s.formattedTime || new Date(s.timestamp).toLocaleString('en-IN'),
+        entity: s.tenant || 'Ranipet Store #1',
+        entityType: 'Report Export',
+        category: 'export',
+        categoryLabel: `Report Download (${s.format})`,
+        actor: s.actor || 'Store Staff',
+        action: s.action || `Report Exported (${s.format})`,
+        details: s.details || `Module: ${s.module}. Records: ${s.recordCount}`,
+        severity: s.severity || 'success',
+      });
     });
 
     // Extract events from real orders
@@ -225,7 +245,7 @@ export default function AuditLogModule({
 
   return (
     <div className="audit-module-container">
-      {/* ── Top Header Bar ── */}
+      {/* ── Top Header Bar (Matching media_1793704371100_944f78bc.png) ── */}
       <div className="audit-header-bar">
         <div className="audit-header-left">
           <div className="audit-title-wrap">
@@ -233,15 +253,15 @@ export default function AuditLogModule({
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                 <polyline points="14 2 14 8 20 8"></polyline>
-                <path d="M16 13H8"></path>
-                <path d="M16 17H8"></path>
-                <path d="M10 9H8"></path>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
               </svg>
             </div>
             <div>
               <h1 className="audit-main-title">Audit Log</h1>
               <p className="audit-subtitle">
-                Immutable chronological system events, status transitions, driver dispatches, and financial ledger history.
+                System events, order transitions, driver actions, payments, and financial ledger history.
               </p>
             </div>
           </div>
@@ -252,13 +272,87 @@ export default function AuditLogModule({
             <span className="audit-pulse-dot"></span>
             <span>Real-time Logging Active</span>
           </div>
+
           <button
             type="button"
-            className="audit-action-btn secondary"
-            onClick={handleExportCSV}
-            title="Export filtered audit logs as CSV"
+            className="audit-action-btn export-excel"
+            onClick={() => {
+              if (filteredEvents.length === 0) {
+                showToast('No audit events to export');
+                return;
+              }
+              exportToExcel({
+                filename: `washdoor_audit_trail_${new Date().toISOString().slice(0, 10)}.xlsx`,
+                sheetName: 'Audit Trail',
+                data: filteredEvents,
+                columns: [
+                  { header: 'Timestamp', key: 'displayTime' },
+                  { header: 'Entity / Target', key: 'entity' },
+                  { header: 'Category', key: 'categoryLabel' },
+                  { header: 'Actor / Operator', key: 'actor' },
+                  { header: 'Action', key: 'action' },
+                  { header: 'Details', key: 'details' },
+                ],
+                title: 'Washdoor System Audit Trail',
+                module: 'Audit Log Module',
+                tenant: 'Ranipet Store #1',
+              });
+              showToast('✓ Audit log exported to Excel');
+            }}
+            title="Export audit logs to Excel (.xlsx)"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="9" y1="3" x2="9" y2="21"></line>
+              <line x1="3" y1="9" x2="21" y2="9"></line>
+              <line x1="3" y1="15" x2="21" y2="15"></line>
+            </svg>
+            <span>Export Excel</span>
+          </button>
+
+          <button
+            type="button"
+            className="audit-action-btn export-pdf"
+            onClick={() => {
+              if (filteredEvents.length === 0) {
+                showToast('No audit events to export');
+                return;
+              }
+              exportToPdf({
+                filename: `washdoor_audit_trail_${new Date().toISOString().slice(0, 10)}.pdf`,
+                title: 'Washdoor System & Operations Audit Trail',
+                subtitle: 'Verified immutable system activity & report download history',
+                data: filteredEvents,
+                columns: [
+                  { header: 'Time', key: 'displayTime', width: 28 },
+                  { header: 'Entity', key: 'entity', width: 26 },
+                  { header: 'Category', key: 'categoryLabel', width: 26 },
+                  { header: 'Operator', key: 'actor', width: 30 },
+                  { header: 'Action', key: 'action', width: 34 },
+                  { header: 'Details', key: 'details', width: 44 },
+                ],
+                module: 'Audit Log Module',
+                tenant: 'Ranipet Store #1',
+              });
+              showToast('✓ Audit log exported to PDF');
+            }}
+            title="Export audit logs to PDF (.pdf)"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <path d="M9 15h6"></path>
+            </svg>
+            <span>Export PDF</span>
+          </button>
+
+          <button
+            type="button"
+            className="audit-action-btn export-csv"
+            onClick={handleExportCSV}
+            title="Export audit logs as CSV"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -268,36 +362,68 @@ export default function AuditLogModule({
         </div>
       </div>
 
-      {/* ── Metrics Cards Row ── */}
+      {/* ── 4 Metrics Summary Cards Grid (Exact match to media_1793704371100_944f78bc.png) ── */}
       <div className="audit-metrics-grid">
+        {/* Card 1: Total System Events */}
         <div className="audit-metric-card">
-          <div className="audit-metric-label">Total System Events</div>
-          <div className="audit-metric-value">{auditEvents.length}</div>
-          <div className="audit-metric-sub">Aggregated across all operations</div>
+          <div className="audit-metric-icon-box blue">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          </div>
+          <div className="audit-metric-info">
+            <div className="audit-metric-label">Total System Events</div>
+            <div className="audit-metric-value">{auditEvents.length}</div>
+          </div>
         </div>
 
+        {/* Card 2: Order Lifecycle Transitions */}
         <div className="audit-metric-card">
-          <div className="audit-metric-label">Order Lifecycle Transitions</div>
-          <div className="audit-metric-value" style={{ color: '#2563eb' }}>
-            {auditEvents.filter((e) => e.category === 'lifecycle').length}
+          <div className="audit-metric-icon-box purple">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+              <polyline points="2 17 12 22 22 17"></polyline>
+              <polyline points="2 12 12 17 22 12"></polyline>
+            </svg>
           </div>
-          <div className="audit-metric-sub">Intakes, processing &amp; completions</div>
+          <div className="audit-metric-info">
+            <div className="audit-metric-label">Order Lifecycle Transitions</div>
+            <div className="audit-metric-value">{auditEvents.filter((e) => e.category === 'lifecycle').length}</div>
+          </div>
         </div>
 
+        {/* Card 3: Driver & Dispatch Actions */}
         <div className="audit-metric-card">
-          <div className="audit-metric-label">Driver &amp; Dispatch Actions</div>
-          <div className="audit-metric-value" style={{ color: '#0284c7' }}>
-            {auditEvents.filter((e) => e.category === 'driver').length}
+          <div className="audit-metric-icon-box green">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
           </div>
-          <div className="audit-metric-sub">Vehicle and logistics routing</div>
+          <div className="audit-metric-info">
+            <div className="audit-metric-label">Driver &amp; Dispatch Actions</div>
+            <div className="audit-metric-value">{auditEvents.filter((e) => e.category === 'driver').length}</div>
+          </div>
         </div>
 
+        {/* Card 4: Payment & Financial Entries */}
         <div className="audit-metric-card">
-          <div className="audit-metric-label">Payment &amp; Financial Entries</div>
-          <div className="audit-metric-value" style={{ color: '#16a34a' }}>
-            {auditEvents.filter((e) => e.category === 'payment').length}
+          <div className="audit-metric-icon-box orange">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="3"></rect>
+              <line x1="2" y1="10" x2="22" y2="10"></line>
+              <circle cx="17" cy="15" r="1.5" fill="currentColor"></circle>
+            </svg>
           </div>
-          <div className="audit-metric-sub">Settlements, advance &amp; receipts</div>
+          <div className="audit-metric-info">
+            <div className="audit-metric-label">Payment &amp; Financial Entries</div>
+            <div className="audit-metric-value">{auditEvents.filter((e) => e.category === 'payment').length}</div>
+          </div>
         </div>
       </div>
 
@@ -307,6 +433,7 @@ export default function AuditLogModule({
         <div className="audit-filter-pills">
           {[
             { id: 'all', label: 'All Events', count: auditEvents.length },
+            { id: 'export', label: 'Report Downloads', count: auditEvents.filter((e) => e.category === 'export').length },
             { id: 'lifecycle', label: 'Order Lifecycle', count: auditEvents.filter((e) => e.category === 'lifecycle').length },
             { id: 'driver', label: 'Driver Dispatch', count: auditEvents.filter((e) => e.category === 'driver').length },
             { id: 'payment', label: 'Payments', count: auditEvents.filter((e) => e.category === 'payment').length },

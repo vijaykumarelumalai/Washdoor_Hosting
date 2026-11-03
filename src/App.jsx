@@ -8,6 +8,8 @@ import DashboardModule from './components/DashboardModule';
 import CreateOrderModal from './components/CreateOrderModal';
 import EditOrderModal from './components/EditOrderModal';
 import AuditLogModule from './components/AuditLogModule';
+import SettingsModule from './components/SettingsModule';
+import ReportsModule from './components/ReportsModule';
 import { getOrders, updateOrderInSupabase, deleteOrderFromSupabase } from './services/customerService';
 import { isSupabaseConfigured } from './lib/supabaseClient';
 import { useLanguage } from './context/LanguageContext';
@@ -135,7 +137,7 @@ export default function App() {
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
 
-  // Extension panel (sidebar collapsed state)
+  // Extension panel (sidebar collapsed state & hover-overlap expansion)
   const [isNavCollapsed, setIsNavCollapsed] = useState(() => {
     try {
       const saved = localStorage.getItem('washdoor_nav_collapsed');
@@ -144,16 +146,38 @@ export default function App() {
       return false;
     }
   });
+  const [isNavHovered, setIsNavHovered] = useState(false);
 
-  const toggleNavCollapse = () => {
+  const toggleNavCollapse = (e) => {
+    if (e && e.stopPropagation) e.stopPropagation();
     setIsNavCollapsed((prev) => {
       const next = !prev;
+      setIsNavHovered(false);
       try {
         localStorage.setItem('washdoor_nav_collapsed', String(next));
       } catch {}
       return next;
     });
   };
+
+  // Centralized tab navigation: auto-collapses navigation menu whenever navigating to any module
+  const navigateToTab = (tab) => {
+    if (tab === 'pos' || tab === 'orders' || tab === 'order') setActiveTab('order');
+    else if (tab === 'customers' || tab === 'customer') setActiveTab('customer');
+    else if (tab === 'reports' || tab === 'report') setActiveTab('report');
+    else if (tab === 'audit_log' || tab === 'auditlog' || tab === 'audit') setActiveTab('audit');
+    else if (tab === 'account' || tab === 'settings') setActiveTab('account');
+    else setActiveTab(tab);
+
+    setSidebarOpen(false);
+    setIsNavHovered(false);
+    setIsNavCollapsed(true);
+    try {
+      localStorage.setItem('washdoor_nav_collapsed', 'true');
+    } catch {}
+  };
+
+  const isSidebarExpanded = !isNavCollapsed || isNavHovered;
 
   // Orders state with cache support (authentically loaded from database, no hardcoded mock records)
   const [orders, setOrders] = useState(() => {
@@ -747,6 +771,34 @@ export default function App() {
           )}
         </button>
 
+        {/* Quick Reports & Download Audit Button in Topbar */}
+        <button
+          type="button"
+          className="top-pill"
+          onClick={() => navigateToTab('report')}
+          title="Open Reports & Audit Download Center"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            cursor: 'pointer',
+            padding: '6px 12px',
+            fontSize: '12.5px',
+            fontWeight: '600',
+            background: activeTab === 'report' ? 'rgba(59, 130, 246, 0.15)' : undefined,
+            borderColor: activeTab === 'report' ? '#3b82f6' : undefined,
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+          <span className="theme-toggle-label">Reports &amp; Audit</span>
+        </button>
+
         {/* Admin Details Dropdown (Avatar Circle Only) */}
         <div className="top-pill-dropdown-wrap">
           <button
@@ -780,6 +832,33 @@ export default function App() {
                   <span className="top-admin-status-dot"></span>
                   {t('session_active')}
                 </div>
+                <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid var(--border, #e2e8f0)' }}>
+                  <button
+                    type="button"
+                    style={{
+                      width: '100%',
+                      padding: '7px 10px',
+                      borderRadius: '6px',
+                      border: '1px solid #2563eb',
+                      background: '#eff6ff',
+                      color: '#2563eb',
+                      fontSize: '12px',
+                      fontWeight: 650,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
+                    }}
+                    onClick={() => {
+                      setActiveTab('account');
+                      setActiveDropdown(null);
+                    }}
+                  >
+                    <span>⚙️</span>
+                    <span>Store Settings &amp; Profile</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -796,7 +875,16 @@ export default function App() {
         />
       )}
 
-      <aside className={`sidebar${isNavCollapsed ? ' collapsed' : ''}${sidebarOpen ? ' mobile-open' : ''}`} aria-label="Main Navigation">
+      <aside
+        className={`sidebar${isNavCollapsed ? ' collapsed' : ''}${isNavHovered ? ' hover-expanded' : ''}${sidebarOpen ? ' mobile-open' : ''}`}
+        aria-label="Main Navigation"
+        onMouseEnter={() => {
+          if (isNavCollapsed) setIsNavHovered(true);
+        }}
+        onMouseLeave={() => {
+          setIsNavHovered(false);
+        }}
+      >
         {/* Circular Extension Panel Toggle Button (positioned on right border) */}
         <button
           type="button"
@@ -815,7 +903,7 @@ export default function App() {
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            {isNavCollapsed ? (
+            {isNavCollapsed && !isNavHovered ? (
               <polyline points="9 18 15 12 9 6" />
             ) : (
               <polyline points="15 18 9 12 15 6" />
@@ -830,7 +918,7 @@ export default function App() {
               <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z" />
             </svg>
           </div>
-          {!isNavCollapsed && (
+          {isSidebarExpanded && (
             <div className="sidebar-brand-info">
               <span className="sidebar-brand-name">{t('brand_name', 'Washdoor')}</span>
               <span className="sidebar-brand-sub" title="Laundry &amp; Dry Clean POS">{t('brand_subtitle', 'Ranipet')}</span>
@@ -845,21 +933,19 @@ export default function App() {
               activeTab === item.id ||
               (item.id === 'order' && (activeTab === 'pos' || activeTab === 'orders')) ||
               (item.id === 'customer' && (activeTab === 'customers' || activeTab === 'customer')) ||
+              (item.id === 'report' && (activeTab === 'reports' || activeTab === 'report')) ||
               (item.id === 'audit' && (activeTab === 'audit' || activeTab === 'audit_log' || activeTab === 'auditlog'));
             return (
               <button
                 key={item.id}
                 type="button"
                 className={`nav ${isActive ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveTab(item.id);
-                  setSidebarOpen(false);
-                }}
+                onClick={() => navigateToTab(item.id)}
                 title={item.id === 'order' ? t('nav_orders_pos_title') : item.id === 'customer' ? t('nav_customers_title') : item.id === 'audit' ? t('nav_audit_log_title', 'System Activity & Audit Trail') : item.title}
                 data-nav={item.id}
               >
                 {item.icon}
-                {!isNavCollapsed && (
+                {isSidebarExpanded && (
                   <span className="nav-label">
                     {item.id === 'order'
                       ? t('nav_orders_pos')
@@ -887,7 +973,7 @@ export default function App() {
                 <path d="M22 7v3a2 2 0 0 1-2 2v0a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12v0a2 2 0 0 1-2-2V7" />
               </svg>
             </div>
-            {!isNavCollapsed && (
+            {isSidebarExpanded && (
               <div className="sidebar-store-info">
                 <div className="sidebar-store-name">Ranipet Store #1</div>
                 <div className="sidebar-store-status">
@@ -922,7 +1008,7 @@ export default function App() {
               <polyline points="16 17 21 12 16 7"></polyline>
               <line x1="21" y1="12" x2="9" y2="12"></line>
             </svg>
-            {!isNavCollapsed && <span>Sign Out</span>}
+            {isSidebarExpanded && <span>Sign Out</span>}
           </button>
         </div>
       </aside>
@@ -935,16 +1021,13 @@ export default function App() {
             loadingOrders={loadingOrders}
             currencySymbol={currentCurrency?.symbol || '₹'}
             onCreateOrder={() => setIsModalOpen(true)}
-            onNavigateTab={(tab) => {
-              if (tab === 'pos' || tab === 'orders') setActiveTab('order');
-              else if (tab === 'customers') setActiveTab('customer');
-              else setActiveTab(tab);
-            }}
+            onNavigateTab={navigateToTab}
             onRefreshOrders={loadOrders}
             onEditOrder={(orderToEdit) => setEditingOrder(orderToEdit)}
             showToast={showToast}
             searchQuery={globalSearchQuery}
             onClearSearch={() => setGlobalSearchQuery('')}
+            onUpdateOrder={handleUpdateOrderRecord}
           />
         ) : (activeTab === 'order' || activeTab === 'pos') ? (
           <POSModule
@@ -956,11 +1039,7 @@ export default function App() {
             showToast={showToast}
             onEditOrder={(orderToEdit) => setEditingOrder(orderToEdit)}
             onOrderCreated={loadOrders}
-            onNavigateTab={(tab) => {
-              if (tab === 'pos' || tab === 'orders') setActiveTab('order');
-              else if (tab === 'customers') setActiveTab('customer');
-              else setActiveTab(tab);
-            }}
+            onNavigateTab={navigateToTab}
             onUpdateOrder={handleUpdateOrderRecord}
             onDeleteOrder={handleDeleteOrderRecord}
             searchQuery={globalSearchQuery}
@@ -972,16 +1051,30 @@ export default function App() {
             searchQuery={globalSearchQuery}
             onSearchChange={setGlobalSearchQuery}
           />
+        ) : (activeTab === 'report' || activeTab === 'reports') ? (
+          <ReportsModule
+            orders={orders}
+            loadingOrders={loadingOrders}
+            currencySymbol={currentCurrency?.symbol || '₹'}
+            showToast={showToast}
+            onNavigateTab={navigateToTab}
+          />
         ) : (activeTab === 'audit' || activeTab === 'audit_log' || activeTab === 'auditlog') ? (
           <AuditLogModule
             orders={orders}
             loadingOrders={loadingOrders}
             currencySymbol={currentCurrency?.symbol || '₹'}
-            onNavigateTab={(tab) => {
-              if (tab === 'pos' || tab === 'orders' || tab === 'order') setActiveTab('order');
-              else if (tab === 'customers' || tab === 'customer') setActiveTab('customer');
-            }}
+            onNavigateTab={navigateToTab}
             showToast={showToast}
+          />
+        ) : (activeTab === 'account' || activeTab === 'settings' || activeTab === 'apps') ? (
+          <SettingsModule
+            showToast={showToast}
+            initialTab={activeTab === 'apps' ? 'apps' : 'business_profile'}
+            onSignOut={() => {
+              showToast('Signed out of counter session');
+              setActiveTab('dashboard');
+            }}
           />
         ) : (
           <div className="welcome-screen-wrap">

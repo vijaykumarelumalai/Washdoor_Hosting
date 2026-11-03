@@ -94,3 +94,13 @@ test('App.jsx provides a centralized search bar in topbar covering order ID, cus
   assert.match(content, /globalSearchQuery/);
   assert.match(content, /searchMatches/);
 });
+
+test('App.jsx auto-collapses navigation on module switch and auto-expands on hover overlap', () => {
+  const content = fs.readFileSync(appPath, 'utf8');
+
+  assert.match(content, /isNavHovered/);
+  assert.match(content, /navigateToTab/);
+  assert.match(content, /hover-expanded/);
+  assert.match(content, /onMouseEnter/);
+  assert.match(content, /onMouseLeave/);
+});
