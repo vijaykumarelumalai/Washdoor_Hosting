@@ -5,6 +5,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import ClothIllustration from './ClothIllustration';
 import { updateOrder, searchCustomers, getProducts } from '../services/customerService';
 import { normalizeMobileNumber, formatPhoneDisplay } from '../utils/validation';
+import { useLanguage } from '../context/LanguageContext';
 import '../styles/EditOrderModal.css';
 
 // 16 Standard Catalog Items exactly from mockup
@@ -37,6 +38,8 @@ export default function EditOrderModal({
   showToast,
   currencySymbol = '₹',
 }) {
+  const { t } = useLanguage();
+
   // Filter state
   const [activeCategory, setActiveCategory] = useState('All Items');
   const [searchQuery, setSearchQuery] = useState('');
@@ -400,16 +403,25 @@ export default function EditOrderModal({
             <div className="pos-filter-toolbar">
               {/* Category Pills */}
               <div className="pos-category-pills">
-                {CATEGORIES.map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    className={`pos-cat-pill ${activeCategory === cat ? 'active' : ''}`}
-                    onClick={() => setActiveCategory(cat)}
-                  >
-                    {cat}
-                  </button>
-                ))}
+                {CATEGORIES.map((cat) => {
+                  let label = cat;
+                  if (cat === 'All Items') label = t('cat_all');
+                  else if (cat === 'Men') label = t('cat_men');
+                  else if (cat === 'Women') label = t('cat_women');
+                  else if (cat === 'Kids') label = t('cat_kids');
+                  else if (cat === 'Home Linen') label = t('cat_linen');
+                  else if (cat === 'Accessories') label = t('cat_accessories');
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      className={`pos-cat-pill ${activeCategory === cat ? 'active' : ''}`}
+                      onClick={() => setActiveCategory(cat)}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Clothes Search */}
@@ -421,7 +433,7 @@ export default function EditOrderModal({
                 <input
                   type="text"
                   className="pos-search-input"
-                  placeholder="Search clothes..."
+                  placeholder={t('pos_search_placeholder')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />

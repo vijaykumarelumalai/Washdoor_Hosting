@@ -1,12 +1,14 @@
 // src/components/CustomerManagement.jsx
 // Complete Customer CRUD Management View with Full Master Data Visual Presentation
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { getAllCustomers, searchCustomers, updateCustomer, deleteCustomer, createCustomer, getNextCustomerId } from '../services/customerService';
 import CustomerForm from './CustomerForm';
 import { friendlySupabaseError, formatPhoneDisplay, isMobileNumberQuery, formatDOB, getAgeFromDOB, normalizeMobileNumber } from '../utils/validation';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function CustomerManagement({ showToast, searchQuery = '', onSearchChange }) {
+  const { t } = useLanguage();
   // Stale-while-revalidate: instant local cache for 0ms load time
   const [customers, setCustomers] = useState(() => {
     try {
@@ -27,6 +29,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
       setQuery(searchQuery);
     }
   }, [searchQuery]);
+
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [isRegisteringNew, setIsRegisteringNew] = useState(false);
   const [nextCustId, setNextCustId] = useState('');
@@ -35,6 +38,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const custListScrollRef = useRef(null);
 
   // ── Customer Pagination ──
   const [custsPageSizeKey, setCustsPageSizeKey] = useState('5');
@@ -107,18 +111,33 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
     }
   }, [isAnyModalOpen]);
 
-  // Window scroll event listener for Scroll To Top control
+  // Scroll event listener for Scroll To Top control (both container & window)
+  const handleListScroll = useCallback((e) => {
+    setShowScrollTop((e?.target?.scrollTop || 0) > 200 || window.scrollY > 280);
+  }, []);
+
   useEffect(() => {
     const handleScroll = () => {
-      setShowScrollTop(window.scrollY > 280);
+      const containerScroll = custListScrollRef.current ? custListScrollRef.current.scrollTop : 0;
+      setShowScrollTop(window.scrollY > 280 || containerScroll > 200);
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   const scrollToTop = () => {
+    if (custListScrollRef.current) {
+      custListScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  // Smooth scroll back to top of customer list whenever page changes
+  useEffect(() => {
+    if (custListScrollRef.current) {
+      custListScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [custPage]);
 
   const handleOpenRegister = async (presetData = null) => {
     setPrefillData(presetData);
@@ -193,7 +212,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
       showToast(`⚠️ ${friendlySupabaseError(error)}`);
       return;
     }
-    showToast('✅ Customer deleted successfully.');
+    showToast(`✅ ${t('customer_deleted_success')}`);
     loadData(query);
   };
 
@@ -204,11 +223,11 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
     : customers.slice((custPage - 1) * CUSTS_PER_PAGE, custPage * CUSTS_PER_PAGE);
 
   return (
-    <div>
-      <div className="page-head" style={{ marginBottom: '16px' }}>
+    <div className="customer-management-container">
+      <div className="page-head" style={{ marginBottom: '14px' }}>
         <div>
-          <h1>Customer Master Records</h1>
-          <div className="muted">Direct CRUD operations: View, Search, Edit, and Manage Master Customers</div>
+          <h1>{t('cust_master_title')}</h1>
+          <div className="muted">{t('cust_master_subtitle')}</div>
         </div>
         <button
           type="button"
@@ -220,12 +239,12 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-          <span>Register Customer</span>
+          <span>{t('register_customer')}</span>
         </button>
       </div>
 
       {/* ── Search & Filter Toolbar ── */}
-      <div className="toolbar" style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+      <div className="toolbar" style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, maxWidth: '780px', flexWrap: 'wrap' }}>
           <div className="toolbar-search-wrap cust-search-wrap" style={{ flex: 1, minWidth: '280px' }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7185a1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -235,7 +254,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
             <input
               type="text"
               className="toolbar-search-input"
-              placeholder="Search by customer name, ID, mobile, address, city…"
+              placeholder={t('search_cust_placeholder')}
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
@@ -261,8 +280,8 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                   setQuery('');
                   onSearchChange?.('');
                 }}
-                aria-label="Clear search"
-                title="Clear search"
+                aria-label={t('clear_search')}
+                title={t('clear_search')}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -302,13 +321,16 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
-              <span>Register Customer</span>
+              <span>{t('register_customer')}</span>
             </button>
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', whiteSpace: 'nowrap' }}>
           <span className="cust-count-badge">
-            {customers.length} customer record{customers.length === 1 ? '' : 's'} loaded{custTotalPages > 1 ? ` · Page ${custPage}/${custTotalPages}` : ''}
+            {customers.length === 1
+              ? t('cust_records_loaded', { count: customers.length })
+              : t('cust_records_loaded_plural', { count: customers.length })
+            }{custTotalPages > 1 ? ` · ${t('page_info', { current: custPage, total: custTotalPages })}` : ''}
           </span>
           <button
             type="button"
@@ -317,9 +339,9 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
             style={{ padding: '7px 14px', fontSize: '12.5px', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             onClick={() => {
               loadData(query);
-              showToast('↻ Syncing customer records...');
+              showToast(t('syncing_toast'));
             }}
-            title="Reload customers from database"
+            title={t('refresh')}
           >
             <svg
               className={loading ? 'sync-spinner' : ''}
@@ -336,17 +358,17 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
               <polyline points="1 20 1 14 7 14" />
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
-            <span>{loading ? 'Syncing...' : 'Refresh'}</span>
+            <span>{loading ? t('syncing') : t('refresh')}</span>
           </button>
         </div>
       </div>
 
       {/* ── Customer List Loading State with Theme-Adaptive Skeleton Cards ── */}
       {loading ? (
-        <div className="orders">
+        <div className="orders cust-orders-container" ref={custListScrollRef} onScroll={handleListScroll}>
           <div className="syncing-banner" style={{ margin: '16px 0', alignSelf: 'flex-start' }}>
             <span className="sync-spinner"></span>
-            <span>{customers.length > 0 ? 'Syncing latest customer records with Supabase…' : 'Connecting to Supabase and syncing customer records…'}</span>
+            <span>{customers.length > 0 ? t('syncing_supabase') : t('connecting_supabase')}</span>
           </div>
           {[1, 2, 3].map((n) => (
             <div key={n} className="skeleton-cust-card">
@@ -370,7 +392,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
           ))}
         </div>
       ) : customers.length === 0 ? (
-        <div className="orders" style={{ textAlign: 'center', padding: '52px 20px', color: '#7e91ac' }}>
+        <div className="orders cust-orders-container cust-empty-container" ref={custListScrollRef} onScroll={handleListScroll} style={{ textAlign: 'center', padding: '52px 20px', color: '#7e91ac' }}>
           {/* Animated 3D/Layered Not-Found Illustration matching user reference */}
           <div className="empty-illustration-container">
             <svg
@@ -600,12 +622,13 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
               </g>
             </svg>
           </div>
-          <p className="empty-title">No customers found</p>
-          <p className="empty-subtitle">No customer records match your filter criteria.</p>
+          <p className="empty-title">{t('no_customers_found')}</p>
+          <p className="empty-subtitle">{t('no_customers_subtitle')}</p>
         </div>
       ) : (
-        <div className="orders">
-          {paginatedCustomers.map((c) => {
+        <>
+          <div className="orders cust-orders-container" ref={custListScrollRef} onScroll={handleListScroll}>
+            {paginatedCustomers.map((c) => {
             const custId = c.customerId || c.customer_code || c.customer_id || c.id || '';
             const status = c.customerStatus || c.customer_status || '';
             const displayMembershipId = c.membershipId || c.membership_id || '';
@@ -634,7 +657,11 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                       {custId && <span className="cust-id-pill">{custId}</span>}
                       <strong className="cust-name-text" style={{ fontSize: '17px' }}>{name}</strong>
                       <span className="phone" style={{ fontSize: '14px' }}>{formatPhoneDisplay(c.mobile_number || c.mobileNumber)}</span>
-                      {status && <span className="badge-tag badge-status">{status}</span>}
+                      {status && (
+                        <span className="badge-tag badge-status">
+                          {status.toLowerCase() === 'active' ? t('badge_active') : status.toLowerCase() === 'inactive' ? t('badge_inactive') : status}
+                        </span>
+                      )}
                       {displayMembershipId && (
                         <span className="membership-id-badge">
                           💳 {displayMembershipId}
@@ -646,11 +673,11 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                     <div className="muted" style={{ marginTop: '5px', fontSize: '13px', display: 'flex', flexWrap: 'wrap', gap: '14px' }}>
                       {locationParts.length > 0 && <span>📍 {locationParts.join(', ')}</span>}
                       {email && <span>✉️ {email}</span>}
-                      {altPhone && <span>📞 Alt: {formatPhoneDisplay(altPhone)}</span>}
+                      {altPhone && <span>📞 {t('alt_phone_prefix')} {formatPhoneDisplay(altPhone)}</span>}
                       {company && <span>🏢 {company} {gst ? `(GST: ${gst})` : ''}</span>}
                       {Array.isArray(c.additional_addresses) && c.additional_addresses.length > 0 && (
                         <span className="additional-addr-count">
-                          🏠 +{c.additional_addresses.length} additional address{c.additional_addresses.length > 1 ? 'es' : ''}
+                          🏠 {c.additional_addresses.length === 1 ? t('additional_address_one', { count: 1 }) : t('additional_address_many', { count: c.additional_addresses.length })}
                         </span>
                       )}
                     </div>
@@ -662,14 +689,14 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                       type="button"
                       className={`secondary cust-btn-view ${isExpanded ? 'active' : ''}`}
                       style={{ padding: '7px 13px', fontSize: '12.5px' }}
-                      title={isExpanded ? 'Collapse Customer Details' : 'View Full Customer Profile'}
+                      title={isExpanded ? t('collapse_profile_title') : t('view_profile_title')}
                       onClick={() => toggleExpandCustomer(cardKey)}
                     >
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                         <circle cx="12" cy="12" r="3" />
                       </svg>
-                      <span>{isExpanded ? 'Hide' : 'View'}</span>
+                      <span>{isExpanded ? t('btn_hide') : t('btn_view')}</span>
                       <svg
                         width="11"
                         height="11"
@@ -694,7 +721,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                         <path d="M12 20h9" />
                         <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
                       </svg>
-                      <span>Edit</span>
+                      <span>{t('btn_edit')}</span>
                     </button>
                     <button
                       type="button"
@@ -706,7 +733,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                         <polyline points="3 6 5 6 21 6" />
                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                       </svg>
-                      <span>Delete</span>
+                      <span>{t('btn_delete')}</span>
                     </button>
                   </div>
                 </div>
@@ -1009,6 +1036,8 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
               </div>
             );
           })}
+          </div>
+
           {/* ── Customer Pagination Bar ── */}
           <div className="pagination-bar">
             <span className="pagination-info">
@@ -1075,7 +1104,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
               </div>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* ── Edit Modal ── */}
@@ -1201,7 +1230,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
           <div className="modal delete-confirm-modal">
             <div className="modal-head delete-confirm-head">
               <div className="modal-title delete-confirm-title">
-                Confirm Customer Deletion
+                {t('delete_confirm_title')}
               </div>
               <button
                 type="button"
@@ -1213,7 +1242,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
               </button>
             </div>
             <div className="delete-confirm-body">
-              Are you sure you want to delete{' '}
+              {t('delete_confirm_msg')}{' '}
               <strong className="cust-name-text">{deleteConfirmTarget.customer_name}</strong> ({formatPhoneDisplay(deleteConfirmTarget.mobile_number)})?
               <div className="delete-confirm-warning-box">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
@@ -1222,7 +1251,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                   <line x1="12" y1="17" x2="12.01" y2="17"></line>
                 </svg>
                 <span>
-                  <strong>Data Integrity Guard:</strong> If this customer has existing order history in Supabase, the database foreign key constraint will safely prevent deletion.
+                  {t('delete_confirm_warning')}
                 </span>
               </div>
             </div>
@@ -1233,7 +1262,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                 onClick={() => setDeleteConfirmTarget(null)}
                 disabled={isDeleting}
               >
-                Cancel
+                {t('btn_cancel')}
               </button>
               <button
                 type="button"
@@ -1241,7 +1270,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                 onClick={() => handleDelete(deleteConfirmTarget.id)}
                 disabled={isDeleting}
               >
-                {isDeleting ? 'Deleting…' : 'Delete Customer'}
+                {isDeleting ? t('btn_deleting') : t('btn_confirm_delete')}
               </button>
             </div>
           </div>

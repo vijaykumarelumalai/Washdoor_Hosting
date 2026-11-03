@@ -20,6 +20,7 @@ import {
   formatPhoneDisplay,
   friendlySupabaseError,
 } from '../utils/validation';
+import { useLanguage } from '../context/LanguageContext';
 import '../styles/POSModule.css';
 
 const DEFAULT_PRODUCTS = [
@@ -84,6 +85,8 @@ export default function POSModule({
   searchQuery = '',
   onSearchChange,
 }) {
+  const { t } = useLanguage();
+
   // Top Header, Search Toolbar & Status Tab State (matching reference mockup)
   const [topSearchQuery, setTopSearchQuery] = useState(searchQuery || '');
 
@@ -983,8 +986,8 @@ export default function POSModule({
       {/* ── Screen Top Header: Orders & POS (Matching Reference Mockup) ── */}
       <div className="pos-screen-header">
         <div className="pos-screen-title-wrap">
-          <h1 className="pos-screen-title">Orders &amp; POS</h1>
-          <div className="pos-screen-subtitle">Create new order, search and manage all laundry orders.</div>
+          <h1 className="pos-screen-title">{t('pos_orders_pos')}</h1>
+          <div className="pos-screen-subtitle">{t('pos_title')}</div>
         </div>
 
         <div className="pos-screen-actions">
@@ -997,7 +1000,7 @@ export default function POSModule({
             <input
               type="text"
               className="pos-search-input toolbar-search-input"
-              placeholder="Search by Order ID, customer name or mobile number..."
+              placeholder={t('pos_search_placeholder')}
               value={topSearchQuery}
               onChange={(e) => {
                 setTopSearchQuery(e.target.value);
@@ -1012,7 +1015,7 @@ export default function POSModule({
                   setTopSearchQuery('');
                   onSearchChange?.('');
                 }}
-                title="Clear search"
+                title={t('clear_search')}
               >
                 ✕
               </button>
@@ -1032,7 +1035,7 @@ export default function POSModule({
                 <line x1="8" y1="2" x2="8" y2="6"></line>
                 <line x1="3" y1="10" x2="21" y2="10"></line>
               </svg>
-              <span className="pos-date-label">{dateFilter === 'All Time' ? '28 Oct 2026 - 28 Oct 2026' : dateFilter}</span>
+              <span className="pos-date-label">{dateFilter === 'All Time' ? t('filter_all_time') : dateFilter}</span>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                 <polyline points="6 9 12 15 18 9"></polyline>
               </svg>
@@ -1042,7 +1045,7 @@ export default function POSModule({
                 <div className="pos-dropdown-header" style={{ fontSize: '11px', padding: '4px 10px 6px', fontWeight: 700, textTransform: 'uppercase' }}>
                   Select Range
                 </div>
-                {['All Time', '28 Oct 2026 - 28 Oct 2026', 'Today', 'Yesterday', 'Last 7 Days', 'This Month'].map((rng) => (
+                {['All Time', 'Today', 'Yesterday', 'Last 7 Days', 'This Month'].map((rng) => (
                   <button
                     key={rng}
                     type="button"
@@ -1052,7 +1055,7 @@ export default function POSModule({
                       setActiveTopDropdown(null);
                     }}
                   >
-                    <span>{rng}</span>
+                    <span>{rng === 'All Time' ? t('filter_all_time') : rng === 'Today' ? t('filter_today') : rng === 'This Month' ? t('filter_this_month') : rng}</span>
                     {dateFilter === rng && <span>✓</span>}
                   </button>
                 ))}
@@ -1075,7 +1078,7 @@ export default function POSModule({
             title="Create new order (Press N)"
           >
             <span style={{ fontSize: '16px', lineHeight: 1 }}>＋</span>
-            <span className="pos-btn-label-full">Create Order</span>
+            <span className="pos-btn-label-full">{t('pos_create_order')}</span>
             <span className="pos-btn-label-short">Order</span>
             <span className="pos-key-badge">N</span>
           </button>
@@ -1095,7 +1098,7 @@ export default function POSModule({
             }}
           >
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#fff', display: 'inline-block' }}></span>
-            <span>All Orders</span>
+            <span>{t('tab_all')}</span>
             <span className="pos-status-pill-count">{statusCounts.all}</span>
           </button>
 
@@ -1108,7 +1111,7 @@ export default function POSModule({
             }}
           >
             <span className="pos-status-dot dot-received" style={{ background: '#2563eb' }}></span>
-            <span>Order Received</span>
+            <span>{t('status_received')}</span>
             <span className="pos-status-pill-count">{statusCounts.received}</span>
           </button>
 
@@ -1121,7 +1124,7 @@ export default function POSModule({
             }}
           >
             <span className="pos-status-dot dot-progress" style={{ background: '#f59e0b' }}></span>
-            <span>In Progress</span>
+            <span>{t('status_progress')}</span>
             <span className="pos-status-pill-count">{statusCounts.inProgress}</span>
           </button>
 
@@ -1134,7 +1137,7 @@ export default function POSModule({
             }}
           >
             <span className="pos-status-dot dot-ready" style={{ background: '#10b981' }}></span>
-            <span>Ready</span>
+            <span>{t('status_ready')}</span>
             <span className="pos-status-pill-count">{statusCounts.ready}</span>
           </button>
 
@@ -1147,7 +1150,7 @@ export default function POSModule({
             }}
           >
             <span className="pos-status-dot dot-delivered" style={{ background: '#0284c7' }}></span>
-            <span>Delivered</span>
+            <span>{t('status_delivered')}</span>
             <span className="pos-status-pill-count">{statusCounts.delivered}</span>
           </button>
 
@@ -1160,7 +1163,7 @@ export default function POSModule({
             }}
           >
             <span className="pos-status-dot dot-cancelled" style={{ background: '#ef4444' }}></span>
-            <span>Cancelled</span>
+            <span>{t('status_cancelled')}</span>
             <span className="pos-status-pill-count">{statusCounts.cancelled}</span>
           </button>
         </div>
@@ -1471,15 +1474,15 @@ export default function POSModule({
                     <table className="pos-orders-table">
                     <thead>
                       <tr>
-                        <th>Order ID</th>
-                        <th>Customer</th>
-                        <th>Address</th>
-                        <th>Service / Items</th>
-                        <th>Status</th>
+                        <th>{t('th_order_id')}</th>
+                        <th>{t('th_customer')}</th>
+                        <th>{t('address_label')}</th>
+                        <th>{t('th_services')}</th>
+                        <th>{t('th_status')}</th>
                         <th>Payment</th>
                         <th>Pickup &amp; Delivery</th>
                         <th>Order Details</th>
-                        <th style={{ textAlign: 'right', paddingRight: '20px' }}>Actions</th>
+                        <th style={{ textAlign: 'right', paddingRight: '20px' }}>{t('th_actions')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1879,7 +1882,13 @@ export default function POSModule({
                                   <span style={{ fontSize: '13px', lineHeight: 1 }}>
                                     {workStatus === 'In Progress' ? '⏱' : workStatus === 'Cancelled' ? '✕' : workStatus === 'Ready' ? '✓' : workStatus === 'Delivered' ? '✓' : '📥'}
                                   </span>
-                                  <span>{workStatus}</span>
+                                  <span>
+                                    {workStatus === 'In Progress' ? t('status_progress') :
+                                     workStatus === 'Ready' ? t('status_ready') :
+                                     workStatus === 'Delivered' ? t('status_delivered') :
+                                     workStatus === 'Cancelled' ? t('status_cancelled') :
+                                     t('status_received')}
+                                  </span>
                                 </div>
                               </div>
                             </td>

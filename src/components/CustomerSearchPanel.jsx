@@ -5,8 +5,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { searchCustomers } from '../services/customerService';
 import { useDebounce } from '../hooks/useDebounce';
 import { formatPhoneDisplay } from '../utils/validation';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function CustomerSearchPanel({ onSelect, onNewCustomer }) {
+  const { t } = useLanguage();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -64,7 +66,7 @@ export default function CustomerSearchPanel({ onSelect, onNewCustomer }) {
             id="customerSearch"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by phone number, customer name or customer ID..."
+            placeholder={t('search_cust_placeholder')}
             autoComplete="off"
             autoFocus
             style={{ paddingLeft: '40px', paddingRight: query ? '46px' : '16px' }}
@@ -74,8 +76,8 @@ export default function CustomerSearchPanel({ onSelect, onNewCustomer }) {
               type="button"
               className="search-clear-btn"
               onClick={handleClear}
-              aria-label="Clear search"
-              title="Clear search"
+              aria-label={t('clear_search')}
+              title={t('clear_search')}
             >
               ✕
             </button>
@@ -91,7 +93,7 @@ export default function CustomerSearchPanel({ onSelect, onNewCustomer }) {
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-          <span>New Customer</span>
+          <span>{t('register_customer')}</span>
         </button>
       </div>
 

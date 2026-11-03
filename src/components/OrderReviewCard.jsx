@@ -4,6 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { formatPhoneDisplay } from '../utils/validation';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function OrderReviewCard({
   order,
@@ -15,6 +16,7 @@ export default function OrderReviewCard({
   showToast,
   currencySymbol = '₹',
 }) {
+  const { t } = useLanguage();
   const cust = order.customer || {};
   const custName = cust.customer_name || order.customer_name || 'Walk-in Customer';
   const phone = cust.mobile_number || order.mobile_number || '';
@@ -78,6 +80,8 @@ export default function OrderReviewCard({
     statusBadgeClass = 'received';
     statusPercentage = 15;
   }
+
+  const isComplete = activePipelineStage === 3 || rawStatus.includes('deliver') || rawStatus.includes('complete') || progress >= 90;
 
   const handleSaveStaffNote = (e) => {
     e.stopPropagation();
@@ -151,7 +155,13 @@ export default function OrderReviewCard({
             onClick={() => onOpenStatus(order)}
           >
             <span className="status-dot" />
-            <span>{statusBadgeLabel}</span>
+            <span>
+              {statusBadgeLabel === 'Cancelled' ? t('status_cancelled') :
+               statusBadgeLabel === 'Delivered' ? t('status_delivered') :
+               statusBadgeLabel === 'Ready' ? t('status_ready') :
+               statusBadgeLabel === 'In Progress' ? t('status_progress') :
+               t('status_received')}
+            </span>
           </button>
 
           <button

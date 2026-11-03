@@ -9,6 +9,7 @@ import CreateOrderModal from './components/CreateOrderModal';
 import EditOrderModal from './components/EditOrderModal';
 import { getOrders, updateOrderInSupabase, deleteOrderFromSupabase } from './services/customerService';
 import { isSupabaseConfigured } from './lib/supabaseClient';
+import { useLanguage } from './context/LanguageContext';
 
 const SAMPLE_CURRENCIES = [
   { code: 'IN', symbol: '₹', label: 'IN • ₹', name: 'India (INR - ₹)' },
@@ -169,7 +170,8 @@ export default function App() {
   // Topbar dropdown states
   const [activeDropdown, setActiveDropdown] = useState(null); // 'currency' | 'language' | 'admin' | null
   const [currentCurrency, setCurrentCurrency] = useState(SAMPLE_CURRENCIES[0] || { symbol: '₹', code: 'IN', label: 'IN • ₹' });
-  const [currentLanguage, setCurrentLanguage] = useState(SAMPLE_LANGUAGES[0] || { name: 'English', code: 'en' });
+  // Language context
+  const { language: currentLanguage, setLanguage: setCurrentLanguage, SAMPLE_LANGUAGES, t } = useLanguage();
 
   // Theme State: 'dark' (default design) | 'light'
   const [theme, setTheme] = useState(() => {
@@ -203,7 +205,7 @@ export default function App() {
   const toggleTheme = () => {
     setTheme((prev) => {
       const next = prev === 'dark' ? 'light' : 'dark';
-      showToast(next === 'light' ? '☀️ Switched to Light Theme' : '🌙 Switched to Dark Theme');
+      showToast(next === 'light' ? t('switched_light') : t('switched_dark'));
       return next;
     });
   };
@@ -532,7 +534,7 @@ export default function App() {
             }}
             title="Open Supabase Table Editor in new tab"
           >
-            <span className="top-pill-label-full">● Supabase Live</span>
+            <span className="top-pill-label-full">● {t('supabase_live')}</span>
             <span className="top-pill-label-short">● Live</span>
           </a>
         ) : (
@@ -624,7 +626,7 @@ export default function App() {
               e.stopPropagation();
               setActiveDropdown((prev) => (prev === 'language' ? null : 'language'));
             }}
-            title="Select Sample Language"
+            title={t('sample_languages')}
           >
             <span>🌐</span>
             <span className="top-pill-label-full">{currentLanguage.name}</span>
@@ -650,7 +652,7 @@ export default function App() {
 
           {activeDropdown === 'language' && (
             <div className="top-pill-menu" style={{ minWidth: '190px' }}>
-              <div className="top-pill-menu-title">Sample Languages</div>
+              <div className="top-pill-menu-title">{t('sample_languages')}</div>
               {SAMPLE_LANGUAGES.map((lang) => (
                 <button
                   key={lang.code}
@@ -659,7 +661,7 @@ export default function App() {
                   onClick={() => {
                     setCurrentLanguage(lang);
                     setActiveDropdown(null);
-                    showToast(`Language set to ${lang.name} (${lang.native})`);
+                    showToast(t('language_set', { name: lang.name, native: lang.native }));
                   }}
                 >
                   <span>{lang.name}</span>
@@ -677,7 +679,7 @@ export default function App() {
           type="button"
           className="top-pill theme-toggle-btn"
           onClick={toggleTheme}
-          title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+          title={theme === 'dark' ? t('switch_to_light') : t('switch_to_dark')}
           aria-label="Toggle theme"
           style={{
             display: 'inline-flex',
@@ -694,7 +696,7 @@ export default function App() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
               </svg>
-              <span className="theme-toggle-label">Dark Mode</span>
+              <span className="theme-toggle-label">{t('dark_mode')}</span>
             </>
           ) : (
             <>
@@ -709,7 +711,7 @@ export default function App() {
                 <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
                 <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
               </svg>
-              <span className="theme-toggle-label">Light Mode</span>
+              <span className="theme-toggle-label">{t('light_mode')}</span>
             </>
           )}
         </button>
@@ -731,21 +733,21 @@ export default function App() {
 
           {activeDropdown === 'admin' && (
             <div className="top-pill-menu top-admin-dropdown" style={{ minWidth: '220px', right: 0, left: 'auto' }}>
-              <div className="top-pill-menu-title">Admin Account</div>
+              <div className="top-pill-menu-title">{t('admin_account')}</div>
               <div className="top-admin-details">
                 <div className="top-admin-user-row">
                   <div className="top-admin-avatar-small">
                     A
                   </div>
                   <div className="top-admin-user-info">
-                    <div className="top-admin-user-name">Store Administrator</div>
+                    <div className="top-admin-user-name">{t('store_admin')}</div>
                     <div className="top-admin-user-email">admin@washdoor.in</div>
                   </div>
                 </div>
-                <div className="top-admin-branch">Branch: Ranipet Store #1</div>
+                <div className="top-admin-branch">{t('branch_ranipet')}</div>
                 <div className="top-admin-status">
                   <span className="top-admin-status-dot"></span>
-                  Session Active
+                  {t('session_active')}
                 </div>
               </div>
             </div>
@@ -799,8 +801,8 @@ export default function App() {
           </div>
           {!isNavCollapsed && (
             <div className="sidebar-brand-info">
-              <span className="sidebar-brand-name">Washdoor</span>
-              <span className="sidebar-brand-sub">Laundry &amp; Dry Clean POS</span>
+              <span className="sidebar-brand-name">{t('brand_name', 'Washdoor')}</span>
+              <span className="sidebar-brand-sub">{t('brand_subtitle', 'Laundry &amp; Dry Clean POS')}</span>
             </div>
           )}
         </div>
@@ -821,11 +823,19 @@ export default function App() {
                   setActiveTab(item.id);
                   setSidebarOpen(false);
                 }}
-                title={item.title}
+                title={item.id === 'order' ? t('nav_orders_pos_title') : item.id === 'customer' ? t('nav_customers_title') : item.title}
                 data-nav={item.id}
               >
                 {item.icon}
-                {!isNavCollapsed && <span className="nav-label">{item.label}</span>}
+                {!isNavCollapsed && (
+                  <span className="nav-label">
+                    {item.id === 'order'
+                      ? t('nav_orders_pos')
+                      : item.id === 'customer'
+                      ? t('nav_customers')
+                      : item.label}
+                  </span>
+                )}
               </button>
             );
           })}

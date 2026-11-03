@@ -6,8 +6,10 @@ import CustomerSearchPanel from './CustomerSearchPanel';
 import CustomerForm from './CustomerForm';
 import { createOrderWithCustomer, getNextOrderId, getNextCustomerId, formatOrderId } from '../services/customerService';
 import { friendlySupabaseError } from '../utils/validation';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, showToast }) {
+  const { t } = useLanguage();
   // Current view: 'LOOKUP' or 'FORM'
   const [view, setView] = useState('LOOKUP');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -162,7 +164,7 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
             <div className="modal-title" id="modalTitle">
-              <span>Create New Customer &amp; Order</span>
+              <span>{t('pos_create_order')}</span>
             </div>
             {view === 'FORM' && activeCustomerId && (
               <div style={{ display: 'flex', alignItems: 'center' }}>
