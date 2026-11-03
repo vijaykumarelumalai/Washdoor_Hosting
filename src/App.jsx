@@ -137,12 +137,13 @@ export default function App() {
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
 
-  // Collapsible Navigation Menu (State 1: Collapsed 68px, State 2: Expanded 230px)
+  // Collapsible Navigation Menu: default auto-collapsed as requested
   const [isNavCollapsed, setIsNavCollapsed] = useState(() => {
     try {
-      return localStorage.getItem('washdoor_nav_collapsed') === 'true';
+      const stored = localStorage.getItem('washdoor_nav_collapsed');
+      return stored === null ? true : stored === 'true';
     } catch {
-      return false;
+      return true;
     }
   });
   const [isNavHovered, setIsNavHovered] = useState(false);
@@ -158,7 +159,7 @@ export default function App() {
     });
   };
 
-  // Centralized tab navigation: preserves current state (collapsed or expanded) without unexpected resets
+  // Centralized tab navigation: auto-collapses on module switch as requested
   const navigateToTab = (tab) => {
     if (tab === 'pos' || tab === 'orders' || tab === 'order') setActiveTab('order');
     else if (tab === 'customers' || tab === 'customer') setActiveTab('customer');
@@ -167,10 +168,16 @@ export default function App() {
     else if (tab === 'account' || tab === 'settings') setActiveTab('account');
     else setActiveTab(tab);
 
+    // Auto-collapse navigation menu when navigating to any module
+    setIsNavCollapsed(true);
+    setIsNavHovered(false);
     setSidebarOpen(false);
+    try {
+      localStorage.setItem('washdoor_nav_collapsed', 'true');
+    } catch {}
   };
 
-  const isSidebarExpanded = !isNavCollapsed;
+  const isSidebarExpanded = !isNavCollapsed || isNavHovered;
 
   // Orders state with cache support (authentically loaded from database, no hardcoded mock records)
   const [orders, setOrders] = useState(() => {

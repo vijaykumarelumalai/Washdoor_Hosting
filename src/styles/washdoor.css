@@ -7828,8 +7828,8 @@ body.light-theme .sidebar-toggle-btn:hover,
   margin-top: 14px !important;
 }
 
-body.light-theme .sidebar:not(.collapsed) .nav,
-[data-theme="light"] .sidebar:not(.collapsed) .nav {
+body.light-theme .sidebar:not(.collapsed) .nav:not(.active),
+[data-theme="light"] .sidebar:not(.collapsed) .nav:not(.active) {
   padding: 10px 14px !important;
   border-radius: 10px !important;
   font-weight: 550 !important;
@@ -7837,18 +7837,34 @@ body.light-theme .sidebar:not(.collapsed) .nav,
   transition: all 0.15s ease !important;
 }
 
-body.light-theme .nav:hover,
-[data-theme="light"] .nav:hover {
+body.light-theme .nav:hover:not(.active),
+[data-theme="light"] .nav:hover:not(.active) {
   background: #f8fafc !important;
   color: #0f172a !important;
 }
 
+body.light-theme .sidebar .nav.active,
+body.light-theme .sidebar:not(.collapsed) .nav.active,
 body.light-theme .nav.active,
-[data-theme="light"] .nav.active {
+body.light-theme .nav.active *,
+body.light-theme .nav.active .nav-label,
+[data-theme="light"] .sidebar .nav.active,
+[data-theme="light"] .sidebar:not(.collapsed) .nav.active,
+[data-theme="light"] .nav.active,
+[data-theme="light"] .nav.active *,
+[data-theme="light"] .nav.active .nav-label {
   background: #2563eb !important;
   color: #ffffff !important;
-  font-weight: 600 !important;
-  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.25) !important;
+  font-weight: 650 !important;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3) !important;
+}
+
+body.light-theme .sidebar .nav.active svg,
+body.light-theme .nav.active svg,
+[data-theme="light"] .sidebar .nav.active svg,
+[data-theme="light"] .nav.active svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
 }
 
 /* Sidebar Bottom (Store Info Card & Sign Out) */
@@ -8096,7 +8112,7 @@ body.dark-theme .sidebar:not(.collapsed) .sidebar-toggle-btn,
   width: 100% !important;
 }
 
-.sidebar:not(.collapsed) .nav {
+.sidebar:not(.collapsed) .nav:not(.active) {
   width: 100% !important;
   padding: 10px 14px !important;
   border-radius: 10px !important;
@@ -8118,8 +8134,8 @@ body.dark-theme .sidebar:not(.collapsed) .sidebar-toggle-btn,
   color: #0f172a !important;
 }
 
-body.dark-theme .sidebar:not(.collapsed) .nav,
-[data-theme="dark"] .sidebar:not(.collapsed) .nav {
+body.dark-theme .sidebar:not(.collapsed) .nav:not(.active),
+[data-theme="dark"] .sidebar:not(.collapsed) .nav:not(.active) {
   color: #94a3b8 !important;
 }
 
@@ -8129,14 +8145,18 @@ body.dark-theme .sidebar:not(.collapsed) .nav:hover:not(.active),
   color: #f1f5f9 !important;
 }
 
-.sidebar:not(.collapsed) .nav.active {
+.sidebar:not(.collapsed) .nav.active,
+.sidebar:not(.collapsed) .nav.active .nav-label,
+.sidebar .nav.active,
+.sidebar .nav.active .nav-label {
   background: #2563eb !important;
   color: #ffffff !important;
   font-weight: 650 !important;
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28) !important;
 }
 
-.sidebar:not(.collapsed) .nav.active svg {
+.sidebar:not(.collapsed) .nav.active svg,
+.sidebar .nav.active svg {
   color: #ffffff !important;
   stroke: #ffffff !important;
 }
