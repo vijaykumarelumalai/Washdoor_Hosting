@@ -4240,3 +4240,83 @@ body.light-theme .pagination-size-select option,
   align-items: center;
   gap: 12px;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ARABIC (RTL) STYLES
+   ══════════════════════════════════════════════════════════════════════════════ */
+body.rtl-layout,
+[dir="rtl"] {
+  direction: rtl;
+  text-align: right;
+}
+
+body.rtl-layout .pos-orders-table th,
+body.rtl-layout .pos-orders-table td,
+[dir="rtl"] .pos-orders-table th,
+[dir="rtl"] .pos-orders-table td {
+  text-align: right;
+}
+
+body.rtl-layout .pos-orders-table th:last-child,
+body.rtl-layout .pos-orders-table td:last-child,
+[dir="rtl"] .pos-orders-table th:last-child,
+[dir="rtl"] .pos-orders-table td:last-child {
+  text-align: left;
+}
+
+body.rtl-layout [dir="ltr"],
+[dir="rtl"] [dir="ltr"] {
+  direction: ltr !important;
+  unicode-bidi: isolate;
+  display: inline-block;
+}
+
+body.rtl-layout .pos-filter-dropdown,
+[dir="rtl"] .pos-filter-dropdown {
+  right: auto;
+  left: 0;
+}
+
+body.rtl-layout .pagination-right,
+[dir="rtl"] .pagination-right {
+  margin-right: auto;
+  margin-left: 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   THERMAL RECEIPT PRINT STYLES
+   ══════════════════════════════════════════════════════════════════════════════ */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  #washdoor-thermal-receipt,
+  #washdoor-thermal-receipt * {
+    visibility: visible !important;
+  }
+  #washdoor-thermal-receipt {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 80mm !important;
+    margin: 0 !important;
+    padding: 8px !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .pos-receipt-modal-backdrop {
+    background: transparent !important;
+    position: static !important;
+    padding: 0 !important;
+  }
+  .pos-receipt-modal {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    max-width: 100% !important;
+  }
+}
+

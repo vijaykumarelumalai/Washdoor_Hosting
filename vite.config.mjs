@@ -16,5 +16,16 @@ export default defineConfig(({ mode }) => {
         ignored: ['**/dist/**', '**/build/**'],
       },
     },
+    build: {
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['react', 'react-dom'],
+            supabase: ['@supabase/supabase-js'],
+          },
+        },
+      },
+    },
   };
 });

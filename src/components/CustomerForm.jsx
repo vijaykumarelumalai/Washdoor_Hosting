@@ -187,7 +187,11 @@ export default function CustomerForm({
     const val = digits.slice(0, 10);
     setMobileNumber(val);
     if (val.length === 10) {
-      setErrors((prev) => ({ ...prev, mobile_number: null }));
+      if (!/^[6-9]/.test(val)) {
+        setErrors((prev) => ({ ...prev, mobile_number: 'Indian mobile number must start with 6, 7, 8, or 9.' }));
+      } else {
+        setErrors((prev) => ({ ...prev, mobile_number: null }));
+      }
     }
   };
 

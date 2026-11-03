@@ -10,21 +10,25 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/logo-192.png" />
+    <meta name="theme-color" content="#ffffff" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <script>
       (function() {
         try {
+          var isManual = localStorage.getItem('washdoor_theme_manual') === 'true';
           var saved = localStorage.getItem('washdoor_theme');
-          var theme = (saved === 'dark' || saved === 'light') ? saved : 'dark';
+          var theme = (isManual && (saved === 'dark' || saved === 'light')) ? saved : 'light';
           document.documentElement.setAttribute('data-theme', theme);
           document.documentElement.className = theme + '-theme';
         } catch (e) {}
       })();
     </script>
-    <script type="module" crossorigin src="/assets/index-3nQ-QAPA.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CFmMREjY.css">
+    <script type="module" crossorigin src="/assets/index-Fhe7YLJG.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-nf7bT_Uh.js">
+    <link rel="modulepreload" crossorigin href="/assets/supabase-f4bNl52y.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-BhcpMAt_.css">
   </head>
   <body style="margin: 0;">
     <div id="root"></div>

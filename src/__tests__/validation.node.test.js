@@ -1,7 +1,7 @@
 // src/__tests__/validation.node.test.js
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateCustomer, friendlySupabaseError, formatPhoneDisplay, formatDOB, parseDOBInput, normalizeMobileNumber, isMobileNumberQuery, getAgeFromDOB } from '../utils/validation.js';
+import { validateCustomer, friendlySupabaseError, formatPhoneDisplay, formatDOB, parseDOBInput, normalizeMobileNumber, isMobileNumberQuery, getAgeFromDOB, isValidIndianMobile } from '../utils/validation.js';
 import { formatOrderId, formatCustomerId } from '../services/customerService.js';
 
 test('formatOrderId generates standardized 5-digit zero-padded order identifier starting with ORD', () => {
@@ -134,6 +134,22 @@ test('friendlySupabaseError formats duplicate mobile and constraint errors', () 
 test('formatPhoneDisplay formats 10-digit numbers into standard readable form', () => {
   assert.equal(formatPhoneDisplay('9833290123'), '+91 98332 90123');
   assert.equal(formatPhoneDisplay('+919833290123'), '+91 98332 90123');
+});
+
+test('isValidIndianMobile validates 10-digit Indian numbers starting with 6-9', () => {
+  assert.equal(isValidIndianMobile('9876543210'), true);
+  assert.equal(isValidIndianMobile('8123456789'), true);
+  assert.equal(isValidIndianMobile('7012345678'), true);
+  assert.equal(isValidIndianMobile('6398765432'), true);
+  assert.equal(isValidIndianMobile('+91 98765 43210'), true);
+  assert.equal(isValidIndianMobile('09876543210'), true);
+
+  // Invalid numbers
+  assert.equal(isValidIndianMobile('5123456789'), false);
+  assert.equal(isValidIndianMobile('1234567890'), false);
+  assert.equal(isValidIndianMobile('98765'), false);
+  assert.equal(isValidIndianMobile(''), false);
+  assert.equal(isValidIndianMobile(null), false);
 });
 
 test('normalizeMobileNumber strips non-digits and standardizes +91 and 0 prefixes to 10 digits', () => {

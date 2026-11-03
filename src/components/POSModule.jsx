@@ -8,6 +8,9 @@ import OrderReviewCard from './OrderReviewCard';
 import SideEditPanel from './SideEditPanel';
 import GarmentInspectionSection from './GarmentInspectionSection';
 import ViewOrderModal from './ViewOrderModal';
+import ThermalReceiptModal from './ThermalReceiptModal';
+import ScheduleDeliveryModal from './ScheduleDeliveryModal';
+import DriverAssignModal from './DriverAssignModal';
 import {
   getProducts,
   searchCustomers,
@@ -115,6 +118,9 @@ export default function POSModule({
 
   // Quick View Order Modal Target Order
   const [viewOrderTarget, setViewOrderTarget] = useState(null);
+
+  // Thermal Receipt / Invoice Modal Target Order
+  const [receiptOrderTarget, setReceiptOrderTarget] = useState(null);
 
   // Expanded Inline Edit Order States (Matching 3-panel UI)
   const [editCatalogCategory, setEditCatalogCategory] = useState('All');
@@ -401,6 +407,12 @@ export default function POSModule({
     const subtotal = editCart.reduce((sum, it) => sum + (Number(it.qty) || 0) * (Number(it.rate) || 0), 0);
     const taxAmount = subtotal * 0.05;
     const grandTotal = subtotal + taxAmount;
+    const advancePaidVal = Number(editFormData.advance_paid || 0);
+
+    if (advancePaidVal > grandTotal) {
+      showToast?.(`⚠️ Advance paid (₹${advancePaidVal.toFixed(2)}) cannot exceed grand total (₹${grandTotal.toFixed(2)})`);
+      return;
+    }
 
     const updatedOrder = {
       ...editingOrderRecord,
@@ -500,6 +512,87 @@ export default function POSModule({
     showToast?.(`✅ Order ${updatedOrder.order_number || updatedOrder.id} updated successfully!`);
     setEditingOrderRecord(null);
     setEditFormData(null);
+  };
+
+  const handleAssignDriverSubmit = ({ order, selectedDriver }) => {
+    const driverName = selectedDriver.split(' (')[0] || selectedDriver;
+    const nowFormatted = new Date().toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const pickupLog = {
+      id: `log_pickup_${Date.now()}`,
+      title: 'Assigned for Pickup',
+      detail: `Pickup scheduled with ${selectedDriver}`,
+      author: 'Store Dispatcher',
+      time: nowFormatted,
+      type: 'pickup',
+      status: 'Assigned for Pickup',
+    };
+
+    const prevLogs = order.audit_logs || order.logs || [];
+    const updatedLogs = [pickupLog, ...prevLogs.filter((l) => l.title !== 'Assigned for Pickup')];
+
+    const updatedOrder = {
+      ...order,
+      assigned_for_pickup: true,
+      pickup_status: 'Assigned for Pickup',
+      assigned_driver: driverName,
+      assigned_driver_full: selectedDriver,
+      pickup_delivery: `Assigned: ${driverName}`,
+      audit_logs: updatedLogs,
+      logs: updatedLogs,
+      timeline: updatedLogs,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (onUpdateOrder) {
+      onUpdateOrder(updatedOrder);
+    } else {
+      try {
+        const cached = localStorage.getItem('washdoor_orders_cache');
+        if (cached) {
+          const list = JSON.parse(cached);
+          const nextList = list.map((o) =>
+            (o.id === updatedOrder.id || o.order_number === updatedOrder.order_number) ? updatedOrder : o
+          );
+          localStorage.setItem('washdoor_orders_cache', JSON.stringify(nextList));
+        }
+      } catch {}
+      onOrderCreated?.(updatedOrder);
+    }
+
+    if (editingOrderRecord && (editingOrderRecord.id === updatedOrder.id || editingOrderRecord.order_number === updatedOrder.order_number)) {
+      setEditingOrderRecord(updatedOrder);
+      setEditFormData((prev) => prev ? {
+        ...prev,
+        assigned_driver: driverName,
+        assigned_driver_full: selectedDriver,
+        pickup_status: 'Assigned for Pickup',
+        assigned_for_pickup: true,
+        pickup_delivery: `Assigned: ${driverName}`,
+      } : prev);
+    }
+
+    showToast?.(`✅ ${driverName} assigned to Order ${updatedOrder.order_number || updatedOrder.order_id}!`);
+
+    const saveKey = updatedOrder.order_number || updatedOrder.id || updatedOrder.work_number;
+    if (saveKey) {
+      updateOrderInSupabase(saveKey, {
+        status: updatedOrder.status,
+        orderStatus: updatedOrder.status,
+        customerName: updatedOrder.customer_name,
+        mobileNumber: updatedOrder.mobile_number,
+        assignedStaff: driverName,
+        pickupStatus: 'Assigned for Pickup',
+        pickupDelivery: `Assigned: ${driverName}`,
+        updated_at: new Date().toISOString(),
+      }).catch((e) => console.warn('Supabase driver assign note:', e));
+    }
   };
 
   // Graphical Action Modal States
@@ -703,6 +796,29 @@ export default function POSModule({
   useEffect(() => {
     setOrdersPage(1);
   }, [activeStatusTab, topSearchQuery, serviceFilter, dateFilter, ordersPageSizeKey]);
+
+  // Global 'N' keyboard shortcut to quickly initiate new order creation
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.key === 'n' || e.key === 'N') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const activeTag = document.activeElement ? document.activeElement.tagName.toUpperCase() : '';
+        const isEditable = document.activeElement ? document.activeElement.isContentEditable : false;
+        if (!['INPUT', 'TEXTAREA', 'SELECT'].includes(activeTag) && !isEditable) {
+          e.preventDefault();
+          if (onCreateOrder) {
+            onCreateOrder();
+          } else {
+            handleResetRegister();
+            setActiveRegisterTab?.('counter');
+            const walkinInput = document.getElementById('walkinNameInput');
+            if (walkinInput) walkinInput.focus();
+          }
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onCreateOrder]);
 
   const ordersTotalPages = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PER_PAGE));
   const paginatedOrders = useMemo(() => {
@@ -911,8 +1027,8 @@ export default function POSModule({
       return;
     }
 
-    if (!cleanMobile || cleanMobile.length !== 10) {
-      showToast?.('⚠️ Please provide a valid 10-digit Mobile Number');
+    if (!cleanMobile || !/^[6-9]\d{9}$/.test(cleanMobile)) {
+      showToast?.('⚠️ Please provide a valid 10-digit Indian Mobile Number (starts with 6, 7, 8, or 9)');
       return;
     }
 
@@ -1474,15 +1590,15 @@ export default function POSModule({
                     <table className="pos-orders-table">
                     <thead>
                       <tr>
-                        <th>{t('th_order_id')}</th>
-                        <th>{t('th_customer')}</th>
-                        <th>{t('address_label')}</th>
-                        <th>{t('th_services')}</th>
-                        <th>{t('th_status')}</th>
-                        <th>Payment</th>
-                        <th>Pickup &amp; Delivery</th>
-                        <th>Order Details</th>
-                        <th style={{ textAlign: 'right', paddingRight: '20px' }}>{t('th_actions')}</th>
+                        <th scope="col">{t('th_order_id')}</th>
+                        <th scope="col">{t('th_customer')}</th>
+                        <th scope="col">{t('address_label')}</th>
+                        <th scope="col">{t('th_services')}</th>
+                        <th scope="col">{t('th_status')}</th>
+                        <th scope="col">{t('th_payment', 'Payment')}</th>
+                        <th scope="col">{t('th_pickup_delivery', 'Pickup & Delivery')}</th>
+                        <th scope="col">{t('th_order_details', 'Order Details')}</th>
+                        <th scope="col" style={{ textAlign: 'right', paddingRight: '20px' }}>{t('th_actions')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1648,7 +1764,7 @@ export default function POSModule({
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                                       <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
                                     </svg>
-                                    <span>{phone}</span>
+                                    <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{phone}</span>
                                   </div>
                                 </div>
                               </div>
@@ -1988,7 +2104,7 @@ export default function POSModule({
                                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                                         <circle cx="12" cy="7" r="4" />
                                       </svg>
-                                      <span>Change Driver</span>
+                                      <span>{t('btn_change_driver', 'Change Driver')}</span>
                                     </button>
                                   </>
                                 ) : (
@@ -2024,7 +2140,7 @@ export default function POSModule({
                                         <line x1="8" y1="2" x2="8" y2="6" />
                                         <line x1="3" y1="10" x2="21" y2="10" />
                                       </svg>
-                                      <span>Schedule</span>
+                                      <span>{t('btn_schedule', 'Schedule')}</span>
                                     </button>
 
                                     <button
@@ -2056,7 +2172,7 @@ export default function POSModule({
                                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                                         <circle cx="12" cy="7" r="4" />
                                       </svg>
-                                      <span>Assign Driver</span>
+                                      <span>{t('btn_assign_driver', 'Assign Driver')}</span>
                                     </button>
                                   </>
                                 )}
@@ -2088,7 +2204,7 @@ export default function POSModule({
                                     className="pos-table-action-btn btn-bill"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      showToast?.('bill viewed!');
+                                      setReceiptOrderTarget(ord);
                                     }}
                                     title="View Bill / Invoice"
                                     style={{
@@ -2115,7 +2231,7 @@ export default function POSModule({
                                       <line x1="16" y1="13" x2="8" y2="13"></line>
                                       <line x1="16" y1="17" x2="8" y2="17"></line>
                                     </svg>
-                                    <span>Bill</span>
+                                    <span>{t('btn_bill', 'Bill')}</span>
                                   </button>
 
                                   <button
@@ -2148,12 +2264,14 @@ export default function POSModule({
                                       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                       <circle cx="12" cy="12" r="3"></circle>
                                     </svg>
-                                    <span>View</span>
+                                    <span>{t('btn_view', 'View')}</span>
                                   </button>
 
                                   <button
                                     type="button"
                                     className={`pos-table-action-btn btn-edit-order ${isEditingThisOrder ? 'active-edit-btn' : ''}`}
+                                    aria-expanded={isEditingThisOrder}
+                                    aria-controls={`order-edit-accordion-${ord.id || ord.order_number}`}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleOpenEditModal(ord);
@@ -2181,7 +2299,7 @@ export default function POSModule({
                                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                                     </svg>
-                                    <span>{isEditingThisOrder ? 'Close' : 'Edit'}</span>
+                                    <span>{isEditingThisOrder ? t('btn_hide', 'Close') : t('btn_edit', 'Edit')}</span>
                                   </button>
 
                                   <button
@@ -2216,7 +2334,7 @@ export default function POSModule({
                                       <line x1="9" y1="3" x2="9" y2="21"></line>
                                       <path d="M14 9l3 3-3 3"></path>
                                     </svg>
-                                    <span>Side Edit Panel</span>
+                                    <span>{t('btn_side_edit_panel', 'Side Edit Panel')}</span>
                                   </button>
                                 </div>
                               </div>
@@ -2477,7 +2595,7 @@ export default function POSModule({
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                                               <div style={{ fontSize: '13px', fontWeight: 750, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                 <span style={{ color: '#2563eb' }}>◆</span>
-                                                <span>Cloth Selection &amp; Catalog</span>
+                                                <span>{t('pos_cloth_selection', 'Cloth Selection & Catalog')}</span>
                                               </div>
                                               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                 <button
@@ -2657,7 +2775,7 @@ export default function POSModule({
                                             <div className="pos-edit-section-card">
                                               <div className="pos-edit-section-title" style={{ fontSize: '12.5px', marginBottom: '10px' }}>
                                                 <span style={{ color: '#2563eb' }}>◆</span>
-                                                <span>Selected Item Details</span>
+                                                <span>{t('pos_selected_item_details', 'Selected Item Details')}</span>
                                               </div>
 
                                               {/* Active Item Banner */}
@@ -2680,7 +2798,7 @@ export default function POSModule({
 
                                               {/* Service Type Dropdown */}
                                               <div style={{ marginBottom: '8px' }}>
-                                                <label className="pos-edit-label">Service Type</label>
+                                                <label className="pos-edit-label">{t('pos_service_type', 'Service Type')}</label>
                                                 <select
                                                   className="pos-edit-field"
                                                   value={editSelectedService}
@@ -2698,7 +2816,7 @@ export default function POSModule({
                                               {/* Quantity & Rate Row */}
                                               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
                                                 <div>
-                                                  <label className="pos-edit-label">Quantity</label>
+                                                  <label className="pos-edit-label">{t('pos_quantity', 'Quantity')}</label>
                                                   <div className="pos-edit-qty-group">
                                                     <button
                                                       type="button"
@@ -2721,7 +2839,7 @@ export default function POSModule({
                                                 </div>
 
                                                 <div>
-                                                  <label className="pos-edit-label">Rate per piece (₹)</label>
+                                                  <label className="pos-edit-label">{t('pos_rate_per_piece', 'Rate per piece')} (₹)</label>
                                                   <input
                                                     type="number"
                                                     min="1"
@@ -2747,7 +2865,7 @@ export default function POSModule({
                                                   <circle cx="20" cy="21" r="1"></circle>
                                                   <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
                                                 </svg>
-                                                <span>Add to Cart</span>
+                                                <span>{t('btn_add_to_cart', 'Add to Cart')}</span>
                                               </button>
                                             </div>
 
@@ -2879,12 +2997,12 @@ export default function POSModule({
                                         }}
                                       >
                                         {[
-                                          { id: 'details', label: '1. Order Details' },
-                                          { id: 'logistics', label: '2. Logistics & Factory' },
-                                          { id: 'status', label: '3. Status Updates' },
-                                          { id: 'payments', label: '4. Payments' },
-                                          { id: 'messages', label: '5. Customer Messages' },
-                                          { id: 'audit', label: '6. Comments & Audit' }
+                                          { id: 'details', label: t('tab_order_details', '1. Order Details') },
+                                          { id: 'logistics', label: t('tab_logistics_factory', '2. Logistics & Factory') },
+                                          { id: 'status', label: t('tab_status_updates', '3. Status Updates') },
+                                          { id: 'payments', label: t('tab_payments', '4. Payments') },
+                                          { id: 'messages', label: t('tab_customer_messages', '5. Customer Messages') },
+                                          { id: 'audit', label: t('tab_comments_audit', '6. Comments & Audit') }
                                         ].map((tab) => {
                                           const isActive = editActiveTab === tab.id;
                                           return (
@@ -3237,7 +3355,7 @@ export default function POSModule({
                                                 {editFormData.customer_name || 'Customer'}
                                               </div>
                                               <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                                                📱 +91 {editFormData.mobile_number || '9876543210'} • {editFormData.address || 'MG Road, Vellore'}
+                                                📱 <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>+91 {editFormData.mobile_number || '9876543210'}</span> • {editFormData.address || 'MG Road, Vellore'}
                                               </div>
                                             </div>
                                             <button
@@ -3267,7 +3385,13 @@ export default function POSModule({
                                             <span style={{ fontWeight: 700, color: '#16a34a', display: 'block', marginBottom: '4px' }}>
                                               Automated WhatsApp &amp; SMS Template:
                                             </span>
-                                            "Hello <strong>{editFormData.customer_name || 'Customer'}</strong>, your laundry order <strong>#{editFormData.order_number}</strong> with Washdoor is now <strong>{normalizeOrderStatus(editFormData.status || editFormData.order_status)}</strong> ({editCartTotalPieces} pieces). Total Bill: ₹{editCartGrandTotal.toFixed(2)}. Expected delivery: {editFormData.expected_delivery || '30 Oct 2026, 05:00 PM'}."
+                                            {t('msg_order_status_template', 'Hello {name}, your laundry order #{orderNumber} with Washdoor is now {status} ({pieces} pieces). Total Bill: ₹{total}. Expected delivery: {delivery}.')
+                                              .replace('{name}', editFormData.customer_name || 'Customer')
+                                              .replace('{orderNumber}', editFormData.order_number || '')
+                                              .replace('{status}', normalizeOrderStatus(editFormData.status || editFormData.order_status))
+                                              .replace('{pieces}', editCartTotalPieces)
+                                              .replace('{total}', editCartGrandTotal.toFixed(2))
+                                              .replace('{delivery}', editFormData.expected_delivery || '30 Oct 2026, 05:00 PM')}
                                           </div>
 
                                           <div style={{ display: 'flex', gap: '8px' }}>
@@ -3753,7 +3877,7 @@ export default function POSModule({
                     </span>
                   </div>
                   <div className="pos-selected-cust-phone">
-                    📞 {formatPhoneDisplay(selectedCustomer.mobile_number)}
+                    📞 <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{formatPhoneDisplay(selectedCustomer.mobile_number)}</span>
                   </div>
                   {selectedCustomer.address && (
                     <div style={{ fontSize: '11.5px', color: '#94a3b8' }}>
@@ -4038,338 +4162,22 @@ export default function POSModule({
       )}
 
       {/* ── Schedule Pickup / Delivery Modal ── */}
-      {scheduleOrderTarget && (
-        <div className="pos-held-modal-backdrop" onClick={() => setScheduleOrderTarget(null)}>
-          <div
-            className="pos-held-modal"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '440px', padding: '22px', background: '#0b172a', border: '1px solid #1e3a5f', borderRadius: '16px', color: '#f1f5f9' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', borderBottom: '1px solid #1e293b', paddingBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 750, fontSize: '15px', color: '#f8fafc' }}>
-                <span style={{ fontSize: '18px' }}>📅</span>
-                <span>Schedule Pickup / Delivery</span>
-              </div>
-              <button
-                type="button"
-                className="pos-cart-del-btn"
-                onClick={() => setScheduleOrderTarget(null)}
-                style={{ fontSize: '16px', color: '#94a3b8' }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div style={{ background: '#030b15', padding: '10px 14px', borderRadius: '8px', border: '1px solid #17253d', marginBottom: '16px' }}>
-              <div style={{ fontWeight: 700, fontSize: '13px', color: '#38bdf8' }}>
-                {scheduleOrderTarget.order_number || scheduleOrderTarget.order_id || 'ORDER'}
-              </div>
-              <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '2px' }}>
-                {scheduleOrderTarget.customer_name || scheduleOrderTarget.customer?.customer_name} • {scheduleOrderTarget.mobile_number || scheduleOrderTarget.customer?.mobile_number}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#94a3b8', marginBottom: '6px' }}>
-                  SCHEDULE TYPE
-                </label>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {['Pickup', 'Delivery'].map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => setScheduleType(type)}
-                      style={{
-                        flex: 1,
-                        padding: '8px',
-                        borderRadius: '8px',
-                        border: scheduleType === type ? '1.5px solid #3b82f6' : '1px solid #1e293b',
-                        background: scheduleType === type ? '#1d4ed8' : '#0f172a',
-                        color: '#fff',
-                        fontWeight: 650,
-                        fontSize: '13px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {type === 'Pickup' ? '📦 Pickup' : '🚚 Delivery'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#94a3b8', marginBottom: '6px' }}>
-                  SCHEDULED DATE
-                </label>
-                <input
-                  type="date"
-                  value={scheduleDate}
-                  onChange={(e) => setScheduleDate(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #1e293b',
-                    background: '#040b17',
-                    color: '#f8fafc',
-                    fontSize: '13px'
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#94a3b8', marginBottom: '6px' }}>
-                  TIME SLOT
-                </label>
-                <select
-                  value={scheduleSlot}
-                  onChange={(e) => setScheduleSlot(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #1e293b',
-                    background: '#040b17',
-                    color: '#f8fafc',
-                    fontSize: '13px'
-                  }}
-                >
-                  <option value="Morning (09:00 AM - 12:00 PM)">Morning (09:00 AM - 12:00 PM)</option>
-                  <option value="Afternoon (01:00 PM - 04:00 PM)">Afternoon (01:00 PM - 04:00 PM)</option>
-                  <option value="Evening (04:00 PM - 07:00 PM)">Evening (04:00 PM - 07:00 PM)</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => setScheduleOrderTarget(null)}
-                  style={{
-                    flex: 1,
-                    padding: '9px',
-                    borderRadius: '8px',
-                    border: '1px solid #334155',
-                    background: 'transparent',
-                    color: '#94a3b8',
-                    fontWeight: 650,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    showToast?.(`✅ ${scheduleType} scheduled for ${scheduleDate} (${scheduleSlot.split(' ')[0]})`);
-                    setScheduleOrderTarget(null);
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: '9px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: '#2563eb',
-                    color: '#fff',
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Confirm Schedule
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ScheduleDeliveryModal
+        isOpen={Boolean(scheduleOrderTarget)}
+        order={scheduleOrderTarget}
+        onClose={() => setScheduleOrderTarget(null)}
+        onConfirmSchedule={({ scheduleType, scheduleDate, scheduleSlot }) => {
+          showToast?.(`✅ ${scheduleType} scheduled for ${scheduleDate} (${scheduleSlot.split(' ')[0]})`);
+        }}
+      />
 
       {/* ── Assign Driver Modal ── */}
-      {assignDriverTarget && (
-        <div className="pos-held-modal-backdrop" onClick={() => setAssignDriverTarget(null)}>
-          <div
-            className="pos-held-modal"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '440px', padding: '22px', background: '#0b172a', border: '1px solid #1e3a5f', borderRadius: '16px', color: '#f1f5f9' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', borderBottom: '1px solid #1e293b', paddingBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 750, fontSize: '15px', color: '#f8fafc' }}>
-                <span style={{ fontSize: '18px' }}>👤</span>
-                <span>Assign Driver &amp; Route</span>
-              </div>
-              <button
-                type="button"
-                className="pos-cart-del-btn"
-                onClick={() => setAssignDriverTarget(null)}
-                style={{ fontSize: '16px', color: '#94a3b8' }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div style={{ background: '#030b15', padding: '10px 14px', borderRadius: '8px', border: '1px solid #17253d', marginBottom: '16px' }}>
-              <div style={{ fontWeight: 700, fontSize: '13px', color: '#38bdf8' }}>
-                {assignDriverTarget.order_number || assignDriverTarget.order_id || 'ORDER'}
-              </div>
-              <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '2px' }}>
-                Customer: {assignDriverTarget.customer_name || assignDriverTarget.customer?.customer_name}
-              </div>
-              <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '2px' }}>
-                📍 {assignDriverTarget.address || 'Katpadi, Vellore'}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 650, color: '#94a3b8', marginBottom: '8px' }}>
-                  AVAILABLE DRIVERS &amp; FLEET
-                </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {[
-                    { name: 'Ramesh Kumar', vehicle: 'Van #1 • Zone 1', zone: 'Katpadi & Vellore North' },
-                    { name: 'Vignesh S', vehicle: 'Bike #3 • Express', zone: 'Sathuvachari & City Central' },
-                    { name: 'Murugan P', vehicle: 'Van #2 • Zone 2', zone: 'Ranipet & Arcot Road' },
-                    { name: 'Suresh K', vehicle: 'Van #4 • Zone 3', zone: 'Officers Line & Gandhi Road' },
-                  ].map((drv) => {
-                    const val = `${drv.name} (${drv.vehicle})`;
-                    const isSelected = selectedDriver.includes(drv.name);
-                    return (
-                      <div
-                        key={drv.name}
-                        onClick={() => setSelectedDriver(val)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '10px 12px',
-                          borderRadius: '8px',
-                          border: isSelected ? '1.5px solid #3b82f6' : '1px solid #1e293b',
-                          background: isSelected ? '#1e293b' : '#040b17',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <div>
-                          <div style={{ fontWeight: 650, fontSize: '13px', color: '#f8fafc' }}>{drv.name}</div>
-                          <div style={{ fontSize: '11px', color: '#94a3b8' }}>{drv.vehicle} • {drv.zone}</div>
-                        </div>
-                        {isSelected && <span style={{ color: '#38bdf8', fontWeight: 700 }}>✓</span>}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => setAssignDriverTarget(null)}
-                  style={{
-                    flex: 1,
-                    padding: '9px',
-                    borderRadius: '8px',
-                    border: '1px solid #334155',
-                    background: 'transparent',
-                    color: '#94a3b8',
-                    fontWeight: 650,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const driverName = selectedDriver.split(' (')[0] || selectedDriver;
-                    const orderIdStr = assignDriverTarget.order_number || assignDriverTarget.order_id || assignDriverTarget.id || 'ORDER';
-                    const nowFormatted = new Date().toLocaleDateString('en-IN', {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    });
-
-                    const pickupLog = {
-                      id: `log_pickup_${Date.now()}`,
-                      title: 'Assigned for Pickup',
-                      detail: `Pickup scheduled with ${selectedDriver}`,
-                      author: 'Store Dispatcher',
-                      time: nowFormatted,
-                      type: 'pickup',
-                      status: 'Assigned for Pickup',
-                    };
-
-                    const prevLogs = assignDriverTarget.audit_logs || assignDriverTarget.logs || [];
-                    const updatedLogs = [pickupLog, ...prevLogs.filter((l) => l.title !== 'Assigned for Pickup')];
-
-                    const updatedOrder = {
-                      ...assignDriverTarget,
-                      assigned_for_pickup: true,
-                      pickup_status: 'Assigned for Pickup',
-                      assigned_driver: driverName,
-                      assigned_driver_full: selectedDriver,
-                      pickup_delivery: `Assigned: ${driverName}`,
-                      audit_logs: updatedLogs,
-                      logs: updatedLogs,
-                      timeline: updatedLogs,
-                      updated_at: new Date().toISOString(),
-                    };
-
-                    // Notify parent to sync state & persist
-                    if (onUpdateOrder) {
-                      onUpdateOrder(updatedOrder);
-                    } else {
-                      try {
-                        const cached = localStorage.getItem('washdoor_orders_cache');
-                        if (cached) {
-                          const list = JSON.parse(cached);
-                          const nextList = list.map((o) =>
-                            (o.id === updatedOrder.id || o.order_number === updatedOrder.order_number) ? updatedOrder : o
-                          );
-                          localStorage.setItem('washdoor_orders_cache', JSON.stringify(nextList));
-                        }
-                      } catch {}
-                      onOrderCreated?.(updatedOrder);
-                    }
-
-                    // Keep inline edit states in sync if active
-                    if (editingOrderRecord && (editingOrderRecord.id === updatedOrder.id || editingOrderRecord.order_number === updatedOrder.order_number)) {
-                      setEditingOrderRecord(updatedOrder);
-                      setEditFormData((prev) => prev ? {
-                        ...prev,
-                        assigned_for_pickup: true,
-                        pickup_status: 'Assigned for Pickup',
-                        assigned_driver: driverName,
-                        assigned_driver_full: selectedDriver,
-                        pickup_delivery: `Assigned: ${driverName}`,
-                        audit_logs: updatedLogs,
-                        logs: updatedLogs,
-                      } : null);
-                    }
-                    if (sideEditTargetOrder && (sideEditTargetOrder.id === updatedOrder.id || sideEditTargetOrder.order_number === updatedOrder.order_number)) {
-                      setSideEditTargetOrder(updatedOrder);
-                    }
-
-                    showToast?.(`🚚 Order ${orderIdStr}: Assigned for pickup to ${driverName}!`);
-                    setAssignDriverTarget(null);
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: '9px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: '#2563eb',
-                    color: '#fff',
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Confirm Assignment
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <DriverAssignModal
+        isOpen={Boolean(assignDriverTarget)}
+        order={assignDriverTarget}
+        onClose={() => setAssignDriverTarget(null)}
+        onAssignDriver={handleAssignDriverSubmit}
+      />
 
       {/* ── Standalone Static Side Edit Panel (matching reference mockup) ── */}
       <SideEditPanel
@@ -4449,6 +4257,13 @@ export default function POSModule({
         }}
         currencySymbol={currencySymbol}
         showToast={showToast}
+      />
+
+      {/* ── POS Thermal Receipt & Invoice Print Dialog ── */}
+      <ThermalReceiptModal
+        isOpen={Boolean(receiptOrderTarget)}
+        order={receiptOrderTarget}
+        onClose={() => setReceiptOrderTarget(null)}
       />
     </div>
   );

@@ -173,13 +173,14 @@ export default function App() {
   // Language context
   const { language: currentLanguage, setLanguage: setCurrentLanguage, SAMPLE_LANGUAGES, t } = useLanguage();
 
-  // Theme State: 'dark' (default design) | 'light'
+  // Theme State: 'light' (default design) | 'dark'
   const [theme, setTheme] = useState(() => {
     try {
+      const isManual = localStorage.getItem('washdoor_theme_manual') === 'true';
       const saved = localStorage.getItem('washdoor_theme');
-      return (saved === 'dark' || saved === 'light') ? saved : 'dark';
+      return (isManual && (saved === 'dark' || saved === 'light')) ? saved : 'light';
     } catch {
-      return 'dark';
+      return 'light';
     }
   });
 
@@ -205,6 +206,10 @@ export default function App() {
   const toggleTheme = () => {
     setTheme((prev) => {
       const next = prev === 'dark' ? 'light' : 'dark';
+      try {
+        localStorage.setItem('washdoor_theme_manual', 'true');
+        localStorage.setItem('washdoor_theme', next);
+      } catch {}
       showToast(next === 'light' ? t('switched_light') : t('switched_dark'));
       return next;
     });

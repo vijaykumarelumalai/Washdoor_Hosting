@@ -14,6 +14,15 @@ export function normalizeMobileNumber(phone) {
 }
 
 /**
+ * Validates if a phone number is a valid 10-digit Indian mobile number (starts with 6, 7, 8, or 9).
+ */
+export function isValidIndianMobile(phone) {
+  if (!phone) return false;
+  const clean = normalizeMobileNumber(phone);
+  return /^[6-9]\d{9}$/.test(clean);
+}
+
+/**
  * Checks if a search query string is formatted strictly as a mobile number.
  * Rejects any query containing alphabetic text or symbols.
  */
@@ -45,19 +54,19 @@ export function validateCustomer(data) {
     errors.customer_name = 'Customer name is required.';
   }
 
-  // Required: Mobile number (normalized to 10-digit national number with +91 country code)
+  // Required: Mobile number (normalized to 10-digit national number with +91 country code, starting with 6-9)
   const cleanMobile = normalizeMobileNumber(data.mobile_number);
   if (!cleanMobile) {
     errors.mobile_number = 'Mobile number is required.';
-  } else if (!/^[0-9]{10}$/.test(cleanMobile)) {
-    errors.mobile_number = 'Enter a valid 10-digit mobile number.';
+  } else if (!/^[6-9]\d{9}$/.test(cleanMobile)) {
+    errors.mobile_number = 'Enter a valid 10-digit Indian mobile number (starts with 6, 7, 8, or 9).';
   }
 
-  // Optional: Alternate phone (exactly 10 numeric digits if provided)
+  // Optional: Alternate phone (exactly 10 numeric digits starting with 6-9 if provided)
   if (data.alternate_phone && data.alternate_phone.trim()) {
     const cleanAlt = normalizeMobileNumber(data.alternate_phone);
-    if (!/^[0-9]{10}$/.test(cleanAlt)) {
-      errors.alternate_phone = 'Alternate phone number must contain exactly 10 digits.';
+    if (!/^[6-9]\d{9}$/.test(cleanAlt)) {
+      errors.alternate_phone = 'Alternate phone must be a valid 10-digit Indian mobile number (starts with 6-9).';
     }
   }
 

@@ -23,6 +23,8 @@ class ErrorBoundary extends React.Component {
     try {
       localStorage.removeItem('washdoor_orders_cache');
       localStorage.removeItem('washdoor_customers_cache');
+      localStorage.removeItem('washdoor_theme');
+      localStorage.removeItem('washdoor_theme_manual');
     } catch {}
     window.location.reload();
   };

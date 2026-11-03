@@ -288,12 +288,22 @@ export function formatOrderId(id) {
 export async function getNextOrderId() {
   try {
     if (isSupabaseConfigured()) {
+      // 1. Try atomic RPC if available in database
+      try {
+        const { data: rpcVal, error: rpcErr } = await supabase.rpc('get_next_order_number');
+        if (!rpcErr && rpcVal) {
+          return formatOrderId(rpcVal);
+        }
+      } catch {}
+
       let maxNum = 0;
-      // 1. Check customer_works table
+      // 2. Check customer_works table
       try {
         const { data: worksData } = await supabase
           .from('customer_works')
-          .select('work_number');
+          .select('work_number')
+          .order('created_at', { ascending: false })
+          .limit(100);
 
         if (worksData && worksData.length > 0) {
           worksData.forEach((row) => {
@@ -308,11 +318,13 @@ export async function getNextOrderId() {
         }
       } catch {}
 
-      // 2. Also check washdoor_orders_master if present
+      // 3. Also check washdoor_orders_master if present
       try {
         const { data: masterData } = await supabase
           .from('washdoor_orders_master')
-          .select('order_number');
+          .select('order_number')
+          .order('created_at', { ascending: false })
+          .limit(100);
 
         if (masterData && masterData.length > 0) {
           masterData.forEach((row) => {
@@ -1271,13 +1283,18 @@ export async function createOrderWithCustomer({
         insertedOrderNum = wData.work_number || generatedOrderNumber;
         insertedOrderId = wData.work_id || generatedOrderNumber;
       } else if (wErr) {
-        console.warn('customer_works insert warning, retrying with fallback work_number:', wErr);
-        // Fallback with generated order number if database requires work_number explicitly
-        const fallbackRow = { ...workRow, work_number: generatedOrderNumber };
+        console.warn('customer_works insert warning:', wErr);
+        // Handle concurrency collision: If work_number already taken, increment and retry
+        let retryOrderNum = generatedOrderNumber;
+        if (wErr.code === '23505' || String(wErr.message).toLowerCase().includes('unique')) {
+          const digits = parseInt(String(generatedOrderNumber).replace(/\D/g, '') || '1', 10);
+          retryOrderNum = formatOrderId(digits + 1);
+        }
+        const fallbackRow = { ...workRow, work_number: retryOrderNum };
         const { data: fbData } = await supabase.from('customer_works').insert([fallbackRow]).select().single();
         if (fbData) {
-          insertedOrderNum = fbData.work_number || generatedOrderNumber;
-          insertedOrderId = fbData.work_id || generatedOrderNumber;
+          insertedOrderNum = fbData.work_number || retryOrderNum;
+          insertedOrderId = fbData.work_id || retryOrderNum;
         }
       }
     } catch (workSyncErr) {
