@@ -397,47 +397,28 @@ export default function App() {
 
   return (
     <div className="app">
-      {/* ── Topbar (Pixel-Perfect Match to media_1793708574273_d2d528e0.png) ── */}
+      {/* ── Topbar (Layout matching media_1793709621021_951aa873.png) ── */}
       <header className={`topbar ${isNavCollapsed ? 'sidebar-collapsed' : ''}`}>
-        {/* Brand Logo & Store Info */}
-        <div className="topbar-brand-section">
-          <div className="topbar-brand-logo" title="Washdoor">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="#ffffff">
-              <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z" />
-            </svg>
-          </div>
-          <div className="topbar-brand-text">
-            <span className="topbar-brand-name">Washdoor</span>
-            <span className="topbar-brand-sub">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                <circle cx="12" cy="10" r="3"></circle>
-              </svg>
-              Ranipet
-            </span>
-          </div>
-
-          {/* Extension Panel / Sidebar Collapse Toggle Button */}
-          <button
-            type="button"
-            className="topbar-sidebar-toggle-btn sidebar-toggle-btn topbar-mobile-menu-btn"
-            onClick={() => {
-              if (window.innerWidth <= 840) {
-                setSidebarOpen((prev) => !prev);
-              } else {
-                toggleNavCollapse();
-              }
-            }}
-            title={isNavCollapsed ? 'Expand Navigation Menu' : 'Collapse Navigation Menu'}
-            aria-label="Toggle navigation menu"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="4" y1="7" x2="20" y2="7"></line>
-              <line x1="4" y1="12" x2="20" y2="12"></line>
-              <line x1="4" y1="17" x2="20" y2="17"></line>
-            </svg>
-          </button>
-        </div>
+        {/* Extension Panel / Sidebar Collapse Toggle Button */}
+        <button
+          type="button"
+          className="topbar-sidebar-toggle-btn sidebar-toggle-btn topbar-mobile-menu-btn"
+          onClick={() => {
+            if (window.innerWidth <= 840) {
+              setSidebarOpen((prev) => !prev);
+            } else {
+              toggleNavCollapse();
+            }
+          }}
+          title={isNavCollapsed ? 'Expand Navigation Menu' : 'Collapse Navigation Menu'}
+          aria-label="Toggle navigation menu"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="4" y1="7" x2="20" y2="7"></line>
+            <line x1="4" y1="12" x2="20" y2="12"></line>
+            <line x1="4" y1="17" x2="20" y2="17"></line>
+          </svg>
+        </button>
 
         {/* ── Centralized Global Search Bar ── */}
         <div className="topbar-search-wrap">
@@ -893,14 +874,11 @@ export default function App() {
               <span className="sidebar-brand-sub" title="Laundry &amp; Dry Clean POS">{t('brand_subtitle', 'Ranipet')}</span>
             </div>
           )}
-          {/* Extension panel toggle button (hidden: permanent full sidebar layout) */}
+          {/* Extension panel toggle button */}
           <button
             type="button"
             className="sidebar-toggle-btn"
             onClick={toggleNavCollapse}
-            style={{ display: 'none' }}
-            aria-hidden="true"
-            tabIndex={-1}
             title={isNavCollapsed ? 'Expand navigation menu (Extension panel)' : 'Collapse navigation menu (Extension panel)'}
             aria-label={isNavCollapsed ? 'Expand navigation menu' : 'Collapse navigation menu'}
           >
