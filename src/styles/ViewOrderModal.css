@@ -45,6 +45,14 @@ body.light-theme .view-order-modal,
   box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
 }
 
+/* Dark Theme Overrides */
+body.dark-theme .view-order-modal,
+[data-theme="dark"] .view-order-modal {
+  background: #0f172a;
+  color: #f1f5f9;
+  border-color: #1e293b;
+}
+
 /* Modal Header Bar */
 .view-order-header {
   display: flex;
@@ -823,4 +831,12 @@ body.light-theme .view-order-bill-val,
   .view-order-btn-close {
     display: none !important;
   }
+}
+
+
+/* dark-theme support */
+body.dark-theme .view-modal-card,
+[data-theme="dark"] .view-modal-card {
+  background: #08111f !important;
+  color: #f1f5f9;
 }

@@ -3,9 +3,11 @@
 /* Matching media_1793702916485_4ed3742d.png */
 
 .reports-container {
-  padding: 24px;
-  max-width: 1440px;
-  margin: 0 auto;
+  padding: 0;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -677,4 +679,76 @@ body.dark-theme .audit-table td {
 
 [data-theme="dark"] .audit-table tr:hover td {
   background: #0f172a !important;
+}
+
+
+/* ── Responsive Refinements for Mobile (360px - 430px) & Tablet (768px - 1024px) ── */
+@media (max-width: 860px) {
+  .reports-container {
+    padding: 16px 12px;
+    gap: 14px;
+  }
+  .reports-header-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 16px;
+  }
+  .reports-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+  .reports-tab-btn {
+    flex: 1;
+    justify-content: center;
+    padding: 8px 12px;
+    font-size: 12.5px;
+  }
+  .reports-filter-bar {
+    gap: 10px;
+    padding: 12px 14px;
+  }
+  .filter-group {
+    flex: 1 1 calc(50% - 10px);
+    min-width: 130px;
+  }
+  .filter-select {
+    width: 100%;
+  }
+  .reports-badge-row {
+    margin-top: 4px;
+  }
+}
+
+@media (max-width: 480px) {
+  .filter-group {
+    flex: 1 1 100%;
+  }
+  .report-metrics-row {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .report-metric-box {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+  }
+  .report-card-actions {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .btn-report-download {
+    padding: 9px 12px;
+    font-size: 13px;
+  }
+}
+
+
+/* light-theme support */
+body.light-theme .reports-container,
+[data-theme="light"] .reports-container {
+  background: transparent;
+  color: #0f172a;
 }

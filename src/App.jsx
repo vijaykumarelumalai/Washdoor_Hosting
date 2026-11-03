@@ -138,14 +138,7 @@ export default function App() {
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
 
   // Extension panel (sidebar collapsed state & hover-overlap expansion)
-  const [isNavCollapsed, setIsNavCollapsed] = useState(() => {
-    try {
-      const saved = localStorage.getItem('washdoor_nav_collapsed');
-      return saved === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [isNavCollapsed, setIsNavCollapsed] = useState(false);
   const [isNavHovered, setIsNavHovered] = useState(false);
 
   const toggleNavCollapse = (e) => {
@@ -171,10 +164,6 @@ export default function App() {
 
     setSidebarOpen(false);
     setIsNavHovered(false);
-    setIsNavCollapsed(true);
-    try {
-      localStorage.setItem('washdoor_nav_collapsed', 'true');
-    } catch {}
   };
 
   const isSidebarExpanded = !isNavCollapsed || isNavHovered;
@@ -774,7 +763,7 @@ export default function App() {
         {/* Quick Reports & Download Audit Button in Topbar */}
         <button
           type="button"
-          className="top-pill"
+          className="top-pill topbar-reports-btn"
           onClick={() => navigateToTab('report')}
           title="Open Reports & Audit Download Center"
           style={{
@@ -941,7 +930,7 @@ export default function App() {
                 type="button"
                 className={`nav ${isActive ? 'active' : ''}`}
                 onClick={() => navigateToTab(item.id)}
-                title={item.id === 'order' ? t('nav_orders_pos_title') : item.id === 'customer' ? t('nav_customers_title') : item.id === 'audit' ? t('nav_audit_log_title', 'System Activity & Audit Trail') : item.title}
+                title={!isSidebarExpanded ? (item.id === 'order' ? 'Orders & POS' : item.label) : undefined}
                 data-nav={item.id}
               >
                 {item.icon}

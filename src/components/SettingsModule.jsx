@@ -413,7 +413,7 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
               </div>
 
               {/* Map Location Section */}
-              <div className="map-location-block">
+              <div className="map-location-block" id="store_map_link" data-field="store_map_link">
                 <div className="map-location-head">
                   <div>
                     <h3 className="map-title">Map location</h3>
@@ -830,7 +830,7 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
               <div className="receipt-settings-layout">
                 {/* Left Controls */}
                 <div className="receipt-controls-col">
-                  <div className="settings-box-panel">
+                  <div className="settings-box-panel" id="thermal_paper_size" data-field="thermal_paper_size">
                     <h3 className="panel-subheading">🖨️ Thermal Printer Sizing</h3>
                     <div className="receipt-size-options">
                       <button
