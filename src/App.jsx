@@ -166,6 +166,7 @@ export default function App() {
     else if (tab === 'reports' || tab === 'report') setActiveTab('report');
     else if (tab === 'audit_log' || tab === 'auditlog' || tab === 'audit') setActiveTab('audit');
     else if (tab === 'account' || tab === 'settings') setActiveTab('account');
+    else if (tab === 'templates' || tab === 'template') setActiveTab('templates');
     else setActiveTab(tab);
 
     // Auto-collapse navigation menu when navigating to any module
@@ -1048,10 +1049,11 @@ export default function App() {
             onNavigateTab={navigateToTab}
             showToast={showToast}
           />
-        ) : (activeTab === 'account' || activeTab === 'settings' || activeTab === 'apps') ? (
+        ) : (activeTab === 'account' || activeTab === 'settings' || activeTab === 'apps' || activeTab === 'templates' || activeTab === 'template') ? (
           <SettingsModule
             showToast={showToast}
-            initialTab={activeTab === 'apps' ? 'apps' : 'business_profile'}
+            initialTab={activeTab === 'apps' ? 'apps' : (activeTab === 'templates' || activeTab === 'template') ? 'templates' : 'business_profile'}
+            orders={orders}
             onSignOut={() => {
               showToast('Signed out of counter session');
               setActiveTab('dashboard');

@@ -6,9 +6,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getStoredSettings, saveStoredSettings, DEFAULT_SETTINGS } from '../config/businessRules';
 import { useLanguage } from '../context/LanguageContext';
+import TemplateManagementSection from './TemplateManagementSection';
 import '../styles/Settings.css';
 
-export default function SettingsModule({ showToast, onSignOut, initialTab = 'business_profile' }) {
+export default function SettingsModule({ showToast, onSignOut, initialTab = 'business_profile', orders = [] }) {
   const { t, language, setLanguage, SAMPLE_LANGUAGES } = useLanguage();
   const [activeTab, setActiveTab] = useState(initialTab);
   const [settings, setSettings] = useState(getStoredSettings());
@@ -168,6 +169,7 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
     { id: 'operations_receipts', label: 'Operations & receipts', icon: '🧾', desc: 'Thermal receipts, barcodes & disclaimer terms' },
     { id: 'notifications', label: 'Reminders & notifications', icon: '🔔', desc: 'WhatsApp, SMS & email automated alerts' },
     { id: 'language', label: 'Language', icon: '🌐', desc: 'Multi-language and text direction' },
+    { id: 'templates', label: 'Template', icon: '📑', desc: 'Predefined WhatsApp, SMS & Email notification templates' },
     { id: 'apps', label: 'Apps', icon: '📱', desc: 'Printers, WhatsApp API & accounting integrations' },
     { id: 'help_support', label: 'Help & support', icon: '❓', desc: 'Documentation, helpline & diagnostics' },
     { id: 'account_details', label: 'Account', icon: '👤', desc: 'Administrator credentials & security' },
@@ -1336,6 +1338,18 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════
+              NEW: TEMPLATE (Positioned directly under Language)
+             ══════════════════════════════════════════════════════════ */}
+          {(activeTab === 'templates' || activeTab === 'template') && (
+            <div className="settings-card-section">
+              <TemplateManagementSection
+                showToast={showToast}
+                orders={orders}
+              />
             </div>
           )}
 

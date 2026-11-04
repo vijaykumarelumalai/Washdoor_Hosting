@@ -5,6 +5,7 @@
 const AUDIT_STORAGE_KEY = 'washdoor_audit_trail_v1';
 const DEFAULT_TENANT = 'Ranipet Store #1';
 const DEFAULT_ACTOR = 'Store Staff (Live Counter Active)';
+const memoryLogs = [];
 
 /**
  * Retrieves all stored audit events from persistent localStorage
@@ -12,14 +13,14 @@ const DEFAULT_ACTOR = 'Store Staff (Live Counter Active)';
  */
 export function getStoredAuditLogs() {
   try {
-    const raw = localStorage.getItem(AUDIT_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (err) {
-    console.error('Failed to load audit logs from localStorage:', err);
-    return [];
-  }
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(AUDIT_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    }
+  } catch (err) {}
+  return [...memoryLogs];
 }
 
 /**
@@ -78,7 +79,12 @@ export function logAuditEvent({
     const existing = getStoredAuditLogs();
     // Keep most recent 500 audit log entries
     const updated = [record, ...existing].slice(0, 500);
-    localStorage.setItem(AUDIT_STORAGE_KEY, JSON.stringify(updated));
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(AUDIT_STORAGE_KEY, JSON.stringify(updated));
+    } else {
+      memoryLogs.length = 0;
+      memoryLogs.push(...updated);
+    }
 
     // Dispatch global event for live UI reactivity
     if (typeof window !== 'undefined') {
@@ -86,9 +92,7 @@ export function logAuditEvent({
         new CustomEvent('washdoor_audit_logged', { detail: record })
       );
     }
-  } catch (err) {
-    console.error('Failed to persist audit log entry:', err);
-  }
+  } catch (err) {}
 
   return record;
 }
