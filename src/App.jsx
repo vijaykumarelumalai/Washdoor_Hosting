@@ -223,51 +223,22 @@ export default function App() {
     }
   });
 
-  // Fullscreen state & toggle matching reference header
+  // Fullscreen state & toggle
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement));
+    const onFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
     };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
-    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
-      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
-      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
-    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
   }, []);
 
   const toggleFullscreen = () => {
-    try {
-      if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
-        const el = document.documentElement;
-        if (el.requestFullscreen) {
-          el.requestFullscreen().catch(() => {});
-        } else if (el.webkitRequestFullscreen) {
-          el.webkitRequestFullscreen();
-        } else if (el.mozRequestFullScreen) {
-          el.mozRequestFullScreen();
-        } else if (el.msRequestFullscreen) {
-          el.msRequestFullscreen();
-        }
-      } else {
-        if (document.exitFullscreen) {
-          document.exitFullscreen().catch(() => {});
-        } else if (document.webkitExitFullscreen) {
-          document.webkitExitFullscreen();
-        } else if (document.mozCancelFullScreen) {
-          document.mozCancelFullScreen();
-        } else if (document.msExitFullscreen) {
-          document.msExitFullscreen();
-        }
-      }
-    } catch (e) {
-      console.warn('Fullscreen toggle failed', e);
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else if (document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
     }
   };
 
@@ -454,27 +425,6 @@ export default function App() {
     <div className={`app ${theme}-theme`} data-theme={theme}>
       {/* ── Topbar (Layout matching media_1793709621021_951aa873.png) ── */}
       <header className={`topbar ${isNavCollapsed ? 'sidebar-collapsed' : ''}`}>
-        {/* Extension Panel / Sidebar Collapse Toggle Button */}
-        <button
-          type="button"
-          className="topbar-sidebar-toggle-btn sidebar-toggle-btn topbar-mobile-menu-btn"
-          onClick={() => {
-            if (window.innerWidth <= 840) {
-              setSidebarOpen((prev) => !prev);
-            } else {
-              toggleNavCollapse();
-            }
-          }}
-          title={isNavCollapsed ? 'Expand Navigation Menu' : 'Collapse Navigation Menu'}
-          aria-label="Toggle navigation menu"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="4" y1="7" x2="20" y2="7"></line>
-            <line x1="4" y1="12" x2="20" y2="12"></line>
-            <line x1="4" y1="17" x2="20" y2="17"></line>
-          </svg>
-        </button>
-
         {/* ── Centralized Global Search Bar ── */}
         <div className="topbar-search-wrap">
           <div className="topbar-search-box">
@@ -606,29 +556,16 @@ export default function App() {
 
         <div className="spacer"></div>
 
-        {/* Fullscreen Toggle Button (matching reference header) */}
+        {/* Fullscreen Toggle Button */}
         <button
           type="button"
           className="topbar-fullscreen-btn"
-          title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-          aria-label="Toggle Fullscreen"
+          title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+          aria-label={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
           onClick={toggleFullscreen}
         >
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            {isFullscreen ? (
-              <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
-            ) : (
-              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-            )}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
           </svg>
         </button>
 
@@ -740,21 +677,7 @@ export default function App() {
             }}
             title={t('sample_languages')}
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#2563eb"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ flexShrink: 0 }}
-            >
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="2" y1="12" x2="22" y2="12"></line>
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-            </svg>
+            <span>🌐</span>
             <span className="top-pill-label-full">{currentLanguage.name}</span>
             <span className="top-pill-label-short">{currentLanguage.code.toUpperCase()}</span>
             <svg
@@ -870,7 +793,7 @@ export default function App() {
           <span className="theme-toggle-label">Reports &amp; Audit</span>
         </button>
 
-        {/* Admin Details Dropdown (Avatar Circle + Chevron matching reference) */}
+        {/* Admin Details Dropdown (Avatar Circle + Chevron) */}
         <div className="top-pill-dropdown-wrap">
           <button
             type="button"
@@ -880,10 +803,11 @@ export default function App() {
               setActiveDropdown((prev) => (prev === 'admin' ? null : 'admin'));
             }}
             title="Tenant / Admin: Store Administrator"
-            aria-label="Admin Profile Menu"
+            aria-label="Admin Avatar"
           >
             <span className="top-admin-avatar-circle">A</span>
             <svg
+              className="top-admin-avatar-chevron"
               width="10"
               height="10"
               viewBox="0 0 24 24"
@@ -892,7 +816,6 @@ export default function App() {
               strokeWidth="2.5"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="top-admin-avatar-chevron"
               style={{
                 transition: 'transform 0.2s ease',
                 transform: activeDropdown === 'admin' ? 'rotate(180deg)' : 'none',

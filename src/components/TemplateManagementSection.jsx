@@ -7,6 +7,7 @@ import {
   NOTIFICATION_CATEGORIES,
   COMMUNICATION_CHANNELS,
   DYNAMIC_VARIABLES,
+  DEFAULT_TEMPLATES,
   getNotificationTemplates,
   saveNotificationTemplate,
   deleteNotificationTemplate,
@@ -32,14 +33,30 @@ export default function TemplateManagementSection({
   // Category Selection: 'order_created' | 'ready_for_pickup' | 'thank_you' | 'late_delivery' | 'payment_pending' | 'late_payment'
   const [selectedCategory, setSelectedCategory] = useState('order_created');
 
-  // All templates from database / localStorage
-  const [templates, setTemplates] = useState([]);
-  const [loadingTemplates, setLoadingTemplates] = useState(true);
+  // Initial default template for immediate synchronous render
+  const initialDefault = DEFAULT_TEMPLATES.find(
+    (t) => t.event_type === 'order_created' && t.channel === 'whatsapp'
+  ) || DEFAULT_TEMPLATES[0];
+
+  // All templates from database / localStorage (defaults immediately to DEFAULT_TEMPLATES)
+  const [templates, setTemplates] = useState(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const raw = localStorage.getItem('washdoor_notification_templates');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      }
+    } catch {}
+    return DEFAULT_TEMPLATES;
+  });
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
   // Form State for the currently selected template
-  const [formName, setFormName] = useState('');
-  const [formSubject, setFormSubject] = useState('');
-  const [formBody, setFormBody] = useState('');
+  const [formName, setFormName] = useState(initialDefault?.template_name || 'Order Created - WhatsApp');
+  const [formSubject, setFormSubject] = useState(initialDefault?.email_subject || '');
+  const [formBody, setFormBody] = useState(initialDefault?.message_body || '');
   const [formIsActive, setFormIsActive] = useState(true);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const bodyTextareaRef = useRef(null);
@@ -96,14 +113,16 @@ export default function TemplateManagementSection({
 
   // Find the current active template matching selectedCategory & selectedChannel
   const currentTemplate = useMemo(() => {
+    const list = templates && templates.length > 0 ? templates : DEFAULT_TEMPLATES;
     return (
-      templates.find((t) => t.event_type === selectedCategory && t.channel === selectedChannel) || {
+      list.find((t) => t.event_type === selectedCategory && t.channel === selectedChannel) ||
+      DEFAULT_TEMPLATES.find((t) => t.event_type === selectedCategory && t.channel === selectedChannel) || {
         id: `tpl-${selectedChannel}-${selectedCategory}`,
         template_name: `${selectedCategory.replace(/_/g, ' ')} - ${selectedChannel}`,
         event_type: selectedCategory,
         channel: selectedChannel,
         email_subject: selectedChannel === 'email' ? 'Laundry Notification from Washdoor' : '',
-        message_body: '',
+        message_body: 'Hello {{customer_name}}! Welcome to Washdoor Laundry Services.',
         is_active: true,
       }
     );

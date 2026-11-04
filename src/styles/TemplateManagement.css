@@ -120,21 +120,31 @@ body.dark-theme .template-channel-tab.active,
 /* ── 3-Column Studio Grid matching Screenshot ── */
 .template-three-col-layout {
   display: grid;
-  grid-template-columns: 290px minmax(360px, 1.25fr) 370px;
-  gap: 20px;
+  grid-template-columns: minmax(240px, 280px) minmax(320px, 1fr) minmax(320px, 370px);
+  gap: 18px;
   align-items: start;
+  width: 100%;
 }
 
-@media (max-width: 1240px) {
+.settings-card-section.template-reminder-view-wrap {
+  padding: 24px;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-surface, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+}
+
+@media (max-width: 1280px) {
   .template-three-col-layout {
-    grid-template-columns: 260px 1fr 340px;
-    gap: 16px;
+    grid-template-columns: 240px minmax(280px, 1fr) 320px;
+    gap: 14px;
   }
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1060px) {
   .template-three-col-layout {
     grid-template-columns: 1fr 1fr;
+    gap: 16px;
   }
   .preview-col-card {
     grid-column: span 2;
@@ -144,6 +154,7 @@ body.dark-theme .template-channel-tab.active,
 @media (max-width: 768px) {
   .template-three-col-layout {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
   .preview-col-card {
     grid-column: span 1;
