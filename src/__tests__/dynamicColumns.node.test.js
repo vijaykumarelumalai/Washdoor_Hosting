@@ -104,10 +104,9 @@ describe('Washdoor Dynamic Column Management System', () => {
 
     // Column Category dropdown
     assert.ok(content.includes('pos-column-dropdown-container'), 'Contains pos-column-dropdown-container');
-    assert.ok(content.includes('Column Category'), 'Contains Column Category label');
     assert.ok(content.includes('pos-column-popover-menu'), 'Contains pos-column-popover-menu');
-    assert.ok(content.includes('Select All'), 'Contains Select All button');
-    assert.ok(content.includes('Reset Defaults'), 'Contains Reset Defaults button');
+    assert.ok(content.includes('pos-column-select-all-btn'), 'Contains Select All/Clear button');
+    assert.ok(content.includes('Reset'), 'Contains Reset button');
     assert.ok(content.includes('Apply Columns'), 'Contains Apply Columns button');
 
     // WhatsApp action button

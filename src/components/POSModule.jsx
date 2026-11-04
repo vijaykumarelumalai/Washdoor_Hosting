@@ -1561,17 +1561,19 @@ export default function POSModule({
               className={`pos-toolbar-btn ${activeTopDropdown === 'columns' ? 'active' : ''}`}
               onClick={() => setActiveTopDropdown((prev) => (prev === 'columns' ? null : 'columns'))}
               style={{
-                background: '#fff',
-                border: '1px solid #cbd5e1',
-                borderRadius: '8px',
-                padding: '8px 14px',
-                color: '#334155',
+                background: activeTopDropdown === 'columns' ? '#eff6ff' : '#fff',
+                border: `1.5px solid ${activeTopDropdown === 'columns' ? '#93c5fd' : '#cbd5e1'}`,
+                borderRadius: '10px',
+                padding: '7px 14px',
+                color: activeTopDropdown === 'columns' ? '#1d4ed8' : '#334155',
                 fontWeight: 600,
                 fontSize: '12.5px',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '6px',
-                cursor: 'pointer'
+                gap: '7px',
+                cursor: 'pointer',
+                boxShadow: '0 1px 3px rgba(15,23,42,0.06)',
+                transition: 'all 0.14s ease',
               }}
               title="Configure visible columns"
             >
@@ -1580,71 +1582,114 @@ export default function POSModule({
                 <line x1="9" y1="3" x2="9" y2="21" />
                 <line x1="15" y1="3" x2="15" y2="21" />
               </svg>
-              <span>Column Category</span>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <span>Columns</span>
+              {selectedColumns.length !== ALL_COLUMN_IDS.length && (
+                <span style={{ background: '#2563eb', color: '#fff', borderRadius: '20px', fontSize: '10px', fontWeight: 700, padding: '1px 7px', lineHeight: 1.5 }}>
+                  {selectedColumns.length}
+                </span>
+              )}
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"
+                style={{ transform: activeTopDropdown === 'columns' ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.18s ease' }}>
                 <polyline points="6 9 12 15 18 9"></polyline>
               </svg>
             </button>
 
             {activeTopDropdown === 'columns' && (
               <div className="pos-column-popover-menu" onClick={(e) => e.stopPropagation()}>
+                {/* Header */}
                 <div className="pos-column-popover-header">
-                  <span className="pos-column-popover-title">
-                    {selectedColumns.length} of {ALL_COLUMN_IDS.length} columns selected
-                  </span>
-                  <button
-                    type="button"
-                    className="pos-column-select-all-btn"
-                    onClick={handleSelectAllColumns}
-                  >
-                    Select All
-                  </button>
+                  <div className="pos-column-popover-title">
+                    <span className="pos-column-popover-title-main">Manage Columns</span>
+                    <span className="pos-column-popover-title-sub">Choose which columns to display</span>
+                  </div>
+                  <div className="pos-column-header-right">
+                    <span className="pos-column-count-pill">{selectedColumns.length}/{ALL_COLUMN_IDS.length}</span>
+                    <button
+                      type="button"
+                      className="pos-column-select-all-btn"
+                      onClick={handleSelectAllColumns}
+                    >
+                      {selectedColumns.length === ALL_COLUMN_IDS.length ? 'Clear' : 'All'}
+                    </button>
+                  </div>
                 </div>
 
+                {/* Default columns section */}
                 <div className="pos-column-list-scroll">
-                  {ORDER_COLUMNS.map((col) => {
+                  <div className="pos-column-section-label">Default Columns</div>
+                  {ORDER_COLUMNS.filter(col => col.default).map((col) => {
                     const isChecked = selectedColumns.includes(col.id);
                     return (
                       <label
                         key={col.id}
-                        className="pos-column-checkbox-item"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                        }}
+                        className={`pos-column-checkbox-item ${isChecked ? 'is-checked' : ''}`}
+                        onClick={(e) => { e.stopPropagation(); }}
                       >
                         <div className="pos-column-item-left">
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => handleToggleColumn(col.id)}
-                            style={{ cursor: 'pointer', accentColor: '#2563eb' }}
-                          />
-                          <span>{col.label}</span>
+                          <div className={`pos-col-custom-check ${isChecked ? 'checked' : ''}`} onClick={() => handleToggleColumn(col.id)}>
+                            {isChecked && (
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            )}
+                          </div>
+                          <span className="pos-column-item-label">{col.label}</span>
                         </div>
-                        {col.default && (
-                          <span className="pos-column-default-badge">(Default)</span>
-                        )}
+                        <div className="pos-column-item-right">
+                          <span className="pos-column-default-badge">Default</span>
+                        </div>
+                      </label>
+                    );
+                  })}
+
+                  <div className="pos-column-section-label" style={{ marginTop: '6px' }}>Additional Columns</div>
+                  {ORDER_COLUMNS.filter(col => !col.default).map((col) => {
+                    const isChecked = selectedColumns.includes(col.id);
+                    return (
+                      <label
+                        key={col.id}
+                        className={`pos-column-checkbox-item ${isChecked ? 'is-checked' : ''}`}
+                        onClick={(e) => { e.stopPropagation(); }}
+                      >
+                        <div className="pos-column-item-left">
+                          <div className={`pos-col-custom-check ${isChecked ? 'checked' : ''}`} onClick={() => handleToggleColumn(col.id)}>
+                            {isChecked && (
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            )}
+                          </div>
+                          <span className="pos-column-item-label">{col.label}</span>
+                        </div>
                       </label>
                     );
                   })}
                 </div>
 
+                {/* Footer */}
                 <div className="pos-column-popover-footer">
                   <button
                     type="button"
                     className="pos-column-btn-reset"
                     onClick={handleResetDefaultColumns}
                   >
-                    Reset Defaults
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                      <path d="M3 3v5h5" />
+                    </svg>
+                    Reset
                   </button>
                   <button
                     type="button"
                     className="pos-column-btn-apply"
                     onClick={() => {
                       setActiveTopDropdown(null);
-                      showToast?.(`✓ Applied ${selectedColumns.length} columns`);
+                      showToast?.(`✓ Showing ${selectedColumns.length} columns`);
                     }}
                   >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
                     Apply Columns
                   </button>
                 </div>
@@ -2611,11 +2656,11 @@ export default function POSModule({
                               </td>
                             )}
 
-                            {/* 9. Actions (Icon-based: Bill, View, WhatsApp, Edit, Side Edit) */}
+                            {/* 9. Actions (2x2 Grid: 1. Bill, 2. WhatsApp / 1. Normal Edit, 2. Side Edit) */}
                             {isColVisible('actions') && (
                               <td className="col-actions" style={{ textAlign: 'right', paddingRight: '14px', verticalAlign: 'top', paddingTop: '14px' }}>
                                 <div className="pos-icon-action-group">
-                                  {/* Bill */}
+                                  {/* Row 1, Col 1: Bill */}
                                   <button
                                     type="button"
                                     className="pos-icon-action-btn pos-btn-bill btn-bill"
@@ -2623,8 +2668,8 @@ export default function POSModule({
                                       e.stopPropagation();
                                       setReceiptOrderTarget(ord);
                                     }}
-                                    title={`View Bill / Invoice (${orderNum})`}
-                                    aria-label="View Bill"
+                                    title={`1. Bill / Invoice (${orderNum})`}
+                                    aria-label="Bill"
                                   >
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                                       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -2634,24 +2679,7 @@ export default function POSModule({
                                     </svg>
                                   </button>
 
-                                  {/* View */}
-                                  <button
-                                    type="button"
-                                    className="pos-icon-action-btn pos-btn-view btn-view-order"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setViewOrderTarget(ord);
-                                    }}
-                                    title={`Quick View Order (${orderNum})`}
-                                    aria-label="Quick View"
-                                  >
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                      <circle cx="12" cy="12" r="3"></circle>
-                                    </svg>
-                                  </button>
-
-                                  {/* WhatsApp */}
+                                  {/* Row 1, Col 2: WhatsApp */}
                                   <button
                                     type="button"
                                     className="pos-icon-action-btn pos-btn-whatsapp btn-whatsapp"
@@ -2659,7 +2687,7 @@ export default function POSModule({
                                       e.stopPropagation();
                                       handleOpenWhatsApp(ord);
                                     }}
-                                    title={`Chat on WhatsApp with ${custName}`}
+                                    title={`2. Chat on WhatsApp (${custName})`}
                                     aria-label="WhatsApp"
                                   >
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -2667,7 +2695,7 @@ export default function POSModule({
                                     </svg>
                                   </button>
 
-                                  {/* Edit */}
+                                  {/* Row 2, Col 1: Normal Edit */}
                                   <button
                                     type="button"
                                     className={`pos-icon-action-btn pos-btn-edit btn-edit-order ${isEditingThisOrder ? 'active-edit-btn' : ''}`}
@@ -2677,8 +2705,8 @@ export default function POSModule({
                                       e.stopPropagation();
                                       handleOpenEditModal(ord);
                                     }}
-                                    title={isEditingThisOrder ? `Close Edit (${orderNum})` : `Edit Order (${orderNum})`}
-                                    aria-label="Edit Order"
+                                    title={isEditingThisOrder ? `Close Normal Edit (${orderNum})` : `1. Normal Edit (${orderNum})`}
+                                    aria-label="Normal Edit"
                                   >
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -2686,7 +2714,7 @@ export default function POSModule({
                                     </svg>
                                   </button>
 
-                                  {/* Side Edit Panel */}
+                                  {/* Row 2, Col 2: Side Edit */}
                                   <button
                                     type="button"
                                     className="pos-icon-action-btn pos-btn-side btn-side-action"
@@ -2694,8 +2722,8 @@ export default function POSModule({
                                       e.stopPropagation();
                                       setSideEditTargetOrder(ord);
                                     }}
-                                    title={`Open Side Edit Panel (${orderNum})`}
-                                    aria-label="Side Edit Panel"
+                                    title={`2. Open Side Edit Panel (${orderNum})`}
+                                    aria-label="Side Edit"
                                   >
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                       <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
