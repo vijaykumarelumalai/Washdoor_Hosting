@@ -174,7 +174,7 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
     { id: 'template_reminder', label: 'Template Reminder Section', icon: '📑', desc: 'Manage WhatsApp, SMS and Email templates for customer communications' },
     { id: 'notifications', label: 'Notification Section', icon: '🔔', desc: 'Automated notification center (to be implemented later)' },
     { id: 'language', label: 'Language', icon: '🌐', desc: 'Multi-language and text direction' },
-    /* Combined into Template Reminder Section: { id: 'templates', label: 'Template Reminder Section' } */
+    { id: 'templates', label: 'Template', icon: '📑', desc: 'Customizable WhatsApp, SMS & Email notification templates' },
     { id: 'apps', label: 'Apps', icon: '📱', desc: 'Printers, WhatsApp API & accounting integrations' },
     { id: 'help_support', label: 'Help & support', icon: '❓', desc: 'Documentation, helpline & diagnostics' },
     { id: 'account_details', label: 'Account', icon: '👤', desc: 'Administrator credentials & security' },

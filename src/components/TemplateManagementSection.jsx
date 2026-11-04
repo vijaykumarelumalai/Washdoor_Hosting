@@ -7,7 +7,6 @@ import {
   NOTIFICATION_CATEGORIES,
   COMMUNICATION_CHANNELS,
   DYNAMIC_VARIABLES,
-  DEFAULT_TEMPLATES,
   getNotificationTemplates,
   saveNotificationTemplate,
   deleteNotificationTemplate,
@@ -33,30 +32,14 @@ export default function TemplateManagementSection({
   // Category Selection: 'order_created' | 'ready_for_pickup' | 'thank_you' | 'late_delivery' | 'payment_pending' | 'late_payment'
   const [selectedCategory, setSelectedCategory] = useState('order_created');
 
-  // Initial default template for immediate synchronous render
-  const initialDefault = DEFAULT_TEMPLATES.find(
-    (t) => t.event_type === 'order_created' && t.channel === 'whatsapp'
-  ) || DEFAULT_TEMPLATES[0];
-
-  // All templates from database / localStorage (defaults immediately to DEFAULT_TEMPLATES)
-  const [templates, setTemplates] = useState(() => {
-    try {
-      if (typeof window !== 'undefined') {
-        const raw = localStorage.getItem('washdoor_notification_templates');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      }
-    } catch {}
-    return DEFAULT_TEMPLATES;
-  });
-  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  // All templates from database / localStorage
+  const [templates, setTemplates] = useState([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
 
   // Form State for the currently selected template
-  const [formName, setFormName] = useState(initialDefault?.template_name || 'Order Created - WhatsApp');
-  const [formSubject, setFormSubject] = useState(initialDefault?.email_subject || '');
-  const [formBody, setFormBody] = useState(initialDefault?.message_body || '');
+  const [formName, setFormName] = useState('');
+  const [formSubject, setFormSubject] = useState('');
+  const [formBody, setFormBody] = useState('');
   const [formIsActive, setFormIsActive] = useState(true);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const bodyTextareaRef = useRef(null);
@@ -79,6 +62,47 @@ export default function TemplateManagementSection({
   // Simulation State
   const [simSelectedOrderId, setSimSelectedOrderId] = useState(orders[0]?.order_number || orders[0]?.id || 'ORD00024');
   const [simIsDispatching, setSimIsDispatching] = useState(false);
+
+  // Search and Filter State
+  const [searchFilter, setSearchFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+
+  // Refresh templates & logs
+  const handleRefresh = async () => {
+    await loadTemplatesData();
+    await loadLogsData();
+    showToast('↻ Refreshed notification templates & delivery ledger');
+  };
+
+  // Duplicate current template
+  const handleDuplicateTemplate = async () => {
+    if (!currentTemplate) return;
+    const duplicatedName = `${formName || currentTemplate.template_name || 'Template'} (Copy)`;
+    const newRecord = {
+      ...currentTemplate,
+      id: `tpl-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      template_name: duplicatedName,
+      message_body: formBody,
+      email_subject: selectedChannel === 'email' ? formSubject : null,
+      is_active: formIsActive,
+      is_default: false,
+      created_at: new Date().toISOString(),
+    };
+    await saveNotificationTemplate(newRecord);
+    showToast(`📋 Template duplicated as "${duplicatedName}"!`);
+    loadTemplatesData();
+  };
+
+  // Delete current template
+  const handleDeleteTemplate = async () => {
+    if (!currentTemplate?.id) return;
+    const confirmDelete = window.confirm(`Are you sure you want to delete "${formName || currentTemplate.template_name}"?`);
+    if (!confirmDelete) return;
+    await deleteNotificationTemplate(currentTemplate.id);
+    showToast(`🗑️ Template "${formName || currentTemplate.template_name}" deleted`);
+    loadTemplatesData();
+  };
 
   // Load Templates
   const loadTemplatesData = async () => {
@@ -113,16 +137,14 @@ export default function TemplateManagementSection({
 
   // Find the current active template matching selectedCategory & selectedChannel
   const currentTemplate = useMemo(() => {
-    const list = templates && templates.length > 0 ? templates : DEFAULT_TEMPLATES;
     return (
-      list.find((t) => t.event_type === selectedCategory && t.channel === selectedChannel) ||
-      DEFAULT_TEMPLATES.find((t) => t.event_type === selectedCategory && t.channel === selectedChannel) || {
+      templates.find((t) => t.event_type === selectedCategory && t.channel === selectedChannel) || {
         id: `tpl-${selectedChannel}-${selectedCategory}`,
         template_name: `${selectedCategory.replace(/_/g, ' ')} - ${selectedChannel}`,
         event_type: selectedCategory,
         channel: selectedChannel,
         email_subject: selectedChannel === 'email' ? 'Laundry Notification from Washdoor' : '',
-        message_body: 'Hello {{customer_name}}! Welcome to Washdoor Laundry Services.',
+        message_body: '',
         is_active: true,
       }
     );
@@ -355,7 +377,18 @@ export default function TemplateManagementSection({
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {/* Refresh Button */}
+          <button
+            type="button"
+            className="btn-refresh-templates"
+            onClick={handleRefresh}
+            title="Refresh templates and notification history"
+          >
+            <span>↻</span>
+            <span>Refresh</span>
+          </button>
+
           {/* Quick Subnav toggle */}
           <div style={{ display: 'flex', background: 'var(--bg-input)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border)' }}>
             <button
@@ -425,6 +458,56 @@ export default function TemplateManagementSection({
         </button>
       </div>
 
+      {/* ── Search & Filter Toolbar ── */}
+      <div className="template-filter-toolbar">
+        <div className="template-search-wrap">
+          <span className="search-icon">🔍</span>
+          <input
+            type="text"
+            className="template-search-input"
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            placeholder="Search templates, variables, or message text..."
+          />
+          {searchFilter && (
+            <button
+              type="button"
+              className="search-clear-btn"
+              onClick={() => setSearchFilter('')}
+              title="Clear search"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
+        <div className="template-filter-dropdowns">
+          <select
+            className="template-filter-select"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">All Statuses</option>
+            <option value="active">Active Only</option>
+            <option value="inactive">Inactive Only</option>
+          </select>
+
+          <select
+            className="template-filter-select"
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+          >
+            <option value="all">All Categories</option>
+            <option value="order_created">Order Created</option>
+            <option value="ready_for_pickup">Ready for Pickup</option>
+            <option value="thank_you">Thank You</option>
+            <option value="late_delivery">Late Delivery Warning</option>
+            <option value="payment_pending">Payment Pending Reminder</option>
+            <option value="late_payment">Late Payment Reminder</option>
+          </select>
+        </div>
+      </div>
+
       {/* ══════════════════════════════════════════════════════════════════
           VIEW 1: 3-COLUMN STUDIO LAYOUT MATCHING SCREENSHOT EXACTLY
          ══════════════════════════════════════════════════════════════════ */}
@@ -438,35 +521,50 @@ export default function TemplateManagementSection({
               {[
                 { key: 'order_created', label: 'Order Created', desc: 'Order confirmation message', icon: '🛒' },
                 { key: 'ready_for_pickup', label: 'Ready for Pickup', desc: 'Notify when order is ready', icon: '📦' },
-                { key: 'thank_you', label: 'Thank You Message', desc: 'Customer appreciation', icon: '❤️' },
-                { key: 'late_delivery', label: 'Late Delivery', desc: 'Delivery delay notification', icon: '⚠️' },
-                { key: 'payment_pending', label: 'Payment Pending', desc: 'Pending payment reminder', icon: '💳' },
-                { key: 'late_payment', label: 'Late Payment', desc: 'Overdue payment reminder', icon: '⌛' },
-              ].map((cat) => {
-                const isSelected = selectedCategory === cat.key;
-                const matchTpl = templates.find((t) => t.event_type === cat.key && t.channel === selectedChannel);
-                const isActive = matchTpl ? matchTpl.is_active : true;
+                { key: 'thank_you', label: 'Thank You', desc: 'Customer appreciation message', icon: '❤️' },
+                { key: 'late_delivery', label: 'Late Delivery Warning', desc: 'Delivery delay notification', icon: '⚠️' },
+                { key: 'payment_pending', label: 'Payment Pending Reminder', desc: 'Pending payment reminder', icon: '💳' },
+                { key: 'late_payment', label: 'Late Payment Reminder', desc: 'Overdue payment reminder', icon: '⌛' },
+              ]
+                .filter((cat) => {
+                  if (categoryFilter !== 'all' && cat.key !== categoryFilter) return false;
+                  const matchTpl = templates.find((t) => t.event_type === cat.key && t.channel === selectedChannel);
+                  const isActive = matchTpl ? matchTpl.is_active : true;
+                  if (statusFilter === 'active' && !isActive) return false;
+                  if (statusFilter === 'inactive' && isActive) return false;
+                  if (searchFilter.trim()) {
+                    const q = searchFilter.toLowerCase();
+                    const matchesName = cat.label.toLowerCase().includes(q) || cat.desc.toLowerCase().includes(q);
+                    const matchesBody = matchTpl?.message_body?.toLowerCase().includes(q) || false;
+                    if (!matchesName && !matchesBody) return false;
+                  }
+                  return true;
+                })
+                .map((cat) => {
+                  const isSelected = selectedCategory === cat.key;
+                  const matchTpl = templates.find((t) => t.event_type === cat.key && t.channel === selectedChannel);
+                  const isActive = matchTpl ? matchTpl.is_active : true;
 
-                return (
-                  <div
-                    key={cat.key}
-                    className={`category-nav-item ${isSelected ? 'selected' : ''}`}
-                    onClick={() => setSelectedCategory(cat.key)}
-                  >
-                    <div className="category-nav-left">
-                      <span className="category-nav-icon">{cat.icon}</span>
-                      <div className="category-nav-info">
-                        <div className="category-nav-title">{cat.label}</div>
-                        <div className="category-nav-subtitle">{cat.desc}</div>
+                  return (
+                    <div
+                      key={cat.key}
+                      className={`category-nav-item ${isSelected ? 'selected' : ''}`}
+                      onClick={() => setSelectedCategory(cat.key)}
+                    >
+                      <div className="category-nav-left">
+                        <span className="category-nav-icon">{cat.icon}</span>
+                        <div className="category-nav-info">
+                          <div className="category-nav-title">{cat.label}</div>
+                          <div className="category-nav-subtitle">{cat.desc}</div>
+                        </div>
                       </div>
-                    </div>
 
-                    <span className={isActive ? 'category-active-badge' : 'category-inactive-badge'}>
-                      {isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                );
-              })}
+                      <span className={isActive ? 'category-active-badge' : 'category-inactive-badge'}>
+                        {isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                  );
+                })}
             </div>
           </div>
 
@@ -573,8 +671,8 @@ export default function TemplateManagementSection({
               </select>
             </div>
 
-            {/* Bottom Actions Row: Reset, Preview, Save Changes */}
-            <div className="edit-actions-bottom-row">
+            {/* Bottom Actions Row: Reset, Duplicate, Delete, Preview, Save Changes */}
+            <div className="edit-actions-bottom-row" style={{ flexWrap: 'wrap', gap: '8px' }}>
               <button
                 type="button"
                 className="btn-v2-reset"
@@ -583,6 +681,26 @@ export default function TemplateManagementSection({
               >
                 <span>↺</span>
                 <span>Reset</span>
+              </button>
+
+              <button
+                type="button"
+                className="btn-v2-duplicate"
+                onClick={handleDuplicateTemplate}
+                title="Duplicate this template"
+              >
+                <span>📋</span>
+                <span>Duplicate</span>
+              </button>
+
+              <button
+                type="button"
+                className="btn-v2-delete"
+                onClick={handleDeleteTemplate}
+                title="Delete or archive this template"
+              >
+                <span>🗑️</span>
+                <span>Delete</span>
               </button>
 
               <button
@@ -668,6 +786,10 @@ export default function TemplateManagementSection({
                 <div className="phone-sms-chat-area">
                   <div className="phone-sms-bubble">
                     {renderedPreviewBody}
+                  </div>
+                  <div style={{ marginTop: '12px', padding: '6px 10px', background: 'rgba(0,0,0,0.06)', borderRadius: '6px', fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span><strong>{renderedPreviewBody.length}</strong> characters</span>
+                    <span><strong>{Math.max(1, Math.ceil(renderedPreviewBody.length / 160))}</strong> SMS segment(s)</span>
                   </div>
                 </div>
               </div>
