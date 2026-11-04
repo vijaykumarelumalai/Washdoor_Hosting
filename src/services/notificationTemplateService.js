@@ -10,12 +10,12 @@ export const NOTIFICATION_LOGS_KEY = 'washdoor_notification_logs_v2';
 
 // ── 1. The 6 Master Notification Categories ──────────────────────────────────
 export const NOTIFICATION_CATEGORIES = [
-  { key: 'order_created', label: 'Order Created', trigger: 'When a new order is successfully created', icon: '🛒' },
-  { key: 'ready_for_pickup', label: 'Ready for Pickup', trigger: 'When garments are ready for customer pickup or collection', icon: '📦' },
-  { key: 'thank_you', label: 'Thank You', trigger: 'When an order is successfully completed', icon: '❤️' },
-  { key: 'late_delivery', label: 'Late Delivery Warning', trigger: 'When an order delivery is delayed', icon: '⚠️' },
-  { key: 'payment_pending', label: 'Payment Pending Reminder', trigger: 'When an order has an outstanding balance', icon: '💳' },
-  { key: 'late_payment', label: 'Late Payment Reminder', trigger: 'When payment remains overdue after its due date', icon: '⏳' },
+  { key: 'order_created', label: 'Order Received', trigger: 'When a new laundry order is registered and accepted', icon: '🛒' },
+  { key: 'ready_for_pickup', label: 'Ready for Delivery', trigger: 'When garments are cleaned, pressed and ready for delivery/pickup', icon: '📦' },
+  { key: 'payment_pending', label: 'Payment Received', trigger: 'When a payment is recorded or invoice balance is confirmed', icon: '💳' },
+  { key: 'late_payment', label: 'Late Payment', trigger: 'When payment remains overdue past the agreed deadline', icon: '⏳' },
+  { key: 'late_delivery', label: 'Delay Order', trigger: 'When laundry processing is delayed beyond estimated delivery date', icon: '⚠️' },
+  { key: 'thank_you', label: 'Suggestion or Complaint Message', trigger: 'Post-delivery feedback, suggestion box and complaint resolution', icon: '❤️' },
 ];
 
 // ── 2. The 14 Supported Dynamic Variables ───────────────────────────────────
@@ -38,29 +38,31 @@ export const SUPPORTED_VARIABLES = [
 
 // ── 3. Exact 18 Default Notification Templates (6 Categories × 3 Channels) ──
 export const DEFAULT_TEMPLATES = [
-  // 1. Order Created
+  // 1. Order Received
   {
     id: 'tpl_order_created_whatsapp',
     category: 'order_created',
     channel: 'whatsapp',
-    template_name: 'Order Created - WhatsApp',
+    template_name: 'Order Received - WhatsApp',
     subject: '',
-    message_body: `Hello {{customer_name}},
+    message_body: `🧺 *WASHDOR LAUNDRY — ORDER CONFIRMATION*
 
-Thank you for choosing Washdoor!
+Dear *{{customer_name}}*,
+Thank you for choosing Washdoor! We have received your garments and started the laundry care process.
 
-Your laundry order {{order_id}} has been successfully created.
+📋 *Order Details:*
+• Order ID: *{{order_id}}*
+• Received On: {{order_date}}
+• Service: *{{service_name}}*
+• Total Items: {{quantity}} garments
+• Expected Ready Date: *{{delivery_date}}*
+• Bill Amount: *{{total_amount}}* ({{payment_status}})
 
-Service: {{service_name}}
-Quantity: {{quantity}}
-Order Date: {{order_date}}
-Expected Delivery: {{delivery_date}}
-Total Amount: {{total_amount}}
+🔍 We will notify you the moment your fresh clothes are washed, pressed & ready!
 
-We will keep you updated on your order status.
-
-Thank you,
-Washdoor Team`,
+Warm regards,
+*Team Washdoor*
+📞 Support: +91 7603917058`,
     is_active: true,
     is_default: true,
   },
@@ -68,9 +70,9 @@ Washdoor Team`,
     id: 'tpl_order_created_sms',
     category: 'order_created',
     channel: 'sms',
-    template_name: 'Order Created - SMS',
+    template_name: 'Order Received - SMS',
     subject: '',
-    message_body: `Washdoor: Hello {{customer_name}}, your order {{order_id}} is confirmed. Service: {{service_name}}. Expected delivery: {{delivery_date}}. Total: {{total_amount}}. Thank you!`,
+    message_body: `Washdoor: Hello {{customer_name}}, order {{order_id}} received! Service: {{service_name}} ({{quantity}} items). Total: {{total_amount}}. Ready by: {{delivery_date}}. Thank you!`,
     is_active: true,
     is_default: true,
   },
@@ -78,47 +80,58 @@ Washdoor Team`,
     id: 'tpl_order_created_email',
     category: 'order_created',
     channel: 'email',
-    template_name: 'Order Created - Email',
-    subject: `Your Washdoor Order {{order_id}} Is Confirmed`,
+    template_name: 'Order Received - Email',
+    subject: `Order Received & Confirmed — Washdoor #{{order_id}}`,
     message_body: `Dear {{customer_name}},
 
-Thank you for choosing Washdoor.
+Thank you for choosing Washdoor Laundry Services! We have safely received your garments at our express hub and processing has officially begun.
 
-Your order {{order_id}} has been successfully created.
+ORDER INTAKE SUMMARY:
+• Order Reference: {{order_id}}
+• Intake Date: {{order_date}}
+• Selected Service: {{service_name}}
+• Garment Count: {{quantity}} pieces
+• Promised Completion: {{delivery_date}}
+• Total Bill: {{total_amount}} (Status: {{payment_status}})
 
-Order Details:
-Order Date: {{order_date}}
-Service: {{service_name}}
-Quantity: {{quantity}}
-Expected Delivery: {{delivery_date}}
-Total Amount: {{total_amount}}
+Each piece undergoes individual inspection, fabric-safe washing with eco-friendly detergents, and crisp steam pressing.
 
-We appreciate your business.
+We will notify you immediately once your garments are sanitized, packaged, and ready for delivery/collection.
 
-Regards,
-Washdoor Team`,
+Warm regards,
+Washdoor Laundry Operations
+Email: info@washdoor.in | Phone: +91 7603917058`,
     is_active: true,
     is_default: true,
   },
 
-  // 2. Ready for Pickup
+  // 2. Ready for Delivery
   {
     id: 'tpl_ready_pickup_whatsapp',
     category: 'ready_for_pickup',
     channel: 'whatsapp',
-    template_name: 'Ready for Pickup - WhatsApp',
+    template_name: 'Ready for Delivery - WhatsApp',
     subject: '',
-    message_body: `Hello {{customer_name}},
+    message_body: `✨ *YOUR CLOTHES ARE FRESH & READY!*
 
-Your laundry order {{order_id}} is ready for pickup!
+Dear *{{customer_name}}*,
+Great news! Your laundry order *#{{order_id}}* is completely washed, sanitized, steam-pressed, and neatly packaged.
 
-Service: {{service_name}}
-Order Number: {{order_id}}
+📦 *Collection & Delivery Details:*
+• Order ID: *{{order_id}}*
+• Service: {{service_name}}
+• Garment Count: {{quantity}} items
+• Ready Date: {{delivery_date}}
+• Amount Due: *{{pending_amount}}*
 
-Please visit Washdoor to collect your garments.
+📍 *Washdoor Express Hub:*
+No.7, 4th Avenue, 1st Cross Road, MBT Road, Chennai.
+
+🛵 If you requested doorstep delivery, our delivery partner will be in touch shortly.
 
 Thank you,
-Washdoor Team`,
+*Team Washdoor*
+📞 Call/WhatsApp: +91 7603917058`,
     is_active: true,
     is_default: true,
   },
@@ -126,9 +139,9 @@ Washdoor Team`,
     id: 'tpl_ready_pickup_sms',
     category: 'ready_for_pickup',
     channel: 'sms',
-    template_name: 'Ready for Pickup - SMS',
+    template_name: 'Ready for Delivery - SMS',
     subject: '',
-    message_body: `Washdoor: Hello {{customer_name}}, your order {{order_id}} is ready for pickup. Please collect your garments. Thank you!`,
+    message_body: `Washdoor: Great news {{customer_name}}! Order {{order_id}} ({{quantity}} items) is washed, pressed & READY for delivery/pickup. Due: {{pending_amount}}. Collect today!`,
     is_active: true,
     is_default: true,
   },
@@ -136,153 +149,55 @@ Washdoor Team`,
     id: 'tpl_ready_pickup_email',
     category: 'ready_for_pickup',
     channel: 'email',
-    template_name: 'Ready for Pickup - Email',
-    subject: `Your Washdoor Order {{order_id}} Is Ready for Pickup`,
+    template_name: 'Ready for Delivery - Email',
+    subject: `Ready for Delivery: Your Fresh Clothes Await! — Order #{{order_id}}`,
     message_body: `Dear {{customer_name}},
 
-Your laundry order {{order_id}} is ready for pickup.
+Your laundry order #{{order_id}} is ready!
 
-Service: {{service_name}}
+All {{quantity}} items have undergone complete fabric-safe treatment, quality inspection, and crisp steam finishing.
 
-Please visit our store to collect your garments.
+ORDER STATUS:
+• Order ID: {{order_id}}
+• Service: {{service_name}}
+• Items: {{quantity}} garments
+• Balance Payable: {{pending_amount}}
+• Store Timings: 08:00 AM – 09:30 PM (Mon–Sun)
 
-Thank you for choosing Washdoor.
+If you opted for store pickup, you can drop by at your convenience. For scheduled doorstep delivery, our courier is on standby.
 
-Regards,
-Washdoor Team`,
+Thank you for trusting Washdoor with your wardrobe!
+
+Best regards,
+Washdoor Customer Experience Team`,
     is_active: true,
     is_default: true,
   },
 
-  // 3. Thank You
-  {
-    id: 'tpl_thank_you_whatsapp',
-    category: 'thank_you',
-    channel: 'whatsapp',
-    template_name: 'Thank You - WhatsApp',
-    subject: '',
-    message_body: `Hello {{customer_name}},
-
-Thank you for choosing Washdoor!
-
-Your order {{order_id}} has been successfully completed.
-
-We appreciate your trust in our service.
-
-We look forward to serving you again.
-
-Washdoor Team`,
-    is_active: true,
-    is_default: true,
-  },
-  {
-    id: 'tpl_thank_you_sms',
-    category: 'thank_you',
-    channel: 'sms',
-    template_name: 'Thank You - SMS',
-    subject: '',
-    message_body: `Washdoor: Thank you {{customer_name}}! Your order {{order_id}} is completed. We appreciate your business. Visit us again!`,
-    is_active: true,
-    is_default: true,
-  },
-  {
-    id: 'tpl_thank_you_email',
-    category: 'thank_you',
-    channel: 'email',
-    template_name: 'Thank You - Email',
-    subject: `Thank You for Choosing Washdoor!`,
-    message_body: `Dear {{customer_name}},
-
-Thank you for choosing Washdoor.
-
-Your order {{order_id}} has been successfully completed.
-
-We appreciate your support and look forward to serving you again.
-
-Regards,
-Washdoor Team`,
-    is_active: true,
-    is_default: true,
-  },
-
-  // 4. Late Delivery Warning
-  {
-    id: 'tpl_late_delivery_whatsapp',
-    category: 'late_delivery',
-    channel: 'whatsapp',
-    template_name: 'Late Delivery Warning - WhatsApp',
-    subject: '',
-    message_body: `Hello {{customer_name}},
-
-We apologize for the delay in your laundry order {{order_id}}.
-
-Reason: {{delay_reason}}
-Original Delivery Date: {{delivery_date}}
-Revised Delivery Date: {{revised_delivery_date}}
-
-We are working to complete your order as soon as possible.
-
-Thank you for your patience.
-
-Washdoor Team`,
-    is_active: true,
-    is_default: true,
-  },
-  {
-    id: 'tpl_late_delivery_sms',
-    category: 'late_delivery',
-    channel: 'sms',
-    template_name: 'Late Delivery Warning - SMS',
-    subject: '',
-    message_body: `Washdoor: Sorry {{customer_name}}, order {{order_id}} is delayed. Revised delivery: {{revised_delivery_date}}. Reason: {{delay_reason}}. Thank you for your patience.`,
-    is_active: true,
-    is_default: true,
-  },
-  {
-    id: 'tpl_late_delivery_email',
-    category: 'late_delivery',
-    channel: 'email',
-    template_name: 'Late Delivery Warning - Email',
-    subject: `Delivery Update – Order {{order_id}}`,
-    message_body: `Dear {{customer_name}},
-
-We apologize for the delay in processing your laundry order.
-
-Order Number: {{order_id}}
-Original Delivery Date: {{delivery_date}}
-Revised Delivery Date: {{revised_delivery_date}}
-Reason: {{delay_reason}}
-
-Our team is working to complete your order as soon as possible.
-
-Thank you for your understanding.
-
-Regards,
-Washdoor Team`,
-    is_active: true,
-    is_default: true,
-  },
-
-  // 5. Payment Pending Reminder
+  // 3. Payment Received
   {
     id: 'tpl_payment_pending_whatsapp',
     category: 'payment_pending',
     channel: 'whatsapp',
-    template_name: 'Payment Pending Reminder - WhatsApp',
+    template_name: 'Payment Received - WhatsApp',
     subject: '',
-    message_body: `Hello {{customer_name}},
+    message_body: `💳 *PAYMENT CONFIRMATION & RECEIPT*
 
-This is a friendly reminder regarding your Washdoor order {{order_id}}.
+Dear *{{customer_name}}*,
+We have successfully received your payment of *{{paid_amount}}* for Washdoor Order *#{{order_id}}*.
 
-Total Amount: {{total_amount}}
-Paid Amount: {{paid_amount}}
-Pending Amount: {{pending_amount}}
-Payment Status: {{payment_status}}
+🧾 *Payment Summary:*
+• Order ID: *{{order_id}}*
+• Payment Status: *{{payment_status}}*
+• Paid Amount: *{{paid_amount}}*
+• Outstanding Balance: *{{pending_amount}}*
+• Total Bill: {{total_amount}}
 
-Please complete your pending payment.
+Thank you for your prompt settlement! Your digital invoice has been updated in our system.
 
-Thank you,
-Washdoor Team`,
+Warm regards,
+*Accounts Department — Washdoor*
+📞 Support: +91 7603917058`,
     is_active: true,
     is_default: true,
   },
@@ -290,9 +205,9 @@ Washdoor Team`,
     id: 'tpl_payment_pending_sms',
     category: 'payment_pending',
     channel: 'sms',
-    template_name: 'Payment Pending Reminder - SMS',
+    template_name: 'Payment Received - SMS',
     subject: '',
-    message_body: `Washdoor: Payment reminder for order {{order_id}}. Pending amount: {{pending_amount}}. Please complete your payment. Thank you!`,
+    message_body: `Washdoor: Payment of {{paid_amount}} received for order {{order_id}}. Balance: {{pending_amount}}. Status: {{payment_status}}. Thank you for your payment!`,
     is_active: true,
     is_default: true,
   },
@@ -300,47 +215,57 @@ Washdoor Team`,
     id: 'tpl_payment_pending_email',
     category: 'payment_pending',
     channel: 'email',
-    template_name: 'Payment Pending Reminder - Email',
-    subject: `Payment Reminder – Order {{order_id}}`,
+    template_name: 'Payment Received - Email',
+    subject: `Payment Receipt Confirmed — Washdoor Order #{{order_id}}`,
     message_body: `Dear {{customer_name}},
 
-This is a friendly reminder that payment for your Washdoor order is still pending.
+We are pleased to confirm that your payment has been processed successfully.
 
-Order Number: {{order_id}}
-Total Amount: {{total_amount}}
-Paid Amount: {{paid_amount}}
-Pending Amount: {{pending_amount}}
-Payment Status: {{payment_status}}
+TRANSACTION BREAKDOWN:
+• Order ID: {{order_id}}
+• Payment Received: {{paid_amount}}
+• Outstanding Balance: {{pending_amount}}
+• Total Invoice Value: {{total_amount}}
+• Current Status: {{payment_status}}
 
-Please complete the outstanding payment.
+Your official digital tax invoice and account ledger have been updated accordingly.
 
-Regards,
-Washdoor Team`,
+Thank you for choosing Washdoor!
+
+Warm regards,
+Washdoor Finance & Billing`,
     is_active: true,
     is_default: true,
   },
 
-  // 6. Late Payment Reminder
+  // 4. Late Payment
   {
     id: 'tpl_late_payment_whatsapp',
     category: 'late_payment',
     channel: 'whatsapp',
-    template_name: 'Late Payment Reminder - WhatsApp',
+    template_name: 'Late Payment - WhatsApp',
     subject: '',
-    message_body: `Hello {{customer_name}},
+    message_body: `⏳ *FRIENDLY REMINDER: OVERDUE PAYMENT*
 
-Our records indicate that payment for order {{order_id}} is overdue.
+Dear *{{customer_name}}*,
+We hope you are delighted with our laundry care services!
 
-Pending Amount: {{pending_amount}}
-Due Date: {{due_date}}
-Days Overdue: {{days_overdue}}
+This is a courteous reminder that an outstanding payment for order *#{{order_id}}* is currently overdue by *{{days_overdue}} day(s)*.
 
-Please arrange payment at your earliest convenience.
+📋 *Invoice Particulars:*
+• Order ID: *{{order_id}}*
+• Due Date: {{due_date}}
+• Outstanding Amount: *{{pending_amount}}*
+• Total Bill: {{total_amount}}
 
-If you have already paid, please ignore this reminder.
+📲 *Easy Payment Options:*
+You can pay via UPI (GPay / PhonePe / Paytm) to *washdoor@upi* or settle at our counter upon your next visit.
 
-Thank you,
-Washdoor Team`,
+If you have already transferred this amount, kindly share the screenshot or ignore this message.
+
+Thank you for your cooperation!
+*Team Washdoor*
+📞 Accounts Desk: +91 7603917058`,
     is_active: true,
     is_default: true,
   },
@@ -348,9 +273,9 @@ Washdoor Team`,
     id: 'tpl_late_payment_sms',
     category: 'late_payment',
     channel: 'sms',
-    template_name: 'Late Payment Reminder - SMS',
+    template_name: 'Late Payment - SMS',
     subject: '',
-    message_body: `Washdoor: Payment overdue for order {{order_id}}. Pending: {{pending_amount}}. Due date: {{due_date}}. Please complete payment or contact us.`,
+    message_body: `Washdoor: Gentle reminder {{customer_name}}, payment of {{pending_amount}} for order {{order_id}} is {{days_overdue}} days overdue (due: {{due_date}}). Kindly clear via UPI washdoor@upi. Thanks!`,
     is_active: true,
     is_default: true,
   },
@@ -358,23 +283,161 @@ Washdoor Team`,
     id: 'tpl_late_payment_email',
     category: 'late_payment',
     channel: 'email',
-    template_name: 'Late Payment Reminder - Email',
-    subject: `Overdue Payment Reminder – Order {{order_id}}`,
+    template_name: 'Late Payment - Email',
+    subject: `Overdue Payment Notice: Washdoor Order #{{order_id}} (Due: {{pending_amount}})`,
     message_body: `Dear {{customer_name}},
 
-This is a reminder that payment for your Washdoor order is overdue.
+We hope your garments reached you in pristine condition!
 
-Order Number: {{order_id}}
-Pending Amount: {{pending_amount}}
-Due Date: {{due_date}}
-Days Overdue: {{days_overdue}}
+Our accounts ledger shows an overdue balance of {{pending_amount}} for your order #{{order_id}}, which reached its due date on {{due_date}} ({{days_overdue}} days ago).
 
-Please arrange payment at your earliest convenience.
+ACCOUNT DETAILS:
+• Order ID: {{order_id}}
+• Total Amount: {{total_amount}}
+• Paid Amount: {{paid_amount}}
+• Overdue Balance: {{pending_amount}}
+• Payment Due Date: {{due_date}}
 
-If payment has already been completed, kindly disregard this notification.
+Please clear the pending balance via UPI / Net Banking or visit our store counter.
 
-Regards,
-Washdoor Team`,
+If payment was made recently, please reply with transaction details so we can update your ledger immediately.
+
+Thank you,
+Washdoor Accounts & Billing Team`,
+    is_active: true,
+    is_default: true,
+  },
+
+  // 5. Delay Order
+  {
+    id: 'tpl_late_delivery_whatsapp',
+    category: 'late_delivery',
+    channel: 'whatsapp',
+    template_name: 'Delay Order - WhatsApp',
+    subject: '',
+    message_body: `⚠️ *IMPORTANT UPDATE: ORDER DELIVERY SCHEDULE*
+
+Dear *{{customer_name}}*,
+We sincerely apologize, but your laundry order *#{{order_id}}* is experiencing a slight delay.
+
+🔍 *Reason for Delay:*
+{{delay_reason}}
+
+📅 *Revised Schedule:*
+• Original Delivery: {{delivery_date}}
+• *New Expected Delivery: {{revised_delivery_date}}*
+• Order ID: {{order_id}}
+• Service: {{service_name}}
+
+Our master pressers and fabric specialists are giving extra care to ensure your garments meet our highest quality standards.
+
+We deeply regret any inconvenience and are prioritizing your package.
+
+Sincerely,
+*Washdoor Quality Care Team*
+📞 Hotline: +91 7603917058`,
+    is_active: true,
+    is_default: true,
+  },
+  {
+    id: 'tpl_late_delivery_sms',
+    category: 'late_delivery',
+    channel: 'sms',
+    template_name: 'Delay Order - SMS',
+    subject: '',
+    message_body: `Washdoor: Sincere apologies {{customer_name}}, order {{order_id}} is delayed due to {{delay_reason}}. Revised delivery: {{revised_delivery_date}}. We appreciate your patience!`,
+    is_active: true,
+    is_default: true,
+  },
+  {
+    id: 'tpl_late_delivery_email',
+    category: 'late_delivery',
+    channel: 'email',
+    template_name: 'Delay Order - Email',
+    subject: `Delivery Schedule Update for Washdoor Order #{{order_id}}`,
+    message_body: `Dear {{customer_name}},
+
+We are writing to provide a transparent update regarding your laundry order #{{order_id}}.
+
+Due to {{delay_reason}}, our turnaround time has been slightly extended to ensure no compromise in wash quality and fabric protection.
+
+REVISED TIMELINE:
+• Order Reference: {{order_id}}
+• Original Target Date: {{delivery_date}}
+• Revised Completion Date: {{revised_delivery_date}}
+• Garments in Process: {{quantity}} items
+
+Our production manager has assigned priority status to your garments, and we will dispatch a confirmation text the moment they pass final quality check.
+
+We truly appreciate your patience and understanding.
+
+Sincerely,
+Washdoor Operations & Quality Assurance`,
+    is_active: true,
+    is_default: true,
+  },
+
+  // 6. Suggestion or Complaint Message
+  {
+    id: 'tpl_thank_you_whatsapp',
+    category: 'thank_you',
+    channel: 'whatsapp',
+    template_name: 'Suggestion or Complaint - WhatsApp',
+    subject: '',
+    message_body: `💬 *HOW WAS YOUR WASHDOR EXPERIENCE?*
+
+Dear *{{customer_name}}*,
+Thank you for trusting Washdoor with your order *#{{order_id}}*! We hope your clothes look, feel, and smell amazing.
+
+🌟 *Your Voice Matters to Us:*
+Whether you loved our service or have suggestions on how we can improve, we would love to hear from you.
+
+• Rate us on Google: https://g.page/r/washdoor/review
+• Have a suggestion or concern? Reply directly to this WhatsApp message or call our manager.
+
+🚨 *Dedicated Complaint Escalation Desk:*
+If any item did not meet your expectations, let us know within 48 hours for immediate re-wash or resolution.
+📞 Customer Care: +91 7603917058
+
+Thank you for being a valued customer!
+*Team Washdoor*`,
+    is_active: true,
+    is_default: true,
+  },
+  {
+    id: 'tpl_thank_you_sms',
+    category: 'thank_you',
+    channel: 'sms',
+    template_name: 'Suggestion or Complaint - SMS',
+    subject: '',
+    message_body: `Washdoor: Thank you {{customer_name}}! How was order {{order_id}}? Have feedback or a complaint? Reply here or call +91 7603917058. We are always here to help!`,
+    is_active: true,
+    is_default: true,
+  },
+  {
+    id: 'tpl_thank_you_email',
+    category: 'thank_you',
+    channel: 'email',
+    template_name: 'Suggestion or Complaint - Email',
+    subject: `Your Feedback Matters — Washdoor Order #{{order_id}}`,
+    message_body: `Dear {{customer_name}},
+
+Thank you for choosing Washdoor for your recent laundry order #{{order_id}}!
+
+Our goal is to deliver 100% spotless fabric care every single time. We value your feedback and would love to hear about your experience.
+
+FEEDBACK & SUGGESTIONS:
+• How was the wash quality, freshness, and steam pressing?
+• Was the pickup and delivery timely?
+• Share your thoughts: feedback@washdoor.in
+
+COMPLAINT & RESOLUTION DESK:
+If any garment was not cleaned to your complete satisfaction, please reply to this email or contact our support supervisor directly at +91 7603917058. We offer a complimentary re-wash guarantee within 48 hours.
+
+Thank you for your patronage!
+
+Warm regards,
+Washdoor Customer Happiness Team`,
     is_active: true,
     is_default: true,
   },
@@ -441,8 +504,29 @@ export async function getTemplates() {
     if (typeof localStorage !== 'undefined') {
       const stored = localStorage.getItem(TEMPLATE_STORAGE_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored);
+        let parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
+          // Normalize legacy templates or missing category / event_type fields
+          parsed = parsed.map((t) => ({
+            ...t,
+            category: t.category || t.event_type || 'order_created',
+            channel: t.channel || 'whatsapp',
+          }));
+
+          // Ensure all 18 default templates are present in the list
+          const existingCategoryChannel = new Set(parsed.map((t) => `${t.category}__${t.channel}`));
+          let modified = false;
+          for (const def of DEFAULT_TEMPLATES) {
+            const key = `${def.category}__${def.channel}`;
+            if (!existingCategoryChannel.has(key)) {
+              parsed.push({ ...def });
+              modified = true;
+            }
+          }
+          if (modified) {
+            localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(parsed));
+          }
+          inMemoryTemplates = parsed;
           return parsed;
         }
       }

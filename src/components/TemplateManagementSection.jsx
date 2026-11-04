@@ -396,8 +396,8 @@ export default function TemplateManagementSection({ showToast, orders = [], onNa
   // ── Active Selected Template ────────────────────────────────────────
   const activeTemplate = useMemo(() => {
     return (
-      templates.find((t) => t.category === selectedCategory && t.channel === selectedChannel) ||
-      templates.find((t) => t.category === selectedCategory) ||
+      templates.find((t) => (t.category || t.event_type) === selectedCategory && t.channel === selectedChannel) ||
+      templates.find((t) => (t.category || t.event_type) === selectedCategory) ||
       templates[0] ||
       DEFAULT_TEMPLATES[0]
     );
@@ -417,8 +417,9 @@ export default function TemplateManagementSection({ showToast, orders = [], onNa
   // ── Filtered Templates ──────────────────────────────────────────────
   const filteredTemplates = useMemo(() => {
     return templates.filter((t) => {
+      const catKey = t.category || t.event_type;
       if (filterChannel !== 'all' && t.channel !== filterChannel) return false;
-      if (filterCategory !== 'all' && t.category !== filterCategory) return false;
+      if (filterCategory !== 'all' && catKey !== filterCategory) return false;
       if (filterActive === 'active' && !t.is_active) return false;
       if (filterActive === 'inactive' && t.is_active) return false;
       if (searchQuery.trim()) {
@@ -774,7 +775,7 @@ export default function TemplateManagementSection({ showToast, orders = [], onNa
             </div>
             <div className="nts-category-list">
               {NOTIFICATION_CATEGORIES.map((cat) => {
-                const count = templates.filter((t) => t.category === cat.key).length;
+                const count = templates.filter((t) => (t.category || t.event_type) === cat.key).length;
                 const isSelected = selectedCategory === cat.key;
                 return (
                   <button
