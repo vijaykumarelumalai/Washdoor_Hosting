@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getStoredSettings, saveStoredSettings, DEFAULT_SETTINGS } from '../config/businessRules';
 import { useLanguage } from '../context/LanguageContext';
+import { validateBusinessProfile } from '../utils/validation';
 import TemplateManagementSection from './TemplateManagementSection';
 import '../styles/Settings.css';
 

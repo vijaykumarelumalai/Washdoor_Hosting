@@ -178,3 +178,78 @@ export function getAgeFromDOB(dobStr) {
   }
   return age >= 0 && age <= 120 ? age : null;
 }
+
+/**
+ * Validates Business Profile settings for the laundry shop.
+ * Covers Shop Name, Phone, Email, WhatsApp number, Address, City, State, PIN Code, and GST number.
+ */
+export function validateBusinessProfile(data = {}) {
+  const errors = {};
+
+  // Shop name (required, min 2 chars)
+  if (!data.shopName || !String(data.shopName).trim()) {
+    errors.shopName = 'Shop name is required.';
+  } else if (String(data.shopName).trim().length < 2) {
+    errors.shopName = 'Shop name must be at least 2 characters.';
+  }
+
+  // Phone (required, valid 10-digit Indian phone)
+  const phoneVal = data.phone != null ? String(data.phone).trim() : '';
+  const cleanPhone = normalizeMobileNumber(phoneVal);
+  if (!phoneVal) {
+    errors.phone = 'Phone number is required.';
+  } else if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+    errors.phone = 'Enter a valid 10-digit Indian phone number (e.g. +91 7603917058).';
+  }
+
+  // Email (required, valid format)
+  const emailVal = data.email != null ? String(data.email).trim() : '';
+  if (!emailVal) {
+    errors.email = 'Email address is required.';
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
+    errors.email = 'Enter a valid email address (e.g. info@washdoor.in).';
+  }
+
+  // WhatsApp number (optional, but if provided, must be valid 10-digit phone)
+  if (data.whatsappNumber && String(data.whatsappNumber).trim()) {
+    const cleanWA = normalizeMobileNumber(data.whatsappNumber);
+    if (!/^[6-9]\d{9}$/.test(cleanWA)) {
+      errors.whatsappNumber = 'Enter a valid 10-digit WhatsApp number (e.g. +91 7338851369).';
+    }
+  }
+
+  // Address (required, min 5 chars)
+  if (!data.address || !String(data.address).trim()) {
+    errors.address = 'Shop address is required.';
+  } else if (String(data.address).trim().length < 5) {
+    errors.address = 'Shop address must be at least 5 characters.';
+  }
+
+  // City (required)
+  if (!data.city || !String(data.city).trim()) {
+    errors.city = 'City is required.';
+  }
+
+  // State (required)
+  if (!data.state || !String(data.state).trim()) {
+    errors.state = 'State is required.';
+  }
+
+  // PIN Code (required, exactly 6 digits)
+  const pinVal = data.pinCode != null ? String(data.pinCode).trim() : '';
+  if (!pinVal) {
+    errors.pinCode = 'PIN code is required.';
+  } else if (!/^\d{6}$/.test(pinVal)) {
+    errors.pinCode = 'Enter a valid 6-digit PIN code (e.g. 632401).';
+  }
+
+  // GST number (optional, but if provided, must match Indian GSTIN format)
+  if (data.gstNumber && String(data.gstNumber).trim()) {
+    const cleanGST = String(data.gstNumber).trim().toUpperCase();
+    if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(cleanGST)) {
+      errors.gstNumber = 'Enter a valid 15-character GSTIN (e.g. 33AABCT1332L1Z8).';
+    }
+  }
+
+  return errors;
+}

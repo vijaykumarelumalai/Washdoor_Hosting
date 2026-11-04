@@ -504,12 +504,20 @@
 
 /* Simulated Map Mockup Canvas */
 .map-container-mockup {
-  border-radius: 12px;
+  border-radius: 14px;
   border: 1.5px solid #cbd5e1;
   overflow: hidden;
-  height: 220px;
+  height: 440px;
+  min-height: 400px;
   position: relative;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
+}
+
+@media (max-width: 640px) {
+  .map-container-mockup {
+    height: 340px;
+    min-height: 320px;
+  }
 }
 
 .map-canvas {
@@ -540,31 +548,31 @@
 }
 
 .road-h-1 {
-  top: 40%;
+  top: 45%;
   left: 0;
   right: 0;
-  height: 16px;
+  height: 18px;
 }
 
 .road-h-2 {
-  top: 70%;
+  top: 76%;
   left: 0;
   right: 0;
-  height: 10px;
+  height: 14px;
 }
 
 .road-v-1 {
-  left: 35%;
+  left: 38%;
   top: 0;
   bottom: 0;
-  width: 16px;
+  width: 18px;
 }
 
 .road-v-2 {
-  left: 75%;
+  left: 74%;
   top: 0;
   bottom: 0;
-  width: 12px;
+  width: 14px;
 }
 
 .map-land-area {
@@ -573,18 +581,18 @@
 }
 
 .area-1 {
-  top: 10px;
-  left: 10px;
-  width: 30%;
-  height: 30%;
+  top: 16px;
+  left: 16px;
+  width: 33%;
+  height: 36%;
   background: #d4e7d4;
 }
 
 .area-2 {
-  bottom: 10px;
-  right: 10px;
-  width: 20%;
-  height: 25%;
+  bottom: 16px;
+  right: 16px;
+  width: 22%;
+  height: 28%;
   background: #dce4ed;
 }
 
@@ -594,8 +602,8 @@
 /* Interactive Pin Marker */
 .map-pin-marker {
   position: absolute;
-  top: 40%;
-  left: 35%;
+  top: 45%;
+  left: 38%;
   transform: translate(-50%, -100%);
   z-index: 10;
   cursor: pointer;
@@ -668,9 +676,9 @@
   color: #f1f5f9;
 }
 
-.poi-1 { top: 20%; right: 40%; }
-.poi-2 { bottom: 25%; left: 10%; }
-.poi-3 { top: 55%; right: 10%; }
+.poi-1 { top: 22%; right: 38%; }
+.poi-2 { bottom: 20%; left: 14%; }
+.poi-3 { top: 62%; right: 12%; }
 
 /* Map Controls */
 .map-controls-type {
