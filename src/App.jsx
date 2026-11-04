@@ -128,7 +128,14 @@ const NAV_ITEMS = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const stored = localStorage.getItem('washdoor_active_tab');
+      return stored || 'dashboard';
+    } catch {
+      return 'dashboard';
+    }
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -161,12 +168,19 @@ export default function App() {
 
   // Centralized tab navigation: auto-collapses on module switch as requested
   const navigateToTab = (tab) => {
-    if (tab === 'pos' || tab === 'orders' || tab === 'order') setActiveTab('order');
-    else if (tab === 'customers' || tab === 'customer') setActiveTab('customer');
-    else if (tab === 'reports' || tab === 'report') setActiveTab('report');
-    else if (tab === 'audit_log' || tab === 'auditlog' || tab === 'audit') setActiveTab('audit');
-    else if (tab === 'account' || tab === 'settings') setActiveTab('account');
-    else setActiveTab(tab);
+    let resolved = tab;
+    if (tab === 'pos' || tab === 'orders' || tab === 'order') resolved = 'order';
+    else if (tab === 'customers' || tab === 'customer') resolved = 'customer';
+    else if (tab === 'reports' || tab === 'report') resolved = 'report';
+    else if (tab === 'audit_log' || tab === 'auditlog' || tab === 'audit') resolved = 'audit';
+    else if (tab === 'account' || tab === 'settings') resolved = 'account';
+    else if (tab === 'templates' || tab === 'template') resolved = 'templates';
+    else resolved = tab;
+
+    setActiveTab(resolved);
+    try {
+      localStorage.setItem('washdoor_active_tab', resolved);
+    } catch {}
 
     // Auto-collapse navigation menu when navigating to any module
     setIsNavCollapsed(true);
@@ -1048,10 +1062,10 @@ export default function App() {
             onNavigateTab={navigateToTab}
             showToast={showToast}
           />
-        ) : (activeTab === 'account' || activeTab === 'settings' || activeTab === 'apps') ? (
+        ) : (activeTab === 'account' || activeTab === 'settings' || activeTab === 'apps' || activeTab === 'templates' || activeTab === 'template') ? (
           <SettingsModule
             showToast={showToast}
-            initialTab={activeTab === 'apps' ? 'apps' : 'business_profile'}
+            initialTab={activeTab === 'apps' ? 'apps' : (activeTab === 'templates' || activeTab === 'template') ? 'templates' : 'business_profile'}
             orders={orders}
             onSignOut={() => {
               showToast('Signed out of counter session');

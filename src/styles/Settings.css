@@ -66,6 +66,44 @@
   gap: 10px;
 }
 
+.settings-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.settings-refresh-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+.settings-refresh-icon {
+  transition: transform 0.2s ease;
+}
+
+.settings-refresh-icon.spinning {
+  animation: settings-spin 0.6s linear infinite;
+}
+
+@keyframes settings-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .settings-help-btn {
   display: inline-flex;
   align-items: center;
@@ -1819,6 +1857,7 @@ body:not(.light-theme):not([data-theme="light"]) .settings-bottom-action-bar {
   border-top-color: #1e293b;
 }
 
+body:not(.light-theme):not([data-theme="light"]) .settings-refresh-btn,
 body:not(.light-theme):not([data-theme="light"]) .settings-help-btn,
 body:not(.light-theme):not([data-theme="light"]) .settings-discard-btn,
 body:not(.light-theme):not([data-theme="light"]) .tax-preset-pill,

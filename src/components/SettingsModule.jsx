@@ -6,17 +6,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getStoredSettings, saveStoredSettings, DEFAULT_SETTINGS } from '../config/businessRules';
 import { useLanguage } from '../context/LanguageContext';
+import TemplateManagementSection from './TemplateManagementSection';
 import '../styles/Settings.css';
 
 export default function SettingsModule({ showToast, onSignOut, initialTab = 'business_profile', orders = [] }) {
   const { t, language, setLanguage, SAMPLE_LANGUAGES } = useLanguage();
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const savedSub = localStorage.getItem('washdoor_settings_subtab');
+      return savedSub || initialTab;
+    } catch {
+      return initialTab;
+    }
+  });
   const [settings, setSettings] = useState(getStoredSettings());
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [logoPreview, setLogoPreview] = useState(settings.shopLogo || '');
   const [mapType, setMapType] = useState('roadmap'); // 'roadmap' | 'satellite'
   const [mapZoom, setMapZoom] = useState(14);
   const [isSignoutModalOpen, setIsSignoutModalOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const fileInputRef = useRef(null);
 
   // ── Template & App Configuration States ──
@@ -141,6 +150,32 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
     showToast?.('Changes discarded');
   };
 
+  // Proper refresh event handler with full sync and reload
+  const handleRefresh = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    setIsRefreshing(true);
+    showToast?.('Refreshing settings & workspace...');
+
+    try {
+      // 1. Sync & reset local stored settings
+      const stored = getStoredSettings();
+      setSettings(stored);
+      setLogoPreview(stored.shopLogo || '');
+      setHasUnsavedChanges(false);
+
+      // 2. Persist active tabs so reload restores the exact screen & subtab
+      localStorage.setItem('washdoor_active_tab', 'account');
+      localStorage.setItem('washdoor_settings_subtab', activeTab);
+    } catch (err) {
+      console.warn('Refresh note:', err);
+    }
+
+    // 3. Execute true browser reload to refresh network, cache, and all component states
+    setTimeout(() => {
+      window.location.reload();
+    }, 250);
+  };
+
   // Logo upload handler
   const handleLogoUpload = (e) => {
     const file = e.target.files?.[0];
@@ -168,6 +203,7 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
     { id: 'operations_receipts', label: 'Operations & receipts', icon: '🧾', desc: 'Thermal receipts, barcodes & disclaimer terms' },
     { id: 'notifications', label: 'Reminders & notifications', icon: '🔔', desc: 'WhatsApp, SMS & email automated alerts' },
     { id: 'language', label: 'Language', icon: '🌐', desc: 'Multi-language and text direction' },
+    { id: 'templates', label: 'Template', icon: '📑', desc: 'Predefined WhatsApp, SMS & Email notification templates', isSubItem: true },
     { id: 'apps', label: 'Apps', icon: '📱', desc: 'Printers, WhatsApp API & accounting integrations' },
     { id: 'help_support', label: 'Help & support', icon: '❓', desc: 'Documentation, helpline & diagnostics' },
     { id: 'account_details', label: 'Account', icon: '👤', desc: 'Administrator credentials & security' },
@@ -189,6 +225,29 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
         </div>
 
         <div className="settings-header-actions">
+          <button
+            type="button"
+            className="settings-refresh-btn"
+            onClick={handleRefresh}
+            title="Refresh Settings"
+          >
+            <svg
+              className={`settings-refresh-icon ${isRefreshing ? 'spinning' : ''}`}
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#2563eb"
+              strokeWidth="2.3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+            <span>Refresh</span>
+          </button>
           <button
             type="button"
             className="settings-help-btn"
@@ -221,16 +280,23 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
                   key={item.id}
                   type="button"
                   className={`settings-nav-item ${isSelected ? 'active' : ''} ${isSignOut ? 'signout-item' : ''}`}
+                  style={item.isSubItem ? { paddingLeft: '26px', fontSize: '13px' } : {}}
                   onClick={() => {
                     if (isSignOut) {
                       setIsSignoutModalOpen(true);
                     } else {
                       setActiveTab(item.id);
+                      try {
+                        localStorage.setItem('washdoor_settings_subtab', item.id);
+                      } catch {}
                     }
                   }}
                 >
                   <span className="settings-nav-icon">{item.icon}</span>
-                  <span className="settings-nav-label">{item.label}</span>
+                  <span className="settings-nav-label">
+                    {item.isSubItem && <span style={{ opacity: 0.5, marginRight: '4px' }}>└</span>}
+                    {item.label}
+                  </span>
                 </button>
               );
             })}
@@ -1277,10 +1343,26 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
           )}
 
           {/* ══════════════════════════════════════════════════════════
-              6. LANGUAGE & REGIONAL
+              6. LANGUAGE & REGIONAL / TEMPLATES
              ══════════════════════════════════════════════════════════ */}
           {activeTab === 'language' && (
             <div className="settings-card-section">
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '18px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
+                <button
+                  type="button"
+                  style={{ padding: '7px 16px', borderRadius: '8px', fontWeight: 650, fontSize: '13px', background: '#eff6ff', border: '1.5px solid #3b82f6', color: '#1d4ed8', cursor: 'pointer' }}
+                >
+                  🌐 Language &amp; Regional
+                </button>
+                <button
+                  type="button"
+                  style={{ padding: '7px 16px', borderRadius: '8px', fontWeight: 600, fontSize: '13px', background: '#ffffff', border: '1px solid #cbd5e1', color: '#475569', cursor: 'pointer' }}
+                  onClick={() => setActiveTab('templates')}
+                >
+                  📑 Notification Templates
+                </button>
+              </div>
+
               <h2 className="settings-section-title">Language &amp; Regional Settings</h2>
               <p className="settings-section-subtitle">
                 Select your preferred application language, calendar system, and regional format
@@ -1336,6 +1418,19 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════
+              SETTINGS → LANGUAGE → TEMPLATE (NOTIFICATION STUDIO)
+             ══════════════════════════════════════════════════════════ */}
+          {(activeTab === 'templates' || activeTab === 'template') && (
+            <div className="settings-card-section" style={{ padding: '20px' }}>
+              <TemplateManagementSection
+                showToast={showToast}
+                orders={orders}
+                onNavigateSettingsTab={(tab) => setActiveTab(tab)}
+              />
             </div>
           )}
 
