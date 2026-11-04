@@ -6,7 +6,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getStoredSettings, saveStoredSettings, DEFAULT_SETTINGS } from '../config/businessRules';
 import { useLanguage } from '../context/LanguageContext';
-import TemplateManagementSection from './TemplateManagementSection';
 import '../styles/Settings.css';
 
 export default function SettingsModule({ showToast, onSignOut, initialTab = 'business_profile', orders = [] }) {
@@ -169,7 +168,6 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
     { id: 'operations_receipts', label: 'Operations & receipts', icon: '🧾', desc: 'Thermal receipts, barcodes & disclaimer terms' },
     { id: 'notifications', label: 'Reminders & notifications', icon: '🔔', desc: 'WhatsApp, SMS & email automated alerts' },
     { id: 'language', label: 'Language', icon: '🌐', desc: 'Multi-language and text direction' },
-    { id: 'templates', label: 'Template', icon: '📑', desc: 'Predefined WhatsApp, SMS & Email notification templates' },
     { id: 'apps', label: 'Apps', icon: '📱', desc: 'Printers, WhatsApp API & accounting integrations' },
     { id: 'help_support', label: 'Help & support', icon: '❓', desc: 'Documentation, helpline & diagnostics' },
     { id: 'account_details', label: 'Account', icon: '👤', desc: 'Administrator credentials & security' },
@@ -179,38 +177,36 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
   return (
     <div className="settings-page-wrapper">
       {/* ── Settings Header Bar ── */}
-      {activeTab !== 'templates' && activeTab !== 'template' && (
-        <div className="settings-top-header">
-          <div className="settings-title-group">
-            <div className="settings-icon-bubble">⚙️</div>
-            <div>
-              <h1 className="settings-main-title">{t('settings_title', 'Settings')}</h1>
-              <p className="settings-main-subtitle">
-                Manage your laundry business profile, receipts, tax, and system preferences
-              </p>
-            </div>
-          </div>
-
-          <div className="settings-header-actions">
-            <button
-              type="button"
-              className="settings-help-btn"
-              onClick={() => setActiveTab('help_support')}
-              title="Help & Support"
-            >
-              <span style={{ fontSize: '15px' }}>❓</span>
-              <span>Help</span>
-            </button>
-            <div className="settings-pro-badge" title="PRO+ License Active">
-              <span>👑</span>
-              <span>PRO</span>
-            </div>
+      <div className="settings-top-header">
+        <div className="settings-title-group">
+          <div className="settings-icon-bubble">⚙️</div>
+          <div>
+            <h1 className="settings-main-title">{t('settings_title', 'Settings')}</h1>
+            <p className="settings-main-subtitle">
+              Manage your laundry business profile, receipts, tax, and system preferences
+            </p>
           </div>
         </div>
-      )}
+
+        <div className="settings-header-actions">
+          <button
+            type="button"
+            className="settings-help-btn"
+            onClick={() => setActiveTab('help_support')}
+            title="Help & Support"
+          >
+            <span style={{ fontSize: '15px' }}>❓</span>
+            <span>Help</span>
+          </button>
+          <div className="settings-pro-badge" title="PRO+ License Active">
+            <span>👑</span>
+            <span>PRO</span>
+          </div>
+        </div>
+      </div>
 
       {/* ── 2-Column Settings Layout ── */}
-      <div className={`settings-layout-grid ${(activeTab === 'templates' || activeTab === 'template') ? 'template-view-fullwidth' : ''}`}>
+      <div className="settings-layout-grid">
         {/* Left Sub-Sidebar Menu */}
         <aside className="settings-menu-sidebar">
           <div className="settings-menu-header">
@@ -1340,19 +1336,6 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
                   </div>
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════════════════
-              NEW: TEMPLATE (Positioned directly under Language)
-             ══════════════════════════════════════════════════════════ */}
-          {(activeTab === 'templates' || activeTab === 'template') && (
-            <div className="settings-card-section">
-              <TemplateManagementSection
-                showToast={showToast}
-                orders={orders}
-                onNavigateSettingsTab={(tab) => setActiveTab(tab)}
-              />
             </div>
           )}
 

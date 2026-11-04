@@ -5,7 +5,6 @@
 // - 'washdoor_order_items' (Line items per order)
 
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient.js';
-import { sendNotification } from './notificationTemplateService.js';
 
 // Default fallback products matching the database seed
 export const DEFAULT_PRODUCTS = [
@@ -1432,27 +1431,6 @@ export async function createOrderWithCustomer({
       } catch (itemErr) {
         console.warn('saveOrderItems async note:', itemErr);
       }
-    }
-
-    // Automated Notification Trigger for Order Created
-    try {
-      sendNotification({
-        eventType: 'order_created',
-        channel: 'whatsapp',
-        order: {
-          order_number: insertedOrderNum,
-          customer_name: cleanCust.customer_name,
-          mobile_number: cleanCust.mobile_number,
-          email: cleanCust.email,
-          total_amount: Number(totalAmount) || 0,
-          service_category: orderPreference || 'Standard Wash',
-          expected_delivery: rawDelivery || 'Tomorrow, 06:00 PM',
-          item_count: calculatedItemCount,
-        },
-        customer: cleanCust,
-      }).catch(() => {});
-    } catch (notifErr) {
-      console.warn('Notification dispatch trigger notice:', notifErr);
     }
 
     return {
