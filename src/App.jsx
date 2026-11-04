@@ -166,7 +166,7 @@ export default function App() {
     else if (tab === 'reports' || tab === 'report') setActiveTab('report');
     else if (tab === 'audit_log' || tab === 'auditlog' || tab === 'audit') setActiveTab('audit');
     else if (tab === 'account' || tab === 'settings') setActiveTab('account');
-    else if (tab === 'templates' || tab === 'template' || tab === 'template_reminder') setActiveTab('template_reminder');
+    else if (tab === 'templates' || tab === 'template') setActiveTab('templates');
     else setActiveTab(tab);
 
     // Auto-collapse navigation menu when navigating to any module
@@ -222,25 +222,6 @@ export default function App() {
       return 'light';
     }
   });
-
-  // Fullscreen state & toggle
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  useEffect(() => {
-    const onFullscreenChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement));
-    };
-    document.addEventListener('fullscreenchange', onFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
-  }, []);
-
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
-    } else if (document.exitFullscreen) {
-      document.exitFullscreen().catch(() => {});
-    }
-  };
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -425,6 +406,27 @@ export default function App() {
     <div className={`app ${theme}-theme`} data-theme={theme}>
       {/* ── Topbar (Layout matching media_1793709621021_951aa873.png) ── */}
       <header className={`topbar ${isNavCollapsed ? 'sidebar-collapsed' : ''}`}>
+        {/* Extension Panel / Sidebar Collapse Toggle Button */}
+        <button
+          type="button"
+          className="topbar-sidebar-toggle-btn sidebar-toggle-btn topbar-mobile-menu-btn"
+          onClick={() => {
+            if (window.innerWidth <= 840) {
+              setSidebarOpen((prev) => !prev);
+            } else {
+              toggleNavCollapse();
+            }
+          }}
+          title={isNavCollapsed ? 'Expand Navigation Menu' : 'Collapse Navigation Menu'}
+          aria-label="Toggle navigation menu"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="4" y1="7" x2="20" y2="7"></line>
+            <line x1="4" y1="12" x2="20" y2="12"></line>
+            <line x1="4" y1="17" x2="20" y2="17"></line>
+          </svg>
+        </button>
+
         {/* ── Centralized Global Search Bar ── */}
         <div className="topbar-search-wrap">
           <div className="topbar-search-box">
@@ -555,19 +557,6 @@ export default function App() {
         </div>
 
         <div className="spacer"></div>
-
-        {/* Fullscreen Toggle Button */}
-        <button
-          type="button"
-          className="topbar-fullscreen-btn"
-          title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-          aria-label={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-          onClick={toggleFullscreen}
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-          </svg>
-        </button>
 
         {/* Notification Bell Icon */}
         <button
@@ -793,7 +782,7 @@ export default function App() {
           <span className="theme-toggle-label">Reports &amp; Audit</span>
         </button>
 
-        {/* Admin Details Dropdown (Avatar Circle + Chevron) */}
+        {/* Admin Details Dropdown (Avatar Circle Only) */}
         <div className="top-pill-dropdown-wrap">
           <button
             type="button"
@@ -805,24 +794,7 @@ export default function App() {
             title="Tenant / Admin: Store Administrator"
             aria-label="Admin Avatar"
           >
-            <span className="top-admin-avatar-circle">A</span>
-            <svg
-              className="top-admin-avatar-chevron"
-              width="10"
-              height="10"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{
-                transition: 'transform 0.2s ease',
-                transform: activeDropdown === 'admin' ? 'rotate(180deg)' : 'none',
-              }}
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
+            A
           </button>
 
           {activeDropdown === 'admin' && (
@@ -1077,10 +1049,10 @@ export default function App() {
             onNavigateTab={navigateToTab}
             showToast={showToast}
           />
-        ) : (activeTab === 'account' || activeTab === 'settings' || activeTab === 'apps' || activeTab === 'templates' || activeTab === 'template' || activeTab === 'template_reminder') ? (
+        ) : (activeTab === 'account' || activeTab === 'settings' || activeTab === 'apps' || activeTab === 'templates' || activeTab === 'template') ? (
           <SettingsModule
             showToast={showToast}
-            initialTab={activeTab === 'apps' ? 'apps' : (activeTab === 'templates' || activeTab === 'template' || activeTab === 'template_reminder') ? 'template_reminder' : 'business_profile'}
+            initialTab={activeTab === 'apps' ? 'apps' : (activeTab === 'templates' || activeTab === 'template') ? 'templates' : 'business_profile'}
             orders={orders}
             onSignOut={() => {
               showToast('Signed out of counter session');

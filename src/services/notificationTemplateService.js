@@ -35,7 +35,7 @@ export const NOTIFICATION_CATEGORIES = [
   },
   {
     key: 'thank_you',
-    label: 'Thank You',
+    label: 'Thank You Message',
     trigger: 'After successful order collection or final delivery',
     badgeClass: 'badge-delivered',
     icon: '❤️',
@@ -43,7 +43,7 @@ export const NOTIFICATION_CATEGORIES = [
   },
   {
     key: 'late_delivery',
-    label: 'Late Delivery Warning',
+    label: 'Warning / Late Delivery',
     trigger: 'When an order passes its expected delivery date without completion',
     badgeClass: 'badge-late',
     icon: '⚠️',
