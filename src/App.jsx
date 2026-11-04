@@ -215,9 +215,8 @@ export default function App() {
   // Theme State: 'light' (default design) | 'dark'
   const [theme, setTheme] = useState(() => {
     try {
-      const isManual = localStorage.getItem('washdoor_theme_manual') === 'true';
       const saved = localStorage.getItem('washdoor_theme');
-      return (isManual && (saved === 'dark' || saved === 'light')) ? saved : 'light';
+      return (saved === 'dark' || saved === 'light') ? saved : 'light';
     } catch {
       return 'light';
     }
@@ -403,7 +402,7 @@ export default function App() {
   }, [orders, globalSearchQuery]);
 
   return (
-    <div className="app">
+    <div className={`app ${theme}-theme`} data-theme={theme}>
       {/* ── Topbar (Layout matching media_1793709621021_951aa873.png) ── */}
       <header className={`topbar ${isNavCollapsed ? 'sidebar-collapsed' : ''}`}>
         {/* Extension Panel / Sidebar Collapse Toggle Button */}

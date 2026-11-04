@@ -151,3 +151,12 @@ test('8. POS & Order Management validation protects phone numbers and currencies
   assert.match(custServiceCode, /formatOrderId/);
   assert.match(custServiceCode, /formatCustomerId/);
 });
+
+test('9. Edit Side Panel maintains 45-50% width on desktop and responsive breakpoints', () => {
+  const sideEditCss = fs.readFileSync(path.resolve(stylesDir, 'SideEditPanel.css'), 'utf8');
+  assert.match(sideEditCss, /width:\s*48%/);
+  assert.match(sideEditCss, /max-width:\s*860px/);
+  assert.match(sideEditCss, /@media\s*\(max-width:\s*1024px\)/);
+  assert.match(sideEditCss, /@media\s*\(max-width:\s*640px\)/);
+  assert.match(sideEditCss, /sideSlideIn/);
+});
