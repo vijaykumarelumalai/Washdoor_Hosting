@@ -718,184 +718,1090 @@ body.dark-theme .nts-preview-body,
   background: #0b1329;
 }
 
-/* WhatsApp Phone Mockup */
-.nts-phone-frame {
+/* ── Right Panel: Live Previews ─────────────────────────────────────── */
+.nts-preview-channel-pill-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nts-preview-pill {
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 650;
+  border: 1px solid var(--border, #cbd5e1);
+  background: var(--bg-surface, #ffffff);
+  color: var(--text-secondary, #475569);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.nts-preview-pill.active {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #ffffff;
+}
+
+body.dark-theme .nts-preview-pill,
+[data-theme="dark"] .nts-preview-pill {
+  background: #1e293b;
+  border-color: #334155;
+  color: #94a3b8;
+}
+
+body.dark-theme .nts-preview-pill.active,
+[data-theme="dark"] .nts-preview-pill.active {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #ffffff;
+}
+
+/* ── Realistic Smartphone Mockup ─────────────────────────────────────── */
+.nts-smartphone-mockup {
+  position: relative;
   width: 100%;
-  max-width: 270px;
-  background: #ffffff;
-  border: 2px solid #0f172a;
-  border-radius: 16px;
+  max-width: 300px;
+  margin: 4px auto 12px auto;
+  box-sizing: border-box;
+}
+
+/* Side hardware buttons on device chassis */
+.nts-phone-hw-btn {
+  position: absolute;
+  background: #27272a;
+  border-radius: 2px;
+  z-index: 1;
+}
+
+.nts-phone-hw-vol-up {
+  left: -3.5px;
+  top: 92px;
+  width: 3.5px;
+  height: 36px;
+}
+
+.nts-phone-hw-vol-down {
+  left: -3.5px;
+  top: 136px;
+  width: 3.5px;
+  height: 36px;
+}
+
+.nts-phone-hw-power {
+  right: -3.5px;
+  top: 112px;
+  width: 3.5px;
+  height: 48px;
+}
+
+/* Phone Outer Body Chassis */
+.nts-phone-chassis {
+  position: relative;
+  width: 100%;
+  min-height: 560px;
+  background: #09090b;
+  border: 8px solid #18181b;
+  border-radius: 40px;
+  box-shadow: 
+    0 0 0 1.5px #27272a,
+    0 20px 35px -8px rgba(0, 0, 0, 0.45),
+    0 1px 3px rgba(0, 0, 0, 0.2);
   overflow: hidden;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
   display: flex;
   flex-direction: column;
 }
 
-.nts-phone-topbar {
-  background: #075e54;
-  color: #ffffff;
-  padding: 8px 10px;
+/* Screen Glass */
+.nts-phone-screen {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  flex: 1;
+  background: #ffffff;
+  border-radius: 32px;
+  overflow: hidden;
+  height: 100%;
+  min-height: 544px;
 }
 
-.nts-phone-avatar {
+/* Top Dynamic Island / Camera & Sensor pill */
+.nts-phone-notch-container {
+  position: absolute;
+  top: 7px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.nts-phone-dynamic-island {
+  width: 88px;
+  height: 20px;
+  background: #000000;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 9px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.nts-phone-camera-lens {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #111827;
+  border: 1px solid #1f2937;
+  position: relative;
+}
+
+.nts-phone-camera-lens::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 2.5px;
+  height: 2.5px;
+  border-radius: 50%;
+  background: #3b82f6;
+  opacity: 0.7;
+}
+
+.nts-phone-sensor {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #1e1b4b;
+}
+
+/* Mobile Status Bar */
+.nts-phone-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px 2px 16px;
+  font-size: 10.5px;
+  font-weight: 700;
+  z-index: 20;
+  user-select: none;
+}
+
+.nts-phone-status-bar.dark-text {
+  color: #0f172a;
+}
+
+.nts-phone-status-bar.light-text {
+  color: #ffffff;
+}
+
+.nts-status-icons {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.nts-status-signal {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 1.5px;
+  height: 9px;
+}
+
+.nts-status-signal .nts-bar {
+  width: 2px;
+  background: currentColor;
+  border-radius: 0.5px;
+}
+
+.nts-status-signal .b1 { height: 3px; }
+.nts-status-signal .b2 { height: 5px; }
+.nts-status-signal .b3 { height: 7px; }
+.nts-status-signal .b4 { height: 9px; }
+
+.nts-status-wifi {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+}
+
+.nts-battery-body {
+  width: 17px;
+  height: 8.5px;
+  border: 1px solid currentColor;
+  border-radius: 2.5px;
+  padding: 1px;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.nts-battery-body::after {
+  content: '';
+  position: absolute;
+  right: -2.5px;
+  top: 2px;
+  width: 1.5px;
+  height: 3.5px;
+  background: currentColor;
+  border-radius: 0 1px 1px 0;
+}
+
+.nts-battery-level {
+  height: 100%;
+  background: currentColor;
+  border-radius: 1px;
+}
+
+/* App Containers */
+.nts-phone-app-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* App Headers */
+.nts-phone-app-header {
+  padding: 7px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 10;
+}
+
+.nts-phone-app-header.whatsapp {
+  background: #075e54;
+  color: #ffffff;
+}
+
+.nts-phone-app-header.sms {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  color: #0f172a;
+}
+
+.nts-phone-app-header.email {
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+  color: #0f172a;
+}
+
+.nts-app-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nts-app-back-btn {
+  font-size: 15px;
+  font-weight: 700;
+  cursor: default;
+}
+
+.nts-app-avatar.whatsapp {
   width: 26px;
   height: 26px;
   border-radius: 50%;
   background: #128c7e;
   display: grid;
   place-items: center;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   color: #ffffff;
+  position: relative;
 }
 
-.nts-phone-contact {
-  flex: 1;
+.nts-avatar-online-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  border: 1px solid #ffffff;
+}
+
+.nts-app-contact-info {
   display: flex;
   flex-direction: column;
 }
 
-.nts-phone-title {
+.nts-contact-name-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.nts-contact-name {
   font-size: 11px;
   font-weight: 700;
   line-height: 1.2;
 }
 
-.nts-phone-sub {
-  font-size: 9px;
+.nts-verified-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  background: #22c55e;
+  color: #ffffff;
+  border-radius: 50%;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.nts-contact-status {
+  font-size: 8.5px;
   opacity: 0.85;
 }
 
-.nts-phone-chat-area {
-  background: #efeae2;
-  padding: 10px;
-  min-height: 190px;
-  max-height: 220px;
-  overflow-y: auto;
+.nts-app-header-actions {
   display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
 }
 
-.nts-whatsapp-bubble {
+/* SMS Header Center */
+.nts-sms-contact-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.nts-sms-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #94a3b8;
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.nts-sms-type-badge {
+  text-align: center;
+  font-size: 9px;
+  color: #94a3b8;
+  padding: 4px 0 2px 0;
+  background: #ffffff;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Chat Viewports */
+.nts-phone-chat-viewport {
+  flex: 1;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  min-height: 360px;
+  max-height: 400px;
+}
+
+.nts-phone-chat-viewport.whatsapp-bg {
+  background-color: #efeae2;
+  background-image: 
+    radial-gradient(#d5cebe 0.75px, transparent 0.75px), 
+    radial-gradient(#d5cebe 0.75px, #efeae2 0.75px);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+}
+
+.nts-phone-chat-viewport.sms-bg {
+  background: #ffffff;
+}
+
+.nts-phone-chat-viewport.email-bg {
+  background: #f8fafc;
+  padding: 8px;
+}
+
+.nts-chat-encryption-notice {
+  background: #ffeecd;
+  color: #54656f;
+  font-size: 8.5px;
+  text-align: center;
+  padding: 5px 8px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  line-height: 1.35;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+}
+
+.nts-chat-date-chip {
+  align-self: center;
+  background: rgba(255, 255, 255, 0.85);
+  color: #54656f;
+  font-size: 8.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 5px;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.06);
+}
+
+.nts-phone-bubble-wrapper {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 6px;
+}
+
+.nts-phone-bubble-wrapper.incoming {
+  align-items: flex-start;
+}
+
+/* WhatsApp Message Bubble */
+.nts-whatsapp-card {
   background: #dcf8c6;
-  border-radius: 7.5px;
-  padding: 8px 9px;
+  border-radius: 8px 8px 8px 2px;
+  padding: 7px 9px;
   font-size: 11px;
   line-height: 1.4;
   color: #111b21;
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
-  white-space: pre-wrap;
-  word-break: break-word;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.12);
+  max-width: 92%;
   position: relative;
 }
 
-.nts-bubble-meta {
+.nts-bubble-message-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.nts-bubble-meta-footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 3px;
-  font-size: 9px;
-  color: #667781;
   margin-top: 4px;
 }
 
-.nts-ticks {
+.nts-bubble-time {
+  font-size: 8.5px;
+  color: #667781;
+}
+
+.nts-whatsapp-double-check {
   color: #53bdeb;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
 }
 
-/* SMS Mobile Preview */
-.nts-sms-frame {
-  width: 100%;
-  max-width: 270px;
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: 14px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.nts-sms-topbar {
-  background: #f1f5f9;
-  padding: 8px 12px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #334155;
-  text-align: center;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.nts-sms-body {
-  padding: 12px 10px;
-  background: #f8fafc;
-  min-height: 160px;
-}
-
-.nts-sms-bubble {
-  background: #0284c7;
-  color: #ffffff;
-  border-radius: 12px 12px 2px 12px;
+/* SMS Card */
+.nts-sms-card {
+  background: #e2e8f0;
+  color: #0f172a;
+  border-radius: 14px 14px 14px 3px;
   padding: 8px 10px;
   font-size: 11px;
   line-height: 1.4;
-  white-space: pre-wrap;
-  word-break: break-word;
+  max-width: 90%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-.nts-sms-stats {
-  padding: 6px 10px;
+.nts-sms-counter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 9px;
+  color: #64748b;
   background: #f1f5f9;
   border-top: 1px solid #e2e8f0;
-  font-size: 10px;
-  color: #64748b;
-  display: flex;
-  justify-content: space-between;
 }
 
-/* Email Window Preview */
-.nts-email-frame {
-  width: 100%;
+/* Mobile Email Card */
+.nts-mobile-email-card {
   background: #ffffff;
-  border: 1px solid #cbd5e1;
   border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
 }
 
-.nts-email-topbar {
-  background: #f1f5f9;
-  padding: 8px 10px;
-  border-bottom: 1px solid #e2e8f0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.nts-email-subject {
+.nts-mobile-email-subject {
   font-size: 12px;
   font-weight: 800;
-  color: #4f46e5;
+  color: #0f172a;
+  line-height: 1.35;
+  margin-bottom: 8px;
 }
 
-.nts-email-meta {
+.nts-mobile-email-sender-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nts-mobile-email-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #4f46e5;
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.nts-mobile-sender-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.nts-sender-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #0f172a;
+}
+
+.nts-mobile-email-time {
+  font-size: 8.5px;
+  color: #94a3b8;
+}
+
+.nts-sender-sub {
+  font-size: 8.5px;
+  color: #64748b;
+}
+
+.nts-mobile-email-divider {
+  height: 1px;
+  background: #f1f5f9;
+  margin: 8px 0;
+}
+
+.nts-branded-email-banner {
+  background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%);
+  color: #ffffff;
+  padding: 6px 8px;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.nts-email-action-box {
+  margin: 10px 0;
+  text-align: center;
+}
+
+.nts-email-cta-btn {
+  background: #4f46e5;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.3);
+}
+
+.nts-mobile-email-footer {
+  font-size: 8px;
+  color: #94a3b8;
+  text-align: center;
+  margin-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+  padding-top: 6px;
+}
+
+/* Bottom Input Docks */
+.nts-phone-bottom-dock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.nts-phone-bottom-dock.whatsapp {
+  background: #f0f2f5;
+}
+
+.nts-phone-bottom-dock.sms {
+  background: #ffffff;
+}
+
+.nts-phone-bottom-dock.email {
+  background: #f8fafc;
+  justify-content: space-around;
+}
+
+.nts-dock-icon {
+  font-size: 13px;
+  color: #64748b;
+  cursor: default;
+}
+
+.nts-dock-icon.app-store {
+  font-weight: 900;
+  color: #3b82f6;
+  font-size: 11px;
+}
+
+.nts-dock-input-sim {
+  flex: 1;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 5px 9px;
+  font-size: 10px;
+  color: #94a3b8;
+  border: 1px solid #cbd5e1;
+}
+
+.nts-dock-input-sim.sms {
+  border-radius: 14px;
+}
+
+.nts-dock-mic-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #00a884;
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+}
+
+.nts-dock-mic-btn.sms {
+  background: #3b82f6;
+  font-weight: 900;
+  font-size: 11px;
+}
+
+.nts-dock-email-action {
+  font-size: 10px;
+  font-weight: 650;
+  color: #4f46e5;
+  cursor: pointer;
+}
+
+/* Home Indicator Bar */
+.nts-phone-home-indicator-wrap {
+  background: inherit;
+  padding: 5px 0 7px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.nts-phone-home-indicator {
+  width: 90px;
+  height: 3.5px;
+  background: #94a3b8;
+  border-radius: 4px;
+}
+
+/* ── Email Simulation Dedicated View ─────────────────────────────────── */
+.nts-email-sim-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.nts-email-hero-card {
+  background: linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%);
+  border: 1px solid #c7d2fe;
+  border-radius: 12px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+body.dark-theme .nts-email-hero-card,
+[data-theme="dark"] .nts-email-hero-card {
+  background: linear-gradient(135deg, #1e1b4b 0%, #172554 100%);
+  border-color: #3730a3;
+}
+
+.nts-email-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nts-email-hero-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #4f46e5;
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.3);
+}
+
+.nts-email-hero-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #1e1b4b;
+}
+
+body.dark-theme .nts-email-hero-title,
+[data-theme="dark"] .nts-email-hero-title {
+  color: #e0e7ff;
+}
+
+.nts-email-hero-sub {
+  margin: 3px 0 0 0;
+  font-size: 12px;
+  color: #4338ca;
+}
+
+body.dark-theme .nts-email-hero-sub,
+[data-theme="dark"] .nts-email-hero-sub {
+  color: #a5b4fc;
+}
+
+.nts-email-view-toggles {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid rgba(79, 70, 229, 0.2);
+}
+
+body.dark-theme .nts-email-view-toggles,
+[data-theme="dark"] .nts-email-view-toggles {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+.nts-view-toggle-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 650;
+  border: none;
+  background: transparent;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.nts-view-toggle-btn.active {
+  background: #4f46e5;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.25);
+}
+
+.nts-email-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .nts-email-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.nts-email-category-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+}
+
+.nts-email-category-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 650;
+  border: 1px solid var(--border, #cbd5e1);
+  background: var(--bg-surface, #ffffff);
+  color: var(--text-secondary, #475569);
+  cursor: pointer;
+}
+
+.nts-email-category-pill.active {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #ffffff;
+}
+
+/* ── Desktop Webmail Mockup Window ───────────────────────────────────── */
+.nts-desktop-webmail-window {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+body.dark-theme .nts-desktop-webmail-window,
+[data-theme="dark"] .nts-desktop-webmail-window {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+.nts-webmail-browser-header {
+  background: #e2e8f0;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid #cbd5e1;
+}
+
+body.dark-theme .nts-webmail-browser-header,
+[data-theme="dark"] .nts-webmail-browser-header {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+.nts-webmail-window-dots {
+  display: flex;
+  gap: 5px;
+}
+
+.nts-webmail-window-dots .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.nts-webmail-window-dots .close { background: #ef4444; }
+.nts-webmail-window-dots .min { background: #f59e0b; }
+.nts-webmail-window-dots .max { background: #10b981; }
+
+.nts-webmail-browser-tab {
+  background: #ffffff;
+  padding: 3px 12px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #334155;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.dark-theme .nts-webmail-browser-tab,
+[data-theme="dark"] .nts-webmail-browser-tab {
+  background: #1e293b;
+  color: #f1f5f9;
+}
+
+.nts-webmail-actions-bar {
+  background: #f8fafc;
+  padding: 6px 12px;
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid #e2e8f0;
+  overflow-x: auto;
+}
+
+body.dark-theme .nts-webmail-actions-bar,
+[data-theme="dark"] .nts-webmail-actions-bar {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+.nts-webmail-action-btn {
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+}
+
+body.dark-theme .nts-webmail-action-btn,
+[data-theme="dark"] .nts-webmail-action-btn {
+  background: #0f172a;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+.nts-webmail-body-container {
+  padding: 14px;
+}
+
+.nts-webmail-header-info {
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+
+.nts-webmail-subject-title {
+  font-size: 14px;
+  font-weight: 800;
+  margin: 0 0 10px 0;
+  color: #0f172a;
+}
+
+body.dark-theme .nts-webmail-subject-title,
+[data-theme="dark"] .nts-webmail-subject-title {
+  color: #f8fafc;
+}
+
+.nts-webmail-participants {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.nts-webmail-sender-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #4f46e5;
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.nts-webmail-sender-text {
+  flex: 1;
+}
+
+.nts-webmail-sender-text .name {
+  font-weight: 700;
+  font-size: 11.5px;
+  color: #0f172a;
+  margin-right: 4px;
+}
+
+body.dark-theme .nts-webmail-sender-text .name,
+[data-theme="dark"] .nts-webmail-sender-text .name {
+  color: #f8fafc;
+}
+
+.nts-webmail-sender-text .email {
+  font-size: 10.5px;
+  color: #64748b;
+  margin-right: 8px;
+}
+
+.nts-webmail-sender-text .time {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.nts-webmail-sender-text .recipient-line {
   font-size: 10px;
   color: #64748b;
 }
 
-.nts-email-content {
-  padding: 10px;
-  font-size: 11px;
-  line-height: 1.45;
-  color: #1e293b;
+.nts-webmail-card-content {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+body.dark-theme .nts-webmail-card-content,
+[data-theme="dark"] .nts-webmail-card-content {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+.nts-webmail-letterhead {
+  text-align: center;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #4f46e5;
+  margin-bottom: 14px;
+}
+
+.nts-letterhead-logo {
+  font-size: 16px;
+  font-weight: 900;
+  color: #4f46e5;
+  letter-spacing: 1px;
+}
+
+.nts-letterhead-tagline {
+  font-size: 10px;
+  color: #64748b;
+}
+
+.nts-letter-greeting {
+  font-weight: 700;
+  font-size: 12px;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+
+body.dark-theme .nts-letter-greeting,
+[data-theme="dark"] .nts-letter-greeting {
+  color: #f8fafc;
+}
+
+.nts-letter-text {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #334155;
   white-space: pre-wrap;
-  min-height: 160px;
-  max-height: 220px;
-  overflow-y: auto;
+  margin-bottom: 14px;
+}
+
+body.dark-theme .nts-letter-text,
+[data-theme="dark"] .nts-letter-text {
+  color: #cbd5e1;
+}
+
+.nts-webmail-cta-section {
+  text-align: center;
+  margin: 14px 0;
+}
+
+.nts-webmail-primary-cta {
+  background: #4f46e5;
+  color: #ffffff;
+  border: none;
+  border-radius: 7px;
+  padding: 8px 18px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.3);
+}
+
+.nts-webmail-footer {
+  text-align: center;
+  font-size: 10px;
+  color: #94a3b8;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 10px;
+  margin-top: 14px;
+  line-height: 1.4;
 }
 
 /* ── 6. Notification History Table View ────────────────────────────── */
