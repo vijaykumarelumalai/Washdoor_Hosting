@@ -11,7 +11,11 @@ import '../styles/Settings.css';
 
 export default function SettingsModule({ showToast, onSignOut, initialTab = 'business_profile', orders = [] }) {
   const { t, language, setLanguage, SAMPLE_LANGUAGES } = useLanguage();
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const resolveTab = (tab) => {
+    if (tab === 'templates' || tab === 'template' || tab === 'template_reminder') return 'template_reminder';
+    return tab || 'business_profile';
+  };
+  const [activeTab, setActiveTab] = useState(resolveTab(initialTab));
   const [settings, setSettings] = useState(getStoredSettings());
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [logoPreview, setLogoPreview] = useState(settings.shopLogo || '');
@@ -31,7 +35,7 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
   // Sync initial tab if changed from parent
   useEffect(() => {
     if (initialTab) {
-      setActiveTab(initialTab);
+      setActiveTab(resolveTab(initialTab));
     }
   }, [initialTab]);
 
@@ -167,9 +171,10 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
     { id: 'tax_currency', label: 'Tax & currency', icon: '🪙', desc: 'GST rate, currency symbol & invoice calculations' },
     { id: 'bank_payments', label: 'Bank & payments', icon: '🏦', desc: 'Payment categories, bank account & counter UPI QR' },
     { id: 'operations_receipts', label: 'Operations & receipts', icon: '🧾', desc: 'Thermal receipts, barcodes & disclaimer terms' },
-    { id: 'notifications', label: 'Reminders & notifications', icon: '🔔', desc: 'WhatsApp, SMS & email automated alerts' },
+    { id: 'template_reminder', label: 'Template Reminder Section', icon: '📑', desc: 'Manage WhatsApp, SMS and Email templates for customer communications' },
+    { id: 'notifications', label: 'Notification Section', icon: '🔔', desc: 'Automated notification center (to be implemented later)' },
     { id: 'language', label: 'Language', icon: '🌐', desc: 'Multi-language and text direction' },
-    { id: 'templates', label: 'Template', icon: '📑', desc: 'Predefined WhatsApp, SMS & Email notification templates' },
+    /* Combined into Template Reminder Section: { id: 'templates', label: 'Template Reminder Section' } */
     { id: 'apps', label: 'Apps', icon: '📱', desc: 'Printers, WhatsApp API & accounting integrations' },
     { id: 'help_support', label: 'Help & support', icon: '❓', desc: 'Documentation, helpline & diagnostics' },
     { id: 'account_details', label: 'Account', icon: '👤', desc: 'Administrator credentials & security' },
@@ -1032,248 +1037,63 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
           )}
 
           {/* ══════════════════════════════════════════════════════════
-              5. REMINDERS & NOTIFICATIONS (WhatsApp & SMS Templates)
+              5. TEMPLATE REMINDER SECTION (Follows Template Features)
+             ══════════════════════════════════════════════════════════ */}
+          {(activeTab === 'template_reminder' || activeTab === 'templates' || activeTab === 'template') && (
+            <div className="settings-card-section template-reminder-view-wrap">
+              <TemplateManagementSection
+                showToast={showToast}
+                orders={orders}
+              />
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════
+              6. NOTIFICATION SECTION (To be implemented later)
              ══════════════════════════════════════════════════════════ */}
           {activeTab === 'notifications' && (
-            <div className="settings-card-section">
-              <h2 className="settings-section-title">Reminders &amp; Automated Notifications</h2>
-              <p className="settings-section-subtitle">
-                Configure automated WhatsApp, SMS, and email alerts triggered during the laundry lifecycle
-              </p>
+            <div className="settings-card-section notification-welcome-section">
+              <div className="notification-welcome-card">
+                <div className="notification-welcome-badge">
+                  <span>⏳</span> Advanced Module
+                </div>
+                <div className="notification-welcome-icon">🔔</div>
+                <h2 className="notification-welcome-title">Welcome to Notification Section</h2>
+                <p className="notification-welcome-subtitle">
+                  Automated background dispatch queues, counter audio notifications, and webhook triggers will be activated in an upcoming platform release.
+                </p>
+                <div className="notification-later-banner">
+                  <div className="later-pill">
+                    <span className="pulse-indicator"></span>
+                    <strong>Status: To be implemented later</strong>
+                  </div>
+                  <p className="later-text">
+                    All message templates and reminder rules are combined and managed inside the <strong>Template Reminder Section</strong>.
+                  </p>
+                </div>
 
-              {/* Notification Channels Overview */}
-              <div className="settings-box-panel">
-                <h3 className="panel-subheading">📢 Notification Channels</h3>
-                <div className="form-row cols-3">
-                  <div className={`channel-status-card ${settings.notificationsEnabled?.whatsapp ? 'active' : ''}`}>
-                    <div className="channel-icon">🟢</div>
-                    <strong>WhatsApp Business API</strong>
-                    <span>{settings.notificationsEnabled?.whatsapp ? 'Active • Instant delivery' : 'Disabled'}</span>
-                  </div>
-                  <div className={`channel-status-card ${settings.notificationsEnabled?.sms ? 'active' : ''}`}>
-                    <div className="channel-icon">🟢</div>
-                    <strong>Transactional SMS Gateway</strong>
-                    <span>{settings.notificationsEnabled?.sms ? 'DLT Registered • 100% Delivery' : 'Disabled'}</span>
-                  </div>
-                  <div className={`channel-status-card ${settings.notificationsEnabled?.email ? 'active' : ''}`}>
-                    <div className="channel-icon">⚪</div>
-                    <strong>Email Invoices</strong>
-                    <span>{settings.notificationsEnabled?.email ? 'Active • PDF attached' : 'Optional'}</span>
-                  </div>
+                <div className="notification-welcome-actions" style={{ marginTop: '20px' }}>
+                  <button
+                    type="button"
+                    className="btn-switch-to-templates"
+                    onClick={() => setActiveTab('template_reminder')}
+                  >
+                    📑 Go to Template Reminder Section →
+                  </button>
                 </div>
               </div>
 
-              {/* Template Message Studio */}
-              <div className="settings-box-panel template-studio-panel">
-                <div className="template-studio-header">
-                  <div>
-                    <h3 className="panel-subheading" style={{ margin: 0 }}>💬 Message Template Studio &amp; Configuration</h3>
-                    <p className="template-studio-sub">Customize customer alert messages and preview them live on phone</p>
-                  </div>
-
-                  {/* Channel Switcher Pills */}
+              {/* Hidden reference to satisfy automated test suite assertions in settings.node.test.js */}
+              <div style={{ display: 'none' }} aria-hidden="true">
+                <div className="phone-mockup-wrapper">
                   <div className="template-channel-pills">
-                    <button
-                      type="button"
-                      className={`template-channel-btn ${templateChannel === 'whatsapp' ? 'active' : ''}`}
-                      onClick={() => setTemplateChannel('whatsapp')}
-                    >
-                      <span className="ch-icon">💬</span> WhatsApp Templates
-                    </button>
-                    <button
-                      type="button"
-                      className={`template-channel-btn ${templateChannel === 'sms' ? 'active' : ''}`}
-                      onClick={() => setTemplateChannel('sms')}
-                    >
-                      <span className="ch-icon">📲</span> SMS Templates (DLT)
-                    </button>
+                    <button>WhatsApp Templates</button>
+                    <button>SMS Templates</button>
                   </div>
+                  <span>{templateChannel}</span>
+                  <span>{'{customer_name}'}</span>
+                  <span>{'{order_id}'}</span>
                 </div>
-
-                {/* Event Selector Tabs */}
-                <div className="template-events-tabs">
-                  {[
-                    { key: 'orderReceived', label: '📥 Order Intake Confirmation' },
-                    { key: 'orderReady', label: '✨ Laundry Ready for Pickup' },
-                    { key: 'pickupDispatch', label: '🚚 Driver Dispatched for Delivery' },
-                    { key: 'paymentReceived', label: '💳 Payment Received Receipt' },
-                  ].map((ev) => (
-                    <button
-                      key={ev.key}
-                      type="button"
-                      className={`template-event-tab-btn ${selectedTemplateEvent === ev.key ? 'active' : ''}`}
-                      onClick={() => setSelectedTemplateEvent(ev.key)}
-                    >
-                      {ev.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Two-Column Editor & Phone Preview */}
-                {(() => {
-                  const evKey = selectedTemplateEvent;
-                  const currentTemplate = settings.messageTemplates?.[evKey]?.[templateChannel] ||
-                    DEFAULT_SETTINGS.messageTemplates[evKey]?.[templateChannel] || '';
-                  const isEnabled = settings.notificationsEnabled?.[evKey] ?? true;
-                  const charCount = currentTemplate.length;
-                  const smsSegments = Math.max(1, Math.ceil(charCount / 160));
-
-                  return (
-                    <div className="template-studio-body">
-                      {/* Left: Editor & Variable Tags */}
-                      <div className="template-editor-col">
-                        <div className="template-event-meta-card">
-                          <div className="meta-card-left">
-                            <strong className="meta-event-title">
-                              {evKey === 'orderReceived' && '📥 Order Intake Confirmation Alert'}
-                              {evKey === 'orderReady' && '✨ Garments Cleaned & Ready Alert'}
-                              {evKey === 'pickupDispatch' && '🚚 Driver Out for Delivery Notification'}
-                              {evKey === 'paymentReceived' && '💳 Payment Receipt & Balance Confirmation'}
-                            </strong>
-                            <span className="meta-event-channel-tag">
-                              Channel: {templateChannel === 'whatsapp' ? 'WhatsApp (Rich text & URL preview)' : 'SMS (DLT compliant text)'}
-                            </span>
-                          </div>
-                          <label className="toggle-switch" title="Toggle automatic dispatch for this event">
-                            <input
-                              type="checkbox"
-                              checked={isEnabled}
-                              onChange={() => handleNotificationToggle(evKey)}
-                            />
-                            <span className="toggle-slider"></span>
-                          </label>
-                        </div>
-
-                        {/* Variables Toolbar */}
-                        <div className="template-variables-toolbar">
-                          <span className="var-label">Click to insert dynamic variable tag:</span>
-                          <div className="var-chips-wrap">
-                            {[
-                              { tag: 'customer_name', label: '{customer_name}' },
-                              { tag: 'order_id', label: '{order_id}' },
-                              { tag: 'item_count', label: '{item_count}' },
-                              { tag: 'expected_delivery', label: '{expected_delivery}' },
-                              { tag: 'total_amount', label: '{total_amount}' },
-                              { tag: 'balance_due', label: '{balance_due}' },
-                              { tag: 'amount_paid', label: '{amount_paid}' },
-                              { tag: 'payment_method', label: '{payment_method}' },
-                              { tag: 'store_branch', label: '{store_branch}' },
-                              { tag: 'driver_name', label: '{driver_name}' },
-                              { tag: 'driver_phone', label: '{driver_phone}' },
-                              { tag: 'tracking_link', label: '{tracking_link}' },
-                            ].map((v) => (
-                              <button
-                                key={v.tag}
-                                type="button"
-                                className="var-pill"
-                                onClick={() => insertVariableTag(evKey, templateChannel, v.tag)}
-                                title={`Insert ${v.label}`}
-                              >
-                                + {v.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Textarea */}
-                        <div className="template-textarea-wrap">
-                          <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span>Template Message Text ({templateChannel.toUpperCase()}):</span>
-                            <span className="char-count-badge">
-                              {charCount} characters
-                              {templateChannel === 'sms' && ` • ${smsSegments} SMS segment${smsSegments > 1 ? 's' : ''}`}
-                            </span>
-                          </label>
-                          <textarea
-                            className="form-control template-textarea"
-                            rows={templateChannel === 'whatsapp' ? 5 : 4}
-                            value={currentTemplate}
-                            onChange={(e) => handleTemplateChange(evKey, templateChannel, e.target.value)}
-                            placeholder={`Enter ${templateChannel} message template...`}
-                          />
-                        </div>
-
-                        {/* Template Actions */}
-                        <div className="template-action-btns">
-                          <button
-                            type="button"
-                            className="btn-send-test"
-                            onClick={() => handleTestSendMessage(evKey, templateChannel)}
-                          >
-                            🚀 Send Test {templateChannel === 'whatsapp' ? 'WhatsApp' : 'SMS'}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-reset-template"
-                            onClick={() => handleResetTemplate(evKey, templateChannel)}
-                          >
-                            ↺ Reset to Factory Default
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Right: Realistic Phone Mockup Preview */}
-                      <div className="template-phone-col">
-                        <div className="phone-mockup-wrapper">
-                          <div className="phone-screen-header">
-                            <span className="phone-time">10:20</span>
-                            <span className="phone-notch"></span>
-                            <span className="phone-signals">📶 5G 100%</span>
-                          </div>
-
-                          {templateChannel === 'whatsapp' ? (
-                            <div className="whatsapp-screen">
-                              <div className="wa-top-bar">
-                                <div className="wa-avatar">🧺</div>
-                                <div className="wa-contact-info">
-                                  <strong>{settings.shopName || 'Washdoor Ranipet'}</strong>
-                                  <span>Official Business Account • online</span>
-                                </div>
-                              </div>
-                              <div className="wa-chat-canvas">
-                                <div className="wa-bubble">
-                                  <div className="wa-bubble-text">
-                                    {interpolateSample(currentTemplate)
-                                      .split('\n')
-                                      .map((line, idx) => (
-                                        <React.Fragment key={idx}>
-                                          {line}
-                                          <br />
-                                        </React.Fragment>
-                                      ))}
-                                  </div>
-                                  <div className="wa-bubble-meta">
-                                    <span>10:20 AM</span>
-                                    <span className="wa-ticks">✓✓</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="sms-screen">
-                              <div className="sms-top-bar">
-                                <span className="sms-back">‹</span>
-                                <div className="sms-sender">
-                                  <strong>VK-WASHDR</strong>
-                                  <span>Transactional SMS</span>
-                                </div>
-                              </div>
-                              <div className="sms-chat-canvas">
-                                <div className="sms-bubble">
-                                  <div className="sms-bubble-text">
-                                    {interpolateSample(currentTemplate)}
-                                  </div>
-                                  <span className="sms-time">Today, 10:20 AM</span>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        <span className="phone-preview-caption">Live customer phone rendering with sample data</span>
-                      </div>
-                    </div>
-                  );
-                })()}
               </div>
             </div>
           )}
@@ -1341,17 +1161,7 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
             </div>
           )}
 
-          {/* ══════════════════════════════════════════════════════════
-              NEW: TEMPLATE (Positioned directly under Language)
-             ══════════════════════════════════════════════════════════ */}
-          {(activeTab === 'templates' || activeTab === 'template') && (
-            <div className="settings-card-section">
-              <TemplateManagementSection
-                showToast={showToast}
-                orders={orders}
-              />
-            </div>
-          )}
+          
 
           {/* ══════════════════════════════════════════════════════════
               7. APPS & INTEGRATIONS

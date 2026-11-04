@@ -1,6 +1,6 @@
 // src/components/TemplateManagementSection.jsx
 // Washdoor Dynamic Notification Template Management & Dispatch Audit Component
-// Embedded under Account / Settings → Language → Template
+// Direct 1:1 Implementation matching media_1793771263189_5eab5efb.png
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
@@ -23,43 +23,44 @@ export default function TemplateManagementSection({
   showToast = () => {},
   orders = [],
 }) {
-  // Top Subnav View: 'templates' | 'history' | 'simulation'
-  const [subView, setSubView] = useState('templates');
+  // Top View: 'studio' (3-column layout matching screenshot) | 'history' | 'simulation'
+  const [activeView, setActiveView] = useState('studio');
 
-  // Templates State
+  // Channel Selection: 'whatsapp' | 'sms' | 'email'
+  const [selectedChannel, setSelectedChannel] = useState('whatsapp');
+
+  // Category Selection: 'order_created' | 'ready_for_pickup' | 'thank_you' | 'late_delivery' | 'payment_pending' | 'late_payment'
+  const [selectedCategory, setSelectedCategory] = useState('order_created');
+
+  // All templates from database / localStorage
   const [templates, setTemplates] = useState([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
-  const [selectedChannel, setSelectedChannel] = useState('whatsapp'); // 'whatsapp' | 'sms' | 'email'
-  const [selectedCategory, setSelectedCategory] = useState('all');
+
+  // Form State for the currently selected template
+  const [formName, setFormName] = useState('');
+  const [formSubject, setFormSubject] = useState('');
+  const [formBody, setFormBody] = useState('');
+  const [formIsActive, setFormIsActive] = useState(true);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const bodyTextareaRef = useRef(null);
 
   // Logs State
   const [logs, setLogs] = useState([]);
-  const [loadingLogs, setLoadingLogs] = useState(false);
   const [logFilterCategory, setLogFilterCategory] = useState('all');
   const [logFilterChannel, setLogFilterChannel] = useState('all');
   const [logFilterStatus, setLogFilterStatus] = useState('all');
   const [logSearchQuery, setLogSearchQuery] = useState('');
 
-  // Modal & Editor States
-  const [isEditorOpen, setIsEditorOpen] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState(null);
-  const [previewTemplate, setPreviewTemplate] = useState(null);
-  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState(null);
+  // Add Template Modal State
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newTplName, setNewTplName] = useState('');
+  const [newTplCategory, setNewTplCategory] = useState('order_created');
+  const [newTplChannel, setNewTplChannel] = useState('whatsapp');
+  const [newTplSubject, setNewTplSubject] = useState('');
+  const [newTplBody, setNewTplBody] = useState('');
 
-  // Editor Form States
-  const [formName, setFormName] = useState('');
-  const [formCategory, setFormCategory] = useState('order_created');
-  const [formChannel, setFormChannel] = useState('whatsapp');
-  const [formSubject, setFormSubject] = useState('');
-  const [formBody, setFormBody] = useState('');
-  const [formIsActive, setFormIsActive] = useState(true);
-  const bodyTextareaRef = useRef(null);
-
-  // Simulation Dispatch State
+  // Simulation State
   const [simSelectedOrderId, setSimSelectedOrderId] = useState(orders[0]?.order_number || orders[0]?.id || 'ORD00024');
-  const [simEvent, setSimEvent] = useState('order_created');
-  const [simChannel, setSimChannel] = useState('whatsapp');
-  const [simCustomRecipient, setSimCustomRecipient] = useState('');
   const [simIsDispatching, setSimIsDispatching] = useState(false);
 
   // Load Templates
@@ -72,10 +73,8 @@ export default function TemplateManagementSection({
 
   // Load Logs
   const loadLogsData = async () => {
-    setLoadingLogs(true);
     const data = await getNotificationLogs();
     setLogs(data);
-    setLoadingLogs(false);
   };
 
   useEffect(() => {
@@ -95,63 +94,58 @@ export default function TemplateManagementSection({
     };
   }, []);
 
-  // Filtered Templates for active channel and category
-  const filteredTemplates = useMemo(() => {
-    return templates.filter((tpl) => {
-      const matchChannel = tpl.channel === selectedChannel;
-      const matchCategory = selectedCategory === 'all' || tpl.event_type === selectedCategory;
-      return matchChannel && matchCategory;
-    });
-  }, [templates, selectedChannel, selectedCategory]);
+  // Find the current active template matching selectedCategory & selectedChannel
+  const currentTemplate = useMemo(() => {
+    return (
+      templates.find((t) => t.event_type === selectedCategory && t.channel === selectedChannel) || {
+        id: `tpl-${selectedChannel}-${selectedCategory}`,
+        template_name: `${selectedCategory.replace(/_/g, ' ')} - ${selectedChannel}`,
+        event_type: selectedCategory,
+        channel: selectedChannel,
+        email_subject: selectedChannel === 'email' ? 'Laundry Notification from Washdoor' : '',
+        message_body: '',
+        is_active: true,
+      }
+    );
+  }, [templates, selectedCategory, selectedChannel]);
 
-  // Open Editor for Creating
-  const handleOpenCreate = () => {
-    setEditingTemplate(null);
-    setFormName('');
-    setFormCategory('order_created');
-    setFormChannel(selectedChannel);
-    setFormSubject('');
-    setFormBody('');
-    setFormIsActive(true);
-    setIsEditorOpen(true);
-  };
-
-  // Open Editor for Editing
-  const handleOpenEdit = (tpl) => {
-    setEditingTemplate(tpl);
-    setFormName(tpl.template_name || '');
-    setFormCategory(tpl.event_type || 'order_created');
-    setFormChannel(tpl.channel || 'whatsapp');
-    setFormSubject(tpl.email_subject || '');
-    setFormBody(tpl.message_body || '');
-    setFormIsActive(tpl.is_active !== undefined ? tpl.is_active : true);
-    setIsEditorOpen(true);
-  };
+  // Sync form inputs when current template changes
+  useEffect(() => {
+    if (currentTemplate) {
+      setFormName(currentTemplate.template_name || '');
+      setFormSubject(currentTemplate.email_subject || '');
+      setFormBody(currentTemplate.message_body || '');
+      setFormIsActive(currentTemplate.is_active !== undefined ? Boolean(currentTemplate.is_active) : true);
+      setHasUnsavedChanges(false);
+    }
+  }, [currentTemplate]);
 
   // Insert Variable at cursor position
-  const handleInsertVariable = (tag) => {
+  const handleInsertVariableSelect = (e) => {
+    const tag = e.target.value;
+    if (!tag) return;
+
     const textarea = bodyTextareaRef.current;
     if (!textarea) {
       setFormBody((prev) => prev + tag);
-      return;
+    } else {
+      const start = textarea.selectionStart || 0;
+      const end = textarea.selectionEnd || 0;
+      const current = formBody;
+      const updated = current.substring(0, start) + tag + current.substring(end);
+      setFormBody(updated);
+
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + tag.length, start + tag.length);
+      }, 50);
     }
-
-    const start = textarea.selectionStart || 0;
-    const end = textarea.selectionEnd || 0;
-    const current = formBody;
-    const updated = current.substring(0, start) + tag + current.substring(end);
-    setFormBody(updated);
-
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + tag.length, start + tag.length);
-    }, 50);
+    setHasUnsavedChanges(true);
+    e.target.value = '';
   };
 
-  // Save Template handler
-  const handleSaveTemplateSubmit = async (e) => {
-    if (e && e.preventDefault) e.preventDefault();
-
+  // Save current template changes
+  const handleSaveChanges = async () => {
     if (!formName.trim()) {
       showToast('⚠️ Template name is required');
       return;
@@ -160,54 +154,101 @@ export default function TemplateManagementSection({
       showToast('⚠️ Message content cannot be empty');
       return;
     }
-    if (formChannel === 'email' && !formSubject.trim()) {
+    if (selectedChannel === 'email' && !formSubject.trim()) {
       showToast('⚠️ Email subject line is required');
       return;
     }
 
     const recordToSave = {
-      ...(editingTemplate || {}),
+      ...currentTemplate,
       template_name: formName.trim(),
-      event_type: formCategory,
-      channel: formChannel,
-      email_subject: formChannel === 'email' ? formSubject.trim() : null,
+      event_type: selectedCategory,
+      channel: selectedChannel,
+      email_subject: selectedChannel === 'email' ? formSubject.trim() : null,
       message_body: formBody.trim(),
       is_active: formIsActive,
     };
 
     await saveNotificationTemplate(recordToSave);
-    setIsEditorOpen(false);
-    showToast(`✅ Template "${recordToSave.template_name}" saved successfully!`);
+    setHasUnsavedChanges(false);
+    showToast(`✅ Saved changes to "${recordToSave.template_name}"!`);
     loadTemplatesData();
   };
 
-  // Toggle Active State
-  const handleToggleActive = async (tpl, e) => {
-    if (e && e.stopPropagation) e.stopPropagation();
-    const updated = await toggleTemplateActive(tpl.id);
-    showToast(`Template ${updated.is_active ? 'Activated' : 'Deactivated'}`);
+  // Reset to original factory template
+  const handleResetToDefault = () => {
+    resetTemplatesToDefault();
     loadTemplatesData();
+    showToast('↺ Template reset to factory default message');
   };
 
-  // Delete Template
-  const handleConfirmDelete = async () => {
-    if (!deleteConfirmTarget) return;
-    await deleteNotificationTemplate(deleteConfirmTarget.id);
-    showToast(`🗑️ Template "${deleteConfirmTarget.template_name}" deleted.`);
-    setDeleteConfirmTarget(null);
-    loadTemplatesData();
-  };
+  // Toggle active state for current template
+  const handleToggleCurrentStatus = async () => {
+    const nextStatus = !formIsActive;
+    setFormIsActive(nextStatus);
+    setHasUnsavedChanges(true);
 
-  // Reset to default factory templates
-  const handleResetDefaults = () => {
-    if (window.confirm('Reset all WhatsApp, SMS, and Email templates to factory default predefined messages?')) {
-      resetTemplatesToDefault();
+    if (currentTemplate?.id) {
+      await toggleTemplateActive(currentTemplate.id);
+      showToast(`Template ${nextStatus ? 'Activated' : 'Deactivated'}`);
       loadTemplatesData();
-      showToast('↺ Factory default templates restored');
     }
   };
 
-  // Filtered Logs
+  // Add New Template Submit
+  const handleCreateNewTemplateSubmit = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+
+    if (!newTplName.trim() || !newTplBody.trim()) {
+      showToast('⚠️ Please fill in all required fields');
+      return;
+    }
+
+    await saveNotificationTemplate({
+      template_name: newTplName.trim(),
+      event_type: newTplCategory,
+      channel: newTplChannel,
+      email_subject: newTplChannel === 'email' ? newTplSubject.trim() : null,
+      message_body: newTplBody.trim(),
+      is_active: true,
+    });
+
+    setIsAddModalOpen(false);
+    setSelectedChannel(newTplChannel);
+    setSelectedCategory(newTplCategory);
+    showToast(`✅ New template "${newTplName.trim()}" created!`);
+    loadTemplatesData();
+  };
+
+  // Render Sample Dynamic Preview Data
+  const sampleContext = useMemo(() => {
+    return {
+      customer_name: 'Rahul Sharma',
+      order_id: 'WD-10056',
+      order_date: '25 Jan 2025',
+      service_name: 'Wash & Fold',
+      quantity: '8',
+      delivery_date: '28 Jan 2025',
+      revised_delivery_date: '29 Jan 2025',
+      total_amount: '450.00',
+      paid_amount: '200.00',
+      pending_amount: '250.00',
+      payment_status: 'Partially Paid',
+      due_date: '28 Jan 2025',
+      delay_reason: 'Fabric air-drying turnaround & stain inspection',
+      days_overdue: '2 days',
+    };
+  }, []);
+
+  const renderedPreviewBody = useMemo(() => {
+    return renderTemplate(formBody || 'Hello {{customer_name}}!', sampleContext);
+  }, [formBody, sampleContext]);
+
+  const renderedPreviewSubject = useMemo(() => {
+    return renderTemplate(formSubject || 'Your Laundry Order Has Been Confirmed', sampleContext);
+  }, [formSubject, sampleContext]);
+
+  // Filtered Logs for History
   const filteredLogs = useMemo(() => {
     const q = logSearchQuery.trim().toLowerCase();
     return logs.filter((log) => {
@@ -223,39 +264,7 @@ export default function TemplateManagementSection({
     });
   }, [logs, logFilterCategory, logFilterChannel, logFilterStatus, logSearchQuery]);
 
-  // Dispatch Simulation Handler
-  const handleExecuteDispatchSimulation = async () => {
-    setSimIsDispatching(true);
-    const selectedOrder = orders.find((o) => (o.order_number || o.id) === simSelectedOrderId) || {
-      order_number: simSelectedOrderId,
-      customer_name: 'Aravind Swamy',
-      mobile_number: '9840123456',
-      total_amount: 450,
-      advance_paid: 200,
-      service_category: 'Steam Press & Wash',
-    };
-
-    const res = await sendNotification({
-      eventType: simEvent,
-      channel: simChannel,
-      order: selectedOrder,
-      recipient: simCustomRecipient.trim() || undefined,
-    });
-
-    setSimIsDispatching(false);
-
-    if (res.success) {
-      showToast(`🚀 ${simChannel.toUpperCase()} notification sent successfully for ${selectedOrder.order_number || simSelectedOrderId}!`);
-      loadLogsData();
-      setSubView('history');
-    } else if (res.duplicate) {
-      showToast(`⚠️ ${res.reason}`);
-    } else {
-      showToast(`❌ Failed to send: ${res.reason}`);
-    }
-  };
-
-  // Export History Handler
+  // Export History
   const handleExportHistory = (format) => {
     const dataToExport = filteredLogs.map((l) => ({
       Timestamp: l.sent_at ? new Date(l.sent_at).toLocaleString('en-IN') : 'N/A',
@@ -275,274 +284,434 @@ export default function TemplateManagementSection({
     showToast(`📄 Exported notification history (${format.toUpperCase()})`);
   };
 
+  // Quick Dispatch Test
+  const handleQuickDispatchTest = async () => {
+    setSimIsDispatching(true);
+    const selectedOrder = orders.find((o) => (o.order_number || o.id) === simSelectedOrderId) || {
+      order_number: simSelectedOrderId,
+      customer_name: 'Rahul Sharma',
+      mobile_number: '9840123456',
+      total_amount: 450,
+      advance_paid: 200,
+      service_category: 'Wash & Fold',
+    };
+
+    const res = await sendNotification({
+      eventType: selectedCategory,
+      channel: selectedChannel,
+      order: selectedOrder,
+    });
+
+    setSimIsDispatching(false);
+
+    if (res.success) {
+      showToast(`🚀 ${selectedChannel.toUpperCase()} notification sent successfully for ${selectedOrder.order_number || simSelectedOrderId}!`);
+      loadLogsData();
+    } else if (res.duplicate) {
+      showToast(`⚠️ ${res.reason}`);
+    } else {
+      showToast(`❌ Failed to send: ${res.reason}`);
+    }
+  };
+
   return (
     <div className="template-mgmt-wrapper">
-      {/* ── Header ── */}
-      <div className="template-mgmt-header">
-        <div className="template-mgmt-title-wrap">
-          <h2 className="template-mgmt-title">Dynamic Notification Templates</h2>
-          <p className="template-mgmt-subtitle">
-            Configure automated WhatsApp, SMS, and Email notification templates with real-time dynamic customer and order variables.
-          </p>
+      {/* ── Top Header Matching Reference Screenshot media_1793771263189_5eab5efb.png ── */}
+      <div className="template-mgmt-header-v2">
+        <div className="template-header-left">
+          <div className="template-header-icon-box">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </div>
+          <div>
+            <h2 className="template-header-title">Notification Templates</h2>
+            <p className="template-header-subtitle">
+              Manage WhatsApp, SMS and Email templates for customer communications.
+            </p>
+          </div>
         </div>
 
-        <div className="template-mgmt-actions">
-          {subView === 'templates' && (
-            <>
-              <button
-                type="button"
-                className="btn-card-action"
-                onClick={handleResetDefaults}
-                title="Restore original Washdoor predefined messages"
-              >
-                <span>↺</span>
-                <span>Reset Defaults</span>
-              </button>
-              <button
-                type="button"
-                className="welcome-action-btn primary"
-                onClick={handleOpenCreate}
-                style={{ padding: '8px 16px', fontSize: '13px' }}
-              >
-                <span>➕</span>
-                <span>Create Template</span>
-              </button>
-            </>
-          )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Quick Subnav toggle */}
+          <div style={{ display: 'flex', background: 'var(--bg-input)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+            <button
+              type="button"
+              className={`template-subnav-btn ${activeView === 'studio' ? 'active' : ''}`}
+              onClick={() => setActiveView('studio')}
+              style={{ padding: '6px 12px', fontSize: '12px' }}
+            >
+              Template Studio
+            </button>
+            <button
+              type="button"
+              className={`template-subnav-btn ${activeView === 'history' ? 'active' : ''}`}
+              onClick={() => setActiveView('history')}
+              style={{ padding: '6px 12px', fontSize: '12px' }}
+            >
+              Notification History &amp; Audit Trail
+            </button>
+            <button
+              type="button"
+              className={`template-subnav-btn ${activeView === 'simulation' ? 'active' : ''}`}
+              onClick={() => setActiveView('simulation')}
+              style={{ padding: '6px 12px', fontSize: '12px' }}
+            >
+              Live Dispatch Test
+            </button>
+          </div>
 
-          {subView === 'history' && (
-            <div style={{ display: 'flex', gap: '6px' }}>
-              <button
-                type="button"
-                className="btn-card-action"
-                onClick={() => handleExportHistory('excel')}
-              >
-                📊 Excel
-              </button>
-              <button
-                type="button"
-                className="btn-card-action"
-                onClick={() => handleExportHistory('pdf')}
-              >
-                📄 PDF
-              </button>
-              <button
-                type="button"
-                className="btn-card-action"
-                onClick={() => handleExportHistory('csv')}
-              >
-                📑 CSV
-              </button>
-            </div>
-          )}
+          <button
+            type="button"
+            className="btn-add-template"
+            onClick={() => setIsAddModalOpen(true)}
+          >
+            <span>+</span>
+            <span>Add Template</span>
+          </button>
         </div>
       </div>
 
-      {/* ── Subnav Tabs ── */}
-      <div className="template-subnav">
+      {/* ── Channel Navigation Tabs Matching Screenshot ── */}
+      <div className="template-channel-tabs">
         <button
           type="button"
-          className={`template-subnav-btn ${subView === 'templates' ? 'active' : ''}`}
-          onClick={() => setSubView('templates')}
+          className={`template-channel-tab ${selectedChannel === 'whatsapp' ? 'active' : ''}`}
+          onClick={() => setSelectedChannel('whatsapp')}
         >
-          <span>📑</span>
-          <span>Template Studio</span>
-          <span className="template-badge-pill">{templates.length}</span>
+          <span style={{ fontSize: '18px', color: '#25D366' }}>💬</span>
+          <span>WhatsApp</span>
         </button>
 
         <button
           type="button"
-          className={`template-subnav-btn ${subView === 'history' ? 'active' : ''}`}
-          onClick={() => setSubView('history')}
+          className={`template-channel-tab ${selectedChannel === 'sms' ? 'active' : ''}`}
+          onClick={() => setSelectedChannel('sms')}
         >
-          <span>📋</span>
-          <span>Notification History &amp; Audit Trail</span>
-          <span className="template-badge-pill">{logs.length}</span>
+          <span style={{ fontSize: '18px', color: '#3b82f6' }}>💬</span>
+          <span>SMS</span>
         </button>
 
         <button
           type="button"
-          className={`template-subnav-btn ${subView === 'simulation' ? 'active' : ''}`}
-          onClick={() => setSubView('simulation')}
+          className={`template-channel-tab ${selectedChannel === 'email' ? 'active' : ''}`}
+          onClick={() => setSelectedChannel('email')}
         >
-          <span>🚀</span>
-          <span>Live Dispatch Test</span>
+          <span style={{ fontSize: '18px', color: '#8b5cf6' }}>✉️</span>
+          <span>Email</span>
         </button>
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════
-          SUB-VIEW 1: TEMPLATE STUDIO
+          VIEW 1: 3-COLUMN STUDIO LAYOUT MATCHING SCREENSHOT EXACTLY
          ══════════════════════════════════════════════════════════════════ */}
-      {subView === 'templates' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Channel Selector Bar */}
-          <div className="channel-selector-bar">
-            <div className="channel-tabs-group">
-              {COMMUNICATION_CHANNELS.map((ch) => {
-                const count = templates.filter((t) => t.channel === ch.key).length;
+      {activeView === 'studio' && (
+        <div className="template-three-col-layout">
+          {/* ── COLUMN 1: Notification Category ── */}
+          <div className="category-col-card">
+            <h3 className="category-col-heading">Notification Category</h3>
+
+            <div className="category-items-list">
+              {[
+                { key: 'order_created', label: 'Order Created', desc: 'Order confirmation message', icon: '🛒' },
+                { key: 'ready_for_pickup', label: 'Ready for Pickup', desc: 'Notify when order is ready', icon: '📦' },
+                { key: 'thank_you', label: 'Thank You Message', desc: 'Customer appreciation', icon: '❤️' },
+                { key: 'late_delivery', label: 'Late Delivery', desc: 'Delivery delay notification', icon: '⚠️' },
+                { key: 'payment_pending', label: 'Payment Pending', desc: 'Pending payment reminder', icon: '💳' },
+                { key: 'late_payment', label: 'Late Payment', desc: 'Overdue payment reminder', icon: '⌛' },
+              ].map((cat) => {
+                const isSelected = selectedCategory === cat.key;
+                const matchTpl = templates.find((t) => t.event_type === cat.key && t.channel === selectedChannel);
+                const isActive = matchTpl ? matchTpl.is_active : true;
+
                 return (
-                  <button
-                    key={ch.key}
-                    type="button"
-                    data-channel={ch.key}
-                    className={`channel-tab-pill ${selectedChannel === ch.key ? 'active' : ''}`}
-                    onClick={() => setSelectedChannel(ch.key)}
+                  <div
+                    key={cat.key}
+                    className={`category-nav-item ${isSelected ? 'selected' : ''}`}
+                    onClick={() => setSelectedCategory(cat.key)}
                   >
-                    <span>{ch.icon}</span>
-                    <span>{ch.label}</span>
-                    <span style={{ opacity: 0.7, fontSize: '11px' }}>({count})</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Category Filter Chips */}
-          <div className="category-filter-row">
-            <button
-              type="button"
-              className={`cat-filter-btn ${selectedCategory === 'all' ? 'active' : ''}`}
-              onClick={() => setSelectedCategory('all')}
-            >
-              <span>All Categories</span>
-              <span>({templates.filter((t) => t.channel === selectedChannel).length})</span>
-            </button>
-            {NOTIFICATION_CATEGORIES.map((cat) => {
-              const count = templates.filter((t) => t.channel === selectedChannel && t.event_type === cat.key).length;
-              return (
-                <button
-                  key={cat.key}
-                  type="button"
-                  className={`cat-filter-btn ${selectedCategory === cat.key ? 'active' : ''}`}
-                  onClick={() => setSelectedCategory(cat.key)}
-                >
-                  <span>{cat.icon}</span>
-                  <span>{cat.label}</span>
-                  <span>({count})</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Templates Grid */}
-          {loadingTemplates ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-              Loading notification templates from database...
-            </div>
-          ) : filteredTemplates.length === 0 ? (
-            <div style={{ padding: '50px 20px', textAlign: 'center', background: 'var(--bg-surface)', borderRadius: '12px', border: '1.5px dashed var(--border)' }}>
-              <div style={{ fontSize: '32px', marginBottom: '10px' }}>📭</div>
-              <h3 style={{ margin: 0, color: 'var(--text-primary)' }}>No templates found</h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
-                No {selectedChannel.toUpperCase()} templates for this category filter.
-              </p>
-              <button
-                type="button"
-                className="welcome-action-btn primary"
-                onClick={handleOpenCreate}
-                style={{ marginTop: '12px', display: 'inline-flex' }}
-              >
-                <span>➕ Create Template</span>
-              </button>
-            </div>
-          ) : (
-            <div className="template-cards-grid">
-              {filteredTemplates.map((tpl) => {
-                const catObj = NOTIFICATION_CATEGORIES.find((c) => c.key === tpl.event_type) || {
-                  label: tpl.event_type,
-                  icon: '🔔',
-                  badgeClass: 'badge-created',
-                };
-                return (
-                  <div key={tpl.id} className={`template-card ${!tpl.is_active ? 'inactive' : ''}`}>
-                    <div>
-                      <div className="template-card-header">
-                        <div className="template-card-title-wrap">
-                          <span className={`template-category-badge ${catObj.badgeClass}`}>
-                            <span>{catObj.icon}</span>
-                            <span>{catObj.label}</span>
-                          </span>
-                          <h4 className="template-card-name">{tpl.template_name}</h4>
-                        </div>
-
-                        {/* Active Toggle Switch */}
-                        <label className="toggle-switch-wrap" title={tpl.is_active ? 'Active' : 'Inactive'}>
-                          <input
-                            type="checkbox"
-                            className="toggle-switch-input"
-                            checked={Boolean(tpl.is_active)}
-                            onChange={(e) => handleToggleActive(tpl, e)}
-                          />
-                          <span className="toggle-slider"></span>
-                          <span style={{ fontSize: '11px' }}>{tpl.is_active ? 'Active' : 'Off'}</span>
-                        </label>
-                      </div>
-
-                      {/* Email Subject Line if email */}
-                      {tpl.channel === 'email' && tpl.email_subject && (
-                        <div className="template-email-subject-line">
-                          <span>Subject: </span>
-                          <span>{tpl.email_subject}</span>
-                        </div>
-                      )}
-
-                      {/* Message Content Snippet */}
-                      <div className="template-card-body-preview">
-                        {tpl.message_body}
+                    <div className="category-nav-left">
+                      <span className="category-nav-icon">{cat.icon}</span>
+                      <div className="category-nav-info">
+                        <div className="category-nav-title">{cat.label}</div>
+                        <div className="category-nav-subtitle">{cat.desc}</div>
                       </div>
                     </div>
 
-                    {/* Card Footer Actions */}
-                    <div className="template-card-footer">
-                      <span className="template-footer-meta">
-                        {tpl.channel.toUpperCase()} • {tpl.message_body?.length || 0} chars
-                      </span>
-
-                      <div className="template-card-actions">
-                        <button
-                          type="button"
-                          className="btn-card-action"
-                          onClick={() => setPreviewTemplate(tpl)}
-                          title="Preview resolved message"
-                        >
-                          <span>👁️</span>
-                          <span>Preview</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          className="btn-card-action"
-                          onClick={() => handleOpenEdit(tpl)}
-                          title="Edit Template"
-                        >
-                          <span>✏️</span>
-                          <span>Edit</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          className="btn-card-action danger"
-                          onClick={() => setDeleteConfirmTarget(tpl)}
-                          title="Delete Template"
-                        >
-                          <span>🗑️</span>
-                        </button>
-                      </div>
-                    </div>
+                    <span className={isActive ? 'category-active-badge' : 'category-inactive-badge'}>
+                      {isActive ? 'Active' : 'Inactive'}
+                    </span>
                   </div>
                 );
               })}
             </div>
-          )}
+          </div>
+
+          {/* ── COLUMN 2: Edit Template – [Channel] ── */}
+          <div className="edit-col-card">
+            <h3 className="edit-col-header">
+              Edit Template – {selectedChannel === 'whatsapp' ? 'WhatsApp' : selectedChannel === 'sms' ? 'SMS' : 'Email'}
+            </h3>
+
+            {/* Template Name & Status Switch */}
+            <div className="edit-name-status-row">
+              <div className="edit-form-group edit-name-field">
+                <label className="edit-label">
+                  Template Name <span className="edit-req-star">*</span>
+                </label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={formName}
+                  onChange={(e) => {
+                    setFormName(e.target.value);
+                    setHasUnsavedChanges(true);
+                  }}
+                  placeholder="e.g. Order Created - WhatsApp"
+                />
+              </div>
+
+              <div className="edit-status-box">
+                <span className="edit-label">Status</span>
+                <label className="toggle-switch-wrap" style={{ cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    className="toggle-switch-input"
+                    checked={formIsActive}
+                    onChange={handleToggleCurrentStatus}
+                  />
+                  <span className="toggle-slider"></span>
+                  <span style={{ fontSize: '12px', fontWeight: 600 }}>
+                    {formIsActive ? 'Active' : 'Inactive'}
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            {/* Email Subject Line (if channel is Email) */}
+            {selectedChannel === 'email' && (
+              <div className="edit-form-group">
+                <label className="edit-label">
+                  Email Subject Line <span className="edit-req-star">*</span>
+                </label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={formSubject}
+                  onChange={(e) => {
+                    setFormSubject(e.target.value);
+                    setHasUnsavedChanges(true);
+                  }}
+                  placeholder="e.g. Your Laundry Order {{order_id}} Has Been Confirmed"
+                />
+              </div>
+            )}
+
+            {/* Message Content */}
+            <div className="edit-form-group">
+              <div className="edit-label-row">
+                <label className="edit-label">
+                  Message Content <span className="edit-req-star">*</span>
+                </label>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  {formBody.length} characters
+                </span>
+              </div>
+              <textarea
+                ref={bodyTextareaRef}
+                className="edit-textarea-v2"
+                rows={11}
+                value={formBody}
+                onChange={(e) => {
+                  setFormBody(e.target.value);
+                  setHasUnsavedChanges(true);
+                }}
+                placeholder="Type template message content..."
+              />
+            </div>
+
+            {/* Dynamic Variable Dropdown Selector */}
+            <div className="edit-variable-row">
+              <span className="edit-variable-label" title="Dynamic Variables selector">Insert Variable:</span>
+              <select
+                className="edit-variable-select"
+                onChange={handleInsertVariableSelect}
+                defaultValue=""
+                aria-label="Dynamic Variables"
+              >
+                <option value="" disabled>
+                  Select variable...
+                </option>
+                {DYNAMIC_VARIABLES.map((v) => (
+                  <option key={v.tag} value={v.tag}>
+                    {v.label} ({v.tag})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Bottom Actions Row: Reset, Preview, Save Changes */}
+            <div className="edit-actions-bottom-row">
+              <button
+                type="button"
+                className="btn-v2-reset"
+                onClick={handleResetToDefault}
+                title="Reset to default factory message"
+              >
+                <span>↺</span>
+                <span>Reset</span>
+              </button>
+
+              <button
+                type="button"
+                className="btn-v2-preview"
+                onClick={() => {
+                  showToast('Live preview updated in right panel!');
+                  bodyTextareaRef.current?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                title="Refresh preview rendering"
+              >
+                <span>👁️</span>
+                <span>Preview</span>
+              </button>
+
+              <button
+                type="button"
+                className="btn-v2-save"
+                onClick={handleSaveChanges}
+                title="Save changes to database"
+              >
+                <span>💾</span>
+                <span>Save Changes</span>
+              </button>
+            </div>
+          </div>
+
+          {/* ── COLUMN 3: Message Preview Card ── */}
+          <div className="preview-col-card">
+            <div className="preview-col-top">
+              <h3 className="preview-col-heading">Message Preview</h3>
+              <span className={`preview-channel-pill preview-pill-${selectedChannel}`}>
+                {selectedChannel === 'whatsapp' ? '💬 WhatsApp' : selectedChannel === 'sms' ? '📲 SMS' : '✉️ Email'}
+              </span>
+            </div>
+
+            {/* WhatsApp Smartphone Mockup matching Reference Image */}
+            {selectedChannel === 'whatsapp' && (
+              <div className="phone-outer-frame">
+                <div className="phone-speaker-cutout"></div>
+
+                {/* WhatsApp Chat Header */}
+                <div className="phone-wa-top-bar">
+                  <div className="phone-wa-left">
+                    <span style={{ fontSize: '15px' }}>‹</span>
+                    <div className="phone-wa-avatar">🧺</div>
+                    <div className="phone-wa-name-group">
+                      <div className="phone-wa-name">Washdoor</div>
+                      <div className="phone-wa-sub">Business Account</div>
+                    </div>
+                  </div>
+                  <div className="phone-wa-actions">
+                    <span>📹</span>
+                    <span>📞</span>
+                    <span>⋮</span>
+                  </div>
+                </div>
+
+                {/* WhatsApp Chat Canvas */}
+                <div className="phone-wa-chat-area">
+                  <div className="phone-wa-bubble">
+                    {renderedPreviewBody}
+                    <div className="phone-wa-meta-row">
+                      <span>10:24 AM</span>
+                      <span className="phone-wa-checkmarks">✓✓</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SMS Smartphone Mockup */}
+            {selectedChannel === 'sms' && (
+              <div className="phone-outer-frame">
+                <div className="phone-speaker-cutout"></div>
+                <div className="phone-sms-top-bar">
+                  <span style={{ fontSize: '16px' }}>‹</span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '13px' }}>VK-WASHDR</div>
+                    <div style={{ fontSize: '10.5px', opacity: 0.8 }}>Transactional SMS</div>
+                  </div>
+                </div>
+                <div className="phone-sms-chat-area">
+                  <div className="phone-sms-bubble">
+                    {renderedPreviewBody}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Email Preview Card */}
+            {selectedChannel === 'email' && (
+              <div className="email-preview-card-v2">
+                <div className="email-preview-header-v2">
+                  <div className="email-preview-sub-v2">{renderedPreviewSubject}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    From: Washdoor Laundry &lt;notifications@washdoor.in&gt;
+                    <br />
+                    To: Rahul Sharma &lt;rahul.sharma@example.com&gt;
+                  </div>
+                </div>
+                <div className="email-preview-body-v2">
+                  {renderedPreviewBody}
+                </div>
+              </div>
+            )}
+
+            {/* Quick Dispatch Simulation Action */}
+            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                  Test Real Dispatch:
+                </span>
+                <select
+                  className="form-control"
+                  style={{ width: 'auto', padding: '4px 8px', fontSize: '11.5px' }}
+                  value={simSelectedOrderId}
+                  onChange={(e) => setSimSelectedOrderId(e.target.value)}
+                >
+                  {orders.map((o) => (
+                    <option key={o.order_number || o.id} value={o.order_number || o.id}>
+                      {o.order_number || o.id}
+                    </option>
+                  ))}
+                  {orders.length === 0 && <option value="ORD00024">ORD00024</option>}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                className="btn-card-action"
+                style={{ width: '100%', justifyContent: 'center', background: 'var(--accent)', color: '#ffffff', borderColor: 'var(--accent)' }}
+                onClick={handleQuickDispatchTest}
+                disabled={simIsDispatching}
+              >
+                <span>🚀</span>
+                <span>{simIsDispatching ? 'Dispatching...' : `Send Test ${selectedChannel.toUpperCase()}`}</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       {/* ══════════════════════════════════════════════════════════════════
-          SUB-VIEW 2: NOTIFICATION HISTORY & AUDIT TRAIL
+          VIEW 2: NOTIFICATION HISTORY & AUDIT TRAIL
          ══════════════════════════════════════════════════════════════════ */}
-      {subView === 'history' && (
+      {activeView === 'history' && (
         <div className="notif-history-wrapper">
-          {/* Filters Bar */}
           <div className="notif-history-filters">
             <div className="notif-filter-input">
               <input
@@ -572,7 +741,7 @@ export default function TemplateManagementSection({
               value={logFilterCategory}
               onChange={(e) => setLogFilterCategory(e.target.value)}
             >
-              <option value="all">All Event Types</option>
+              <option value="all">All Categories</option>
               {NOTIFICATION_CATEGORIES.map((c) => (
                 <option key={c.key} value={c.key}>
                   {c.label}
@@ -593,18 +762,31 @@ export default function TemplateManagementSection({
               <option value="Failed">Failed</option>
             </select>
 
-            <button
-              type="button"
-              className="btn-card-action"
-              onClick={loadLogsData}
-              title="Refresh logs from database"
-            >
-              <span>↺</span>
-              <span>Refresh</span>
-            </button>
+            <div style={{ display: 'flex', gap: '6px', marginLeft: 'auto' }}>
+              <button
+                type="button"
+                className="btn-card-action"
+                onClick={() => handleExportHistory('excel')}
+              >
+                📊 Excel
+              </button>
+              <button
+                type="button"
+                className="btn-card-action"
+                onClick={() => handleExportHistory('pdf')}
+              >
+                📄 PDF
+              </button>
+              <button
+                type="button"
+                className="btn-card-action"
+                onClick={() => handleExportHistory('csv')}
+              >
+                📑 CSV
+              </button>
+            </div>
           </div>
 
-          {/* History Table */}
           <div className="notif-history-table-container">
             <table className="notif-history-table">
               <thead>
@@ -612,18 +794,18 @@ export default function TemplateManagementSection({
                   <th>Timestamp</th>
                   <th>Order ID</th>
                   <th>Customer</th>
-                  <th>Event Category</th>
+                  <th>Category</th>
                   <th>Channel</th>
                   <th>Recipient</th>
                   <th>Message Preview</th>
-                  <th>Delivery Status</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredLogs.length === 0 ? (
                   <tr>
                     <td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>
-                      No notification logs match your filter criteria.
+                      No notification logs found.
                     </td>
                   </tr>
                 ) : (
@@ -637,14 +819,14 @@ export default function TemplateManagementSection({
                         <td>
                           <strong>{log.order_id || '—'}</strong>
                         </td>
-                        <td>{log.customer_name || 'Walk-in Customer'}</td>
+                        <td>{log.customer_name || 'Customer'}</td>
                         <td>
                           <span style={{ fontSize: '12px', fontWeight: 600 }}>
                             {NOTIFICATION_CATEGORIES.find((c) => c.key === log.event_type)?.label || log.event_type}
                           </span>
                         </td>
                         <td>
-                          <span style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: '11px' }}>
+                          <span style={{ fontWeight: 700, fontSize: '11px' }}>
                             {log.channel === 'whatsapp' ? '💬 WhatsApp' : log.channel === 'sms' ? '📲 SMS' : '✉️ Email'}
                           </span>
                         </td>
@@ -669,391 +851,91 @@ export default function TemplateManagementSection({
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════════
-          SUB-VIEW 3: LIVE DISPATCH SIMULATION & TEST
-         ══════════════════════════════════════════════════════════════════ */}
-      {subView === 'simulation' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-          <div className="settings-box-panel">
-            <h3 className="panel-subheading">🚀 Real-Time Dispatch Simulation</h3>
-            <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-              Select any live customer order from the database to test dynamic variable replacement and dispatch notification.
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label className="form-label">Select Customer Order</label>
-                <select
-                  className="form-control"
-                  value={simSelectedOrderId}
-                  onChange={(e) => setSimSelectedOrderId(e.target.value)}
-                >
-                  {orders.length === 0 ? (
-                    <option value="ORD00024">ORD00024 • Aravind Swamy (₹450.00)</option>
-                  ) : (
-                    orders.map((o) => (
-                      <option key={o.id || o.order_number} value={o.order_number || o.id}>
-                        {o.order_number || o.id} • {o.customer_name || 'Customer'} (₹{o.total_amount || o.grand_total || '0'})
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-
-              <div className="form-row cols-2">
-                <div>
-                  <label className="form-label">Notification Event</label>
-                  <select
-                    className="form-control"
-                    value={simEvent}
-                    onChange={(e) => setSimEvent(e.target.value)}
-                  >
-                    {NOTIFICATION_CATEGORIES.map((c) => (
-                      <option key={c.key} value={c.key}>
-                        {c.icon} {c.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="form-label">Communication Channel</label>
-                  <select
-                    className="form-control"
-                    value={simChannel}
-                    onChange={(e) => setSimChannel(e.target.value)}
-                  >
-                    <option value="whatsapp">💬 WhatsApp</option>
-                    <option value="sms">📲 SMS</option>
-                    <option value="email">✉️ Email</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="form-label">Custom Test Recipient (Optional)</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder={simChannel === 'email' ? 'e.g. test@washdoor.in' : 'e.g. 9840123456'}
-                  value={simCustomRecipient}
-                  onChange={(e) => setSimCustomRecipient(e.target.value)}
-                />
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  Defaults to the selected order's registered mobile or email.
-                </span>
-              </div>
-
-              <button
-                type="button"
-                className="welcome-action-btn primary"
-                onClick={handleExecuteDispatchSimulation}
-                disabled={simIsDispatching}
-                style={{ marginTop: '8px', padding: '10px 20px', fontSize: '13.5px' }}
-              >
-                <span>{simIsDispatching ? '⏳ Dispatching...' : '🚀 Dispatch Notification Now'}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Right: Dynamic Resolved Message Preview */}
-          <div className="template-preview-col">
-            <h4 style={{ margin: 0, fontSize: '13.5px', color: 'var(--text-primary)', fontWeight: 700 }}>
-              Live Dynamically Resolved Preview
-            </h4>
-
-            {(() => {
-              const activeTpl = templates.find((t) => t.event_type === simEvent && t.channel === simChannel && t.is_active) ||
-                templates.find((t) => t.event_type === simEvent && t.channel === simChannel) || {
-                  message_body: 'No template configured for this channel and event.',
-                  email_subject: 'Washdoor Notification',
-                };
-
-              const currentOrder = orders.find((o) => (o.order_number || o.id) === simSelectedOrderId) || {
-                order_number: simSelectedOrderId,
-                customer_name: 'Aravind Swamy',
-                mobile_number: '9840123456',
-                email: 'aravind.swamy@gmail.com',
-                total_amount: 450,
-                advance_paid: 200,
-                balance_due: 250,
-                service_category: 'Steam Press & Normal Wash',
-                expected_delivery: 'Tomorrow, 06:00 PM',
-              };
-
-              const rendered = renderTemplate(activeTpl.message_body, currentOrder);
-              const renderedSubject = activeTpl.email_subject ? renderTemplate(activeTpl.email_subject, currentOrder) : '';
-
-              if (simChannel === 'whatsapp') {
-                return (
-                  <div className="preview-phone-mockup">
-                    <div className="preview-phone-header">
-                      <span>10:30</span>
-                      <span>📶 5G 100%</span>
-                    </div>
-                    <div className="preview-wa-header">
-                      <div style={{ fontSize: '20px' }}>🧺</div>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: '13px' }}>Washdoor Ranipet</div>
-                        <div style={{ fontSize: '11px', opacity: 0.85 }}>Official Business Account</div>
-                      </div>
-                    </div>
-                    <div style={{ background: '#e5ddd5', minHeight: '200px', display: 'flex', flexDirection: 'column' }}>
-                      <div className="preview-wa-bubble">{rendered}</div>
-                    </div>
-                  </div>
-                );
-              }
-
-              if (simChannel === 'sms') {
-                return (
-                  <div className="preview-phone-mockup">
-                    <div className="preview-phone-header">
-                      <span>10:30</span>
-                      <span>📶 5G</span>
-                    </div>
-                    <div className="preview-sms-header">
-                      <span>‹</span>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: '13px' }}>VK-WASHDR</div>
-                        <div style={{ fontSize: '10.5px', opacity: 0.8 }}>Transactional SMS Route</div>
-                      </div>
-                    </div>
-                    <div style={{ background: '#f1f5f9', minHeight: '180px', display: 'flex', flexDirection: 'column' }}>
-                      <div className="preview-sms-bubble">{rendered}</div>
-                    </div>
-                  </div>
-                );
-              }
-
-              return (
-                <div className="preview-email-card">
-                  <div className="preview-email-header">
-                    <div className="preview-email-subject">{renderedSubject}</div>
-                    <div className="preview-email-meta">
-                      From: <strong>Washdoor Laundry &lt;notifications@washdoor.in&gt;</strong>
-                      <br />
-                      To: <strong>{currentOrder.customer_name} &lt;{currentOrder.email || 'customer@washdoor.in'}&gt;</strong>
-                    </div>
-                  </div>
-                  <div className="preview-email-body">{rendered}</div>
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════════
-          INTERACTIVE TEMPLATE EDITOR MODAL
-         ══════════════════════════════════════════════════════════════════ */}
-      {isEditorOpen && (
-        <div className="template-modal-backdrop" onClick={() => setIsEditorOpen(false)}>
-          <div className="template-modal-card" onClick={(e) => e.stopPropagation()}>
+      {/* ── Add Template Modal ── */}
+      {isAddModalOpen && (
+        <div className="template-modal-backdrop" onClick={() => setIsAddModalOpen(false)}>
+          <div className="template-modal-card" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
             <div className="template-modal-header">
               <div className="template-modal-title">
-                <span>{editingTemplate ? '✏️ Edit Template' : '➕ Create New Notification Template'}</span>
+                <span>➕ Add Notification Template</span>
               </div>
               <button
                 type="button"
                 className="pos-dialog-close-btn"
-                onClick={() => setIsEditorOpen(false)}
-                aria-label="Close"
+                onClick={() => setIsAddModalOpen(false)}
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSaveTemplateSubmit}>
-              <div className="template-modal-body">
-                {/* Left: Form Fields */}
-                <div className="template-editor-col">
+            <form onSubmit={handleCreateNewTemplateSubmit}>
+              <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div>
+                  <label className="form-label">Template Name *</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. Special Festival Offer - WhatsApp"
+                    value={newTplName}
+                    onChange={(e) => setNewTplName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-row cols-2">
                   <div>
-                    <label className="form-label">Template Name *</label>
+                    <label className="form-label">Notification Category *</label>
+                    <select
+                      className="form-control"
+                      value={newTplCategory}
+                      onChange={(e) => setNewTplCategory(e.target.value)}
+                    >
+                      {NOTIFICATION_CATEGORIES.map((c) => (
+                        <option key={c.key} value={c.key}>
+                          {c.icon} {c.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="form-label">Channel *</label>
+                    <select
+                      className="form-control"
+                      value={newTplChannel}
+                      onChange={(e) => setNewTplChannel(e.target.value)}
+                    >
+                      <option value="whatsapp">💬 WhatsApp</option>
+                      <option value="sms">📲 SMS</option>
+                      <option value="email">✉️ Email</option>
+                    </select>
+                  </div>
+                </div>
+
+                {newTplChannel === 'email' && (
+                  <div>
+                    <label className="form-label">Email Subject Line *</label>
                     <input
                       type="text"
                       className="form-control"
-                      placeholder="e.g. Order Created Confirmation (WhatsApp)"
-                      value={formName}
-                      onChange={(e) => setFormName(e.target.value)}
+                      placeholder="e.g. Your Washdoor Laundry Update"
+                      value={newTplSubject}
+                      onChange={(e) => setNewTplSubject(e.target.value)}
                       required
                     />
                   </div>
+                )}
 
-                  <div className="form-row cols-2">
-                    <div>
-                      <label className="form-label">Notification Category *</label>
-                      <select
-                        className="form-control"
-                        value={formCategory}
-                        onChange={(e) => setFormCategory(e.target.value)}
-                      >
-                        {NOTIFICATION_CATEGORIES.map((cat) => (
-                          <option key={cat.key} value={cat.key}>
-                            {cat.icon} {cat.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="form-label">Communication Channel *</label>
-                      <select
-                        className="form-control"
-                        value={formChannel}
-                        onChange={(e) => setFormChannel(e.target.value)}
-                      >
-                        <option value="whatsapp">💬 WhatsApp</option>
-                        <option value="sms">📲 SMS</option>
-                        <option value="email">✉️ Email</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {formChannel === 'email' && (
-                    <div>
-                      <label className="form-label">Email Subject Line *</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="e.g. Your Laundry Order {{order_id}} Has Been Confirmed"
-                        value={formSubject}
-                        onChange={(e) => setFormSubject(e.target.value)}
-                        required
-                      />
-                    </div>
-                  )}
-
-                  {/* Variable Chips Inserter */}
-                  <div className="variable-chips-container">
-                    <div className="variable-chips-label">
-                      📌 Dynamic Variables (Click to Insert at Cursor)
-                    </div>
-                    <div className="variable-chips-list">
-                      {DYNAMIC_VARIABLES.map((v) => (
-                        <button
-                          key={v.tag}
-                          type="button"
-                          className="variable-chip-btn"
-                          onClick={() => handleInsertVariable(v.tag)}
-                          title={`${v.label}: ${v.desc} (e.g. ${v.example})`}
-                        >
-                          <span>{v.tag}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <label className="form-label" style={{ margin: 0 }}>Message Content *</label>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {formBody.length} characters
-                        {formChannel === 'sms' && ` • ${Math.ceil(formBody.length / 160)} SMS`}
-                      </span>
-                    </div>
-                    <textarea
-                      ref={bodyTextareaRef}
-                      className="form-control"
-                      rows={8}
-                      placeholder="Type template message body here with {{variable}} tags..."
-                      value={formBody}
-                      onChange={(e) => setFormBody(e.target.value)}
-                      required
-                      style={{ fontFamily: 'inherit', fontSize: '13px', lineHeight: '1.45' }}
-                    />
-                  </div>
-
-                  <label className="toggle-switch-wrap" style={{ marginTop: '4px' }}>
-                    <input
-                      type="checkbox"
-                      className="toggle-switch-input"
-                      checked={formIsActive}
-                      onChange={(e) => setFormIsActive(e.target.checked)}
-                    />
-                    <span className="toggle-slider"></span>
-                    <span>Set this template as active for automated dispatch</span>
-                  </label>
-                </div>
-
-                {/* Right: Real-Time Preview */}
-                <div className="template-preview-col">
-                  <h4 style={{ margin: 0, fontSize: '13.5px', color: 'var(--text-primary)', fontWeight: 700 }}>
-                    Live Customer Preview
-                  </h4>
-
-                  {(() => {
-                    const sampleContext = {
-                      customer_name: 'Aravind Swamy',
-                      order_id: 'ORD00024',
-                      order_date: '04 Nov 2026',
-                      service_name: 'Wash & Fold, Steam Press',
-                      quantity: '6 pieces',
-                      delivery_date: '06 Nov 2026, 06:00 PM',
-                      revised_delivery_date: '07 Nov 2026, 12:00 PM',
-                      total_amount: '450.00',
-                      paid_amount: '200.00',
-                      pending_amount: '250.00',
-                      payment_status: 'Partially Paid',
-                      due_date: '06 Nov 2026',
-                      delay_reason: 'Monsoon weather air-drying delay',
-                      days_overdue: '3 days',
-                    };
-
-                    const renderedBody = renderTemplate(formBody || 'Your template message will appear here...', sampleContext);
-                    const renderedSubject = renderTemplate(formSubject || 'Email Subject', sampleContext);
-
-                    if (formChannel === 'whatsapp') {
-                      return (
-                        <div className="preview-phone-mockup">
-                          <div className="preview-phone-header">
-                            <span>10:20</span>
-                            <span>📶 5G</span>
-                          </div>
-                          <div className="preview-wa-header">
-                            <div style={{ fontSize: '18px' }}>🧺</div>
-                            <div>
-                              <div style={{ fontWeight: 700, fontSize: '13px' }}>Washdoor Ranipet</div>
-                              <div style={{ fontSize: '10.5px', opacity: 0.85 }}>Verified Official Account</div>
-                            </div>
-                          </div>
-                          <div style={{ background: '#e5ddd5', minHeight: '180px' }}>
-                            <div className="preview-wa-bubble">{renderedBody}</div>
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    if (formChannel === 'sms') {
-                      return (
-                        <div className="preview-phone-mockup">
-                          <div className="preview-phone-header">
-                            <span>10:20</span>
-                            <span>📶 5G</span>
-                          </div>
-                          <div className="preview-sms-header">
-                            <div>
-                              <div style={{ fontWeight: 700, fontSize: '13px' }}>VK-WASHDR</div>
-                              <div style={{ fontSize: '10.5px', opacity: 0.8 }}>Transactional SMS</div>
-                            </div>
-                          </div>
-                          <div style={{ background: '#f1f5f9', minHeight: '160px' }}>
-                            <div className="preview-sms-bubble">{renderedBody}</div>
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div className="preview-email-card">
-                        <div className="preview-email-header">
-                          <div className="preview-email-subject">{renderedSubject}</div>
-                          <div className="preview-email-meta">To: Aravind Swamy &lt;aravind.swamy@gmail.com&gt;</div>
-                        </div>
-                        <div className="preview-email-body">{renderedBody}</div>
-                      </div>
-                    );
-                  })()}
+                <div>
+                  <label className="form-label">Message Content *</label>
+                  <textarea
+                    className="form-control"
+                    rows={6}
+                    placeholder="Enter template message with {{customer_name}}, {{order_id}}..."
+                    value={newTplBody}
+                    onChange={(e) => setNewTplBody(e.target.value)}
+                    required
+                  />
                 </div>
               </div>
 
@@ -1061,167 +943,19 @@ export default function TemplateManagementSection({
                 <button
                   type="button"
                   className="btn-card-action"
-                  onClick={() => setIsEditorOpen(false)}
+                  onClick={() => setIsAddModalOpen(false)}
                 >
                   Cancel
                 </button>
 
                 <button
                   type="submit"
-                  className="welcome-action-btn primary"
-                  style={{ padding: '8px 20px', fontSize: '13.5px' }}
+                  className="btn-add-template"
                 >
-                  <span>💾 Save Template</span>
+                  Create Template
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── Quick Preview Dialog ── */}
-      {previewTemplate && (
-        <div className="template-modal-backdrop" onClick={() => setPreviewTemplate(null)}>
-          <div className="template-modal-card" style={{ maxWidth: '600px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="template-modal-header">
-              <div className="template-modal-title">
-                <span>👁️ {previewTemplate.template_name}</span>
-              </div>
-              <button
-                type="button"
-                className="pos-dialog-close-btn"
-                onClick={() => setPreviewTemplate(null)}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div style={{ padding: '20px' }}>
-              {(() => {
-                const sampleContext = {
-                  customer_name: 'Aravind Swamy',
-                  order_id: 'ORD00024',
-                  order_date: '04 Nov 2026',
-                  service_name: 'Steam Press & Wash',
-                  quantity: '5 pieces',
-                  delivery_date: 'Tomorrow, 06:00 PM',
-                  revised_delivery_date: 'Day after tomorrow, 12:00 PM',
-                  total_amount: '380.00',
-                  paid_amount: '180.00',
-                  pending_amount: '200.00',
-                  payment_status: 'Partially Paid',
-                  due_date: 'Tomorrow, 06:00 PM',
-                  delay_reason: 'Monsoon fabric air-drying delay',
-                  days_overdue: '2 days',
-                };
-
-                const body = renderTemplate(previewTemplate.message_body, sampleContext);
-                const subj = previewTemplate.email_subject ? renderTemplate(previewTemplate.email_subject, sampleContext) : '';
-
-                if (previewTemplate.channel === 'whatsapp') {
-                  return (
-                    <div className="preview-phone-mockup">
-                      <div className="preview-wa-header">
-                        <div style={{ fontSize: '20px' }}>🧺</div>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: '13px' }}>Washdoor Ranipet</div>
-                          <div style={{ fontSize: '11px', opacity: 0.85 }}>WhatsApp Official</div>
-                        </div>
-                      </div>
-                      <div style={{ background: '#e5ddd5', minHeight: '180px' }}>
-                        <div className="preview-wa-bubble">{body}</div>
-                      </div>
-                    </div>
-                  );
-                }
-
-                if (previewTemplate.channel === 'sms') {
-                  return (
-                    <div className="preview-phone-mockup">
-                      <div className="preview-sms-header">
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: '13px' }}>VK-WASHDR</div>
-                          <div style={{ fontSize: '10.5px', opacity: 0.8 }}>SMS Gateway</div>
-                        </div>
-                      </div>
-                      <div style={{ background: '#f1f5f9', minHeight: '160px' }}>
-                        <div className="preview-sms-bubble">{body}</div>
-                      </div>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="preview-email-card">
-                    <div className="preview-email-header">
-                      <div className="preview-email-subject">{subj}</div>
-                      <div className="preview-email-meta">To: Aravind Swamy &lt;aravind.swamy@gmail.com&gt;</div>
-                    </div>
-                    <div className="preview-email-body">{body}</div>
-                  </div>
-                );
-              })()}
-            </div>
-
-            <div className="template-modal-footer">
-              <button
-                type="button"
-                className="btn-card-action"
-                onClick={() => setPreviewTemplate(null)}
-              >
-                Close Preview
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Delete Confirmation Dialog ── */}
-      {deleteConfirmTarget && (
-        <div className="template-modal-backdrop" onClick={() => setDeleteConfirmTarget(null)}>
-          <div className="template-modal-card" style={{ maxWidth: '460px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="template-modal-header">
-              <div className="template-modal-title" style={{ color: '#ef4444' }}>
-                <span>⚠️ Confirm Delete Template</span>
-              </div>
-              <button
-                type="button"
-                className="pos-dialog-close-btn"
-                onClick={() => setDeleteConfirmTarget(null)}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div style={{ padding: '20px' }}>
-              <p style={{ margin: 0, fontSize: '13.5px', color: 'var(--text-primary)' }}>
-                Are you sure you want to permanently delete template:
-                <br />
-                <strong style={{ color: 'var(--accent)' }}>"{deleteConfirmTarget.template_name}"</strong>?
-              </p>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' }}>
-                Automated {deleteConfirmTarget.channel.toUpperCase()} alerts for {deleteConfirmTarget.event_type} will be paused until a replacement template is created.
-              </p>
-            </div>
-
-            <div className="template-modal-footer">
-              <button
-                type="button"
-                className="btn-card-action"
-                onClick={() => setDeleteConfirmTarget(null)}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                className="btn-card-action danger"
-                style={{ background: '#ef4444', color: '#ffffff', borderColor: '#ef4444' }}
-                onClick={handleConfirmDelete}
-              >
-                Delete Template
-              </button>
-            </div>
           </div>
         </div>
       )}

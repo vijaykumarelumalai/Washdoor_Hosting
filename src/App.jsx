@@ -166,7 +166,7 @@ export default function App() {
     else if (tab === 'reports' || tab === 'report') setActiveTab('report');
     else if (tab === 'audit_log' || tab === 'auditlog' || tab === 'audit') setActiveTab('audit');
     else if (tab === 'account' || tab === 'settings') setActiveTab('account');
-    else if (tab === 'templates' || tab === 'template') setActiveTab('templates');
+    else if (tab === 'templates' || tab === 'template' || tab === 'template_reminder') setActiveTab('template_reminder');
     else setActiveTab(tab);
 
     // Auto-collapse navigation menu when navigating to any module
@@ -222,6 +222,54 @@ export default function App() {
       return 'light';
     }
   });
+
+  // Fullscreen state & toggle matching reference header
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    try {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
+        const el = document.documentElement;
+        if (el.requestFullscreen) {
+          el.requestFullscreen().catch(() => {});
+        } else if (el.webkitRequestFullscreen) {
+          el.webkitRequestFullscreen();
+        } else if (el.mozRequestFullScreen) {
+          el.mozRequestFullScreen();
+        } else if (el.msRequestFullscreen) {
+          el.msRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        } else if (document.mozCancelFullScreen) {
+          document.mozCancelFullScreen();
+        } else if (document.msExitFullscreen) {
+          document.msExitFullscreen();
+        }
+      }
+    } catch (e) {
+      console.warn('Fullscreen toggle failed', e);
+    }
+  };
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -558,6 +606,32 @@ export default function App() {
 
         <div className="spacer"></div>
 
+        {/* Fullscreen Toggle Button (matching reference header) */}
+        <button
+          type="button"
+          className="topbar-fullscreen-btn"
+          title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+          aria-label="Toggle Fullscreen"
+          onClick={toggleFullscreen}
+        >
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            {isFullscreen ? (
+              <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+            ) : (
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+            )}
+          </svg>
+        </button>
+
         {/* Notification Bell Icon */}
         <button
           type="button"
@@ -666,7 +740,21 @@ export default function App() {
             }}
             title={t('sample_languages')}
           >
-            <span>🌐</span>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#2563eb"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ flexShrink: 0 }}
+            >
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="2" y1="12" x2="22" y2="12"></line>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+            </svg>
             <span className="top-pill-label-full">{currentLanguage.name}</span>
             <span className="top-pill-label-short">{currentLanguage.code.toUpperCase()}</span>
             <svg
@@ -782,7 +870,7 @@ export default function App() {
           <span className="theme-toggle-label">Reports &amp; Audit</span>
         </button>
 
-        {/* Admin Details Dropdown (Avatar Circle Only) */}
+        {/* Admin Details Dropdown (Avatar Circle + Chevron matching reference) */}
         <div className="top-pill-dropdown-wrap">
           <button
             type="button"
@@ -792,9 +880,26 @@ export default function App() {
               setActiveDropdown((prev) => (prev === 'admin' ? null : 'admin'));
             }}
             title="Tenant / Admin: Store Administrator"
-            aria-label="Admin Avatar"
+            aria-label="Admin Profile Menu"
           >
-            A
+            <span className="top-admin-avatar-circle">A</span>
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="top-admin-avatar-chevron"
+              style={{
+                transition: 'transform 0.2s ease',
+                transform: activeDropdown === 'admin' ? 'rotate(180deg)' : 'none',
+              }}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
           </button>
 
           {activeDropdown === 'admin' && (
@@ -1049,10 +1154,10 @@ export default function App() {
             onNavigateTab={navigateToTab}
             showToast={showToast}
           />
-        ) : (activeTab === 'account' || activeTab === 'settings' || activeTab === 'apps' || activeTab === 'templates' || activeTab === 'template') ? (
+        ) : (activeTab === 'account' || activeTab === 'settings' || activeTab === 'apps' || activeTab === 'templates' || activeTab === 'template' || activeTab === 'template_reminder') ? (
           <SettingsModule
             showToast={showToast}
-            initialTab={activeTab === 'apps' ? 'apps' : (activeTab === 'templates' || activeTab === 'template') ? 'templates' : 'business_profile'}
+            initialTab={activeTab === 'apps' ? 'apps' : (activeTab === 'templates' || activeTab === 'template' || activeTab === 'template_reminder') ? 'template_reminder' : 'business_profile'}
             orders={orders}
             onSignOut={() => {
               showToast('Signed out of counter session');
