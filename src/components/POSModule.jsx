@@ -29,7 +29,10 @@ import {
   ORDER_COLUMNS,
   DEFAULT_COLUMN_IDS,
   ALL_COLUMN_IDS,
+  REQUIRED_COLUMN_IDS,
+  FIXED_COLUMN_IDS,
   sanitizeAndOrderColumns,
+  enforceRequiredColumns,
 } from '../config/orderColumnsConfig';
 import {
   loadColumnPreferences,
@@ -129,27 +132,29 @@ export default function POSModule({
     let mounted = true;
     loadColumnPreferences().then((cols) => {
       if (mounted && Array.isArray(cols) && cols.length > 0) {
-        setSelectedColumns(cols);
-        setDraftColumns(cols);
+        const enforced = enforceRequiredColumns(cols);
+        setSelectedColumns(enforced);
+        setDraftColumns(enforced);
       }
     });
     return () => { mounted = false; };
   }, []);
 
   const handleToggleColumn = (colId) => {
+    if (REQUIRED_COLUMN_IDS.includes(colId)) {
+      const colObj = ORDER_COLUMNS.find((c) => c.id === colId);
+      showToast?.(`ℹ️ ${colObj?.label || 'This'} is a permanent column and cannot be removed`);
+      return;
+    }
     setDraftColumns((prev) => {
       const exists = prev.includes(colId);
       let updated;
       if (exists) {
-        if (prev.length <= 1) {
-          showToast?.('⚠️ At least one column must remain visible');
-          return prev;
-        }
         updated = prev.filter((id) => id !== colId);
       } else {
         updated = [...prev, colId];
       }
-      const ordered = sanitizeAndOrderColumns(updated);
+      const ordered = enforceRequiredColumns(updated);
       setSelectedColumns(ordered);
       saveColumnPreferences(ordered);
       return ordered;
@@ -157,11 +162,20 @@ export default function POSModule({
   };
 
   const handleSelectAllColumns = () => {
-    const all = [...ALL_COLUMN_IDS];
-    setDraftColumns(all);
-    setSelectedColumns(all);
-    saveColumnPreferences(all);
-    showToast?.('✓ All 17 columns selected');
+    if (selectedColumns.length === ALL_COLUMN_IDS.length) {
+      // Keep only fixed required columns (Order ID, Customer, Actions)
+      const fixedOnly = [...REQUIRED_COLUMN_IDS];
+      setDraftColumns(fixedOnly);
+      setSelectedColumns(fixedOnly);
+      saveColumnPreferences(fixedOnly);
+      showToast?.('✓ Reset to 3 fixed required columns');
+    } else {
+      const all = [...ALL_COLUMN_IDS];
+      setDraftColumns(all);
+      setSelectedColumns(all);
+      saveColumnPreferences(all);
+      showToast?.('✓ All 17 columns selected');
+    }
   };
 
   const handleResetDefaultColumns = () => {
@@ -190,7 +204,7 @@ export default function POSModule({
     showToast?.(`💬 Opened WhatsApp chat for ${custName} (+91 ${tenDigits})`);
   };
 
-  const isColVisible = (colId) => selectedColumns.includes(colId);
+  const isColVisible = (colId) => REQUIRED_COLUMN_IDS.includes(colId) || selectedColumns.includes(colId);
 
   // Inline Order Edit Modal State (List View Fields, Read-Only when Ready)
   const [editingOrderRecord, setEditingOrderRecord] = useState(null);
@@ -1618,15 +1632,34 @@ export default function POSModule({
                 <div className="pos-column-list-scroll">
                   <div className="pos-column-section-label">Default Columns</div>
                   {ORDER_COLUMNS.filter(col => col.default).map((col) => {
-                    const isChecked = selectedColumns.includes(col.id);
+                    const isRequired = col.required || REQUIRED_COLUMN_IDS.includes(col.id);
+                    const isChecked = isRequired || selectedColumns.includes(col.id);
                     return (
                       <label
                         key={col.id}
-                        className={`pos-column-checkbox-item ${isChecked ? 'is-checked' : ''}`}
-                        onClick={(e) => { e.stopPropagation(); }}
+                        className={`pos-column-checkbox-item ${isChecked ? 'is-checked' : ''} ${isRequired ? 'is-fixed-item' : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isRequired) {
+                            showToast?.(`ℹ️ ${col.label} is a permanent column and cannot be hidden`);
+                          } else {
+                            handleToggleColumn(col.id);
+                          }
+                        }}
+                        title={isRequired ? `${col.label} is a permanent column (cannot be hidden)` : `Toggle ${col.label}`}
                       >
                         <div className="pos-column-item-left">
-                          <div className={`pos-col-custom-check ${isChecked ? 'checked' : ''}`} onClick={() => handleToggleColumn(col.id)}>
+                          <div
+                            className={`pos-col-custom-check ${isChecked ? 'checked' : ''} ${isRequired ? 'is-fixed' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isRequired) {
+                                showToast?.(`ℹ️ ${col.label} is a permanent column and cannot be hidden`);
+                              } else {
+                                handleToggleColumn(col.id);
+                              }
+                            }}
+                          >
                             {isChecked && (
                               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="20 6 9 17 4 12" />
@@ -1636,7 +1669,17 @@ export default function POSModule({
                           <span className="pos-column-item-label">{col.label}</span>
                         </div>
                         <div className="pos-column-item-right">
-                          <span className="pos-column-default-badge">Default</span>
+                          {isRequired ? (
+                            <span className="pos-column-required-badge" title="Permanent required column">
+                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                              </svg>
+                              Required
+                            </span>
+                          ) : (
+                            <span className="pos-column-default-badge">Default</span>
+                          )}
                         </div>
                       </label>
                     );
@@ -1649,10 +1692,14 @@ export default function POSModule({
                       <label
                         key={col.id}
                         className={`pos-column-checkbox-item ${isChecked ? 'is-checked' : ''}`}
-                        onClick={(e) => { e.stopPropagation(); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleColumn(col.id);
+                        }}
+                        title={`Toggle ${col.label}`}
                       >
                         <div className="pos-column-item-left">
-                          <div className={`pos-col-custom-check ${isChecked ? 'checked' : ''}`} onClick={() => handleToggleColumn(col.id)}>
+                          <div className={`pos-col-custom-check ${isChecked ? 'checked' : ''}`}>
                             {isChecked && (
                               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="20 6 9 17 4 12" />

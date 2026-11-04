@@ -420,6 +420,45 @@ body.dark-theme .pos-column-item-label,
 body.dark-theme .pos-column-default-badge,
 [data-theme="dark"] .pos-column-default-badge { background: #2e1065; color: #c084fc; }
 
+.pos-column-required-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: #f1f5f9;
+  color: #475569;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid #cbd5e1;
+}
+body.dark-theme .pos-column-required-badge,
+[data-theme="dark"] .pos-column-required-badge {
+  background: #1e293b;
+  border-color: #334155;
+  color: #94a3b8;
+}
+
+.pos-col-custom-check.is-fixed {
+  background: #2563eb !important;
+  border-color: #1d4ed8 !important;
+  cursor: not-allowed;
+  opacity: 0.9;
+}
+
+.pos-column-checkbox-item.is-fixed-item {
+  cursor: default;
+}
+.pos-column-checkbox-item.is-fixed-item:hover {
+  background: #f8fafc;
+}
+body.dark-theme .pos-column-checkbox-item.is-fixed-item:hover,
+[data-theme="dark"] .pos-column-checkbox-item.is-fixed-item:hover {
+  background: #0f1d33;
+}
+
 /* Footer */
 .pos-column-popover-footer {
   padding: 12px 16px;

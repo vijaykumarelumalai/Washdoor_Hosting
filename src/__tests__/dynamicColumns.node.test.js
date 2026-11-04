@@ -9,8 +9,11 @@ import {
   ORDER_COLUMNS,
   DEFAULT_COLUMN_IDS,
   ALL_COLUMN_IDS,
+  REQUIRED_COLUMN_IDS,
+  FIXED_COLUMN_IDS,
   COLUMN_STORAGE_KEY,
   sanitizeAndOrderColumns,
+  enforceRequiredColumns,
 } from '../config/orderColumnsConfig.js';
 import {
   loadColumnPreferences,
@@ -131,10 +134,37 @@ describe('Washdoor Dynamic Column Management System', () => {
     assert.ok(content.includes('.pos-column-list-scroll'));
     assert.ok(content.includes('.pos-column-checkbox-item'));
     assert.ok(content.includes('.pos-column-default-badge'));
+    assert.ok(content.includes('.pos-column-required-badge'), 'Contains pos-column-required-badge');
+    assert.ok(content.includes('.is-fixed'), 'Contains is-fixed for required checkboxes');
 
     // Check all 17 column classes exist
     ALL_COLUMN_IDS.forEach((id) => {
       assert.ok(content.includes(`.col-${id}`), `Missing CSS class for .col-${id}`);
     });
+  });
+
+  test('10. Fixed Required Columns: Order ID, Customer, and Actions are permanent', () => {
+    assert.deepEqual(REQUIRED_COLUMN_IDS, ['order_id', 'customer', 'actions']);
+    assert.deepEqual(FIXED_COLUMN_IDS, ['order_id', 'customer', 'actions']);
+
+    const orderIdCol = ORDER_COLUMNS.find((c) => c.id === 'order_id');
+    const customerCol = ORDER_COLUMNS.find((c) => c.id === 'customer');
+    const actionsCol = ORDER_COLUMNS.find((c) => c.id === 'actions');
+
+    assert.equal(orderIdCol.required, true);
+    assert.equal(customerCol.required, true);
+    assert.equal(actionsCol.required, true);
+  });
+
+  test('11. enforceRequiredColumns: guarantees Order ID, Customer, and Actions are always present', () => {
+    // Empty list
+    const fromEmpty = enforceRequiredColumns([]);
+    assert.ok(fromEmpty.includes('order_id'));
+    assert.ok(fromEmpty.includes('customer'));
+    assert.ok(fromEmpty.includes('actions'));
+
+    // Partial list without required columns
+    const fromOther = enforceRequiredColumns(['status', 'driver']);
+    assert.deepEqual(fromOther, ['order_id', 'customer', 'status', 'actions', 'driver']);
   });
 });

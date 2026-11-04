@@ -7,6 +7,8 @@ export const ORDER_COLUMNS = [
     id: 'order_id',
     label: 'Order ID',
     default: true,
+    required: true,
+    fixed: true,
     purpose: 'Unique order number',
     minWidth: '130px',
   },
@@ -14,6 +16,8 @@ export const ORDER_COLUMNS = [
     id: 'customer',
     label: 'Customer',
     default: true,
+    required: true,
+    fixed: true,
     purpose: 'Customer name and mobile number',
     minWidth: '180px',
   },
@@ -63,6 +67,8 @@ export const ORDER_COLUMNS = [
     id: 'actions',
     label: 'Actions',
     default: true,
+    required: true,
+    fixed: true,
     purpose: 'Bill, View, Edit, Side Edit and WhatsApp icon',
     minWidth: '350px',
     align: 'right',
@@ -130,6 +136,10 @@ export const ORDER_COLUMNS = [
 export const DEFAULT_COLUMN_IDS = ORDER_COLUMNS.filter((c) => c.default).map((c) => c.id);
 export const ALL_COLUMN_IDS = ORDER_COLUMNS.map((c) => c.id);
 
+// ── Required/Fixed columns: Order ID, Customer, and Actions must always remain visible ──
+export const REQUIRED_COLUMN_IDS = ORDER_COLUMNS.filter((c) => c.required).map((c) => c.id);
+export const FIXED_COLUMN_IDS = REQUIRED_COLUMN_IDS;
+
 export const COLUMN_STORAGE_KEY = 'washdoor_orders_column_preferences_v1';
 
 /**
@@ -144,4 +154,15 @@ export function sanitizeAndOrderColumns(selectedIds) {
   const idSet = new Set(selectedIds);
   // Return in strict predefined sequence 1 to 17
   return ORDER_COLUMNS.filter((c) => idSet.has(c.id)).map((c) => c.id);
+}
+
+/**
+ * Ensures required/fixed columns (Order ID, Customer, Actions) are always present.
+ * @param {string[]} selectedIds
+ * @returns {string[]}
+ */
+export function enforceRequiredColumns(selectedIds) {
+  const current = Array.isArray(selectedIds) ? selectedIds : DEFAULT_COLUMN_IDS;
+  const merged = new Set([...current, ...REQUIRED_COLUMN_IDS]);
+  return sanitizeAndOrderColumns([...merged]);
 }
