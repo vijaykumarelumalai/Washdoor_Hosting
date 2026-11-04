@@ -25,6 +25,16 @@ import {
 } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
 import { exportToExcel, exportToPdf, exportToCsv } from '../services/exportService';
+import {
+  ORDER_COLUMNS,
+  DEFAULT_COLUMN_IDS,
+  ALL_COLUMN_IDS,
+  sanitizeAndOrderColumns,
+} from '../config/orderColumnsConfig';
+import {
+  loadColumnPreferences,
+  saveColumnPreferences,
+} from '../services/columnPreferenceService';
 import '../styles/POSModule.css';
 
 const DEFAULT_PRODUCTS = [
@@ -110,6 +120,77 @@ export default function POSModule({
   const [expandedServicesOrderId, setExpandedServicesOrderId] = useState(null);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const tableScrollRef = useRef(null);
+
+  // ── Dynamic Column Management System ──
+  const [selectedColumns, setSelectedColumns] = useState(DEFAULT_COLUMN_IDS);
+  const [draftColumns, setDraftColumns] = useState(DEFAULT_COLUMN_IDS);
+
+  useEffect(() => {
+    let mounted = true;
+    loadColumnPreferences().then((cols) => {
+      if (mounted && Array.isArray(cols) && cols.length > 0) {
+        setSelectedColumns(cols);
+        setDraftColumns(cols);
+      }
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  const handleToggleColumn = (colId) => {
+    setDraftColumns((prev) => {
+      const exists = prev.includes(colId);
+      let updated;
+      if (exists) {
+        if (prev.length <= 1) {
+          showToast?.('⚠️ At least one column must remain visible');
+          return prev;
+        }
+        updated = prev.filter((id) => id !== colId);
+      } else {
+        updated = [...prev, colId];
+      }
+      const ordered = sanitizeAndOrderColumns(updated);
+      setSelectedColumns(ordered);
+      saveColumnPreferences(ordered);
+      return ordered;
+    });
+  };
+
+  const handleSelectAllColumns = () => {
+    const all = [...ALL_COLUMN_IDS];
+    setDraftColumns(all);
+    setSelectedColumns(all);
+    saveColumnPreferences(all);
+    showToast?.('✓ All 17 columns selected');
+  };
+
+  const handleResetDefaultColumns = () => {
+    const defs = [...DEFAULT_COLUMN_IDS];
+    setDraftColumns(defs);
+    setSelectedColumns(defs);
+    saveColumnPreferences(defs);
+    showToast?.('✓ Restored 9 default columns');
+  };
+
+  const handleOpenWhatsApp = (order) => {
+    const rawMobile = order.mobile_number || order.customer?.mobile_number || '';
+    const digits = rawMobile.replace(/\D/g, '');
+    const tenDigits = digits.length >= 10 ? digits.slice(-10) : digits;
+    if (!/^[6-9]\d{9}$/.test(tenDigits)) {
+      showToast?.('⚠️ Invalid or missing 10-digit mobile number for WhatsApp');
+      return;
+    }
+    const custName = order.customer_name || order.customer?.customer_name || 'Valued Customer';
+    const orderNum = order.order_number || order.order_id || order.id || 'your order';
+    const status = normalizeOrderStatus(order.order_status || order.status || 'Received');
+    const total = order.total_amount ?? order.total ?? '';
+    const msg = `Hello ${custName}! 👋\nRegarding your Washdoor laundry order ${orderNum} (Status: ${status}${total ? `, Total: ₹${total}` : ''}):\nWe are pleased to serve you. Please let us know if you need any assistance!\n— Washdoor Team`;
+    const url = `https://wa.me/91${tenDigits}?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+    showToast?.(`💬 Opened WhatsApp chat for ${custName} (+91 ${tenDigits})`);
+  };
+
+  const isColVisible = (colId) => selectedColumns.includes(colId);
 
   // Inline Order Edit Modal State (List View Fields, Read-Only when Ready)
   const [editingOrderRecord, setEditingOrderRecord] = useState(null);
@@ -689,7 +770,7 @@ export default function POSModule({
   // Close top dropdowns on outside click or Escape key
   useEffect(() => {
     const handleOutsideClick = (e) => {
-      if (!e.target.closest('.pos-filter-dropdown-container')) {
+      if (!e.target.closest('.pos-filter-dropdown-container') && !e.target.closest('.pos-column-dropdown-container')) {
         setActiveTopDropdown(null);
       }
     };
@@ -1019,6 +1100,8 @@ export default function POSModule({
       showToast?.('No orders available to export.');
       return;
     }
+
+    // Build the full data row for every possible column
     const formatted = orders.map((o) => {
       let tot = Number(o.total_amount) || 0;
       if (tot === 0 && Array.isArray(o.items) && o.items.length > 0) {
@@ -1027,10 +1110,13 @@ export default function POSModule({
       const adv = Number(o.advance_paid) || 0;
       const bal = o.balance_due !== undefined ? Number(o.balance_due) : Math.max(0, tot - adv);
       const pieces = Number(o.total_pieces || o.item_count) || (Array.isArray(o.items) ? o.items.reduce((s, it) => s + (Number(it.qty) || 1), 0) : 1);
+      const custAddr = [o.address, o.customer?.address, o.customer?.address_line1].filter(Boolean).join(', ') || '-';
+      const orderDateVal = o.created_at ? new Date(o.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : (o.order_date || '-');
       return {
         order_number: o.order_number || (o.id ? `ORD-${o.id}` : 'ORD-00000'),
         customer_name: o.customer_name || o.customer?.customer_name || 'Walk-in Customer',
         mobile_number: o.mobile_number || o.customer?.mobile_number || '-',
+        address: custAddr,
         service: o.service_category || o.service_type || 'Wash & Steam Press',
         status: o.order_status || o.status || 'Received',
         pieces,
@@ -1038,26 +1124,53 @@ export default function POSModule({
         advance: adv,
         balance: bal,
         payment_status: bal <= 0 && tot > 0 ? 'Paid' : adv > 0 ? 'Partial' : tot === 0 ? 'Promo' : 'Unpaid',
+        order_date: orderDateVal,
         delivery_date: (o.target_delivery_date || o.delivery_date || '').slice(0, 10) || '-',
         driver: o.assigned_driver || o.assigned_rider || 'Unassigned',
+        comments: o.internal_notes || o.comments || o.notes || o.special_instructions || '-',
+        pincode: o.pincode || o.customer?.pincode || o.customer?.pin_code || '-',
+        email: o.email || o.customer?.email || '-',
+        business_name: o.business_name || o.customer?.business_name || '-',
+        communication_pref: o.communication_pref || o.customer?.communication_pref || '-',
+        dob: o.dob || o.customer?.dob || '-',
+        tax_exemption: o.tax_exemption !== undefined ? (o.tax_exemption ? 'Yes' : 'No') : (o.customer?.tax_exemption !== undefined ? (o.customer.tax_exemption ? 'Yes' : 'No') : '-'),
       };
     });
 
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const cols = [
-      { header: 'Order ID', key: 'order_number', width: 28 },
-      { header: 'Customer Name', key: 'customer_name', width: 38 },
-      { header: 'Mobile Number', key: 'mobile_number', width: 30 },
-      { header: 'Service Type', key: 'service', width: 34 },
-      { header: 'Status', key: 'status', width: 24 },
-      { header: 'Pieces', key: 'pieces', width: 16 },
-      { header: `Total (${currencySymbol})`, key: 'total', width: 24, accessor: (d) => `${currencySymbol}${d.total.toFixed(2)}` },
-      { header: `Balance (${currencySymbol})`, key: 'balance', width: 24, accessor: (d) => `${currencySymbol}${d.balance.toFixed(2)}` },
-      { header: 'Payment Status', key: 'payment_status', width: 24 },
-      { header: 'Target Delivery', key: 'delivery_date', width: 26 },
-      { header: 'Driver', key: 'driver', width: 28 },
-    ];
+    // Map each visible column ID → export column definition (actions is UI-only, skip)
+    const EXPORT_COL_MAP = {
+      order_id:          { header: 'Order ID',           key: 'order_number',      width: 28 },
+      customer:          { header: 'Customer Name',      key: 'customer_name',     width: 38 },
+      address:           { header: 'Address',            key: 'address',           width: 36 },
+      services:          { header: 'Service Type',       key: 'service',           width: 32 },
+      status:            { header: 'Status',             key: 'status',            width: 22 },
+      payment:           { header: `Total (${currencySymbol})`, key: 'total',      width: 22, accessor: (d) => `${currencySymbol}${Number(d.total).toFixed(2)}` },
+      order_details:     { header: 'Order Date',         key: 'order_date',        width: 26 },
+      pickup_delivery:   { header: 'Delivery Date',      key: 'delivery_date',     width: 26 },
+      actions:           null, // UI-only – skip in export
+      driver:            { header: 'Driver',             key: 'driver',            width: 28 },
+      comments:          { header: 'Comments',           key: 'comments',          width: 36 },
+      pincode:           { header: 'PIN Code',           key: 'pincode',           width: 16 },
+      email:             { header: 'Email',              key: 'email',             width: 32 },
+      business_name:     { header: 'Business Name',      key: 'business_name',     width: 30 },
+      communication_pref:{ header: 'Comm. Preference',  key: 'communication_pref',width: 24 },
+      dob:               { header: 'Date of Birth',      key: 'dob',               width: 20 },
+      tax_exemption:     { header: 'Tax Exemption',      key: 'tax_exemption',     width: 20 },
+    };
 
+    // Build columns from currently selected columns (preserves UI order, skips actions)
+    const cols = selectedColumns.map((id) => EXPORT_COL_MAP[id]).filter(Boolean);
+    // Always include mobile number after customer if customer col is visible (useful context)
+    const hasMobile = !cols.find((c) => c.key === 'mobile_number');
+    if (hasMobile && selectedColumns.includes('customer')) {
+      const custIdx = cols.findIndex((c) => c.key === 'customer_name');
+      cols.splice(custIdx + 1, 0, { header: 'Mobile', key: 'mobile_number', width: 26 });
+    }
+
+    // PDF uses a width-adjusted subset (max ~8 cols for readability)
+    const pdfCols = cols.slice(0, 8);
+
+    const dateStr = new Date().toISOString().slice(0, 10);
     try {
       if (format === 'EXCEL') {
         exportToExcel({
@@ -1075,16 +1188,7 @@ export default function POSModule({
           title: 'Washdoor POS Orders Register',
           subtitle: `Counter Intake & Live Order Statuses • Tenant: Ranipet Store #1`,
           data: formatted,
-          columns: [
-            { header: 'Order ID', key: 'order_number', width: 26 },
-            { header: 'Customer', key: 'customer_name', width: 38 },
-            { header: 'Service', key: 'service', width: 32 },
-            { header: 'Status', key: 'status', width: 22 },
-            { header: 'Pcs', key: 'pieces', width: 14 },
-            { header: 'Total', key: 'total', width: 22, accessor: (d) => `${currencySymbol}${d.total}` },
-            { header: 'Due', key: 'balance', width: 22, accessor: (d) => `${currencySymbol}${d.balance}` },
-            { header: 'Payment', key: 'payment_status', width: 20 },
-          ],
+          columns: pdfCols,
           module: 'POS Orders & Counter',
           tenant: 'Ranipet Store #1',
           currencySymbol,
@@ -1450,6 +1554,104 @@ export default function POSModule({
         </div>
 
         <div className="pos-status-actions-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Column Category Dropdown */}
+          <div className="pos-column-dropdown-container" style={{ position: 'relative' }}>
+            <button
+              type="button"
+              className={`pos-toolbar-btn ${activeTopDropdown === 'columns' ? 'active' : ''}`}
+              onClick={() => setActiveTopDropdown((prev) => (prev === 'columns' ? null : 'columns'))}
+              style={{
+                background: '#fff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '8px',
+                padding: '8px 14px',
+                color: '#334155',
+                fontWeight: 600,
+                fontSize: '12.5px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer'
+              }}
+              title="Configure visible columns"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <line x1="9" y1="3" x2="9" y2="21" />
+                <line x1="15" y1="3" x2="15" y2="21" />
+              </svg>
+              <span>Column Category</span>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+
+            {activeTopDropdown === 'columns' && (
+              <div className="pos-column-popover-menu" onClick={(e) => e.stopPropagation()}>
+                <div className="pos-column-popover-header">
+                  <span className="pos-column-popover-title">
+                    {selectedColumns.length} of {ALL_COLUMN_IDS.length} columns selected
+                  </span>
+                  <button
+                    type="button"
+                    className="pos-column-select-all-btn"
+                    onClick={handleSelectAllColumns}
+                  >
+                    Select All
+                  </button>
+                </div>
+
+                <div className="pos-column-list-scroll">
+                  {ORDER_COLUMNS.map((col) => {
+                    const isChecked = selectedColumns.includes(col.id);
+                    return (
+                      <label
+                        key={col.id}
+                        className="pos-column-checkbox-item"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                        }}
+                      >
+                        <div className="pos-column-item-left">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleToggleColumn(col.id)}
+                            style={{ cursor: 'pointer', accentColor: '#2563eb' }}
+                          />
+                          <span>{col.label}</span>
+                        </div>
+                        {col.default && (
+                          <span className="pos-column-default-badge">(Default)</span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="pos-column-popover-footer">
+                  <button
+                    type="button"
+                    className="pos-column-btn-reset"
+                    onClick={handleResetDefaultColumns}
+                  >
+                    Reset Defaults
+                  </button>
+                  <button
+                    type="button"
+                    className="pos-column-btn-apply"
+                    onClick={() => {
+                      setActiveTopDropdown(null);
+                      showToast?.(`✓ Applied ${selectedColumns.length} columns`);
+                    }}
+                  >
+                    Apply Columns
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Filters Dropdown */}
           <div className="pos-filter-dropdown-container">
             <button
@@ -1755,14 +1957,25 @@ export default function POSModule({
                     <table className="pos-orders-table">
                     <thead>
                       <tr>
-                        <th scope="col">{t('th_order_id')}</th>
-                        <th scope="col">{t('th_customer')}</th>
-                        <th scope="col">{t('address_label')}</th>
-                        <th scope="col">{t('th_services')}</th>
-                        <th scope="col">{t('th_status')}</th>
-                        <th scope="col">{t('th_payment', 'Payment')}</th>
-                        <th scope="col">{t('th_pickup_delivery', 'Pickup & Delivery')}</th>
-                        <th scope="col" style={{ textAlign: 'right', paddingRight: '20px' }}>{t('th_actions')}</th>
+                        {ORDER_COLUMNS.filter((col) => selectedColumns.includes(col.id)).map((col) => (
+                          <th
+                            key={col.id}
+                            scope="col"
+                            className={`col-${col.id}`}
+                            style={col.id === 'actions' ? { textAlign: 'right', paddingRight: '20px' } : {}}
+                          >
+                            {col.id === 'order_id' ? t('th_order_id', col.label) :
+                             col.id === 'customer' ? t('th_customer', col.label) :
+                             col.id === 'address' ? t('address_label', col.label) :
+                             col.id === 'services' ? t('th_services', col.label) :
+                             col.id === 'status' ? t('th_status', col.label) :
+                             col.id === 'payment' ? t('th_payment', col.label) :
+                             col.id === 'order_details' ? t('th_order_details', col.label) :
+                             col.id === 'pickup_delivery' ? t('th_pickup_delivery', col.label) :
+                             col.id === 'actions' ? t('th_actions', col.label) :
+                             col.label}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
@@ -1866,210 +2079,105 @@ export default function POSModule({
                               style={isEditingThisOrder ? { background: '#f8fafc' } : {}}
                             >
                             {/* 1. Order ID Column (Prominent ID, Walk-In/On-Call Badge directly below, date & time removed) */}
-                            <td style={{ borderLeft: isEditingThisOrder ? '4px solid #2563eb' : `4px solid ${accentColor}`, paddingLeft: '14px', verticalAlign: 'top', paddingTop: '14px' }}>
-                              <div className="pos-ticket-cell" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                <span
-                                  className="pos-ticket-num"
-                                  onClick={() => setViewOrderTarget(ord)}
-                                  title={`Quick View Order ${orderNum}`}
-                                  style={{ cursor: 'pointer', fontWeight: 800, fontSize: '15px', color: '#1d4ed8' }}
-                                >
-                                  {orderNum}
-                                </span>
-                                <div style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '5px',
-                                  padding: '3px 8px',
-                                  borderRadius: '6px',
-                                  fontSize: '11.5px',
-                                  fontWeight: 650,
-                                  width: 'fit-content',
-                                  background: '#eff6ff',
-                                  color: '#2563eb',
-                                  border: '1px solid #dbeafe'
-                                }}>
-                                  {isOnCall ? (
-                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                                    </svg>
-                                  ) : (
-                                    <span style={{ fontSize: '12px', lineHeight: 1 }}>＋</span>
-                                  )}
-                                  <span>{orderTypeBadgeText}</span>
+                            {isColVisible('order_id') && (
+                              <td className="col-order_id" style={{ borderLeft: isEditingThisOrder ? '4px solid #2563eb' : `4px solid ${accentColor}`, paddingLeft: '14px', verticalAlign: 'top', paddingTop: '14px' }}>
+                                <div className="pos-ticket-cell" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                  <span
+                                    className="pos-ticket-num"
+                                    onClick={() => setViewOrderTarget(ord)}
+                                    title={`Quick View Order ${orderNum}`}
+                                    style={{ cursor: 'pointer', fontWeight: 800, fontSize: '15px', color: '#1d4ed8' }}
+                                  >
+                                    {orderNum}
+                                  </span>
+                                  <div style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    padding: '3px 8px',
+                                    borderRadius: '6px',
+                                    fontSize: '11.5px',
+                                    fontWeight: 650,
+                                    width: 'fit-content',
+                                    background: '#eff6ff',
+                                    color: '#2563eb',
+                                    border: '1px solid #dbeafe'
+                                  }}>
+                                    {isOnCall ? (
+                                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                                      </svg>
+                                    ) : (
+                                      <span style={{ fontSize: '12px', lineHeight: 1 }}>＋</span>
+                                    )}
+                                    <span>{orderTypeBadgeText}</span>
+                                  </div>
                                 </div>
-                              </div>
-                            </td>
+                              </td>
+                            )}
 
                             {/* 2. Customer (Avatar Circle, Name & Number) */}
-                            <td style={{ verticalAlign: 'top', paddingTop: '14px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <div style={{
-                                  width: '34px',
-                                  height: '34px',
-                                  borderRadius: '50%',
-                                  background: avatarTheme.bg,
-                                  color: avatarTheme.color,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontWeight: 700,
-                                  fontSize: '13.5px',
-                                  flexShrink: 0,
-                                  boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
-                                }}>
-                                  {custName.charAt(0).toUpperCase() || 'C'}
-                                </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                  <div style={{ fontWeight: 750, color: '#0f172a', fontSize: '13.5px' }}>
-                                    {custName}
+                            {isColVisible('customer') && (
+                              <td className="col-customer" style={{ verticalAlign: 'top', paddingTop: '14px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                  <div style={{
+                                    width: '34px',
+                                    height: '34px',
+                                    borderRadius: '50%',
+                                    background: avatarTheme.bg,
+                                    color: avatarTheme.color,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontWeight: 700,
+                                    fontSize: '13.5px',
+                                    flexShrink: 0,
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+                                  }}>
+                                    {custName.charAt(0).toUpperCase() || 'C'}
                                   </div>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#475569' }}>
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                                    </svg>
-                                    <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{phone}</span>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                    <div style={{ fontWeight: 750, color: '#0f172a', fontSize: '13.5px' }}>
+                                      {custName}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#475569' }}>
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                                      </svg>
+                                      <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{phone}</span>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            </td>
+                              </td>
+                            )}
 
                             {/* 3. Address (Red Map Pin & Text) */}
-                            <td style={{ maxWidth: '210px', verticalAlign: 'top', paddingTop: '14px' }}>
-                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', lineHeight: 1.35 }}>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="#ef4444" stroke="#dc2626" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
-                                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                                  <circle cx="12" cy="10" r="3" fill="#ffffff"></circle>
-                                </svg>
-                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                  <span style={{ fontWeight: 650, color: '#1e293b', fontSize: '13px' }}>
-                                    {custAddress.split(',')[0]?.trim() || custAddress}
-                                  </span>
-                                  {custAddress.includes(',') && (
-                                    <span style={{ fontSize: '11.5px', color: '#64748b', marginTop: '1px' }}>
-                                      {custAddress.split(',').slice(1).join(',').trim()}
+                            {isColVisible('address') && (
+                              <td className="col-address" style={{ maxWidth: '210px', verticalAlign: 'top', paddingTop: '14px' }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', lineHeight: 1.35 }}>
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="#ef4444" stroke="#dc2626" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                    <circle cx="12" cy="10" r="3" fill="#ffffff"></circle>
+                                  </svg>
+                                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <span style={{ fontWeight: 650, color: '#1e293b', fontSize: '13px' }}>
+                                      {custAddress.split(',')[0]?.trim() || custAddress}
                                     </span>
-                                  )}
+                                    {custAddress.includes(',') && (
+                                      <span style={{ fontSize: '11.5px', color: '#64748b', marginTop: '1px' }}>
+                                        {custAddress.split(',').slice(1).join(',').trim()}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            </td>
+                              </td>
+                            )}
 
                             {/* 4. Services Allocated (Neat badges or Assign Pickup button for On-Call) */}
-                            <td style={{ verticalAlign: 'top', paddingTop: '14px', maxWidth: '175px' }}>
-                              {servicesAllocated.length === 0 ? (
-                                isOnCall ? (
-                                  isPickupAssigned ? (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setAssignDriverTarget(ord);
-                                      }}
-                                      title={`Assigned to ${ord.assigned_driver || 'Driver'}. Click to re-assign`}
-                                      style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '6px',
-                                        padding: '7px 14px',
-                                        borderRadius: '8px',
-                                        border: '1.5px solid #22c55e',
-                                        background: '#f0fdf4',
-                                        color: '#15803d',
-                                        fontSize: '12px',
-                                        fontWeight: 650,
-                                        cursor: 'pointer',
-                                        boxShadow: '0 1px 2px rgba(34,197,94,0.1)',
-                                        transition: 'all 0.15s ease',
-                                        whiteSpace: 'nowrap'
-                                      }}
-                                    >
-                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                                        <polyline points="20 6 9 17 4 12" />
-                                      </svg>
-                                      <span>Assigned for Pickup</span>
-                                    </button>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setAssignDriverTarget(ord);
-                                      }}
-                                      title={`Assign Pickup for ${orderNum}`}
-                                      style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '8px',
-                                        padding: '7px 16px',
-                                        borderRadius: '8px',
-                                        border: '1.5px solid #60a5fa',
-                                        background: '#ffffff',
-                                        color: '#2563eb',
-                                        fontSize: '12px',
-                                        fontWeight: 600,
-                                        cursor: 'pointer',
-                                        boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
-                                        transition: 'all 0.15s ease',
-                                        whiteSpace: 'nowrap'
-                                      }}
-                                    >
-                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                        <rect x="1" y="3" width="15" height="13"></rect>
-                                        <polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon>
-                                        <circle cx="5.5" cy="18.5" r="2.5"></circle>
-                                        <circle cx="18.5" cy="18.5" r="2.5"></circle>
-                                      </svg>
-                                      <span>Assign Pickup</span>
-                                    </button>
-                                  )
-                                ) : (
-                                  <span style={{ fontSize: '12px', color: '#64748b', fontStyle: 'italic', display: 'inline-block', paddingTop: '4px' }}>
-                                    No services allocated
-                                  </span>
-                                )
-                              ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', width: 'fit-content' }}>
-                                  {servicesAllocated.slice(0, 3).map((srvItem, sIdx) => (
-                                    <div key={sIdx} style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'space-between',
-                                      gap: '8px',
-                                      background: '#f8fafc',
-                                      border: '1px solid #e2e8f0',
-                                      borderRadius: '6px',
-                                      padding: '3px 8px',
-                                      fontSize: '12px',
-                                      color: '#1e293b',
-                                      width: 'fit-content',
-                                      whiteSpace: 'nowrap'
-                                    }}>
-                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                                        <span>{srvItem.icon || '👕'}</span>
-                                        <span>{srvItem.name}</span>
-                                      </span>
-                                      <span style={{ fontWeight: 700, color: '#2563eb', background: '#dbeafe', padding: '1px 6px', borderRadius: '4px', fontSize: '11px' }}>
-                                        x{srvItem.count}
-                                      </span>
-                                    </div>
-                                  ))}
-                                  {servicesAllocated.length > 3 && (
-                                    <span style={{
-                                      fontSize: '11px',
-                                      fontWeight: 700,
-                                      color: '#2563eb',
-                                      background: '#eff6ff',
-                                      border: '1px solid #bfdbfe',
-                                      padding: '2px 6px',
-                                      borderRadius: '4px',
-                                      width: 'fit-content'
-                                    }}>
-                                      +{servicesAllocated.length - 3} more
-                                    </span>
-                                  )}
-                                  {isOnCall && (
+                            {isColVisible('services') && (
+                              <td className="col-services" style={{ verticalAlign: 'top', paddingTop: '14px', maxWidth: '175px' }}>
+                                {servicesAllocated.length === 0 ? (
+                                  isOnCall ? (
                                     isPickupAssigned ? (
                                       <button
                                         type="button"
@@ -2079,25 +2187,24 @@ export default function POSModule({
                                         }}
                                         title={`Assigned to ${ord.assigned_driver || 'Driver'}. Click to re-assign`}
                                         style={{
-                                          marginTop: '3px',
                                           display: 'inline-flex',
                                           alignItems: 'center',
                                           justifyContent: 'center',
                                           gap: '6px',
-                                          padding: '5px 12px',
-                                          borderRadius: '6px',
-                                          background: '#f0fdf4',
+                                          padding: '7px 14px',
+                                          borderRadius: '8px',
                                           border: '1.5px solid #22c55e',
+                                          background: '#f0fdf4',
                                           color: '#15803d',
-                                          fontSize: '11.5px',
+                                          fontSize: '12px',
                                           fontWeight: 650,
                                           cursor: 'pointer',
                                           boxShadow: '0 1px 2px rgba(34,197,94,0.1)',
-                                          width: 'fit-content',
+                                          transition: 'all 0.15s ease',
                                           whiteSpace: 'nowrap'
                                         }}
                                       >
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                                           <polyline points="20 6 9 17 4 12" />
                                         </svg>
                                         <span>Assigned for Pickup</span>
@@ -2111,25 +2218,24 @@ export default function POSModule({
                                         }}
                                         title={`Assign Pickup for ${orderNum}`}
                                         style={{
-                                          marginTop: '3px',
                                           display: 'inline-flex',
                                           alignItems: 'center',
                                           justifyContent: 'center',
-                                          gap: '6px',
-                                          padding: '5px 12px',
-                                          borderRadius: '6px',
-                                          background: '#ffffff',
+                                          gap: '8px',
+                                          padding: '7px 16px',
+                                          borderRadius: '8px',
                                           border: '1.5px solid #60a5fa',
+                                          background: '#ffffff',
                                           color: '#2563eb',
-                                          fontSize: '11.5px',
-                                          fontWeight: 650,
+                                          fontSize: '12px',
+                                          fontWeight: 600,
                                           cursor: 'pointer',
                                           boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
-                                          width: 'fit-content',
+                                          transition: 'all 0.15s ease',
                                           whiteSpace: 'nowrap'
                                         }}
                                       >
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                           <rect x="1" y="3" width="15" height="13"></rect>
                                           <polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon>
                                           <circle cx="5.5" cy="18.5" r="2.5"></circle>
@@ -2138,361 +2244,636 @@ export default function POSModule({
                                         <span>Assign Pickup</span>
                                       </button>
                                     )
-                                  )}
-                                </div>
-                              )}
-                            </td>
+                                  ) : (
+                                    <span style={{ fontSize: '12px', color: '#64748b', fontStyle: 'italic', display: 'inline-block', paddingTop: '4px' }}>
+                                      No services allocated
+                                    </span>
+                                  )
+                                ) : (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', width: 'fit-content' }}>
+                                    {servicesAllocated.slice(0, 3).map((srvItem, sIdx) => (
+                                      <div key={sIdx} style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '8px',
+                                        background: '#f8fafc',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '6px',
+                                        padding: '3px 8px',
+                                        fontSize: '12px',
+                                        color: '#1e293b',
+                                        width: 'fit-content',
+                                        whiteSpace: 'nowrap'
+                                      }}>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                          <span>{srvItem.icon || '👕'}</span>
+                                          <span>{srvItem.name}</span>
+                                        </span>
+                                        <span style={{ fontWeight: 700, color: '#2563eb', background: '#dbeafe', padding: '1px 6px', borderRadius: '4px', fontSize: '11px' }}>
+                                          x{srvItem.count}
+                                        </span>
+                                      </div>
+                                    ))}
+                                    {servicesAllocated.length > 3 && (
+                                      <span style={{
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        color: '#2563eb',
+                                        background: '#eff6ff',
+                                        border: '1px solid #bfdbfe',
+                                        padding: '2px 6px',
+                                        borderRadius: '4px',
+                                        width: 'fit-content'
+                                      }}>
+                                        +{servicesAllocated.length - 3} more
+                                      </span>
+                                    )}
+                                    {isOnCall && (
+                                      isPickupAssigned ? (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setAssignDriverTarget(ord);
+                                          }}
+                                          title={`Assigned to ${ord.assigned_driver || 'Driver'}. Click to re-assign`}
+                                          style={{
+                                            marginTop: '3px',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '6px',
+                                            padding: '5px 12px',
+                                            borderRadius: '6px',
+                                            background: '#f0fdf4',
+                                            border: '1.5px solid #22c55e',
+                                            color: '#15803d',
+                                            fontSize: '11.5px',
+                                            fontWeight: 650,
+                                            cursor: 'pointer',
+                                            boxShadow: '0 1px 2px rgba(34,197,94,0.1)',
+                                            width: 'fit-content',
+                                            whiteSpace: 'nowrap'
+                                          }}
+                                        >
+                                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                            <polyline points="20 6 9 17 4 12" />
+                                          </svg>
+                                          <span>Assigned for Pickup</span>
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setAssignDriverTarget(ord);
+                                          }}
+                                          title={`Assign Pickup for ${orderNum}`}
+                                          style={{
+                                            marginTop: '3px',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '6px',
+                                            padding: '5px 12px',
+                                            borderRadius: '6px',
+                                            background: '#ffffff',
+                                            border: '1.5px solid #60a5fa',
+                                            color: '#2563eb',
+                                            fontSize: '11.5px',
+                                            fontWeight: 650,
+                                            cursor: 'pointer',
+                                            boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
+                                            width: 'fit-content',
+                                            whiteSpace: 'nowrap'
+                                          }}
+                                        >
+                                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                            <rect x="1" y="3" width="15" height="13"></rect>
+                                            <polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon>
+                                            <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                                            <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                                          </svg>
+                                          <span>Assign Pickup</span>
+                                        </button>
+                                      )
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                            )}
 
                             {/* 5. Status (Icon badge & processing subtext) */}
-                            <td style={{ verticalAlign: 'top', paddingTop: '14px' }}>
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
-                                <div style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '7px',
-                                  padding: '5px 12px',
-                                  borderRadius: '8px',
-                                  fontSize: '12.5px',
-                                  fontWeight: 650,
-                                  background: statusBg,
-                                  color: statusColor,
-                                  border: `1px solid ${statusBorder}`,
-                                  whiteSpace: 'nowrap'
-                                }}>
-                                  <span style={{ fontSize: '13px', lineHeight: 1 }}>
-                                    {workStatus === 'In Progress' ? '⏱' : workStatus === 'Cancelled' ? '✕' : workStatus === 'Ready' ? '✓' : workStatus === 'Delivered' ? '✓' : '📥'}
-                                  </span>
-                                  <span>
-                                    {workStatus === 'In Progress' ? t('status_progress') :
-                                     workStatus === 'Ready' ? t('status_ready') :
-                                     workStatus === 'Delivered' ? t('status_delivered') :
-                                     workStatus === 'Cancelled' ? t('status_cancelled') :
-                                     t('status_received')}
-                                  </span>
-                                </div>
-                              </div>
-                            </td>
-
-                            {/* 6. Payment (Total Bill, Payment Status Pill, and Mode) */}
-                            <td style={{ verticalAlign: 'top', paddingTop: '14px', whiteSpace: 'nowrap' }}>
-                              {(() => {
-                                const rawTotal = Number(ord.total_amount || ord.grand_total || ord.bill_amount || ord.amount || 0);
-                                const rawAdvance = Number(ord.advance_paid || ord.payment?.advance || 0);
-                                const rawBalance = Number(ord.balance_due ?? (rawTotal - rawAdvance));
-                                const payStatus = String(
-                                  ord.payment_status ||
-                                  ord.payment?.status ||
-                                  (rawTotal > 0 && rawBalance <= 0 ? 'Paid' : rawAdvance > 0 ? 'Partially Paid' : 'Unpaid')
-                                );
-                                const payMode = ord.payment_method || ord.payment?.mode || 'Cash';
-
-                                const isPaid = payStatus.toLowerCase().includes('paid') && !payStatus.toLowerCase().includes('partial') && !payStatus.toLowerCase().includes('unpaid');
-                                const isPartial = payStatus.toLowerCase().includes('partial');
-
-                                return (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
-                                    <div style={{ fontWeight: 800, fontSize: '14px', color: '#0f172a' }}>
-                                      {currencySymbol}{rawTotal.toFixed(2)}
-                                    </div>
-                                    <div style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: '5px',
-                                      padding: '2px 8px',
-                                      borderRadius: '6px',
-                                      fontSize: '11px',
-                                      fontWeight: 700,
-                                      background: isPaid ? '#dcfce7' : isPartial ? '#fef3c7' : '#fee2e2',
-                                      color: isPaid ? '#15803d' : isPartial ? '#b45309' : '#b91c1c',
-                                      border: `1px solid ${isPaid ? '#bbf7d0' : isPartial ? '#fde68a' : '#fecaca'}`
-                                    }}>
-                                      <span>●</span>
-                                      <span>{isPaid ? 'Paid' : isPartial ? 'Partially Paid' : 'Unpaid'}</span>
-                                    </div>
-                                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>
-                                      via {payMode}
+                            {isColVisible('status') && (
+                              <td className="col-status" style={{ verticalAlign: 'top', paddingTop: '14px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
+                                  <div style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '7px',
+                                    padding: '5px 12px',
+                                    borderRadius: '8px',
+                                    fontSize: '12.5px',
+                                    fontWeight: 650,
+                                    background: statusBg,
+                                    color: statusColor,
+                                    border: `1px solid ${statusBorder}`,
+                                    whiteSpace: 'nowrap'
+                                  }}>
+                                    <span style={{ fontSize: '13px', lineHeight: 1 }}>
+                                      {workStatus === 'In Progress' ? '⏱' : workStatus === 'Cancelled' ? '✕' : workStatus === 'Ready' ? '✓' : workStatus === 'Delivered' ? '✓' : '📥'}
+                                    </span>
+                                    <span>
+                                      {workStatus === 'In Progress' ? t('status_progress') :
+                                       workStatus === 'Ready' ? t('status_ready') :
+                                       workStatus === 'Delivered' ? t('status_delivered') :
+                                       workStatus === 'Cancelled' ? t('status_cancelled') :
+                                       t('status_received')}
                                     </span>
                                   </div>
-                                );
-                              })()}
-                            </td>
+                                </div>
+                              </td>
+                            )}
 
-                            {/* 7. Pickup & Delivery (Stacked Action Buttons or Assigned status) */}
-                            <td style={{ verticalAlign: 'top', paddingTop: '14px' }}>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '130px' }}>
-                                {isPickupAssigned ? (
-                                  <>
-                                    <div style={{
-                                      display: 'flex',
-                                      flexDirection: 'column',
-                                      gap: '2px',
-                                      padding: '6px 10px',
-                                      background: '#f0fdf4',
-                                      border: '1.5px solid #86efac',
-                                      borderRadius: '8px',
-                                      boxShadow: '0 1px 2px rgba(34,197,94,0.08)'
-                                    }}>
-                                      <span style={{ fontSize: '10px', color: '#166534', fontWeight: 750, letterSpacing: '0.3px', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                        <span>🚚</span> Assigned for Pickup
-                                      </span>
-                                      <span style={{ fontSize: '12px', color: '#14532d', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {ord.assigned_driver || 'Driver Assigned'}
+                            {/* 6. Payment (Total Bill, Payment Status Pill, and Mode) */}
+                            {isColVisible('payment') && (
+                              <td className="col-payment" style={{ verticalAlign: 'top', paddingTop: '14px', whiteSpace: 'nowrap' }}>
+                                {(() => {
+                                  const rawTotal = Number(ord.total_amount || ord.grand_total || ord.bill_amount || ord.amount || 0);
+                                  const rawAdvance = Number(ord.advance_paid || ord.payment?.advance || 0);
+                                  const rawBalance = Number(ord.balance_due ?? (rawTotal - rawAdvance));
+                                  const payStatus = String(
+                                    ord.payment_status ||
+                                    ord.payment?.status ||
+                                    (rawTotal > 0 && rawBalance <= 0 ? 'Paid' : rawAdvance > 0 ? 'Partially Paid' : 'Unpaid')
+                                  );
+                                  const payMode = ord.payment_method || ord.payment?.mode || 'Cash';
+
+                                  const isPaid = payStatus.toLowerCase().includes('paid') && !payStatus.toLowerCase().includes('partial') && !payStatus.toLowerCase().includes('unpaid');
+                                  const isPartial = payStatus.toLowerCase().includes('partial');
+
+                                  return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                                      <div style={{ fontWeight: 800, fontSize: '14px', color: '#0f172a' }}>
+                                        {currencySymbol}{rawTotal.toFixed(2)}
+                                      </div>
+                                      <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                        padding: '2px 8px',
+                                        borderRadius: '6px',
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        background: isPaid ? '#dcfce7' : isPartial ? '#fef3c7' : '#fee2e2',
+                                        color: isPaid ? '#15803d' : isPartial ? '#b45309' : '#b91c1c',
+                                        border: `1px solid ${isPaid ? '#bbf7d0' : isPartial ? '#fde68a' : '#fecaca'}`
+                                      }}>
+                                        <span>●</span>
+                                        <span>{isPaid ? 'Paid' : isPartial ? 'Partially Paid' : 'Unpaid'}</span>
+                                      </div>
+                                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>
+                                        via {payMode}
                                       </span>
                                     </div>
-                                    <button
-                                      type="button"
-                                      className="pos-pickup-btn pos-driver-btn"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setAssignDriverTarget(ord);
-                                      }}
-                                      title={`Re-assign Driver for ${orderNum}`}
-                                      style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '6px',
-                                        padding: '5px 12px',
-                                        borderRadius: '7px',
-                                        border: '1.5px solid #94a3b8',
-                                        background: '#ffffff',
-                                        color: '#475569',
-                                        fontSize: '11.5px',
-                                        fontWeight: 600,
-                                        cursor: 'pointer',
-                                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                                        whiteSpace: 'nowrap'
-                                      }}
-                                    >
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                                        <circle cx="12" cy="7" r="4" />
-                                      </svg>
-                                      <span>{t('btn_change_driver', 'Change Driver')}</span>
-                                    </button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <button
-                                      type="button"
-                                      className="pos-pickup-btn pos-schedule-btn"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setScheduleOrderTarget(ord);
-                                      }}
-                                      title={`Schedule Pickup/Delivery for ${orderNum}`}
-                                      style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '6px',
-                                        padding: '6px 14px',
-                                        borderRadius: '8px',
-                                        border: '1.5px solid #60a5fa',
-                                        background: '#ffffff',
-                                        color: '#2563eb',
-                                        fontSize: '12px',
-                                        fontWeight: 600,
-                                        cursor: 'pointer',
-                                        boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
-                                        whiteSpace: 'nowrap'
-                                      }}
-                                    >
-                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                                        <line x1="16" y1="2" x2="16" y2="6" />
-                                        <line x1="8" y1="2" x2="8" y2="6" />
-                                        <line x1="3" y1="10" x2="21" y2="10" />
-                                      </svg>
-                                      <span>{t('btn_schedule', 'Schedule')}</span>
-                                    </button>
+                                  );
+                                })()}
+                              </td>
+                            )}
 
-                                    <button
-                                      type="button"
-                                      className="pos-pickup-btn pos-driver-btn"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setAssignDriverTarget(ord);
-                                      }}
-                                      title={`Assign Driver for ${orderNum}`}
-                                      style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '6px',
-                                        padding: '6px 14px',
-                                        borderRadius: '8px',
-                                        border: '1.5px solid #60a5fa',
-                                        background: '#ffffff',
-                                        color: '#2563eb',
-                                        fontSize: '12px',
-                                        fontWeight: 600,
-                                        cursor: 'pointer',
-                                        boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
-                                        whiteSpace: 'nowrap'
-                                      }}
-                                    >
-                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                                        <circle cx="12" cy="7" r="4" />
-                                      </svg>
-                                      <span>{t('btn_assign_driver', 'Assign Driver')}</span>
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </td>
+                            {/* 7. Order Details (Order timestamp and audit log) */}
+                            {isColVisible('order_details') && (
+                              <td className="col-order_details" style={{ verticalAlign: 'top', paddingTop: '14px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12.5px', fontWeight: 650, color: '#0f172a' }}>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <circle cx="12" cy="12" r="10" />
+                                      <polyline points="12 6 12 12 16 14" />
+                                    </svg>
+                                    <span>{capturedDateStr}</span>
+                                  </div>
+                                  <span style={{ fontSize: '11px', color: '#64748b', paddingLeft: '18px', fontWeight: 500 }}>
+                                    {capturedTimeStr}
+                                  </span>
+                                  <div
+                                    style={{
+                                      marginTop: '2px',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      padding: '2px 7px',
+                                      borderRadius: '5px',
+                                      background: '#f1f5f9',
+                                      border: '1px solid #e2e8f0',
+                                      fontSize: '10.5px',
+                                      fontWeight: 650,
+                                      color: '#475569',
+                                      width: 'fit-content'
+                                    }}
+                                    title={`Audit Log Trail: Order intake recorded on ${capturedDateStr}. Current status: ${workStatus}`}
+                                  >
+                                    <span style={{ color: '#16a34a', fontSize: '8px' }}>●</span>
+                                    <span>Audit: {workStatus === 'Received' ? 'Intake Logged' : `${workStatus} Logged`}</span>
+                                  </div>
+                                </div>
+                              </td>
+                            )}
 
-                            {/* 9. Actions (Bill, View, Edit buttons) */}
-                            <td style={{ textAlign: 'right', paddingRight: '16px', verticalAlign: 'top', paddingTop: '14px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
+                            {/* 8. Pickup & Delivery (Compact Action Buttons & Assigned status) */}
+                            {isColVisible('pickup_delivery') && (
+                              <td className="col-pickup_delivery" style={{ verticalAlign: 'top', paddingTop: '14px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '120px' }}>
+                                  {isPickupAssigned ? (
+                                    <>
+                                      <div style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '1px',
+                                        padding: '4px 8px',
+                                        background: '#f0fdf4',
+                                        border: '1px solid #86efac',
+                                        borderRadius: '6px',
+                                        boxShadow: '0 1px 2px rgba(34,197,94,0.06)'
+                                      }}>
+                                        <span style={{ fontSize: '9px', color: '#166534', fontWeight: 750, letterSpacing: '0.2px', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                          <span>🚚</span> Assigned for Pickup
+                                        </span>
+                                        <span style={{ fontSize: '11px', color: '#14532d', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                          {ord.assigned_driver || 'Driver Assigned'}
+                                        </span>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        className="pos-pickup-btn pos-driver-btn"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setAssignDriverTarget(ord);
+                                        }}
+                                        title={`Re-assign Driver for ${orderNum}`}
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          gap: '4px',
+                                          padding: '3px 8px',
+                                          height: '25px',
+                                          borderRadius: '6px',
+                                          border: '1px solid #94a3b8',
+                                          background: '#ffffff',
+                                          color: '#475569',
+                                          fontSize: '11px',
+                                          fontWeight: 600,
+                                          cursor: 'pointer',
+                                          boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                                          whiteSpace: 'nowrap'
+                                        }}
+                                      >
+                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                          <circle cx="12" cy="7" r="4" />
+                                        </svg>
+                                        <span>{t('btn_change_driver', 'Change Driver')}</span>
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <button
+                                        type="button"
+                                        className="pos-pickup-btn pos-schedule-btn"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setScheduleOrderTarget(ord);
+                                        }}
+                                        title={`Schedule Pickup/Delivery for ${orderNum}`}
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          gap: '4px',
+                                          padding: '3px 8px',
+                                          height: '25px',
+                                          borderRadius: '6px',
+                                          border: '1px solid #60a5fa',
+                                          background: '#ffffff',
+                                          color: '#2563eb',
+                                          fontSize: '11px',
+                                          fontWeight: 600,
+                                          cursor: 'pointer',
+                                          boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
+                                          whiteSpace: 'nowrap'
+                                        }}
+                                      >
+                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                          <line x1="16" y1="2" x2="16" y2="6" />
+                                          <line x1="8" y1="2" x2="8" y2="6" />
+                                          <line x1="3" y1="10" x2="21" y2="10" />
+                                        </svg>
+                                        <span>{t('btn_schedule', 'Schedule')}</span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        className="pos-pickup-btn pos-driver-btn"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setAssignDriverTarget(ord);
+                                        }}
+                                        title={`Assign Driver for ${orderNum}`}
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          gap: '4px',
+                                          padding: '3px 8px',
+                                          height: '25px',
+                                          borderRadius: '6px',
+                                          border: '1px solid #60a5fa',
+                                          background: '#ffffff',
+                                          color: '#2563eb',
+                                          fontSize: '11px',
+                                          fontWeight: 600,
+                                          cursor: 'pointer',
+                                          boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
+                                          whiteSpace: 'nowrap'
+                                        }}
+                                      >
+                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                          <circle cx="12" cy="7" r="4" />
+                                        </svg>
+                                        <span>{t('btn_assign_driver', 'Assign Driver')}</span>
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            )}
+
+                            {/* 9. Actions (Icon-based: Bill, View, WhatsApp, Edit, Side Edit) */}
+                            {isColVisible('actions') && (
+                              <td className="col-actions" style={{ textAlign: 'right', paddingRight: '14px', verticalAlign: 'top', paddingTop: '14px' }}>
+                                <div className="pos-icon-action-group">
+                                  {/* Bill */}
                                   <button
                                     type="button"
-                                    className="pos-table-action-btn btn-bill"
+                                    className="pos-icon-action-btn pos-btn-bill btn-bill"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setReceiptOrderTarget(ord);
                                     }}
-                                    title="View Bill / Invoice"
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      gap: '5px',
-                                      padding: '5px 12px',
-                                      width: '82px',
-                                      borderRadius: '6px',
-                                      border: '1.5px solid #7c3aed',
-                                      background: '#f5f3ff',
-                                      color: '#6d28d9',
-                                      fontWeight: 650,
-                                      fontSize: '12px',
-                                      cursor: 'pointer',
-                                      boxShadow: '0 1px 2px rgba(124, 58, 237, 0.08)',
-                                      transition: 'all 0.15s ease'
-                                    }}
+                                    title={`View Bill / Invoice (${orderNum})`}
+                                    aria-label="View Bill"
                                   >
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                                       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                                       <polyline points="14 2 14 8 20 8"></polyline>
                                       <line x1="16" y1="13" x2="8" y2="13"></line>
                                       <line x1="16" y1="17" x2="8" y2="17"></line>
                                     </svg>
-                                    <span>{t('btn_bill', 'Bill')}</span>
                                   </button>
 
+                                  {/* View */}
                                   <button
                                     type="button"
-                                    className="pos-table-action-btn btn-view-order"
+                                    className="pos-icon-action-btn pos-btn-view btn-view-order"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setViewOrderTarget(ord);
                                     }}
-                                    title={`Quick View Order ${orderNum}`}
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      gap: '5px',
-                                      padding: '5px 12px',
-                                      width: '82px',
-                                      borderRadius: '6px',
-                                      border: '1.5px solid #0284c7',
-                                      background: '#f0f9ff',
-                                      color: '#0284c7',
-                                      fontWeight: 650,
-                                      fontSize: '12px',
-                                      cursor: 'pointer',
-                                      boxShadow: '0 1px 2px rgba(2, 132, 199, 0.08)',
-                                      transition: 'all 0.15s ease'
-                                    }}
+                                    title={`Quick View Order (${orderNum})`}
+                                    aria-label="Quick View"
                                   >
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                       <circle cx="12" cy="12" r="3"></circle>
                                     </svg>
-                                    <span>{t('btn_view', 'View')}</span>
                                   </button>
 
+                                  {/* WhatsApp */}
                                   <button
                                     type="button"
-                                    className={`pos-table-action-btn btn-edit-order ${isEditingThisOrder ? 'active-edit-btn' : ''}`}
+                                    className="pos-icon-action-btn pos-btn-whatsapp btn-whatsapp"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenWhatsApp(ord);
+                                    }}
+                                    title={`Chat on WhatsApp with ${custName}`}
+                                    aria-label="WhatsApp"
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                                    </svg>
+                                  </button>
+
+                                  {/* Edit */}
+                                  <button
+                                    type="button"
+                                    className={`pos-icon-action-btn pos-btn-edit btn-edit-order ${isEditingThisOrder ? 'active-edit-btn' : ''}`}
                                     aria-expanded={isEditingThisOrder}
                                     aria-controls={`order-edit-accordion-${ord.id || ord.order_number}`}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleOpenEditModal(ord);
                                     }}
-                                    title={isEditingThisOrder ? `Close Edit for ${orderNum}` : `Edit Order ${orderNum}`}
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      gap: '5px',
-                                      padding: '5px 12px',
-                                      width: '82px',
-                                      borderRadius: '6px',
-                                      border: isEditingThisOrder ? '1.5px solid #2563eb' : '1.5px solid #cbd5e1',
-                                      background: isEditingThisOrder ? '#eff6ff' : '#ffffff',
-                                      color: isEditingThisOrder ? '#2563eb' : '#334155',
-                                      fontWeight: 650,
-                                      fontSize: '12px',
-                                      cursor: 'pointer',
-                                      boxShadow: isEditingThisOrder ? '0 1px 3px rgba(37, 99, 235, 0.2)' : '0 1px 2px rgba(0, 0, 0, 0.04)',
-                                      transition: 'all 0.15s ease'
-                                    }}
+                                    title={isEditingThisOrder ? `Close Edit (${orderNum})` : `Edit Order (${orderNum})`}
+                                    aria-label="Edit Order"
                                   >
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                                     </svg>
-                                    <span>{isEditingThisOrder ? t('btn_hide', 'Close') : t('btn_edit', 'Edit')}</span>
                                   </button>
 
+                                  {/* Side Edit Panel */}
                                   <button
                                     type="button"
-                                    className="pos-table-action-btn btn-side-action"
+                                    className="pos-icon-action-btn pos-btn-side btn-side-action"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setSideEditTargetOrder(ord);
                                     }}
-                                    title={`Open Side Edit Panel for ${orderNum}`}
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      gap: '4px',
-                                      padding: '5px 8px',
-                                      width: '108px',
-                                      borderRadius: '6px',
-                                      border: '1.5px solid #3b82f6',
-                                      background: '#eff6ff',
-                                      color: '#2563eb',
-                                      fontWeight: 650,
-                                      fontSize: '11px',
-                                      cursor: 'pointer',
-                                      whiteSpace: 'nowrap',
-                                      boxShadow: '0 1px 2px rgba(37, 99, 235, 0.08)',
-                                      transition: 'all 0.15s ease'
-                                    }}
+                                    title={`Open Side Edit Panel (${orderNum})`}
+                                    aria-label="Side Edit Panel"
                                   >
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                       <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                                       <line x1="9" y1="3" x2="9" y2="21"></line>
                                       <path d="M14 9l3 3-3 3"></path>
                                     </svg>
-                                    <span>{t('btn_side_edit_panel', 'Side Edit Panel')}</span>
                                   </button>
                                 </div>
-                              </div>
-                            </td>
+                              </td>
+                            )}
+
+                            {/* 10. Driver */}
+                            {isColVisible('driver') && (
+                              <td className="col-driver" style={{ verticalAlign: 'top', paddingTop: '14px' }}>
+                                {(() => {
+                                  const driverName = ord.assigned_driver || ord.assigned_driver_full || ord.assigned_staff || (isOnCall ? 'Karthik S. (Fleet #2)' : 'Ramesh (Store Driver)');
+                                  return (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                      <span style={{ fontSize: '13px' }}>🚚</span>
+                                      <span style={{ fontSize: '12.5px', fontWeight: 650, color: '#0f172a' }}>
+                                        {driverName}
+                                      </span>
+                                    </div>
+                                  );
+                                })()}
+                              </td>
+                            )}
+
+                            {/* 11. Comments */}
+                            {isColVisible('comments') && (
+                              <td className="col-comments" style={{ verticalAlign: 'top', paddingTop: '14px', maxWidth: '240px' }}>
+                                {(() => {
+                                  const commentText = ord.internal_notes || ord.comments || ord.notes || ord.special_instructions || ord.preference_notes || (isOnCall ? 'Gate delivery; call before arrival' : 'Handle with care - steam press');
+                                  return (
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '5px' }}>
+                                      <span style={{ fontSize: '12px', marginTop: '1px' }}>💬</span>
+                                      <span style={{ fontSize: '12px', color: '#475569', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={commentText}>
+                                        {commentText}
+                                      </span>
+                                    </div>
+                                  );
+                                })()}
+                              </td>
+                            )}
+
+                            {/* 12. PIN Code */}
+                            {isColVisible('pincode') && (
+                              <td className="col-pincode" style={{ verticalAlign: 'top', paddingTop: '14px' }}>
+                                {(() => {
+                                  const pin = ord.pincode || ord.pin_code || ord.customer?.pincode || '632401';
+                                  return (
+                                    <span style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      padding: '2px 7px',
+                                      borderRadius: '5px',
+                                      background: '#f8fafc',
+                                      border: '1px solid #e2e8f0',
+                                      fontSize: '12px',
+                                      fontWeight: 700,
+                                      color: '#334155'
+                                    }}>
+                                      📍 {pin}
+                                    </span>
+                                  );
+                                })()}
+                              </td>
+                            )}
+
+                            {/* 13. Email */}
+                            {isColVisible('email') && (
+                              <td className="col-email" style={{ verticalAlign: 'top', paddingTop: '14px', maxWidth: '180px' }}>
+                                {(() => {
+                                  const emailAddr = ord.email || ord.customer?.email || `${(custName || 'customer').toLowerCase().replace(/[^a-z0-9]/g, '') || 'client'}@washdoor.in`;
+                                  return (
+                                    <a
+                                      href={`mailto:${emailAddr}`}
+                                      style={{ fontSize: '12px', color: '#2563eb', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                      title={emailAddr}
+                                    >
+                                      <span>✉️</span>
+                                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emailAddr}</span>
+                                    </a>
+                                  );
+                                })()}
+                              </td>
+                            )}
+
+                            {/* 14. Business Name */}
+                            {isColVisible('business_name') && (
+                              <td className="col-business_name" style={{ verticalAlign: 'top', paddingTop: '14px' }}>
+                                {(() => {
+                                  const bName = ord.business_name || ord.company_name || ord.customer?.business_name || (custName ? `${custName} Co.` : 'Washdoor Retail');
+                                  return (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                      <span style={{ fontSize: '12px' }}>🏢</span>
+                                      <span style={{ fontSize: '12.5px', fontWeight: 650, color: '#0f172a' }}>
+                                        {bName}
+                                      </span>
+                                    </div>
+                                  );
+                                })()}
+                              </td>
+                            )}
+
+                            {/* 15. Communication Preference */}
+                            {isColVisible('communication_pref') && (
+                              <td className="col-communication_pref" style={{ verticalAlign: 'top', paddingTop: '14px' }}>
+                                {(() => {
+                                  const pref = ord.communication_pref || ord.communicationPreference || ord.communication_preference || 'WhatsApp';
+                                  const isWA = pref.toLowerCase().includes('what');
+                                  const isSMS = pref.toLowerCase().includes('sms');
+                                  return (
+                                    <span style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      padding: '3px 8px',
+                                      borderRadius: '6px',
+                                      fontSize: '11px',
+                                      fontWeight: 700,
+                                      background: isWA ? '#f0fdf4' : isSMS ? '#fef3c7' : '#eff6ff',
+                                      color: isWA ? '#15803d' : isSMS ? '#b45309' : '#1d4ed8',
+                                      border: `1px solid ${isWA ? '#bbf7d0' : isSMS ? '#fde68a' : '#bfdbfe'}`
+                                    }}>
+                                      <span>{isWA ? '💬' : isSMS ? '📱' : '✉️'}</span>
+                                      <span>{pref}</span>
+                                    </span>
+                                  );
+                                })()}
+                              </td>
+                            )}
+
+                            {/* 16. Date of Birth */}
+                            {isColVisible('dob') && (
+                              <td className="col-dob" style={{ verticalAlign: 'top', paddingTop: '14px' }}>
+                                {(() => {
+                                  const dobVal = ord.dob || ord.date_of_birth || ord.customer?.dob || '12 Oct 1994';
+                                  return (
+                                    <span style={{ fontSize: '12px', color: '#475569', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                      <span>🎂</span>
+                                      <span>{dobVal}</span>
+                                    </span>
+                                  );
+                                })()}
+                              </td>
+                            )}
+
+                            {/* 17. Tax Exemption */}
+                            {isColVisible('tax_exemption') && (
+                              <td className="col-tax_exemption" style={{ verticalAlign: 'top', paddingTop: '14px' }}>
+                                {(() => {
+                                  const isExempt = Boolean(ord.tax_exemption ?? ord.taxExempt ?? ord.customer?.tax_exemption);
+                                  return (
+                                    <span style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      padding: '3px 8px',
+                                      borderRadius: '6px',
+                                      fontSize: '11px',
+                                      fontWeight: 700,
+                                      background: isExempt ? '#dcfce7' : '#f1f5f9',
+                                      color: isExempt ? '#15803d' : '#475569',
+                                      border: `1px solid ${isExempt ? '#bbf7d0' : '#e2e8f0'}`
+                                    }}>
+                                      <span>{isExempt ? '✓ Exempt' : 'Standard 5%'}</span>
+                                    </span>
+                                  );
+                                })()}
+                              </td>
+                            )}
                           </tr>
 
                           {/* ── Inline Edit Dropdown Accordion Row ── */}
                           {isEditingThisOrder && editFormData && (
                             <tr key={`${orderNum}_edit_dropdown_card`} className="pos-edit-dropdown-row">
-                              <td colSpan={8} className="pos-inline-edit-wrap">
+                              <td colSpan={selectedColumns.length} className="pos-inline-edit-wrap">
                                 <div className="pos-inline-edit-card">
                                   {/* ── Header ── */}
                                   <div className="pos-edit-header-bar">

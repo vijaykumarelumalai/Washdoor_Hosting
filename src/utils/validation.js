@@ -193,13 +193,17 @@ export function validateBusinessProfile(data = {}) {
     errors.shopName = 'Shop name must be at least 2 characters.';
   }
 
-  // Phone (required, valid 10-digit Indian phone)
+  // Phone (required, strictly 10 numeric digits)
   const phoneVal = data.phone != null ? String(data.phone).trim() : '';
   const cleanPhone = normalizeMobileNumber(phoneVal);
   if (!phoneVal) {
     errors.phone = 'Phone number is required.';
+  } else if (/[a-zA-Z]/.test(phoneVal)) {
+    errors.phone = 'Phone number cannot contain letters. Only numeric digits allowed.';
+  } else if (cleanPhone.length !== 10) {
+    errors.phone = `Phone number must be exactly 10 digits (currently ${cleanPhone.length}/10).`;
   } else if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
-    errors.phone = 'Enter a valid 10-digit Indian phone number (e.g. +91 7603917058).';
+    errors.phone = 'Enter a valid 10-digit Indian phone number starting with 6, 7, 8, or 9.';
   }
 
   // Email (required, valid format)
@@ -210,11 +214,16 @@ export function validateBusinessProfile(data = {}) {
     errors.email = 'Enter a valid email address (e.g. info@washdoor.in).';
   }
 
-  // WhatsApp number (optional, but if provided, must be valid 10-digit phone)
+  // WhatsApp number (optional, but if provided, strictly 10 digits)
   if (data.whatsappNumber && String(data.whatsappNumber).trim()) {
-    const cleanWA = normalizeMobileNumber(data.whatsappNumber);
-    if (!/^[6-9]\d{9}$/.test(cleanWA)) {
-      errors.whatsappNumber = 'Enter a valid 10-digit WhatsApp number (e.g. +91 7338851369).';
+    const waVal = String(data.whatsappNumber).trim();
+    const cleanWA = normalizeMobileNumber(waVal);
+    if (/[a-zA-Z]/.test(waVal)) {
+      errors.whatsappNumber = 'WhatsApp number cannot contain letters. Only numeric digits allowed.';
+    } else if (cleanWA.length !== 10) {
+      errors.whatsappNumber = `WhatsApp number must be exactly 10 digits (currently ${cleanWA.length}/10).`;
+    } else if (!/^[6-9]\d{9}$/.test(cleanWA)) {
+      errors.whatsappNumber = 'Enter a valid 10-digit WhatsApp number starting with 6, 7, 8, or 9.';
     }
   }
 

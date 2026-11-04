@@ -776,6 +776,12 @@ function mapCustomerWorkRowToOrder(row) {
     delivered_at: row.delivered_at || null,
     staff_notes: internalNotesObj.staff_notes || '',
     flags: internalNotesObj.flags || {},
+    pincode: row.pincode || row.pin_code || internalNotesObj.pincode || '',
+    pin_code: row.pin_code || row.pincode || internalNotesObj.pincode || '',
+    business_name: row.business_name || row.company_name || internalNotesObj.business_name || '',
+    communication_pref: row.communication_pref || row.communication_preference || internalNotesObj.communication_pref || 'WhatsApp',
+    dob: row.dob || row.date_of_birth || internalNotesObj.dob || '',
+    tax_exemption: row.tax_exemption ?? internalNotesObj.tax_exemption ?? false,
     customer: {
       id: custId,
       customerId: custId,
@@ -793,6 +799,11 @@ function mapCustomerWorkRowToOrder(row) {
       area_service_zone: 'Zone 1',
       tier: 'SILVER',
       service_category: row.service_type || 'Wash & Steam Press',
+      pincode: row.pincode || row.pin_code || internalNotesObj.pincode || '',
+      business_name: row.business_name || row.company_name || internalNotesObj.business_name || '',
+      communication_pref: row.communication_pref || row.communication_preference || internalNotesObj.communication_pref || 'WhatsApp',
+      dob: row.dob || row.date_of_birth || internalNotesObj.dob || '',
+      tax_exemption: row.tax_exemption ?? internalNotesObj.tax_exemption ?? false,
     },
   };
 }

@@ -1,7 +1,7 @@
 // src/__tests__/validation.node.test.js
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateCustomer, friendlySupabaseError, formatPhoneDisplay, formatDOB, parseDOBInput, normalizeMobileNumber, isMobileNumberQuery, getAgeFromDOB, isValidIndianMobile } from '../utils/validation.js';
+import { validateCustomer, friendlySupabaseError, formatPhoneDisplay, formatDOB, parseDOBInput, normalizeMobileNumber, isMobileNumberQuery, getAgeFromDOB, isValidIndianMobile, validateBusinessProfile } from '../utils/validation.js';
 import { formatOrderId, formatCustomerId } from '../services/customerService.js';
 
 test('formatOrderId generates standardized 5-digit zero-padded order identifier starting with ORD', () => {
@@ -212,4 +212,86 @@ test('getAgeFromDOB calculates valid age from ISO date string', () => {
   const today = new Date();
   const expectedAge = today.getFullYear() - birthYear - (today.getMonth() < 0 || (today.getMonth() === 0 && today.getDate() < 1) ? 1 : 0);
   assert.equal(getAgeFromDOB('2000-01-01'), expectedAge);
+});
+
+test('validateBusinessProfile accepts complete valid business profile matching screenshot', () => {
+  const profile = {
+    shopName: 'Washdoor',
+    phone: '+91 7603917058',
+    email: 'info@washdoor.in',
+    whatsappNumber: '+91 7338851369',
+    address: 'No.7, 4th Avenue, 1st Cross Road, MBT Road',
+    city: 'Chennai',
+    state: 'Tamil Nadu',
+    pinCode: '632401',
+    gstNumber: '33AABCT1332L1Z8',
+  };
+  const errors = validateBusinessProfile(profile);
+  assert.deepEqual(errors, {});
+});
+
+test('validateBusinessProfile requires shopName, phone, email, address, city, state, pinCode', () => {
+  const emptyProfile = {};
+  const errors = validateBusinessProfile(emptyProfile);
+  assert.ok(errors.shopName, 'Shop name should be required');
+  assert.ok(errors.phone, 'Phone should be required');
+  assert.ok(errors.email, 'Email should be required');
+  assert.ok(errors.address, 'Address should be required');
+  assert.ok(errors.city, 'City should be required');
+  assert.ok(errors.state, 'State should be required');
+  assert.ok(errors.pinCode, 'PIN code should be required');
+});
+
+test('validateBusinessProfile validates phone numbers and formats', () => {
+  const invalidPhone = {
+    shopName: 'Washdoor',
+    phone: '12345',
+    email: 'info@washdoor.in',
+    address: 'Main Road',
+    city: 'Chennai',
+    state: 'TN',
+    pinCode: '632401',
+  };
+  assert.ok(validateBusinessProfile(invalidPhone).phone);
+
+  const validPhone = { ...invalidPhone, phone: '7603917058' };
+  assert.equal(validateBusinessProfile(validPhone).phone, undefined);
+});
+
+test('validateBusinessProfile validates email format', () => {
+  const invalidEmail = {
+    shopName: 'Washdoor',
+    phone: '7603917058',
+    email: 'not-an-email',
+    address: 'Main Road',
+    city: 'Chennai',
+    state: 'TN',
+    pinCode: '632401',
+  };
+  assert.ok(validateBusinessProfile(invalidEmail).email);
+});
+
+test('validateBusinessProfile validates 6-digit PIN code and optional 15-char GSTIN', () => {
+  const invalidPinAndGst = {
+    shopName: 'Washdoor',
+    phone: '7603917058',
+    email: 'info@washdoor.in',
+    address: 'Main Road',
+    city: 'Chennai',
+    state: 'TN',
+    pinCode: '6324',
+    gstNumber: 'INVALIDGST',
+  };
+  const errors = validateBusinessProfile(invalidPinAndGst);
+  assert.ok(errors.pinCode);
+  assert.ok(errors.gstNumber);
+
+  const validPinAndGst = {
+    ...invalidPinAndGst,
+    pinCode: '632401',
+    gstNumber: '33AABCT1332L1Z8',
+  };
+  const cleanErrors = validateBusinessProfile(validPinAndGst);
+  assert.equal(cleanErrors.pinCode, undefined);
+  assert.equal(cleanErrors.gstNumber, undefined);
 });

@@ -37,6 +37,29 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
   const [isTestingAppConn, setIsTestingAppConn] = useState(false);
   const [appConnResult, setAppConnResult] = useState(null);
 
+  // ── Validation States for Business Profile ──
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [touchedFields, setTouchedFields] = useState({});
+
+  const validateField = (field, value) => {
+    const testData = { ...settings, [field]: value };
+    const errs = validateBusinessProfile(testData);
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      if (errs[field]) {
+        next[field] = errs[field];
+      } else {
+        delete next[field];
+      }
+      return next;
+    });
+  };
+
+  const handleBlur = (field) => {
+    setTouchedFields((prev) => ({ ...prev, [field]: true }));
+    validateField(field, settings[field]);
+  };
+
   // Sync initial tab if changed from parent
   useEffect(() => {
     if (initialTab) {
@@ -44,13 +67,50 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
     }
   }, [initialTab]);
 
-  // Handle generic form changes
+  // Handle generic form changes with strict length and numeric enforcement
   const handleInputChange = (field, value) => {
+    let finalValue = value;
+    if (field === 'gstNumber') {
+      finalValue = String(value).toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 15);
+    } else if (field === 'phone' || field === 'whatsappNumber') {
+      // Strip all alphabets and invalid characters (allow only digits and leading +)
+      const raw = String(value);
+      const hasPlus = raw.trim().startsWith('+');
+      const digitsOnly = raw.replace(/\D/g, '');
+
+      // If user prefixes with 91 and enters 11+ digits, treat as national number
+      const nationalDigits = (digitsOnly.startsWith('91') && digitsOnly.length > 10)
+        ? digitsOnly.slice(2)
+        : digitsOnly;
+
+      // Strictly capped at 10 digits
+      const capped = nationalDigits.slice(0, 10);
+
+      if (hasPlus || digitsOnly.startsWith('91')) {
+        if (capped.length > 5) {
+          finalValue = `+91 ${capped.slice(0, 5)} ${capped.slice(5)}`;
+        } else if (capped.length > 0) {
+          finalValue = `+91 ${capped}`;
+        } else {
+          finalValue = '+91 ';
+        }
+      } else {
+        finalValue = capped;
+      }
+    } else if (field === 'pinCode') {
+      // Strictly capped at 6 digits
+      finalValue = String(value).replace(/\D/g, '').slice(0, 6);
+    }
+
     setSettings((prev) => ({
       ...prev,
-      [field]: value,
+      [field]: finalValue,
     }));
     setHasUnsavedChanges(true);
+
+    if (touchedFields[field] || fieldErrors[field]) {
+      validateField(field, finalValue);
+    }
   };
 
   // Handle nested enabledPayments
@@ -132,12 +192,33 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
 
   // Save changes to localStorage & runtime config
   const handleSaveChanges = () => {
+    // Validate Business Profile if saving on business profile tab or generally
+    if (activeTab === 'business_profile') {
+      const valErrors = validateBusinessProfile(settings);
+      if (Object.keys(valErrors).length > 0) {
+        setFieldErrors(valErrors);
+        const allTouched = {};
+        Object.keys(valErrors).forEach((k) => {
+          allTouched[k] = true;
+        });
+        setTouchedFields((prev) => ({ ...prev, ...allTouched }));
+        showToast?.('⚠️ Please fix the highlighted errors in Business profile before saving.');
+
+        // Focus first invalid element
+        const firstField = Object.keys(valErrors)[0];
+        const el = document.querySelector(`[data-field="${firstField}"], input[name="${firstField}"]`);
+        el?.focus?.();
+        return;
+      }
+    }
+
     const toSave = {
       ...settings,
       shopLogo: logoPreview,
     };
     saveStoredSettings(toSave);
     setSettings(toSave);
+    setFieldErrors({});
     setHasUnsavedChanges(false);
     showToast?.('✓ Store settings saved successfully!');
   };
@@ -147,6 +228,8 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
     const stored = getStoredSettings();
     setSettings(stored);
     setLogoPreview(stored.shopLogo || '');
+    setFieldErrors({});
+    setTouchedFields({});
     setHasUnsavedChanges(false);
     showToast?.('Changes discarded');
   };
@@ -361,105 +444,218 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
                 <div className="shop-fields-form">
                   <div className="form-row cols-2">
                     <div className="form-field">
-                      <label className="form-label">Shop name</label>
+                      <label className="form-label">
+                        Shop name <span className="form-field-required">*</span>
+                      </label>
                       <input
                         type="text"
-                        className="form-control"
+                        name="shopName"
+                        data-field="shopName"
+                        className={`form-control ${fieldErrors.shopName && touchedFields.shopName ? 'is-invalid' : ''}`}
                         value={settings.shopName}
                         onChange={(e) => handleInputChange('shopName', e.target.value)}
+                        onBlur={() => handleBlur('shopName')}
                         placeholder="e.g. Washdoor"
                       />
+                      {fieldErrors.shopName && touchedFields.shopName && (
+                        <div className="form-field-error">
+                          <span className="form-field-error-icon">⚠️</span>
+                          <span>{fieldErrors.shopName}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="form-field">
-                      <label className="form-label">Phone</label>
+                      <div className="form-field-header-row">
+                        <label className="form-label">
+                          Phone <span className="form-field-required">*</span>
+                        </label>
+                        <span className={`phone-length-badge ${(settings.phone || '').replace(/\D/g, '').replace(/^91(?=\d{10})/, '').length === 10 ? 'valid' : (settings.phone || '').replace(/\D/g, '').replace(/^91(?=\d{10})/, '').length > 0 ? 'partial' : ''}`}>
+                          {(settings.phone || '').replace(/\D/g, '').replace(/^91(?=\d{10})/, '').length === 10
+                            ? '✓ 10/10 digits'
+                            : `${(settings.phone || '').replace(/\D/g, '').replace(/^91(?=\d{10})/, '').length}/10 digits`}
+                        </span>
+                      </div>
                       <input
                         type="text"
-                        className="form-control"
+                        name="phone"
+                        data-field="phone"
+                        maxLength={16}
+                        className={`form-control ${fieldErrors.phone && touchedFields.phone ? 'is-invalid' : ''}`}
                         value={settings.phone}
                         onChange={(e) => handleInputChange('phone', e.target.value)}
-                        placeholder="+91 7338851369"
+                        onBlur={() => handleBlur('phone')}
+                        placeholder="+91 7603917058"
                       />
+                      {fieldErrors.phone && touchedFields.phone && (
+                        <div className="form-field-error">
+                          <span className="form-field-error-icon">⚠️</span>
+                          <span>{fieldErrors.phone}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   <div className="form-row cols-2">
                     <div className="form-field">
-                      <label className="form-label">Email</label>
+                      <label className="form-label">
+                        Email <span className="form-field-required">*</span>
+                      </label>
                       <input
                         type="email"
-                        className="form-control"
+                        name="email"
+                        data-field="email"
+                        className={`form-control ${fieldErrors.email && touchedFields.email ? 'is-invalid' : ''}`}
                         value={settings.email}
                         onChange={(e) => handleInputChange('email', e.target.value)}
+                        onBlur={() => handleBlur('email')}
                         placeholder="info@washdoor.in"
                       />
+                      {fieldErrors.email && touchedFields.email && (
+                        <div className="form-field-error">
+                          <span className="form-field-error-icon">⚠️</span>
+                          <span>{fieldErrors.email}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="form-field">
-                      <label className="form-label">WhatsApp number</label>
+                      <div className="form-field-header-row">
+                        <label className="form-label">WhatsApp number</label>
+                        <span className={`phone-length-badge ${(settings.whatsappNumber || '').replace(/\D/g, '').replace(/^91(?=\d{10})/, '').length === 10 ? 'valid' : (settings.whatsappNumber || '').replace(/\D/g, '').replace(/^91(?=\d{10})/, '').length > 0 ? 'partial' : ''}`}>
+                          {(settings.whatsappNumber || '').replace(/\D/g, '').replace(/^91(?=\d{10})/, '').length === 10
+                            ? '✓ 10/10 digits'
+                            : `${(settings.whatsappNumber || '').replace(/\D/g, '').replace(/^91(?=\d{10})/, '').length}/10 digits`}
+                        </span>
+                      </div>
                       <div className="input-with-clear">
                         <input
                           type="text"
-                          className="form-control"
+                          name="whatsappNumber"
+                          data-field="whatsappNumber"
+                          maxLength={16}
+                          className={`form-control ${fieldErrors.whatsappNumber && touchedFields.whatsappNumber ? 'is-invalid' : ''}`}
                           value={settings.whatsappNumber}
                           onChange={(e) => handleInputChange('whatsappNumber', e.target.value)}
+                          onBlur={() => handleBlur('whatsappNumber')}
                           placeholder="+91 7338851369"
                         />
                         {settings.whatsappNumber && (
                           <button
                             type="button"
                             className="input-clear-btn"
-                            onClick={() => handleInputChange('whatsappNumber', '')}
+                            onClick={() => {
+                              handleInputChange('whatsappNumber', '');
+                              handleBlur('whatsappNumber');
+                            }}
                             title="Clear WhatsApp number"
                           >
                             ✕
                           </button>
                         )}
                       </div>
+                      {fieldErrors.whatsappNumber && touchedFields.whatsappNumber && (
+                        <div className="form-field-error">
+                          <span className="form-field-error-icon">⚠️</span>
+                          <span>{fieldErrors.whatsappNumber}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   <div className="form-row cols-1">
                     <div className="form-field">
-                      <label className="form-label">Address</label>
+                      <label className="form-label">
+                        Address <span className="form-field-required">*</span>
+                      </label>
                       <input
                         type="text"
-                        className="form-control"
+                        name="address"
+                        data-field="address"
+                        className={`form-control ${fieldErrors.address && touchedFields.address ? 'is-invalid' : ''}`}
                         value={settings.address}
                         onChange={(e) => handleInputChange('address', e.target.value)}
-                        placeholder="No.7, 4th Avenue, 1st Cross Road"
+                        onBlur={() => handleBlur('address')}
+                        placeholder="No.7, 4th Avenue, 1st Cross Road, MBT Road"
                       />
+                      {fieldErrors.address && touchedFields.address && (
+                        <div className="form-field-error">
+                          <span className="form-field-error-icon">⚠️</span>
+                          <span>{fieldErrors.address}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   <div className="form-row cols-3">
                     <div className="form-field">
-                      <label className="form-label">City</label>
+                      <label className="form-label">
+                        City <span className="form-field-required">*</span>
+                      </label>
                       <input
                         type="text"
-                        className="form-control"
+                        name="city"
+                        data-field="city"
+                        className={`form-control ${fieldErrors.city && touchedFields.city ? 'is-invalid' : ''}`}
                         value={settings.city}
                         onChange={(e) => handleInputChange('city', e.target.value)}
-                        placeholder="Chennai / Ranipet"
+                        onBlur={() => handleBlur('city')}
+                        placeholder="Chennai"
                       />
+                      {fieldErrors.city && touchedFields.city && (
+                        <div className="form-field-error">
+                          <span className="form-field-error-icon">⚠️</span>
+                          <span>{fieldErrors.city}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="form-field">
-                      <label className="form-label">State</label>
+                      <label className="form-label">
+                        State <span className="form-field-required">*</span>
+                      </label>
                       <input
                         type="text"
-                        className="form-control"
+                        name="state"
+                        data-field="state"
+                        className={`form-control ${fieldErrors.state && touchedFields.state ? 'is-invalid' : ''}`}
                         value={settings.state}
                         onChange={(e) => handleInputChange('state', e.target.value)}
+                        onBlur={() => handleBlur('state')}
                         placeholder="Tamil Nadu"
                       />
+                      {fieldErrors.state && touchedFields.state && (
+                        <div className="form-field-error">
+                          <span className="form-field-error-icon">⚠️</span>
+                          <span>{fieldErrors.state}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="form-field">
-                      <label className="form-label">PIN Code</label>
+                      <div className="form-field-header-row">
+                        <label className="form-label">
+                          PIN Code <span className="form-field-required">*</span>
+                        </label>
+                        <span className={`phone-length-badge ${(settings.pinCode || '').replace(/\D/g, '').length === 6 ? 'valid' : (settings.pinCode || '').replace(/\D/g, '').length > 0 ? 'partial' : ''}`}>
+                          {(settings.pinCode || '').replace(/\D/g, '').length === 6
+                            ? '✓ 6/6 digits'
+                            : `${(settings.pinCode || '').replace(/\D/g, '').length}/6 digits`}
+                        </span>
+                      </div>
                       <input
                         type="text"
-                        className="form-control"
+                        name="pinCode"
+                        data-field="pinCode"
+                        maxLength={6}
+                        className={`form-control ${fieldErrors.pinCode && touchedFields.pinCode ? 'is-invalid' : ''}`}
                         value={settings.pinCode}
                         onChange={(e) => handleInputChange('pinCode', e.target.value)}
+                        onBlur={() => handleBlur('pinCode')}
                         placeholder="632401"
                       />
+                      {fieldErrors.pinCode && touchedFields.pinCode && (
+                        <div className="form-field-error">
+                          <span className="form-field-error-icon">⚠️</span>
+                          <span>{fieldErrors.pinCode}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -468,12 +664,22 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
                       <label className="form-label">GST number</label>
                       <input
                         type="text"
-                        className="form-control"
+                        name="gstNumber"
+                        data-field="gstNumber"
+                        className={`form-control ${fieldErrors.gstNumber && touchedFields.gstNumber ? 'is-invalid' : ''}`}
                         value={settings.gstNumber}
                         onChange={(e) => handleInputChange('gstNumber', e.target.value)}
+                        onBlur={() => handleBlur('gstNumber')}
                         placeholder="33AABCT1332L1Z8"
                       />
-                      <span className="field-hint">Saved with Tax &amp; currency.</span>
+                      {fieldErrors.gstNumber && touchedFields.gstNumber ? (
+                        <div className="form-field-error">
+                          <span className="form-field-error-icon">⚠️</span>
+                          <span>{fieldErrors.gstNumber}</span>
+                        </div>
+                      ) : (
+                        <span className="field-hint">Saved with Tax &amp; currency.</span>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -217,6 +217,321 @@
   color: #ffffff;
 }
 
+/* ── Dynamic Column Category Popover Menu ── */
+.pos-column-popover-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 120;
+  background: var(--bg-surface, #ffffff);
+  border: 1.5px solid var(--border, #cbd5e1);
+  border-radius: 12px;
+  width: 290px;
+  max-width: 90vw;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: posFadeIn 0.15s ease;
+}
+
+body.dark-theme .pos-column-popover-menu,
+[data-theme="dark"] .pos-column-popover-menu {
+  background: #0f1d33;
+  border-color: #1e3352;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+
+.pos-column-popover-header {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-hover, #f8fafc);
+}
+
+body.dark-theme .pos-column-popover-header,
+[data-theme="dark"] .pos-column-popover-header {
+  background: #09172c;
+  border-color: #1c2e4a;
+}
+
+.pos-column-popover-title {
+  font-size: 11.5px;
+  font-weight: 750;
+  color: var(--text-primary, #0f172a);
+}
+
+.pos-column-select-all-btn {
+  font-size: 11px;
+  font-weight: 650;
+  color: #2563eb;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.12s ease;
+}
+
+.pos-column-select-all-btn:hover {
+  background: #eff6ff;
+}
+
+.pos-column-list-scroll {
+  max-height: 310px;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pos-column-checkbox-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s ease;
+}
+
+.pos-column-checkbox-item:hover {
+  background: var(--bg-hover, #f1f5f9);
+}
+
+body.dark-theme .pos-column-checkbox-item:hover,
+[data-theme="dark"] .pos-column-checkbox-item:hover {
+  background: #152744;
+}
+
+.pos-column-item-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-primary, #1e293b);
+}
+
+body.dark-theme .pos-column-item-left,
+[data-theme="dark"] .pos-column-item-left {
+  color: #e2e8f0;
+}
+
+.pos-column-default-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #ede9fe;
+  color: #7c3aed;
+}
+
+body.dark-theme .pos-column-default-badge,
+[data-theme="dark"] .pos-column-default-badge {
+  background: #2e1065;
+  color: #c084fc;
+}
+
+.pos-column-popover-footer {
+  padding: 10px 14px;
+  border-top: 1px solid var(--border, #e2e8f0);
+  background: var(--bg-hover, #f8fafc);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+body.dark-theme .pos-column-popover-footer,
+[data-theme="dark"] .pos-column-popover-footer {
+  background: #09172c;
+  border-color: #1c2e4a;
+}
+
+.pos-column-btn-reset {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #cbd5e1);
+  background: transparent;
+  color: var(--text-secondary, #64748b);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pos-column-btn-reset:hover {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+.pos-column-btn-apply {
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: none;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3);
+  transition: all 0.15s ease;
+}
+
+.pos-column-btn-apply:hover {
+  background: #1d4ed8;
+}
+
+/* ── Dynamic Table Column Classes ── */
+.col-order_id { min-width: 130px; width: 135px; }
+.col-customer { min-width: 175px; }
+.col-address { min-width: 180px; max-width: 220px; word-break: break-word; }
+.col-services { min-width: 165px; }
+.col-status { min-width: 125px; width: 125px; }
+.col-payment { min-width: 160px; }
+.col-order_details { min-width: 175px; }
+.col-pickup_delivery { min-width: 180px; }
+.col-actions { min-width: 200px; text-align: right; }
+
+.col-driver { min-width: 140px; }
+.col-comments { min-width: 180px; max-width: 240px; }
+.col-pincode { min-width: 105px; }
+.col-email { min-width: 180px; }
+.col-business_name { min-width: 160px; }
+.col-communication_pref { min-width: 145px; }
+.col-dob { min-width: 130px; }
+.col-tax_exemption { min-width: 130px; }
+
+/* ── Icon-based Action Buttons ── */
+.pos-icon-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+  max-width: 148px;
+}
+
+.pos-icon-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+  border: 1.5px solid transparent;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.pos-icon-action-btn:hover {
+  transform: translateY(-1.5px);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.08);
+}
+
+.pos-btn-bill {
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+  color: #7c3aed;
+}
+.pos-btn-bill:hover {
+  background: #ede9fe;
+  color: #6d28d9;
+  border-color: #c4b5fd;
+}
+
+.pos-btn-view {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+  color: #0284c7;
+}
+.pos-btn-view:hover {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #7dd3fc;
+}
+
+.pos-btn-whatsapp,
+.btn-whatsapp {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #16a34a;
+}
+.pos-btn-whatsapp:hover,
+.btn-whatsapp:hover {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #86efac;
+}
+
+.pos-btn-edit {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+.pos-btn-edit:hover,
+.pos-btn-edit.active-edit-btn {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #2563eb;
+}
+
+.pos-btn-side {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #4f46e5;
+}
+.pos-btn-side:hover {
+  background: #e0e7ff;
+  color: #4338ca;
+  border-color: #a5b4fc;
+}
+
+body.dark-theme .pos-btn-bill,
+[data-theme="dark"] .pos-btn-bill {
+  background: #2e1065;
+  border-color: #581c87;
+  color: #c084fc;
+}
+
+body.dark-theme .pos-btn-view,
+[data-theme="dark"] .pos-btn-view {
+  background: #082f49;
+  border-color: #0369a1;
+  color: #38bdf8;
+}
+
+body.dark-theme .pos-btn-whatsapp,
+body.dark-theme .btn-whatsapp,
+[data-theme="dark"] .pos-btn-whatsapp,
+[data-theme="dark"] .btn-whatsapp {
+  background: #052e16;
+  border-color: #15803d;
+  color: #4ade80;
+}
+
+body.dark-theme .pos-btn-edit,
+[data-theme="dark"] .pos-btn-edit {
+  background: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+body.dark-theme .pos-btn-side,
+[data-theme="dark"] .pos-btn-side {
+  background: #1e1b4b;
+  border-color: #3730a3;
+  color: #818cf8;
+}
+
 /* ── Status Filter Pills Bar ── */
 .pos-status-pills-bar {
   display: flex;
@@ -2792,13 +3107,14 @@ body.light-theme .pos-time-val,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: 8px;
+  gap: 4px;
+  padding: 3px 8px !important;
+  border-radius: 6px !important;
   border: 1.5px solid rgba(59, 130, 246, 0.4);
   background: rgba(37, 99, 235, 0.14);
   color: #60a5fa;
-  font-size: 12px;
+  font-size: 11px !important;
+  height: 26px !important;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -3459,58 +3775,19 @@ body.light-theme .pos-orders-table thead th:first-child,
   justify-content: flex-end;
 }
 
-/* Sticky Bill column, desktop only (mobile/tablet scroll normally) */
-@media (min-width: 1024px) {
-  .pos-orders-table th:last-child,
-  .pos-orders-table td:last-child {
-    position: sticky;
-    right: 0;
-    box-shadow: -8px 0 12px -8px rgba(0, 0, 0, 0.45);
-  }
-
-  /* Body cell: opaque so scrolled content doesn't show through */
-  .pos-orders-table td:last-child {
-    z-index: 4;
-    background: #081527;
-  }
-
-  /* Header cell: sticks to the top AND right, so it sits above everything */
-  .pos-orders-table thead th:last-child {
-    z-index: 8;
-    background: #0b1a2f;
-  }
-
-  /* Keep hover colour in sync with the row */
-  .pos-orders-table tbody tr.pos-order-row:hover td:last-child {
-    background: #0d1e38;
-  }
-
-  /* Light theme */
-  body.light-theme .pos-orders-table td:last-child,
-  [data-theme="light"] .pos-orders-table td:last-child {
-    background: #ffffff !important;
-    box-shadow: -8px 0 12px -8px rgba(15, 23, 42, 0.15);
-  }
-
-  body.light-theme .pos-orders-table tbody tr.pos-order-row:hover td:last-child,
-  [data-theme="light"] .pos-orders-table tbody tr.pos-order-row:hover td:last-child {
-    background: #f8fafc !important;
-  }
-
-  body.light-theme .pos-orders-table thead th:last-child,
-  [data-theme="light"] .pos-orders-table thead th:last-child {
-    background: #f8fafc !important;
-    box-shadow: -8px 0 12px -8px rgba(15, 23, 42, 0.15);
-  }
+/* ── All columns scroll naturally side-by-side: sticky last column removed as requested ── */
+.pos-orders-table th:last-child,
+.pos-orders-table td:last-child {
+  position: static !important;
+  right: auto !important;
+  box-shadow: none !important;
 }
 
-/* Mobile/tablet: no sticky Bill column */
-@media (max-width: 1023px) {
-  .pos-orders-table th:last-child,
-  .pos-orders-table td:last-child {
-    position: static;
-    box-shadow: none;
-  }
+.pos-orders-table thead th:last-child {
+  position: sticky !important;
+  top: 0 !important;
+  right: auto !important;
+  box-shadow: none !important;
 }
 
 /* ══════════════════════════════════════════════════════════════════
