@@ -108,7 +108,7 @@ export default function ThermalReceiptModal({ order, isOpen, onClose }) {
               width: receiptSize === '80mm' ? '300px' : '230px',
               backgroundColor: '#ffffff',
               color: '#000000',
-              fontFamily: "'Courier New', Courier, monospace",
+              fontFamily: "'Inter', sans-serif",
               padding: '16px 14px',
               boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
               fontSize: receiptSize === '80mm' ? '12px' : '10.5px',
