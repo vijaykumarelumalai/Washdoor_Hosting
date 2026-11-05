@@ -27,6 +27,7 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
   const [mapZoom, setMapZoom] = useState(14);
   const [isSignoutModalOpen, setIsSignoutModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [faqSearchQuery, setFaqSearchQuery] = useState('');
   const fileInputRef = useRef(null);
 
   // ── Template & App Configuration States ──
@@ -246,6 +247,8 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
       setSettings(stored);
       setLogoPreview(stored.shopLogo || '');
       setHasUnsavedChanges(false);
+      setFieldErrors({});
+      setTouchedFields({});
 
       // 2. Persist active tabs so reload restores the exact screen & subtab
       localStorage.setItem('washdoor_active_tab', 'account');
@@ -254,10 +257,10 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
       console.warn('Refresh note:', err);
     }
 
-    // 3. Execute true browser reload to refresh network, cache, and all component states
     setTimeout(() => {
-      window.location.reload();
-    }, 250);
+      setIsRefreshing(false);
+      showToast?.('✓ Settings synced & up-to-date');
+    }, 500);
   };
 
   // Logo upload handler
@@ -335,13 +338,23 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
           <button
             type="button"
             className="settings-help-btn"
-            onClick={() => setActiveTab('help_support')}
+            onClick={() => {
+              setActiveTab('help_support');
+              try {
+                localStorage.setItem('washdoor_settings_subtab', 'help_support');
+              } catch {}
+            }}
             title="Help & Support"
           >
             <span style={{ fontSize: '15px' }}>❓</span>
             <span>Help</span>
           </button>
-          <div className="settings-pro-badge" title="PRO+ License Active">
+          <div
+            className="settings-pro-badge"
+            title="PRO+ License Active"
+            style={{ cursor: 'pointer' }}
+            onClick={() => showToast?.('👑 PRO+ Plan is Active on this terminal')}
+          >
             <span>👑</span>
             <span>PRO</span>
           </div>
@@ -1719,24 +1732,99 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
                 </div>
               </div>
 
-              {/* FAQ Accordions */}
+              {/* FAQ Accordions with Live Search */}
               <div className="settings-box-panel" style={{ marginTop: '20px' }}>
-                <h3 className="panel-subheading">💡 Frequently Asked Questions</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+                  <h3 className="panel-subheading" style={{ margin: 0 }}>💡 Frequently Asked Questions</h3>
+                  <div style={{ position: 'relative', width: '280px', maxWidth: '100%' }}>
+                    <input
+                      type="text"
+                      className="form-control"
+                      style={{ fontSize: '12.5px', padding: '6px 12px 6px 30px', borderRadius: '8px' }}
+                      placeholder="Search FAQ questions..."
+                      value={faqSearchQuery}
+                      onChange={(e) => setFaqSearchQuery(e.target.value)}
+                    />
+                    <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '13px', opacity: 0.6 }}>🔍</span>
+                    {faqSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setFaqSearchQuery('')}
+                        style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#94a3b8' }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <div className="faq-list">
                   {[
-                    { q: 'How do I change the receipt paper size to 58mm for mobile vans?', a: 'Go to Settings → Operations & receipts, and select "58mm (Handheld Mobile)". Click "Save changes".' },
-                    { q: 'How do I assign a driver to an On-Call order?', a: 'In the Orders & POS screen, look for the "Assign Driver" or "Assign Pickup" button on any On-Call order row. Select a driver from your fleet and click Assign.' },
-                    { q: 'Can I add custom garment services to the intake catalog?', a: 'Yes! Open any order edit dialog or Create Order modal to browse and select garments across Wash, Steam, Dry Clean, and Premium Care categories.' },
-                    { q: 'Where are customer records saved?', a: 'All master customer records are synchronized in real-time with your live Supabase cloud database, with local caching for instant counter lookups.' },
-                  ].map((faq, i) => (
-                    <details key={i} className="faq-item">
-                      <summary className="faq-question">
-                        <span>{faq.q}</span>
-                        <span className="faq-chevron">▾</span>
-                      </summary>
-                      <p className="faq-answer">{faq.a}</p>
-                    </details>
-                  ))}
+                    {
+                      q: 'How do I change the receipt paper size to 58mm for mobile vans or handheld POS?',
+                      a: 'Go to Settings → Operations & receipts, scroll down to "Thermal Printer Paper Width", and select "58mm (Handheld Mobile POS)". Click "Save changes" at the bottom to apply.',
+                    },
+                    {
+                      q: 'How do I print my store UPI QR code on customer thermal bills?',
+                      a: 'Navigate to Settings → Bank & payments. Enter your UPI ID (e.g. washdoor@upi). The system will auto-generate a live preview of the QR code which will automatically be printed on customer intake receipts.',
+                    },
+                    {
+                      q: 'Can I customize the automated WhatsApp message sent when clothes are ready?',
+                      a: 'Yes! Go to Settings → Language → Template (Notification Templates). Select the "Ready for Delivery" category, edit the text or insert dynamic variables like {{customer_name}}, {{order_id}}, and {{total_amount}}, then click "Save Template".',
+                    },
+                    {
+                      q: 'What does the "Refresh" button at the top of Settings do?',
+                      a: 'The Refresh button re-syncs all business preferences, tax rates, printer settings, and custom templates with your cloud database and local storage without logging you out of your terminal.',
+                    },
+                    {
+                      q: 'Where do I enter our GSTIN and HSN code for tax invoices?',
+                      a: 'You can update your 15-digit GSTIN under Business profile or Tax & currency. Tax & currency allows configuring CGST (9%) + SGST (9%), toggling tax-inclusive billing, and specifying the laundry SAC/HSN code (default: 999712).',
+                    },
+                    {
+                      q: 'How do I assign a driver to an On-Call order?',
+                      a: 'In the Orders & POS screen, look for the "Assign Driver" or "Assign Pickup" button on any On-Call order row. Select a driver from your fleet and click Assign.',
+                    },
+                    {
+                      q: 'Can I add custom garment services to the intake catalog?',
+                      a: 'Yes! Open any order edit dialog or Create Order modal to browse and select garments across Wash, Steam, Dry Clean, and Premium Care categories.',
+                    },
+                    {
+                      q: 'Where are customer master records and transaction logs saved?',
+                      a: 'All master customer records, receipts, and order states are synchronized in real-time with your live Supabase cloud database, with local caching for instant counter lookups even during network drops.',
+                    },
+                  ]
+                    .filter((faq) => {
+                      if (!faqSearchQuery.trim()) return true;
+                      const q = faqSearchQuery.toLowerCase();
+                      return faq.q.toLowerCase().includes(q) || faq.a.toLowerCase().includes(q);
+                    })
+                    .map((faq, i) => (
+                      <details key={i} className="faq-item" open={Boolean(faqSearchQuery.trim())}>
+                        <summary className="faq-question">
+                          <span>{faq.q}</span>
+                          <span className="faq-chevron">▾</span>
+                        </summary>
+                        <p className="faq-answer">{faq.a}</p>
+                      </details>
+                    ))}
+                  {faqSearchQuery.trim() &&
+                    [
+                      { q: 'paper size 58mm', a: '' },
+                      { q: 'upi qr', a: '' },
+                      { q: 'whatsapp template', a: '' },
+                      { q: 'refresh button', a: '' },
+                      { q: 'gstin hsn', a: '' },
+                      { q: 'driver on-call', a: '' },
+                      { q: 'custom garment', a: '' },
+                      { q: 'customer records', a: '' },
+                    ].filter((faq) => {
+                      const q = faqSearchQuery.toLowerCase();
+                      return faq.q.toLowerCase().includes(q);
+                    }).length === 0 && (
+                      <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+                        No questions found matching "{faqSearchQuery}". Contact our helpline below for instant support!
+                      </div>
+                    )}
                 </div>
               </div>
 
