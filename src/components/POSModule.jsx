@@ -1977,7 +1977,7 @@ export default function POSModule({
                     ))}
                   </div>
                   {/* ── Cards View Pagination Bar ── */}
-                  <div className="pagination-bar">
+                  <div className="pagination-bar pos-cards-pagination-bar">
                     <span className="pagination-info">
                       Showing {filteredOrders.length === 0 ? 0 : ((ordersPage - 1) * ORDERS_PER_PAGE) + 1}–{Math.min(ordersPage * ORDERS_PER_PAGE, filteredOrders.length)} of {filteredOrders.length} orders
                     </span>
@@ -2044,8 +2044,8 @@ export default function POSModule({
                   </div>
                 </>
               ) : (
-                <>
-                  <div className="pos-orders-table-card" ref={tableScrollRef}>
+                <div className="pos-orders-table-card">
+                  <div className="pos-orders-table-scroll" ref={tableScrollRef}>
                     <table className="pos-orders-table">
                     <thead>
                       <tr>
@@ -4149,8 +4149,8 @@ export default function POSModule({
                     </tbody>
                   </table>
                 </div>
-                {/* ── Orders Pagination Bar ── */}
-                <div className="pagination-bar">
+                {/* ── Orders Table Footer Pagination Bar ── */}
+                <div className="pagination-bar pos-table-pagination-footer">
                     <span className="pagination-info">
                       Showing {filteredOrders.length === 0 ? 0 : ((ordersPage - 1) * ORDERS_PER_PAGE) + 1}–{Math.min(ordersPage * ORDERS_PER_PAGE, filteredOrders.length)} of {filteredOrders.length} orders
                     </span>
@@ -4215,7 +4215,7 @@ export default function POSModule({
                       </div>
                     </div>
                   </div>
-                </>
+                </div>
               )}
             </>
           )}

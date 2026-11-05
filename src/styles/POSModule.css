@@ -891,7 +891,7 @@ body.dark-theme .pos-btn-side,
   border-radius: 9px;
   font-size: 12.5px;
   font-weight: 700;
-  font-family: 'Inter', sans-serif;
+  font-family: monospace;
 }
 
 /* ── 3-Column Layout ── */
@@ -2193,7 +2193,7 @@ body.light-theme .pos-search-result-phone,
 .pos-search-result-id {
   font-size: 11px;
   color: #a5b4fc;
-  font-family: 'Inter', sans-serif;
+  font-family: monospace;
 }
 
 body.light-theme .pos-search-result-id,
@@ -2444,7 +2444,7 @@ body.light-theme .pos-top-result-item:hover,
   padding: 2px 6px;
   border-radius: 5px;
   font-size: 11px;
-  font-family: 'Inter', sans-serif;
+  font-family: monospace;
   font-weight: 700;
   border: 1px solid #1c2e4a;
 }
@@ -2572,19 +2572,17 @@ body.light-theme .pos-top-result-item:hover,
   box-shadow: 0 6px 20px rgba(118, 104, 255, 0.45);
 }
 
-/* Orders Table Card with Smooth Contained Horizontal Scroller */
+/* Orders Table Card Container with Smooth Contained Table Scroller & Integrated Footer */
 .pos-orders-table-card {
   background: #081527;
   border: 1.5px solid #1c2e4a;
   border-radius: 14px;
-  overflow-x: auto !important;
-  overflow-y: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
   /* main = 100vh-62px, inner padding 44px top, header ~90px, pills ~50px, toolbar ~56px, gap ~20px */
   max-height: calc(100vh - 62px - 280px);
   max-height: calc(100dvh - 62px - 280px);
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin !important;
-  scrollbar-color: #2b3d5b rgba(0, 0, 0, 0.1) !important;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
   width: 100%;
   max-width: 100%;
@@ -2592,28 +2590,41 @@ body.light-theme .pos-top-result-item:hover,
   margin-bottom: 8px;
 }
 
+/* Inner Horizontal and Vertical Scroll Container for the Table */
+.pos-orders-table-scroll {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin !important;
+  scrollbar-color: #2b3d5b rgba(0, 0, 0, 0.1) !important;
+}
+
 /* Mobile & Tablet */
 @media (max-width: 960px) {
   .pos-orders-table-card {
     max-height: calc(100vh - 62px - 240px);
     max-height: calc(100dvh - 62px - 240px);
-    overflow-y: auto !important;
-    overflow-x: auto !important;
     border-radius: 12px;
   }
 }
 
+.pos-orders-table-scroll::-webkit-scrollbar,
 .pos-orders-table-card::-webkit-scrollbar {
   width: 6px !important;
   height: 10px !important;
   display: block !important;
 }
 
+.pos-orders-table-scroll::-webkit-scrollbar-track,
 .pos-orders-table-card::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.15) !important;
   border-radius: 6px !important;
 }
 
+.pos-orders-table-scroll::-webkit-scrollbar-thumb,
 .pos-orders-table-card::-webkit-scrollbar-thumb {
   background: #233550 !important;
   border-radius: 6px !important;
@@ -2621,10 +2632,12 @@ body.light-theme .pos-top-result-item:hover,
   min-width: 40px !important;
 }
 
+.pos-orders-table-scroll::-webkit-scrollbar-thumb:hover,
 .pos-orders-table-card::-webkit-scrollbar-thumb:hover {
   background: #475d82 !important;
 }
 
+.pos-orders-table-scroll::-webkit-scrollbar-corner,
 .pos-orders-table-card::-webkit-scrollbar-corner {
   background: rgba(0, 0, 0, 0.15) !important;
 }
@@ -2984,27 +2997,40 @@ body.light-theme .pos-layout-btn.active,
 }
 
 body.light-theme .pos-orders-table-card,
-[data-theme="light"] .pos-orders-table-card {
+[data-theme="light"] .pos-orders-table-card,
+body.light-theme .pos-orders-table-scroll,
+[data-theme="light"] .pos-orders-table-scroll {
   background: #ffffff !important;
   border: 1.5px solid #cbd5e1 !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06) !important;
   scrollbar-color: #cbd5e1 #f8fafc !important;
 }
 
+body.light-theme .pos-orders-table-scroll {
+  border: none !important;
+  box-shadow: none !important;
+}
+
 body.light-theme .pos-orders-table-card::-webkit-scrollbar-track,
-[data-theme="light"] .pos-orders-table-card::-webkit-scrollbar-track {
+[data-theme="light"] .pos-orders-table-card::-webkit-scrollbar-track,
+body.light-theme .pos-orders-table-scroll::-webkit-scrollbar-track,
+[data-theme="light"] .pos-orders-table-scroll::-webkit-scrollbar-track {
   background: #f8fafc !important;
   border-radius: 6px !important;
 }
 
 body.light-theme .pos-orders-table-card::-webkit-scrollbar-thumb,
-[data-theme="light"] .pos-orders-table-card::-webkit-scrollbar-thumb {
+[data-theme="light"] .pos-orders-table-card::-webkit-scrollbar-thumb,
+body.light-theme .pos-orders-table-scroll::-webkit-scrollbar-thumb,
+[data-theme="light"] .pos-orders-table-scroll::-webkit-scrollbar-thumb {
   background: #cbd5e1 !important;
   border-radius: 6px !important;
 }
 
 body.light-theme .pos-orders-table-card::-webkit-scrollbar-thumb:hover,
-[data-theme="light"] .pos-orders-table-card::-webkit-scrollbar-thumb:hover {
+[data-theme="light"] .pos-orders-table-card::-webkit-scrollbar-thumb:hover,
+body.light-theme .pos-orders-table-scroll::-webkit-scrollbar-thumb:hover,
+[data-theme="light"] .pos-orders-table-scroll::-webkit-scrollbar-thumb:hover {
   background: #94a3b8 !important;
 }
 
@@ -5008,13 +5034,25 @@ body.light-theme .pos-status-pill.active,
   box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25) !important;
 }
 
-/* Orders Table Card */
+/* Orders Table Card Container */
 .pos-orders-table-card {
   border-radius: 12px !important;
   border: 1px solid #e2e8f0 !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
   background: #ffffff !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+/* Inner Table Scroll Container */
+.pos-orders-table-scroll {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  min-height: 0 !important;
   overflow-x: auto !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
 }
 
 /* Table Dimensions & Layout */
@@ -5048,16 +5086,51 @@ body.light-theme .pos-orders-table tbody tr.pos-order-row:hover,
   background: #f8fafc !important;
 }
 
-/* Clean Pagination Alignment */
-.pagination-bar {
+/* Table Footer Pagination Alignment (Integrated inside table card container) */
+.pos-orders-table-card .pagination-bar,
+.pos-table-pagination-footer {
   display: flex !important;
   align-items: center !important;
   justify-content: space-between !important;
-  padding: 12px 8px !important;
-  margin-top: 8px !important;
-  border-top: 1px solid #e2e8f0 !important;
+  padding: 11px 18px !important;
+  margin-top: 0 !important;
+  border-top: 1px solid #e8edf5 !important;
+  background: #ffffff !important;
+  border-radius: 0 0 12px 12px !important;
   width: 100% !important;
   box-sizing: border-box !important;
+  flex-shrink: 0 !important;
+  position: relative !important;
+  z-index: 6 !important;
+}
+
+body.dark-theme .pos-orders-table-card .pagination-bar,
+[data-theme="dark"] .pos-orders-table-card .pagination-bar,
+body.dark-theme .pos-table-pagination-footer,
+[data-theme="dark"] .pos-table-pagination-footer {
+  background: #0a1628 !important;
+  border-top-color: #1c2e4a !important;
+}
+
+/* Standalone / External Pagination Bar (Cards view & Customer Management) */
+.pagination-bar:not(.pos-table-pagination-footer) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 12px 16px !important;
+  margin-top: 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+body.dark-theme .pagination-bar:not(.pos-table-pagination-footer),
+[data-theme="dark"] .pagination-bar:not(.pos-table-pagination-footer) {
+  background: #0a1628 !important;
+  border-color: #1c2e4a !important;
 }
 
 body.light-theme .pagination-info,

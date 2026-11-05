@@ -1039,7 +1039,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
           </div>
 
           {/* ── Customer Pagination Bar ── */}
-          <div className="pagination-bar">
+          <div className="pagination-bar cust-pagination-bar">
             <span className="pagination-info">
               Showing {customers.length === 0 ? 0 : ((custPage - 1) * CUSTS_PER_PAGE) + 1}–{Math.min(custPage * CUSTS_PER_PAGE, customers.length)} of {customers.length} customers
             </span>
