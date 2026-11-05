@@ -5,21 +5,30 @@ import { LanguageProvider } from './context/LanguageContext';
 import './styles/theme.css';
 import './styles/washdoor.css';
 
-class ErrorBoundary extends React.Component {
-  constructor(props) {
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError(error) {
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error, errorInfo) {
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
     console.error('Washdoor App ErrorBoundary caught an error:', error, errorInfo);
   }
 
-  handleReset = () => {
+  handleReset = (): void => {
     try {
       localStorage.removeItem('washdoor_orders_cache');
       localStorage.removeItem('washdoor_customers_cache');
@@ -29,7 +38,7 @@ class ErrorBoundary extends React.Component {
     window.location.reload();
   };
 
-  render() {
+  render(): React.ReactNode {
     if (this.state.hasError) {
       return (
         <div
@@ -122,12 +131,15 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <LanguageProvider>
-        <App />
-      </LanguageProvider>
-    </ErrorBoundary>
-  </React.StrictMode>
-);
+const rootElement = document.getElementById('root');
+if (rootElement) {
+  ReactDOM.createRoot(rootElement).render(
+    <React.StrictMode>
+      <ErrorBoundary>
+        <LanguageProvider>
+          <App />
+        </LanguageProvider>
+      </ErrorBoundary>
+    </React.StrictMode>
+  );
+}

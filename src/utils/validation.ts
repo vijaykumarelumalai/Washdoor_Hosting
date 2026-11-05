@@ -1,0 +1,299 @@
+// src/utils/validation.ts
+// Validation logic for Customer & Order data
+
+import { Customer } from '../types/customer';
+import { StoreSettings } from '../types/settings';
+
+export interface CustomerValidationErrors {
+  customer_name?: string;
+  mobile_number?: string;
+  alternate_phone?: string;
+  pincode?: string;
+  email?: string;
+  map_link?: string;
+  [key: string]: string | undefined;
+}
+
+export interface BusinessProfileValidationErrors {
+  shopName?: string;
+  phone?: string;
+  email?: string;
+  whatsappNumber?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pinCode?: string;
+  gstNumber?: string;
+  [key: string]: string | undefined;
+}
+
+export interface SupabaseLikeError {
+  message?: string;
+  code?: string | number;
+  details?: string | null;
+  hint?: string | null;
+}
+
+export function normalizeMobileNumber(phone: string | number | null | undefined): string {
+  if (!phone) return '';
+  const digits = String(phone).replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return digits.slice(2);
+  }
+  if (digits.length === 11 && digits.startsWith('0')) {
+    return digits.slice(1);
+  }
+  return digits;
+}
+
+/**
+ * Validates if a phone number is a valid 10-digit Indian mobile number (starts with 6, 7, 8, or 9).
+ */
+export function isValidIndianMobile(phone: string | number | null | undefined): boolean {
+  if (!phone) return false;
+  const clean = normalizeMobileNumber(phone);
+  return /^[6-9]\d{9}$/.test(clean);
+}
+
+/**
+ * Checks if a search query string is formatted strictly as a mobile number.
+ * Rejects any query containing alphabetic text or symbols.
+ */
+export function isMobileNumberQuery(query: string | null | undefined): boolean {
+  if (!query || typeof query !== 'string') return false;
+  const trimmed = query.trim();
+  if (!trimmed) return false;
+
+  // Must only contain digits, optional leading '+', spaces, or hyphens
+  if (!/^\+?[\d\s-]+$/.test(trimmed)) {
+    return false;
+  }
+
+  const digits = trimmed.replace(/\D/g, '');
+  const clean = digits.length === 12 && digits.startsWith('91')
+    ? digits.slice(2)
+    : digits.length === 11 && digits.startsWith('0')
+    ? digits.slice(1)
+    : digits;
+
+  return clean.length === 10;
+}
+
+export function validateCustomer(data: Partial<Customer>): CustomerValidationErrors {
+  const errors: CustomerValidationErrors = {};
+
+  // Required: Customer name
+  if (!data.customer_name || !data.customer_name.trim()) {
+    errors.customer_name = 'Customer name is required.';
+  }
+
+  // Required: Mobile number (normalized to 10-digit national number with +91 country code, starting with 6-9)
+  const cleanMobile = normalizeMobileNumber(data.mobile_number);
+  if (!cleanMobile) {
+    errors.mobile_number = 'Mobile number is required.';
+  } else if (!/^[6-9]\d{9}$/.test(cleanMobile)) {
+    errors.mobile_number = 'Enter a valid 10-digit Indian mobile number (starts with 6, 7, 8, or 9).';
+  }
+
+  // Optional: Alternate phone (exactly 10 numeric digits starting with 6-9 if provided)
+  if (data.alternate_phone && data.alternate_phone.trim()) {
+    const cleanAlt = normalizeMobileNumber(data.alternate_phone);
+    if (!/^[6-9]\d{9}$/.test(cleanAlt)) {
+      errors.alternate_phone = 'Alternate phone must be a valid 10-digit Indian mobile number (starts with 6-9).';
+    }
+  }
+
+  // Optional: Pincode (exactly 6 numeric digits if provided)
+  if (data.pincode && data.pincode.trim()) {
+    if (!/^[0-9]{6}$/.test(data.pincode.trim())) {
+      errors.pincode = 'Pincode must contain exactly 6 digits.';
+    }
+  }
+
+  // Optional: Email format
+  if (data.email && data.email.trim()) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email.trim())) {
+      errors.email = 'Enter a valid email address.';
+    }
+  }
+
+  // Optional: Map link (must be a valid URL with http:// or https://)
+  if (data.map_link && data.map_link.trim()) {
+    try {
+      const url = new URL(data.map_link.trim());
+      if (!['http:', 'https:'].includes(url.protocol)) {
+        errors.map_link = 'Map link must start with http:// or https://';
+      }
+    } catch {
+      errors.map_link = 'Enter a valid URL for the map link.';
+    }
+  }
+
+  return errors;
+}
+
+export function friendlySupabaseError(error: SupabaseLikeError | Error | string | null | undefined): string | null {
+  if (!error) return null;
+  const errObj = typeof error === 'object' ? error : { message: String(error) };
+  const message = errObj.message || String(error);
+  const code = (errObj as SupabaseLikeError).code;
+
+  if (message.includes('row-level security') || code === '42501' || code === 42501) {
+    return 'Supabase Row Level Security (RLS) is blocking inserts. Run the RLS policy in Supabase SQL Editor.';
+  }
+
+  if (message.includes('customers_mobile_number_key') || message.includes('duplicate key value')) {
+    return 'This mobile number is already registered in the system.';
+  }
+  if (message.includes('check constraint') || message.includes('violates check')) {
+    if (message.includes('mobile_number')) return 'Mobile number must be exactly 10 digits.';
+    if (message.includes('pincode')) return 'Pincode must be exactly 6 digits.';
+    if (message.includes('alternate_phone')) return 'Alternate phone must be exactly 10 digits.';
+    if (message.includes('email')) return 'Invalid email format.';
+    if (message.includes('map_link')) return 'Map link must start with http:// or https://';
+  }
+  if (message.includes('foreign key') || message.includes('violates foreign key')) {
+    return 'Cannot delete customer because they have existing orders.';
+  }
+
+  return message;
+}
+
+export function formatPhoneDisplay(phone: string | number | null | undefined): string {
+  if (!phone) return '';
+  const clean = normalizeMobileNumber(phone);
+  if (clean.length === 10) {
+    return `+91 ${clean.slice(0, 5)} ${clean.slice(5)}`;
+  }
+  return String(phone);
+}
+
+export function formatDOB(isoDate: string | null | undefined): string {
+  if (!isoDate) return '';
+  const clean = String(isoDate).trim();
+  const parts = clean.split('-');
+  if (parts.length === 3) {
+    const [year, month, day] = parts;
+    return `${day.padStart(2, '0')}-${month.padStart(2, '0')}-${year}`;
+  }
+  return clean;
+}
+
+export function parseDOBInput(input: string | null | undefined): string {
+  if (!input) return '';
+  const clean = String(input).trim();
+  if (/^\d{1,2}[-/.]\d{1,2}[-/.]\d{4}$/.test(clean)) {
+    const parts = clean.split(/[-/.]/);
+    const day = parts[0].padStart(2, '0');
+    const month = parts[1].padStart(2, '0');
+    const year = parts[2];
+    return `${year}-${month}-${day}`;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+    return clean;
+  }
+  return clean;
+}
+
+export function getAgeFromDOB(dobStr: string | null | undefined): number | null {
+  if (!dobStr) return null;
+  const parts = String(dobStr).split('-');
+  if (parts.length !== 3) return null;
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  const birthDate = new Date(year, month, day);
+  if (isNaN(birthDate.getTime())) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age >= 0 && age <= 120 ? age : null;
+}
+
+/**
+ * Validates Business Profile settings for the laundry shop.
+ * Covers Shop Name, Phone, Email, WhatsApp number, Address, City, State, PIN Code, and GST number.
+ */
+export function validateBusinessProfile(data: Partial<StoreSettings> = {}): BusinessProfileValidationErrors {
+  const errors: BusinessProfileValidationErrors = {};
+
+  // Shop name (required, min 2 chars)
+  if (!data.shopName || !String(data.shopName).trim()) {
+    errors.shopName = 'Shop name is required.';
+  } else if (String(data.shopName).trim().length < 2) {
+    errors.shopName = 'Shop name must be at least 2 characters.';
+  }
+
+  // Phone (required, strictly 10 numeric digits)
+  const phoneVal = data.phone != null ? String(data.phone).trim() : '';
+  const cleanPhone = normalizeMobileNumber(phoneVal);
+  if (!phoneVal) {
+    errors.phone = 'Phone number is required.';
+  } else if (/[a-zA-Z]/.test(phoneVal)) {
+    errors.phone = 'Phone number cannot contain letters. Only numeric digits allowed.';
+  } else if (cleanPhone.length !== 10) {
+    errors.phone = `Phone number must be exactly 10 digits (currently ${cleanPhone.length}/10).`;
+  } else if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+    errors.phone = 'Enter a valid 10-digit Indian phone number starting with 6, 7, 8, or 9.';
+  }
+
+  // Email (required, valid format)
+  const emailVal = data.email != null ? String(data.email).trim() : '';
+  if (!emailVal) {
+    errors.email = 'Email address is required.';
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
+    errors.email = 'Enter a valid email address (e.g. info@washdoor.in).';
+  }
+
+  // WhatsApp number (optional, but if provided, strictly 10 digits)
+  if (data.whatsappNumber && String(data.whatsappNumber).trim()) {
+    const waVal = String(data.whatsappNumber).trim();
+    const cleanWA = normalizeMobileNumber(waVal);
+    if (/[a-zA-Z]/.test(waVal)) {
+      errors.whatsappNumber = 'WhatsApp number cannot contain letters. Only numeric digits allowed.';
+    } else if (cleanWA.length !== 10) {
+      errors.whatsappNumber = `WhatsApp number must be exactly 10 digits (currently ${cleanWA.length}/10).`;
+    } else if (!/^[6-9]\d{9}$/.test(cleanWA)) {
+      errors.whatsappNumber = 'Enter a valid 10-digit WhatsApp number starting with 6, 7, 8, or 9.';
+    }
+  }
+
+  // Address (required, min 5 chars)
+  if (!data.address || !String(data.address).trim()) {
+    errors.address = 'Shop address is required.';
+  } else if (String(data.address).trim().length < 5) {
+    errors.address = 'Shop address must be at least 5 characters.';
+  }
+
+  // City (required)
+  if (!data.city || !String(data.city).trim()) {
+    errors.city = 'City is required.';
+  }
+
+  // State (required)
+  if (!data.state || !String(data.state).trim()) {
+    errors.state = 'State is required.';
+  }
+
+  // PIN Code (required, exactly 6 digits)
+  const pinVal = data.pinCode != null ? String(data.pinCode).trim() : '';
+  if (!pinVal) {
+    errors.pinCode = 'PIN code is required.';
+  } else if (!/^\d{6}$/.test(pinVal)) {
+    errors.pinCode = 'Enter a valid 6-digit PIN code (e.g. 632401).';
+  }
+
+  // GST number (optional, but if provided, must match Indian GSTIN format)
+  if (data.gstNumber && String(data.gstNumber).trim()) {
+    const cleanGST = String(data.gstNumber).trim().toUpperCase();
+    if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(cleanGST)) {
+      errors.gstNumber = 'Enter a valid 15-character GSTIN (e.g. 33AABCT1332L1Z8).';
+    }
+  }
+
+  return errors;
+}
