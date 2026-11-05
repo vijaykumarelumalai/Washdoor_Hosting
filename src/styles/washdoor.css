@@ -3337,7 +3337,7 @@ select option {
 }
 
 /* ── Responsive adjustments ── */
-@media (max-width: 840px) {
+@media (max-width: 768px) {
   .topbar {
     margin-left: 0 !important;
     width: 100% !important;
@@ -3394,9 +3394,6 @@ select option {
     padding-left: 0 !important;
     border-right: none !important;
     height: auto !important;
-  }
-  .sidebar-toggle-btn {
-    display: none !important;
   }
   .brand {
     gap: 8px;
@@ -7194,7 +7191,7 @@ html, body, #root, .app {
     padding: 0 10px;
     max-width: 100vw;
     box-sizing: border-box;
-    overflow-x: hidden;
+    overflow: visible !important;
   }
   .top-pill {
     padding: 5px 8px;
@@ -8585,10 +8582,12 @@ body.dark-theme .topbar,
   width: calc(100% - 68px) !important;
 }
 
-/* Topbar Mobile Menu Button (Desktop: Hidden; Mobile: Visible) */
-@media (min-width: 841px) {
+/* Topbar Mobile Menu Button (Desktop > 768px: Hidden; Mobile <= 768px: Visible) */
+@media (min-width: 769px) {
   .topbar-sidebar-toggle-btn,
-  .topbar-mobile-menu-btn {
+  .topbar-mobile-menu-btn,
+  .topbar-mobile-left,
+  .topbar-mobile-brand {
     display: none !important;
   }
 }
@@ -8842,58 +8841,140 @@ body.dark-theme .top-pill:hover,
   box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.2) !important;
 }
 
+/* ── Admin Avatar Button (Crystal Clear in Light Theme & Dark Theme) ── */
 .top-admin-avatar-btn {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  border-radius: 50% !important;
+  background: #2563eb !important;
+  border: 1.5px solid #60a5fa !important;
+  color: #ffffff !important;
+  font-size: 14.5px !important;
+  font-weight: 750 !important;
   display: inline-flex !important;
   align-items: center !important;
-  gap: 5px !important;
-  background: transparent !important;
-  border: none !important;
+  justify-content: center !important;
   cursor: pointer !important;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35) !important;
+  transition: all 0.18s ease !important;
   padding: 0 !important;
+  user-select: none !important;
   flex-shrink: 0 !important;
-  outline: none !important;
-  box-shadow: none !important;
-  border-radius: 9999px !important;
+  line-height: 1 !important;
+  text-align: center !important;
 }
 
-.top-admin-avatar-circle {
-  width: 32px !important;
-  height: 32px !important;
-  border-radius: 50% !important;
-  background: #4338ca !important;
+.top-admin-avatar-btn:hover,
+.top-admin-avatar-btn.active {
+  background: #1d4ed8 !important;
+  border-color: #93c5fd !important;
+  box-shadow: 0 0 12px rgba(37, 99, 235, 0.55) !important;
+  transform: translateY(-1px) !important;
+}
+
+body.dark-theme .top-admin-avatar-btn,
+[data-theme="dark"] .top-admin-avatar-btn {
+  background: #2563eb !important;
+  border-color: #60a5fa !important;
   color: #ffffff !important;
-  font-weight: 700 !important;
-  font-size: 13.5px !important;
-  display: grid !important;
-  place-items: center !important;
-  box-shadow: 0 1px 3px rgba(67, 56, 202, 0.35) !important;
-  transition: transform 0.15s ease !important;
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.45) !important;
 }
 
-.top-admin-avatar-btn:hover .top-admin-avatar-circle {
-  transform: scale(1.05) !important;
+body.light-theme .top-admin-avatar-btn,
+[data-theme="light"] .top-admin-avatar-btn {
+  background: #2563eb !important;
+  border-color: #3b82f6 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3) !important;
 }
 
-.top-admin-avatar-chevron {
-  color: #475569 !important;
-  transition: transform 0.2s ease !important;
+/* ── Desktop Sidebar Toggle Button in Topbar (Visible when sidebar collapsed, Image 5 style) ── */
+.topbar-desktop-toggle-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  border-radius: 8px !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+  cursor: pointer !important;
+  flex-shrink: 0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+  transition: all 0.15s ease !important;
 }
 
-body.dark-theme .top-admin-avatar-chevron,
-[data-theme="dark"] .top-admin-avatar-chevron {
-  color: #94a3b8 !important;
+.topbar-desktop-toggle-btn:hover {
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  transform: translateY(-1px) !important;
 }
 
-@media (max-width: 840px) {
-  /* Mobile Off-Canvas Drawer (Hidden off-screen when closed) */
-  .sidebar {
+body.dark-theme .topbar-desktop-toggle-btn,
+[data-theme="dark"] .topbar-desktop-toggle-btn {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-theme .topbar-desktop-toggle-btn:hover,
+[data-theme="dark"] .topbar-desktop-toggle-btn:hover {
+  background: #273549 !important;
+  border-color: #475569 !important;
+  color: #ffffff !important;
+}
+
+@media (max-width: 768px) {
+  .topbar-desktop-toggle-btn {
+    display: none !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   MOBILE SIDEBAR RESPONSIVENESS (BELOW 768px & AT 768px)
+   ══════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* Mobile Backdrop Overlay */
+  .sidebar-overlay {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    background: rgba(15, 23, 42, 0.55) !important;
+    backdrop-filter: blur(3px) !important;
+    -webkit-backdrop-filter: blur(3px) !important;
+    z-index: 998 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transition: opacity 0.25s ease !important;
+  }
+
+  .sidebar-overlay.open {
+    display: block !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  /* Mobile Slide-in Drawer: 280px wide, hidden off-screen when closed */
+  .sidebar,
+  .sidebar.collapsed {
     position: fixed !important;
     top: 0 !important;
     bottom: 0 !important;
     left: -320px !important;
     transform: translateX(-100%) !important;
-    width: 270px !important;
+    width: 280px !important;
+    min-width: 280px !important;
+    max-width: 280px !important;
     height: 100vh !important;
+    height: 100dvh !important;
     border-radius: 0 !important;
     margin: 0 !important;
     padding: 16px 14px !important;
@@ -8902,20 +8983,14 @@ body.dark-theme .top-admin-avatar-chevron,
     pointer-events: none !important;
     opacity: 0 !important;
     box-shadow: none !important;
-    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), left 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease, visibility 0.28s !important;
   }
 
-  /* When collapsed class is active on mobile, maintain off-screen position until opened */
-  .sidebar.collapsed {
-    left: -320px !important;
-    transform: translateX(-100%) !important;
-    width: 270px !important;
-    visibility: hidden !important;
-    pointer-events: none !important;
-    opacity: 0 !important;
-  }
-
-  /* Mobile Drawer Open via hamburger tap */
+  /* Drawer Open state via hamburger tap */
   .sidebar.mobile-open,
   .sidebar.collapsed.mobile-open {
     left: 0 !important;
@@ -8923,34 +8998,493 @@ body.dark-theme .top-admin-avatar-chevron,
     visibility: visible !important;
     pointer-events: auto !important;
     opacity: 1 !important;
+    width: 280px !important;
+    min-width: 280px !important;
+    max-width: 280px !important;
     box-shadow: 14px 0 45px rgba(0, 0, 0, 0.45) !important;
     z-index: 1000 !important;
   }
 
+  /* Light Theme Drawer Background & Border */
+  body.light-theme .sidebar,
+  [data-theme="light"] .sidebar {
+    background: #ffffff !important;
+    border-right: 1px solid #e2e8f0 !important;
+  }
+
+  body.light-theme .sidebar.mobile-open,
+  [data-theme="light"] .sidebar.mobile-open {
+    box-shadow: 14px 0 40px rgba(15, 23, 42, 0.18) !important;
+  }
+
+  /* Dark Theme Drawer Background & Border */
+  body.dark-theme .sidebar,
+  [data-theme="dark"] .sidebar {
+    background: #08111f !important;
+    border-right: 1px solid #17253a !important;
+  }
+
+  /* Mobile Drawer Brand Header: Logo, Name, Subtitle, and Close Button */
+  .sidebar .sidebar-brand-header,
+  .sidebar.collapsed .sidebar-brand-header,
   .sidebar.mobile-open .sidebar-brand-header {
     display: flex !important;
+    align-items: center !important;
     justify-content: flex-start !important;
+    gap: 12px !important;
     padding-bottom: 16px !important;
+    border-bottom: 1px solid #17253a !important;
+    width: 100% !important;
+    min-height: 48px !important;
   }
 
+  body.light-theme .sidebar .sidebar-brand-header,
+  [data-theme="light"] .sidebar .sidebar-brand-header {
+    border-bottom-color: #e2e8f0 !important;
+  }
+
+  .sidebar .sidebar-brand-logo,
+  .sidebar.collapsed .sidebar-brand-logo {
+    width: 42px !important;
+    height: 42px !important;
+    min-width: 42px !important;
+    border-radius: 12px !important;
+    background: #0879f9 !important;
+    display: grid !important;
+    place-items: center !important;
+    color: #ffffff !important;
+    flex-shrink: 0 !important;
+    margin: 0 !important;
+  }
+
+  .sidebar .sidebar-brand-info,
+  .sidebar.collapsed .sidebar-brand-info,
   .sidebar.mobile-open .sidebar-brand-info {
     display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
   }
 
-  .sidebar.mobile-open .sidebar-nav-items .nav .nav-label {
+  .sidebar .sidebar-brand-name,
+  .sidebar.collapsed .sidebar-brand-name {
+    font-size: 19px !important;
+    font-weight: 800 !important;
+    line-height: 1.15 !important;
+    display: block !important;
+    color: #ffffff !important;
+  }
+
+  body.light-theme .sidebar .sidebar-brand-name,
+  [data-theme="light"] .sidebar .sidebar-brand-name {
+    color: #0f172a !important;
+  }
+
+  .sidebar .sidebar-brand-sub,
+  .sidebar.collapsed .sidebar-brand-sub {
+    font-size: 11.5px !important;
+    font-weight: 650 !important;
+    color: #8fa2bd !important;
+    margin-top: 2px !important;
+    display: block !important;
+  }
+
+  body.light-theme .sidebar .sidebar-brand-sub,
+  [data-theme="light"] .sidebar .sidebar-brand-sub {
+    color: #64748b !important;
+  }
+
+  /* Close / Hamburger toggle button in Drawer Header */
+  .sidebar .sidebar-toggle-btn,
+  .sidebar.collapsed .sidebar-toggle-btn,
+  .sidebar .sidebar-hamburger-btn,
+  .sidebar.collapsed .sidebar-hamburger-btn,
+  .sidebar.mobile-open .sidebar-hamburger-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    margin-left: auto !important;
+    border-radius: 8px !important;
+    border: 1px solid #1e293b !important;
+    background: #0f172a !important;
+    color: #94a3b8 !important;
+    cursor: pointer !important;
+    flex-shrink: 0 !important;
+  }
+
+  body.light-theme .sidebar .sidebar-hamburger-btn,
+  [data-theme="light"] .sidebar .sidebar-hamburger-btn {
+    border-color: #e2e8f0 !important;
+    background: #f8fafc !important;
+    color: #475569 !important;
+  }
+
+  /* Full Navigation List & Complete Labels in Drawer */
+  .sidebar .sidebar-nav-items,
+  .sidebar.collapsed .sidebar-nav-items,
+  .sidebar.mobile-open .sidebar-nav-items {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+    margin-top: 14px !important;
+    width: 100% !important;
+    padding: 0 !important;
+    align-items: stretch !important;
+    flex: 1 !important;
+  }
+
+  .sidebar .nav,
+  .sidebar.collapsed .nav,
+  .sidebar.mobile-open .nav {
+    width: 100% !important;
+    height: auto !important;
+    min-width: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    padding: 10px 14px !important;
+    gap: 12px !important;
+    font-size: 14px !important;
+    font-weight: 650 !important;
+    border-radius: 12px !important;
+    white-space: nowrap !important;
+    color: #8fa2bd !important;
+    background: transparent !important;
+    border: none !important;
+    box-sizing: border-box !important;
+    text-align: left !important;
+  }
+
+  body.light-theme .sidebar .nav,
+  [data-theme="light"] .sidebar .nav {
+    color: #475569 !important;
+  }
+
+  .sidebar .nav:hover,
+  .sidebar.collapsed .nav:hover {
+    background: #101c30 !important;
+    color: #ffffff !important;
+  }
+
+  body.light-theme .sidebar .nav:hover,
+  [data-theme="light"] .sidebar .nav:hover {
+    background: #f1f5f9 !important;
+    color: #0f172a !important;
+  }
+
+  .sidebar .nav.active,
+  .sidebar.collapsed .nav.active,
+  .sidebar.mobile-open .nav.active {
+    color: #ffffff !important;
+    background: #0879f9 !important;
+    box-shadow: 0 4px 14px rgba(8, 121, 249, 0.35) !important;
+    font-weight: 700 !important;
+  }
+
+  .sidebar .nav.active svg,
+  .sidebar.collapsed .nav.active svg {
+    color: #ffffff !important;
+    stroke: #ffffff !important;
+  }
+
+  .sidebar .nav .nav-label,
+  .sidebar.collapsed .nav .nav-label,
+  .sidebar.mobile-open .nav .nav-label {
+    display: inline-block !important;
+    font-size: 14px !important;
+  }
+
+  /* Sidebar Bottom Container: Store Status Card + Sign Out Button */
+  .sidebar .sidebar-bottom,
+  .sidebar.collapsed .sidebar-bottom,
+  .sidebar.mobile-open .sidebar-bottom {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    width: 100% !important;
+    margin-top: auto !important;
+    padding-top: 14px !important;
+    align-items: stretch !important;
+    flex-shrink: 0 !important;
+  }
+
+  .sidebar .sidebar-store-card,
+  .sidebar.collapsed .sidebar-store-card,
+  .sidebar.mobile-open .sidebar-store-card {
+    width: 100% !important;
+    height: auto !important;
+    min-width: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 10px 12px !important;
+    border-radius: 14px !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2) !important;
+    box-sizing: border-box !important;
+    background: #0b1424 !important;
+    border: 1px solid #1a293f !important;
+  }
+
+  body.light-theme .sidebar .sidebar-store-card,
+  [data-theme="light"] .sidebar .sidebar-store-card {
+    background: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+  }
+
+  .sidebar .sidebar-store-icon,
+  .sidebar.collapsed .sidebar-store-icon {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    border-radius: 10px !important;
+    background: rgba(8, 121, 249, 0.15) !important;
+    color: #38bdf8 !important;
+    display: grid !important;
+    place-items: center !important;
+    flex-shrink: 0 !important;
+    margin: 0 !important;
+  }
+
+  .sidebar .sidebar-store-info,
+  .sidebar.collapsed .sidebar-store-info,
+  .sidebar.mobile-open .sidebar-store-info {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+  }
+
+  .sidebar .sidebar-store-name,
+  .sidebar.collapsed .sidebar-store-name {
+    font-size: 13.5px !important;
+    font-weight: 800 !important;
+    color: #ffffff !important;
+    line-height: 1.2 !important;
+    display: block !important;
+  }
+
+  body.light-theme .sidebar .sidebar-store-name,
+  [data-theme="light"] .sidebar .sidebar-store-name {
+    color: #0f172a !important;
+  }
+
+  .sidebar .sidebar-store-status,
+  .sidebar.collapsed .sidebar-store-status {
+    font-size: 11.5px !important;
+    font-weight: 700 !important;
+    color: #10b981 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    margin-top: 2px !important;
+  }
+
+  .sidebar .sidebar-signout-btn,
+  .sidebar.collapsed .sidebar-signout-btn,
+  .sidebar.mobile-open .sidebar-signout-btn {
+    width: 100% !important;
+    height: auto !important;
+    min-width: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    padding: 11px 16px !important;
+    border-radius: 12px !important;
+    box-sizing: border-box !important;
+    background: rgba(239, 68, 68, 0.12) !important;
+    border: 1px solid rgba(239, 68, 68, 0.25) !important;
+    color: #f87171 !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    cursor: pointer !important;
+    transition: all 0.18s ease !important;
+  }
+
+  body.light-theme .sidebar .sidebar-signout-btn,
+  [data-theme="light"] .sidebar .sidebar-signout-btn {
+    background: #fef2f2 !important;
+    border: 1px solid #fee2e2 !important;
+    color: #ef4444 !important;
+  }
+
+  .sidebar .sidebar-signout-btn span,
+  .sidebar.collapsed .sidebar-signout-btn span,
+  .sidebar.mobile-open .sidebar-signout-btn span {
+    display: inline-block !important;
+  }
+
+  /* ── Marked Fields Hidden on Mobile (Clean & Professional Minimal Topbar) ── */
+  .topbar-search-wrap,
+  .topbar-notification-btn,
+  .top-pill-currency,
+  .top-currency-dropdown-wrap,
+  .top-pill-language,
+  .top-language-dropdown-wrap,
+  .topbar-reports-btn {
+    display: none !important;
+  }
+
+  /* Right-side Mobile Controls matching Image 2 reference: [ • Live ] [ ☀️/🌙 ] [ A ] */
+  .top-pill.top-pill-status {
+    padding: 5px 10px !important;
+    font-size: 12px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    border-radius: 9999px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .top-pill.top-pill-status .top-pill-label-full {
+    display: none !important;
+  }
+
+  .top-pill.top-pill-status .top-pill-label-short {
     display: inline !important;
+    font-weight: 700 !important;
   }
 
-  /* Mobile Backdrop Overlay */
-  .sidebar-overlay.open {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
+  /* Theme Toggle Icon Button on Mobile (Image 2 style) */
+  .top-pill.theme-toggle-btn {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 8px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .theme-toggle-label {
+    display: none !important;
+  }
+
+  /* Admin Account Avatar Button on Mobile (Crucial: ALWAYS prominent and visible) */
+  .top-admin-avatar-btn {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 50% !important;
+    background: #2563eb !important;
+    border: 1.5px solid #60a5fa !important;
+    color: #ffffff !important;
+    font-size: 14.5px !important;
+    font-weight: 750 !important;
+    cursor: pointer !important;
+    flex-shrink: 0 !important;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4) !important;
+    margin: 0 !important;
+  }
+
+  /* Admin Account Dropdown Wrap & Menu on Mobile (Crucial: Display over topbar without clipping) */
+  .top-pill-dropdown-wrap {
+    position: relative !important;
+    overflow: visible !important;
+    display: inline-flex !important;
+    align-items: center !important;
+  }
+
+  .top-admin-dropdown {
+    display: flex !important;
+    flex-direction: column !important;
+    position: absolute !important;
+    top: calc(100% + 8px) !important;
     right: 0 !important;
-    bottom: 0 !important;
-    background: rgba(15, 23, 42, 0.55) !important;
-    backdrop-filter: blur(3px) !important;
-    z-index: 999 !important;
+    left: auto !important;
+    width: max-content !important;
+    min-width: 250px !important;
+    max-width: calc(100vw - 20px) !important;
+    box-sizing: border-box !important;
+    z-index: 1050 !important;
+    border-radius: 14px !important;
+    padding: 8px 12px 12px !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  body.light-theme .top-admin-dropdown,
+  [data-theme="light"] .top-admin-dropdown {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    color: #0f172a !important;
+    box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16), 0 4px 14px rgba(15, 23, 42, 0.08) !important;
+  }
+
+  body.dark-theme .top-admin-dropdown,
+  [data-theme="dark"] .top-admin-dropdown {
+    background: #0f172a !important;
+    border: 1px solid #1e293b !important;
+    color: #f8fafc !important;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7), 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+  }
+
+  /* Mobile Left: Hamburger Button + Elegant Washdoor Brand Header */
+  .topbar-mobile-left {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .topbar-mobile-brand {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    cursor: pointer !important;
+    user-select: none !important;
+  }
+
+  .topbar-mobile-logo {
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+    border-radius: 8px !important;
+    background: #0879f9 !important;
+    color: #ffffff !important;
+    display: grid !important;
+    place-items: center !important;
+    box-shadow: 0 2px 8px rgba(8, 121, 249, 0.3) !important;
+  }
+
+  .topbar-mobile-titles {
+    display: flex !important;
+    flex-direction: column !important;
+    line-height: 1.15 !important;
+  }
+
+  .topbar-mobile-name {
+    font-size: 15px !important;
+    font-weight: 800 !important;
+    color: #ffffff !important;
+    letter-spacing: -0.2px !important;
+  }
+
+  body.light-theme .topbar-mobile-name,
+  [data-theme="light"] .topbar-mobile-name {
+    color: #0f172a !important;
+  }
+
+  .topbar-mobile-sub {
+    font-size: 10.5px !important;
+    font-weight: 650 !important;
+    color: #8fa2bd !important;
+  }
+
+  body.light-theme .topbar-mobile-sub,
+  [data-theme="light"] .topbar-mobile-sub {
+    color: #64748b !important;
   }
 
   /* Topbar Header on Mobile */
@@ -8958,16 +9492,23 @@ body.dark-theme .top-admin-avatar-chevron,
   .topbar.sidebar-collapsed {
     margin-left: 0 !important;
     width: 100% !important;
+    height: 56px !important;
+    min-height: 56px !important;
     padding: 0 12px !important;
     gap: 8px !important;
     position: sticky !important;
     top: 0 !important;
     z-index: 100 !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    overflow: visible !important;
   }
 
   /* Mobile Hamburger Menu Button in Topbar */
   .topbar-mobile-menu-btn {
-    display: flex !important;
+    display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
     width: 36px !important;
@@ -8988,16 +9529,32 @@ body.dark-theme .top-admin-avatar-chevron,
     background: #1e293b !important;
     border-color: #334155 !important;
     color: #cbd5e1 !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
   }
 
-  /* Main Viewport & Elevated Professional Table Z-Index on Mobile */
+  .topbar-mobile-menu-btn:hover {
+    background: #f8fafc !important;
+    color: #0f172a !important;
+  }
+
+  body.dark-theme .topbar-mobile-menu-btn:hover,
+  [data-theme="dark"] .topbar-mobile-menu-btn:hover {
+    background: #273549 !important;
+    color: #ffffff !important;
+  }
+
+  /* Main Viewport on Mobile */
   .main,
   .main.sidebar-collapsed {
     margin-left: 0 !important;
     width: 100% !important;
-    padding: 12px 14px 24px !important;
+    height: auto !important;
+    min-height: calc(100vh - 56px) !important;
+    min-height: calc(100dvh - 56px) !important;
+    padding: 14px 12px 28px !important;
     position: relative !important;
     z-index: 20 !important;
+    box-sizing: border-box !important;
   }
 
   .pos-orders-view-content,

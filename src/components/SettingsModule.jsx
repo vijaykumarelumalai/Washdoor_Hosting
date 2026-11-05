@@ -281,17 +281,17 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
   };
 
   const menuItems = [
-    { id: 'business_profile', label: 'Business profile', icon: '🏪', desc: 'Shop logo, address, contact & map location' },
-    { id: 'tax_currency', label: 'Tax & currency', icon: '🪙', desc: 'GST rate, currency symbol & invoice calculations' },
-    { id: 'bank_payments', label: 'Bank & payments', icon: '🏦', desc: 'Payment categories, bank account & counter UPI QR' },
-    { id: 'operations_receipts', label: 'Operations & receipts', icon: '🧾', desc: 'Thermal receipts, barcodes & disclaimer terms' },
-    { id: 'notifications', label: 'Reminders & notifications', icon: '🔔', desc: 'WhatsApp, SMS & email automated alerts' },
-    { id: 'language', label: 'Language', icon: '🌐', desc: 'Multi-language and text direction' },
-    { id: 'templates', label: 'Template', icon: '📑', desc: 'Predefined WhatsApp, SMS & Email notification templates', isSubItem: true },
-    { id: 'apps', label: 'Apps', icon: '📱', desc: 'Printers, WhatsApp API & accounting integrations' },
-    { id: 'help_support', label: 'Help & support', icon: '❓', desc: 'Documentation, helpline & diagnostics' },
-    { id: 'account_details', label: 'Account', icon: '👤', desc: 'Administrator credentials & security' },
-    { id: 'signout', label: 'Sign Out', icon: '🚪', desc: 'Sign out of store terminal' },
+    { id: 'business_profile', label: t('tab_business_profile', 'Business profile'), icon: '🏪', desc: 'Shop logo, address, contact & map location' },
+    { id: 'tax_currency', label: t('tab_tax_currency', 'Tax & currency'), icon: '🪙', desc: 'GST rate, currency symbol & invoice calculations' },
+    { id: 'bank_payments', label: t('tab_bank_payments', 'Bank & payments'), icon: '🏦', desc: 'Payment categories, bank account & counter UPI QR' },
+    { id: 'operations_receipts', label: t('tab_operations_receipts', 'Operations & receipts'), icon: '🧾', desc: 'Thermal receipts, barcodes & disclaimer terms' },
+    { id: 'notifications', label: t('tab_notifications', 'Reminders & notifications'), icon: '🔔', desc: 'WhatsApp, SMS & email automated alerts' },
+    { id: 'language', label: t('tab_language', 'Language'), icon: '🌐', desc: 'Multi-language and text direction' },
+    { id: 'templates', label: t('tab_template', 'Template'), icon: '📑', desc: 'Predefined WhatsApp, SMS & Email notification templates', isSubItem: true },
+    { id: 'apps', label: t('tab_apps', 'Apps'), icon: '📱', desc: 'Printers, WhatsApp API & accounting integrations' },
+    { id: 'help_support', label: t('tab_help_support', 'Help & support'), icon: '❓', desc: 'Documentation, helpline & diagnostics' },
+    { id: 'account_details', label: t('tab_account', 'Account'), icon: '👤', desc: 'Administrator credentials & security' },
+    { id: 'signout', label: t('btn_sign_out', 'Sign Out'), icon: '🚪', desc: 'Sign out of store terminal' },
   ];
 
   return (

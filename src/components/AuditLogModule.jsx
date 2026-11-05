@@ -259,9 +259,9 @@ export default function AuditLogModule({
               </svg>
             </div>
             <div>
-              <h1 className="audit-main-title">Audit Log</h1>
+              <h1 className="audit-main-title">{t('nav_audit_log', 'Audit Log')}</h1>
               <p className="audit-subtitle">
-                System events, order transitions, driver actions, payments, and financial ledger history.
+                {t('audit_subtitle', 'System events, order transitions, driver actions, payments, and financial ledger history.')}
               </p>
             </div>
           </div>
@@ -270,7 +270,7 @@ export default function AuditLogModule({
         <div className="audit-header-actions">
           <div className="audit-status-badge">
             <span className="audit-pulse-dot"></span>
-            <span>Real-time Logging Active</span>
+            <span>{t('audit_realtime_active', 'Real-time Logging Active')}</span>
           </div>
 
           <button
@@ -307,7 +307,7 @@ export default function AuditLogModule({
               <line x1="3" y1="9" x2="21" y2="9"></line>
               <line x1="3" y1="15" x2="21" y2="15"></line>
             </svg>
-            <span>Export Excel</span>
+            <span>{t('btn_export_excel', 'Export Excel')}</span>
           </button>
 
           <button
@@ -343,7 +343,7 @@ export default function AuditLogModule({
               <polyline points="14 2 14 8 20 8"></polyline>
               <path d="M9 15h6"></path>
             </svg>
-            <span>Export PDF</span>
+            <span>{t('btn_export_pdf', 'Export PDF')}</span>
           </button>
 
           <button
@@ -357,7 +357,7 @@ export default function AuditLogModule({
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
-            <span>Export CSV</span>
+            <span>{t('btn_export_csv', 'Export CSV')}</span>
           </button>
         </div>
       </div>

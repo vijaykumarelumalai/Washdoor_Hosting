@@ -38,13 +38,6 @@ import {
   loadColumnPreferences,
   saveColumnPreferences,
 } from '../services/columnPreferenceService';
-import {
-  ORDER_STATUSES,
-  ORDER_STATUS_CONFIG,
-  PROPERTY_STATUSES,
-  SERVICE_CATEGORIES,
-  normalizeOrderStatus as centralNormalizeOrderStatus,
-} from '../config/businessRules';
 import '../styles/POSModule.css';
 
 const DEFAULT_PRODUCTS = [
@@ -67,17 +60,16 @@ const DEFAULT_PRODUCTS = [
 ];
 
 const CATEGORIES = ['All Items', 'Men', 'Women', 'Kids', 'Home Linen', 'Accessories'];
-const SERVICE_OPTIONS = [
-  'Laundry',
-  'Dry cleaning',
-  'Washing by KG',
-  'Shoe cleaning',
-  'Ironing only',
-  'Customer category',
-];
+const SERVICE_OPTIONS = ['Wash & Steam Press', 'Wash & Fold', 'Dry Cleaning', 'Steam Press Only', 'Heavy Linens'];
 
 export function normalizeOrderStatus(raw) {
-  return centralNormalizeOrderStatus(raw);
+  const s = String(raw || '').trim().toLowerCase();
+  if (s.includes('cancel')) return 'Cancelled';
+  if (s.includes('deliver') || s.includes('complete')) return 'Delivered';
+  if (s.includes('ready') || s.includes('billing')) return 'Ready';
+  if (s.includes('receive') || s.includes('intake') || s.includes('new') || s.includes('overdue')) return 'Order Received';
+  if (s.includes('progress') || s.includes('wash') || s.includes('iron') || s.includes('process')) return 'In Progress';
+  return 'Order Received';
 }
 
 const EDIT_CATALOG_ITEMS = [
@@ -811,19 +803,23 @@ export default function POSModule({
     };
   }, [scheduleOrderTarget, assignDriverTarget]);
 
-  // Compute live counts for all 9 Status Filter Pills
+  // Compute live counts for Status Filter Pills (Order Received, In Progress, Ready, Delivered, Cancelled)
   const statusCounts = useMemo(() => {
-    const counts = { all: orders.length };
-    ORDER_STATUSES.forEach((st) => {
-      counts[st] = 0;
-    });
+    const counts = {
+      all: orders.length,
+      received: 0,
+      inProgress: 0,
+      ready: 0,
+      delivered: 0,
+      cancelled: 0,
+    };
     orders.forEach((o) => {
       const norm = normalizeOrderStatus(o.order_status || o.status);
-      if (counts[norm] !== undefined) {
-        counts[norm]++;
-      } else {
-        counts['other'] = (counts['other'] || 0) + 1;
-      }
+      if (norm === 'Order Received') counts.received++;
+      else if (norm === 'In Progress') counts.inProgress++;
+      else if (norm === 'Ready') counts.ready++;
+      else if (norm === 'Delivered') counts.delivered++;
+      else if (norm === 'Cancelled') counts.cancelled++;
     });
     return counts;
   }, [orders]);
@@ -1505,26 +1501,70 @@ export default function POSModule({
             <span className="pos-status-pill-count">{statusCounts.all}</span>
           </button>
 
-          {ORDER_STATUSES.map((st) => {
-            const cfg = ORDER_STATUS_CONFIG[st] || { label: st, shortLabel: st, dot: '#2563eb' };
-            const isActive = activeStatusTab === st;
-            return (
-              <button
-                key={st}
-                type="button"
-                className={`pos-status-pill ${isActive ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveStatusTab(st);
-                  setPosViewMode('orders');
-                }}
-                title={`Filter by ${cfg.label}`}
-              >
-                <span className="pos-status-dot" style={{ background: cfg.dot || '#2563eb' }}></span>
-                <span>{cfg.shortLabel || cfg.label}</span>
-                <span className="pos-status-pill-count">{statusCounts[st] || 0}</span>
-              </button>
-            );
-          })}
+          <button
+            type="button"
+            className={`pos-status-pill ${activeStatusTab === 'Order Received' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveStatusTab('Order Received');
+              setPosViewMode('orders');
+            }}
+          >
+            <span className="pos-status-dot dot-received" style={{ background: '#2563eb' }}></span>
+            <span>{t('status_received')}</span>
+            <span className="pos-status-pill-count">{statusCounts.received}</span>
+          </button>
+
+          <button
+            type="button"
+            className={`pos-status-pill ${activeStatusTab === 'In Progress' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveStatusTab('In Progress');
+              setPosViewMode('orders');
+            }}
+          >
+            <span className="pos-status-dot dot-progress" style={{ background: '#f59e0b' }}></span>
+            <span>{t('status_progress')}</span>
+            <span className="pos-status-pill-count">{statusCounts.inProgress}</span>
+          </button>
+
+          <button
+            type="button"
+            className={`pos-status-pill ${activeStatusTab === 'Ready' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveStatusTab('Ready');
+              setPosViewMode('orders');
+            }}
+          >
+            <span className="pos-status-dot dot-ready" style={{ background: '#10b981' }}></span>
+            <span>{t('status_ready')}</span>
+            <span className="pos-status-pill-count">{statusCounts.ready}</span>
+          </button>
+
+          <button
+            type="button"
+            className={`pos-status-pill ${activeStatusTab === 'Delivered' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveStatusTab('Delivered');
+              setPosViewMode('orders');
+            }}
+          >
+            <span className="pos-status-dot dot-delivered" style={{ background: '#0284c7' }}></span>
+            <span>{t('status_delivered')}</span>
+            <span className="pos-status-pill-count">{statusCounts.delivered}</span>
+          </button>
+
+          <button
+            type="button"
+            className={`pos-status-pill ${activeStatusTab === 'Cancelled' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveStatusTab('Cancelled');
+              setPosViewMode('orders');
+            }}
+          >
+            <span className="pos-status-dot dot-cancelled" style={{ background: '#ef4444' }}></span>
+            <span>{t('status_cancelled')}</span>
+            <span className="pos-status-pill-count">{statusCounts.cancelled}</span>
+          </button>
         </div>
 
         <div className="pos-status-actions-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -2064,17 +2104,38 @@ export default function POSModule({
                                 }))
                               : []);
 
-                        // Dynamic Status configuration & Property/Priority status
-                        const normStatus = normalizeOrderStatus(ord.order_status || ord.status || workStatus);
-                        const statusConfig = ORDER_STATUS_CONFIG[normStatus] || ORDER_STATUS_CONFIG['order recived'];
-                        const statusBg = statusConfig.bg;
-                        const statusColor = statusConfig.color;
-                        const statusBorder = statusConfig.border;
-                        const statusDotColor = statusConfig.dot;
-                        const statusIcon = statusConfig.icon;
-                        const statusLabel = statusConfig.label;
-                        const accentColor = statusConfig.dot || ord.accent_color || '#2563eb';
-                        const isPropertyPriorityYes = (ord.property_status === 'Yes' || ord.priority === 'Yes');
+                        // Status colors & style (Only Received, In Progress, Ready, Delivered, Cancelled)
+                        let statusBg = '#eff6ff';
+                        let statusColor = '#1d4ed8';
+                        let statusBorder = '#bfdbfe';
+                        let statusDotColor = '#2563eb';
+                        let accentColor = ord.accent_color || '#2563eb';
+
+                        if (workStatus === 'In Progress') {
+                          statusBg = '#fef3c7';
+                          statusColor = '#b45309';
+                          statusBorder = '#fde68a';
+                          statusDotColor = '#f59e0b';
+                          accentColor = ord.accent_color || '#f59e0b';
+                        } else if (workStatus === 'Ready') {
+                          statusBg = '#dcfce7';
+                          statusColor = '#15803d';
+                          statusBorder = '#bbf7d0';
+                          statusDotColor = '#10b981';
+                          accentColor = ord.accent_color || '#10b981';
+                        } else if (workStatus === 'Delivered') {
+                          statusBg = '#e0f2fe';
+                          statusColor = '#0369a1';
+                          statusBorder = '#bae6fd';
+                          statusDotColor = '#0284c7';
+                          accentColor = ord.accent_color || '#0284c7';
+                        } else if (workStatus === 'Cancelled') {
+                          statusBg = '#fee2e2';
+                          statusColor = '#b91c1c';
+                          statusBorder = '#fecaca';
+                          statusDotColor = '#ef4444';
+                          accentColor = ord.accent_color || '#ef4444';
+                        }
 
                         // Order capture date & details
                         const capturedDateStr = ord.captured_date || (ord.created_at ? new Date(ord.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '28 Oct 2026');
@@ -2398,7 +2459,7 @@ export default function POSModule({
                             {/* 5. Status (Icon badge & processing subtext) */}
                             {isColVisible('status') && (
                               <td className="col-status" style={{ verticalAlign: 'top', paddingTop: '14px' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '5px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
                                   <div style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
@@ -2412,26 +2473,16 @@ export default function POSModule({
                                     border: `1px solid ${statusBorder}`,
                                     whiteSpace: 'nowrap'
                                   }}>
-                                    <span style={{ fontSize: '13px', lineHeight: 1 }}>{statusIcon}</span>
-                                    <span>{statusLabel}</span>
-                                  </div>
-
-                                  {/* Property / Priority Status Pill */}
-                                  <div style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    padding: '2px 8px',
-                                    borderRadius: '6px',
-                                    fontSize: '11px',
-                                    fontWeight: 700,
-                                    background: isPropertyPriorityYes ? '#fee2e2' : 'rgba(255, 255, 255, 0.05)',
-                                    color: isPropertyPriorityYes ? '#dc2626' : '#64748b',
-                                    border: `1px solid ${isPropertyPriorityYes ? '#fca5a5' : '#334155'}`,
-                                    whiteSpace: 'nowrap',
-                                  }}>
-                                    <span>{isPropertyPriorityYes ? '★' : '•'}</span>
-                                    <span>Property: {isPropertyPriorityYes ? 'Yes' : 'No'}</span>
+                                    <span style={{ fontSize: '13px', lineHeight: 1 }}>
+                                      {workStatus === 'In Progress' ? '⏱' : workStatus === 'Cancelled' ? '✕' : workStatus === 'Ready' ? '✓' : workStatus === 'Delivered' ? '✓' : '📥'}
+                                    </span>
+                                    <span>
+                                      {workStatus === 'In Progress' ? t('status_progress') :
+                                       workStatus === 'Ready' ? t('status_ready') :
+                                       workStatus === 'Delivered' ? t('status_delivered') :
+                                       workStatus === 'Cancelled' ? t('status_cancelled') :
+                                       t('status_received')}
+                                    </span>
                                   </div>
                                 </div>
                               </td>

@@ -3,6 +3,7 @@
 // Pixel-perfect match to media_1793702916485_4ed3742d.png
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useLanguage } from '../context/LanguageContext';
 import { getStoredAuditLogs } from '../services/auditService';
 import { exportToExcel, exportToPdf, exportToCsv } from '../services/exportService';
 import '../styles/ReportsModule.css';
@@ -14,6 +15,7 @@ export default function ReportsModule({
   showToast = () => {},
   onNavigateTab,
 }) {
+  const { t } = useLanguage();
   const tenantName = 'Ranipet Store #1';
   const [activeView, setActiveView] = useState('reports'); // 'reports' | 'audit'
   const [auditLogs, setAuditLogs] = useState(() => getStoredAuditLogs());
@@ -453,18 +455,18 @@ export default function ReportsModule({
       <section className="reports-header-banner">
         <div className="reports-header-left">
           <div className="reports-brand-icon-box">📊</div>
-          <h1 className="reports-title">Reports &amp; Analytics Center</h1>
+          <h1 className="reports-title">{t('reports_center_title', 'Reports & Analytics Center')}</h1>
           <div className="reports-badge-row">
             <span className="smart-tenant-pill">
               <span>🏢</span>
-              <span>Tenant: <strong>{tenantName}</strong></span>
+              <span>{t('tenant_label', 'Tenant: {name}', { name: tenantName })}</span>
             </span>
             <span className="smart-health-pill">
               <span className="health-dot"></span>
-              <span>Reports &amp; Audit Engine Active</span>
+              <span>{t('reports_audit_engine_active', 'Reports & Audit Engine Active')}</span>
             </span>
             <span className="smart-metric-pill">
-              <span>Audited Downloads: <strong>{auditLogs.length}</strong></span>
+              <span>{t('audited_downloads', 'Audited Downloads: {count}', { count: auditLogs.length })}</span>
             </span>
           </div>
         </div>
@@ -476,7 +478,7 @@ export default function ReportsModule({
             className={`reports-tab-btn ${activeView === 'reports' ? 'active' : ''}`}
             onClick={() => setActiveView('reports')}
           >
-            <span>📊 Available Reports</span>
+            <span>📊 {t('tab_available_reports', 'Available Reports')}</span>
           </button>
           <button
             type="button"
@@ -486,7 +488,7 @@ export default function ReportsModule({
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
             </svg>
-            <span>Report Audit Trail</span>
+            <span>{t('tab_report_audit_trail', 'Report Audit Trail')}</span>
             <span className="reports-badge-num">{auditLogs.length}</span>
           </button>
         </div>
@@ -497,29 +499,29 @@ export default function ReportsModule({
         {/* Date Range Dropdown */}
         <div className="filter-group">
           <span style={{ fontSize: '14px' }}>📅</span>
-          <span>Date Range</span>
+          <span>{t('filter_date_range', 'Date Range')}</span>
           <select
             className="filter-select"
             value={datePreset}
             onChange={(e) => setDatePreset(e.target.value)}
           >
-            <option value="30d">Last 30 Days (4 Oct – 3 Nov, 2026)</option>
-            <option value="today">Today</option>
-            <option value="7d">Last 7 Days</option>
-            <option value="month">This Month</option>
-            <option value="all">All Time</option>
+            <option value="30d">{t('preset_last_30d', 'Last 30 Days (4 Oct – 3 Nov, 2026)')}</option>
+            <option value="today">{t('preset_today', 'Today')}</option>
+            <option value="7d">{t('preset_last_7d', 'Last 7 Days')}</option>
+            <option value="month">{t('preset_this_month', 'This Month')}</option>
+            <option value="all">{t('preset_all_time', 'All Time')}</option>
           </select>
         </div>
 
         {/* Service Dropdown */}
         <div className="filter-group">
-          <span>Service</span>
+          <span>{t('filter_service', 'Service')}</span>
           <select
             className="filter-select"
             value={serviceFilter}
             onChange={(e) => setServiceFilter(e.target.value)}
           >
-            <option value="all">All Services</option>
+            <option value="all">{t('filter_all_services', 'All Services')}</option>
             <option value="wash">Wash &amp; Steam Press</option>
             <option value="dry">Dry Cleaning</option>
             <option value="iron">Steam Ironing Only</option>
@@ -528,32 +530,32 @@ export default function ReportsModule({
 
         {/* Order Status Dropdown */}
         <div className="filter-group">
-          <span>Order Status</span>
+          <span>{t('filter_order_status', 'Order Status')}</span>
           <select
             className="filter-select"
             value={orderStatusFilter}
             onChange={(e) => setOrderStatusFilter(e.target.value)}
           >
-            <option value="all">All Statuses</option>
-            <option value="received">Order Received</option>
-            <option value="progress">In Progress</option>
-            <option value="ready">Ready for Pickup</option>
-            <option value="delivered">Delivered</option>
+            <option value="all">{t('filter_all_statuses', 'All Statuses')}</option>
+            <option value="received">{t('status_received', 'Order Received')}</option>
+            <option value="progress">{t('status_in_progress', 'In Progress')}</option>
+            <option value="ready">{t('kpi_ready_pickup', 'Ready for Pickup')}</option>
+            <option value="delivered">{t('status_delivered', 'Delivered')}</option>
           </select>
         </div>
 
         {/* Payment Status Dropdown */}
         <div className="filter-group">
-          <span>Payment Status</span>
+          <span>{t('filter_payment_status', 'Payment Status')}</span>
           <select
             className="filter-select"
             value={paymentStatusFilter}
             onChange={(e) => setPaymentStatusFilter(e.target.value)}
           >
-            <option value="all">All Payments</option>
-            <option value="paid">Paid</option>
-            <option value="unpaid">Unpaid</option>
-            <option value="partial">Partial</option>
+            <option value="all">{t('filter_all_payments', 'All Payments')}</option>
+            <option value="paid">{t('payment_paid', 'Paid')}</option>
+            <option value="unpaid">{t('payment_unpaid', 'Unpaid')}</option>
+            <option value="partial">{t('payment_partial', 'Partial')}</option>
           </select>
         </div>
 
@@ -563,7 +565,7 @@ export default function ReportsModule({
           className="filter-btn-secondary"
           onClick={() => setShowMoreFilters((p) => !p)}
         >
-          <span>⩸ More Filters</span>
+          <span>⩸ {t('more_filters', 'More Filters')}</span>
         </button>
 
         {/* Refresh Button */}
@@ -595,7 +597,7 @@ export default function ReportsModule({
             <div>
               <div className="report-card-top">
                 <div className="report-card-icon blue">🗄️</div>
-                <h3 className="report-card-title">Financial &amp; Daily Collections</h3>
+                <h3 className="report-card-title">{t('report_financial_title', 'Financial & Daily Collections')}</h3>
               </div>
 
               <div className="report-metrics-row" style={{ marginTop: '14px' }}>
@@ -647,7 +649,7 @@ export default function ReportsModule({
             <div>
               <div className="report-card-top">
                 <div className="report-card-icon green">📦</div>
-                <h3 className="report-card-title">Master Orders &amp; Fulfillment Register</h3>
+                <h3 className="report-card-title">{t('report_orders_title', 'Master Orders & Fulfillment Register')}</h3>
               </div>
 
               <div className="report-metrics-row" style={{ marginTop: '14px' }}>
@@ -699,7 +701,7 @@ export default function ReportsModule({
             <div>
               <div className="report-card-top">
                 <div className="report-card-icon amber">⚖️</div>
-                <h3 className="report-card-title">Outstanding Due &amp; Credit Ledger</h3>
+                <h3 className="report-card-title">{t('report_credit_title', 'Outstanding Due & Credit Ledger')}</h3>
               </div>
 
               <div className="report-metrics-row" style={{ marginTop: '14px' }}>
@@ -749,7 +751,7 @@ export default function ReportsModule({
             <div>
               <div className="report-card-top">
                 <div className="report-card-icon purple">🧺</div>
-                <h3 className="report-card-title">Services &amp; Plant Throughput</h3>
+                <h3 className="report-card-title">{t('report_services_title', 'Services & Plant Throughput')}</h3>
               </div>
 
               <div className="report-metrics-row" style={{ marginTop: '14px' }}>

@@ -13,7 +13,6 @@ import ReportsModule from './components/ReportsModule';
 import { getOrders, updateOrderInSupabase, deleteOrderFromSupabase } from './services/customerService';
 import { isSupabaseConfigured } from './lib/supabaseClient';
 import { useLanguage } from './context/LanguageContext';
-import { normalizeOrderStatus } from './config/businessRules';
 
 const SAMPLE_CURRENCIES = [
   { code: 'IN', symbol: '₹', label: 'INR ₹', name: 'India (INR - ₹)' },
@@ -145,7 +144,7 @@ export default function App() {
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
 
-  // Collapsible Navigation Menu: default auto-collapsed as requested
+  // Collapsible Navigation Menu: default auto-collapsed on desktop
   const [isNavCollapsed, setIsNavCollapsed] = useState(() => {
     try {
       const stored = localStorage.getItem('washdoor_nav_collapsed');
@@ -155,6 +154,26 @@ export default function App() {
     }
   });
   const [isNavHovered, setIsNavHovered] = useState(false);
+
+  // Responsive state: mobile breakpoint at <= 768px
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth <= 768;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth <= 768;
+      setIsMobile(mobile);
+      if (!mobile) {
+        setSidebarOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const toggleNavCollapse = (e) => {
     if (e && e.stopPropagation) e.stopPropagation();
@@ -167,7 +186,7 @@ export default function App() {
     });
   };
 
-  // Centralized tab navigation: auto-collapses on module switch as requested
+  // Centralized tab navigation: auto-collapses on desktop on module switch, closes drawer on mobile
   const navigateToTab = (tab) => {
     let resolved = tab;
     if (tab === 'pos' || tab === 'orders' || tab === 'order') resolved = 'order';
@@ -183,16 +202,20 @@ export default function App() {
       localStorage.setItem('washdoor_active_tab', resolved);
     } catch {}
 
-    // Auto-collapse navigation menu when navigating to any module
-    setIsNavCollapsed(true);
+    // Auto-collapse navigation menu on desktop when navigating to any module
+    if (!isMobile) {
+      setIsNavCollapsed(true);
+      try {
+        localStorage.setItem('washdoor_nav_collapsed', 'true');
+      } catch {}
+    }
     setIsNavHovered(false);
     setSidebarOpen(false);
-    try {
-      localStorage.setItem('washdoor_nav_collapsed', 'true');
-    } catch {}
   };
 
-  const isSidebarExpanded = (!isNavCollapsed || isNavHovered) || sidebarOpen;
+  // Mobile drawer always displays full expanded sidebar (logo, brand name, complete navigation labels, store card, and Sign Out button)
+  // Desktop sidebar displays full content when not collapsed (!isNavCollapsed)
+  const showFullSidebarContent = isMobile ? true : !isNavCollapsed;
 
   // Orders state with cache support (authentically loaded from database, no hardcoded mock records)
   const [orders, setOrders] = useState(() => {
@@ -202,7 +225,13 @@ export default function App() {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed)) {
           return parsed.map((o) => {
-            const norm = normalizeOrderStatus(o.order_status || o.status);
+            const s = String(o.order_status || o.status || '').toLowerCase();
+            let norm = 'Order Received';
+            if (s.includes('cancel')) norm = 'Cancelled';
+            else if (s.includes('deliver') || s.includes('complete')) norm = 'Delivered';
+            else if (s.includes('ready') || s.includes('billing')) norm = 'Ready';
+            else if (s.includes('progress') || s.includes('wash')) norm = 'In Progress';
+            else if (s.includes('receive') || s.includes('intake') || s.includes('overdue')) norm = 'Order Received';
             return { ...o, status: norm, order_status: norm };
           });
         }
@@ -270,7 +299,11 @@ export default function App() {
       }
     };
     document.addEventListener('click', handleGlobalClick);
-    return () => document.removeEventListener('click', handleGlobalClick);
+    document.addEventListener('touchstart', handleGlobalClick, { passive: true });
+    return () => {
+      document.removeEventListener('click', handleGlobalClick);
+      document.removeEventListener('touchstart', handleGlobalClick);
+    };
   }, []);
 
   // Toast helper
@@ -412,168 +445,204 @@ export default function App() {
 
   return (
     <div className={`app ${theme}-theme`} data-theme={theme}>
-      {/* ── Topbar (Layout matching media_1793709621021_951aa873.png) ── */}
-      <header className={`topbar ${isNavCollapsed ? 'sidebar-collapsed' : ''}`}>
-        {/* Mobile Navigation Drawer Toggle Button (Mobile view only) */}
-        <button
-          type="button"
-          className="topbar-mobile-menu-btn"
-          onClick={() => setSidebarOpen((prev) => !prev)}
-          title="Toggle Navigation Menu"
-          aria-label="Toggle navigation menu"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="4" y1="7" x2="20" y2="7"></line>
-            <line x1="4" y1="12" x2="20" y2="12"></line>
-            <line x1="4" y1="17" x2="20" y2="17"></line>
-          </svg>
-        </button>
-
-        {/* ── Centralized Global Search Bar ── */}
-        <div className="topbar-search-wrap">
-          <div className="topbar-search-box">
-            <svg
-              className="topbar-search-icon"
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      {/* ── Topbar (Layout matching media_1793709621021_951aa873.png & Image 5) ── */}
+      <header className={`topbar ${!isMobile && isNavCollapsed ? 'sidebar-collapsed' : ''}`}>
+        {/* Desktop Sidebar Toggle Button: Visible only when sidebar is collapsed on desktop (matches reference image Image 5) */}
+        {!isMobile && isNavCollapsed && (
+          <button
+            type="button"
+            className="topbar-desktop-toggle-btn"
+            onClick={toggleNavCollapse}
+            title="Expand Navigation Menu"
+            aria-label="Expand navigation menu"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="4" y1="7" x2="20" y2="7"></line>
+              <line x1="4" y1="12" x2="20" y2="12"></line>
+              <line x1="4" y1="17" x2="20" y2="17"></line>
             </svg>
-            <input
-              type="text"
-              className="topbar-search-input"
-              placeholder="Search by Order ID, Customer Name, or Mobile Number..."
-              value={globalSearchQuery}
-              onChange={(e) => {
-                setGlobalSearchQuery(e.target.value);
-                setIsSearchDropdownOpen(true);
-              }}
-              onFocus={() => {
-                if (globalSearchQuery.trim()) setIsSearchDropdownOpen(true);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  setActiveTab('order');
-                  setIsSearchDropdownOpen(false);
-                } else if (e.key === 'Escape') {
-                  setIsSearchDropdownOpen(false);
-                }
-              }}
-              aria-label="Centralized Search"
-            />
-            {globalSearchQuery && (
-              <button
-                type="button"
-                className="topbar-search-clear-btn"
-                onClick={() => {
-                  setGlobalSearchQuery('');
-                  setIsSearchDropdownOpen(false);
-                }}
-                title="Clear search"
-                aria-label="Clear search"
-              >
-                ✕
-              </button>
-            )}
-            <div className="topbar-search-shortcut" title="Press Ctrl+K or ⌘K to search">
-              <kbd>Ctrl + K</kbd>
+          </button>
+        )}
+
+        {/* Mobile Navigation Drawer Toggle Button & Brand (Visible only on mobile <= 768px) */}
+        {isMobile && (
+          <div className="topbar-mobile-left">
+            <button
+              type="button"
+              className="topbar-mobile-menu-btn"
+              onClick={() => setSidebarOpen((prev) => !prev)}
+              title="Toggle Navigation Menu"
+              aria-label="Toggle navigation menu"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="4" y1="7" x2="20" y2="7"></line>
+                <line x1="4" y1="12" x2="20" y2="12"></line>
+                <line x1="4" y1="17" x2="20" y2="17"></line>
+              </svg>
+            </button>
+            <div className="topbar-mobile-brand" onClick={() => setSidebarOpen(true)} style={{ cursor: 'pointer' }} title="Washdoor POS">
+              <div className="topbar-mobile-logo">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z" />
+                </svg>
+              </div>
+              <div className="topbar-mobile-titles">
+                <span className="topbar-mobile-name">Washdoor</span>
+                <span className="topbar-mobile-sub">Ranipet</span>
+              </div>
             </div>
           </div>
+        )}
 
-          {/* Live Search Results Dropdown */}
-          {isSearchDropdownOpen && globalSearchQuery.trim() && (
-            <div className="topbar-search-dropdown" role="listbox">
-              <div className="topbar-search-dropdown-head">
-                <span>Matching Orders &amp; Customers</span>
-                <span className="topbar-search-count-badge">
-                  {searchMatches.length} {searchMatches.length === 1 ? 'match' : 'matches'}
-                </span>
+        {/* ── Centralized Global Search Bar (Hidden on Mobile, Visible on Desktop) ── */}
+        {!isMobile && (
+          <div className="topbar-search-wrap">
+            <div className="topbar-search-box">
+              <svg
+                className="topbar-search-icon"
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input
+                type="text"
+                className="topbar-search-input"
+                placeholder="Search by Order ID, Customer Name, or Mobile Number..."
+                value={globalSearchQuery}
+                onChange={(e) => {
+                  setGlobalSearchQuery(e.target.value);
+                  setIsSearchDropdownOpen(true);
+                }}
+                onFocus={() => {
+                  if (globalSearchQuery.trim()) setIsSearchDropdownOpen(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setActiveTab('order');
+                    setIsSearchDropdownOpen(false);
+                  } else if (e.key === 'Escape') {
+                    setIsSearchDropdownOpen(false);
+                  }
+                }}
+                aria-label="Centralized Search"
+              />
+              {globalSearchQuery && (
+                <button
+                  type="button"
+                  className="topbar-search-clear-btn"
+                  onClick={() => {
+                    setGlobalSearchQuery('');
+                    setIsSearchDropdownOpen(false);
+                  }}
+                  title="Clear search"
+                  aria-label="Clear search"
+                >
+                  ✕
+                </button>
+              )}
+              <div className="topbar-search-shortcut" title="Press Ctrl+K or ⌘K to search">
+                <kbd>Ctrl + K</kbd>
               </div>
+            </div>
 
-              {searchMatches.length === 0 ? (
-                <div className="topbar-search-empty">
-                  <div style={{ fontSize: '20px', marginBottom: '4px' }}>🔍</div>
-                  <div style={{ fontWeight: 650, color: 'inherit' }}>No matching records found</div>
-                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                    Try searching by full 10-digit number, customer name, or order ID (e.g. ORD-00020).
-                  </div>
+            {/* Live Search Results Dropdown */}
+            {isSearchDropdownOpen && globalSearchQuery.trim() && (
+              <div className="topbar-search-dropdown" role="listbox">
+                <div className="topbar-search-dropdown-head">
+                  <span>Matching Orders &amp; Customers</span>
+                  <span className="topbar-search-count-badge">
+                    {searchMatches.length} {searchMatches.length === 1 ? 'match' : 'matches'}
+                  </span>
                 </div>
-              ) : (
-                <div className="topbar-search-results-list">
-                  {searchMatches.slice(0, 6).map((ord) => {
-                    const custName = ord.customer_name || ord.customer?.customer_name || 'Walk-in Customer';
-                    const orderNum = ord.order_number || ord.order_id || ord.id || '—';
-                    const phone = ord.formatted_mobile || ord.mobile_number || ord.customer?.mobile_number || '—';
-                    const status = ord.order_status || ord.status || 'Received';
-                    const total = ord.total_amount || ord.grand_total || ord.bill_amount || 0;
 
-                    return (
-                      <div
-                        key={ord.id || orderNum}
-                        className="topbar-search-result-item"
-                        onClick={() => {
-                          setActiveTab('order');
-                          setIsSearchDropdownOpen(false);
-                        }}
-                      >
-                        <div className="topbar-search-item-left">
-                          <span className="topbar-search-order-pill">{orderNum}</span>
-                          <div className="topbar-search-cust-info">
-                            <span className="topbar-search-cust-name">{custName}</span>
-                            <span className="topbar-search-cust-phone">
-                              📞 {phone}
+                {searchMatches.length === 0 ? (
+                  <div className="topbar-search-empty">
+                    <div style={{ fontSize: '20px', marginBottom: '4px' }}>🔍</div>
+                    <div style={{ fontWeight: 650, color: 'inherit' }}>No matching records found</div>
+                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                      Try searching by full 10-digit number, customer name, or order ID (e.g. ORD-00020).
+                    </div>
+                  </div>
+                ) : (
+                  <div className="topbar-search-results-list">
+                    {searchMatches.slice(0, 6).map((ord) => {
+                      const custName = ord.customer_name || ord.customer?.customer_name || 'Walk-in Customer';
+                      const orderNum = ord.order_number || ord.order_id || ord.id || '—';
+                      const phone = ord.formatted_mobile || ord.mobile_number || ord.customer?.mobile_number || '—';
+                      const status = ord.order_status || ord.status || 'Received';
+                      const total = ord.total_amount || ord.grand_total || ord.bill_amount || 0;
+
+                      return (
+                        <div
+                          key={ord.id || orderNum}
+                          className="topbar-search-result-item"
+                          onClick={() => {
+                            setActiveTab('order');
+                            setIsSearchDropdownOpen(false);
+                          }}
+                        >
+                          <div className="topbar-search-item-left">
+                            <span className="topbar-search-order-pill">{orderNum}</span>
+                            <div className="topbar-search-cust-info">
+                              <span className="topbar-search-cust-name">{custName}</span>
+                              <span className="topbar-search-cust-phone">
+                                📞 {phone}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="topbar-search-item-right">
+                            <span className="topbar-search-status-tag">{status}</span>
+                            <span className="topbar-search-amount">
+                              {currentCurrency?.symbol || '₹'}{Number(total).toFixed(2)}
                             </span>
                           </div>
                         </div>
-                        <div className="topbar-search-item-right">
-                          <span className="topbar-search-status-tag">{status}</span>
-                          <span className="topbar-search-amount">
-                            {currentCurrency?.symbol || '₹'}{Number(total).toFixed(2)}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                      );
+                    })}
+                  </div>
+                )}
 
-              <div
-                className="topbar-search-dropdown-footer"
-                onClick={() => {
-                  setActiveTab('order');
-                  setIsSearchDropdownOpen(false);
-                }}
-              >
-                <span>View all matching orders in Orders Register</span>
-                <kbd>↵ Enter</kbd>
+                <div
+                  className="topbar-search-dropdown-footer"
+                  onClick={() => {
+                    setActiveTab('order');
+                    setIsSearchDropdownOpen(false);
+                  }}
+                >
+                  <span>View all matching orders in Orders Register</span>
+                  <kbd>↵ Enter</kbd>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         <div className="spacer"></div>
 
-        {/* Notification Bell Icon */}
-        <button
-          type="button"
-          className="topbar-notification-btn"
-          title="Notifications"
-          aria-label="Notifications"
-          onClick={() => showToast('No new notifications')}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-          </svg>
-          <span className="topbar-notification-dot" aria-hidden="true"></span>
-        </button>
+        {/* Notification Bell Icon (Hidden on Mobile, Visible on Desktop) */}
+        {!isMobile && (
+          <button
+            type="button"
+            className="topbar-notification-btn"
+            title="Notifications"
+            aria-label="Notifications"
+            onClick={() => showToast('No new notifications')}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+            <span className="topbar-notification-dot" aria-hidden="true"></span>
+          </button>
+        )}
 
         {isSupabaseConfigured() ? (
           <a
@@ -601,118 +670,122 @@ export default function App() {
           </a>
         )}
 
-        {/* Currency & Location Dropdown */}
-        <div className="top-pill-dropdown-wrap">
-          <button
-            type="button"
-            className={`top-pill top-pill-currency ${activeDropdown === 'currency' ? 'active' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              setActiveDropdown((prev) => (prev === 'currency' ? null : 'currency'));
-            }}
-            title="Select Sample Currency"
-          >
-            <span className="top-pill-label-full">{currentCurrency.label}</span>
-            <span className="top-pill-label-short">{currentCurrency.symbol}</span>
-            <svg
-              width="11"
-              height="11"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{
-                transition: 'transform 0.2s ease',
-                transform: activeDropdown === 'currency' ? 'rotate(180deg)' : 'none',
-                opacity: 0.8,
+        {/* Currency & Location Dropdown (Hidden on Mobile, Visible on Desktop) */}
+        {!isMobile && (
+          <div className="top-pill-dropdown-wrap top-currency-dropdown-wrap">
+            <button
+              type="button"
+              className={`top-pill top-pill-currency ${activeDropdown === 'currency' ? 'active' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveDropdown((prev) => (prev === 'currency' ? null : 'currency'));
               }}
+              title="Select Sample Currency"
             >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
+              <span className="top-pill-label-full">{currentCurrency.label}</span>
+              <span className="top-pill-label-short">{currentCurrency.symbol}</span>
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{
+                  transition: 'transform 0.2s ease',
+                  transform: activeDropdown === 'currency' ? 'rotate(180deg)' : 'none',
+                  opacity: 0.8,
+                }}
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
 
-          {activeDropdown === 'currency' && (
-            <div className="top-pill-menu" style={{ minWidth: '220px' }}>
-              <div className="top-pill-menu-title">Sample Currencies</div>
-              {SAMPLE_CURRENCIES.map((cur) => (
-                <button
-                  key={cur.code}
-                  type="button"
-                  className={`top-pill-item ${currentCurrency.code === cur.code ? 'active' : ''}`}
-                  onClick={() => {
-                    setCurrentCurrency(cur);
-                    setActiveDropdown(null);
-                    showToast(`Currency changed to ${cur.name}`);
-                  }}
-                >
-                  <span>{cur.name}</span>
-                  <span className="top-pill-item-symbol">
-                    {cur.symbol}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+            {activeDropdown === 'currency' && (
+              <div className="top-pill-menu" style={{ minWidth: '220px' }}>
+                <div className="top-pill-menu-title">Sample Currencies</div>
+                {SAMPLE_CURRENCIES.map((cur) => (
+                  <button
+                    key={cur.code}
+                    type="button"
+                    className={`top-pill-item ${currentCurrency.code === cur.code ? 'active' : ''}`}
+                    onClick={() => {
+                      setCurrentCurrency(cur);
+                      setActiveDropdown(null);
+                      showToast(`Currency changed to ${cur.name}`);
+                    }}
+                  >
+                    <span>{cur.name}</span>
+                    <span className="top-pill-item-symbol">
+                      {cur.symbol}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* Language Dropdown */}
-        <div className="top-pill-dropdown-wrap">
-          <button
-            type="button"
-            className={`top-pill top-pill-language ${activeDropdown === 'language' ? 'active' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              setActiveDropdown((prev) => (prev === 'language' ? null : 'language'));
-            }}
-            title={t('sample_languages')}
-          >
-            <span>🌐</span>
-            <span className="top-pill-label-full">{currentLanguage.name}</span>
-            <span className="top-pill-label-short">{currentLanguage.code.toUpperCase()}</span>
-            <svg
-              width="11"
-              height="11"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{
-                transition: 'transform 0.2s ease',
-                transform: activeDropdown === 'language' ? 'rotate(180deg)' : 'none',
-                opacity: 0.8,
+        {/* Language Dropdown (Desktop only - mobile keeps topbar clean so Admin Account is prominent, matching Image 2) */}
+        {!isMobile && (
+          <div className="top-pill-dropdown-wrap top-language-dropdown-wrap">
+            <button
+              type="button"
+              className={`top-pill top-pill-language ${activeDropdown === 'language' ? 'active' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveDropdown((prev) => (prev === 'language' ? null : 'language'));
               }}
+              title={t('sample_languages')}
             >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
+              <span>🌐</span>
+              <span className="top-pill-label-full">{currentLanguage.name}</span>
+              <span className="top-pill-label-short">{currentLanguage.code.toUpperCase()}</span>
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{
+                  transition: 'transform 0.2s ease',
+                  transform: activeDropdown === 'language' ? 'rotate(180deg)' : 'none',
+                  opacity: 0.8,
+                }}
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
 
-          {activeDropdown === 'language' && (
-            <div className="top-pill-menu" style={{ minWidth: '190px' }}>
-              <div className="top-pill-menu-title">{t('sample_languages')}</div>
-              {SAMPLE_LANGUAGES.map((lang) => (
-                <button
-                  key={lang.code}
-                  type="button"
-                  className={`top-pill-item ${currentLanguage.code === lang.code ? 'active' : ''}`}
-                  onClick={() => {
-                    setCurrentLanguage(lang);
-                    setActiveDropdown(null);
-                    showToast(t('language_set', { name: lang.name, native: lang.native }));
-                  }}
-                >
-                  <span>{lang.name}</span>
-                  <span className="top-pill-item-native">
-                    {lang.native}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+            {activeDropdown === 'language' && (
+              <div className="top-pill-menu" style={{ minWidth: '190px' }}>
+                <div className="top-pill-menu-title">{t('sample_languages')}</div>
+                {SAMPLE_LANGUAGES.map((lang) => (
+                  <button
+                    key={lang.code}
+                    type="button"
+                    className={`top-pill-item ${currentLanguage.code === lang.code ? 'active' : ''}`}
+                    onClick={() => {
+                      setCurrentLanguage(lang);
+                      setActiveDropdown(null);
+                      showToast(t('language_set', { name: lang.name, native: lang.native }));
+                    }}
+                  >
+                    <span>{lang.name}</span>
+                    <span className="top-pill-item-native">
+                      {lang.native}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Dark / Light Theme Toggle Button */}
         <button
@@ -756,33 +829,35 @@ export default function App() {
           )}
         </button>
 
-        {/* Quick Reports & Download Audit Button in Topbar */}
-        <button
-          type="button"
-          className="top-pill topbar-reports-btn"
-          onClick={() => navigateToTab('report')}
-          title="Open Reports & Audit Download Center"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            cursor: 'pointer',
-            padding: '6px 12px',
-            fontSize: '12.5px',
-            fontWeight: '600',
-            background: activeTab === 'report' ? 'rgba(59, 130, 246, 0.15)' : undefined,
-            borderColor: activeTab === 'report' ? '#3b82f6' : undefined,
-          }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="16" y1="13" x2="8" y2="13"></line>
-            <line x1="16" y1="17" x2="8" y2="17"></line>
-            <polyline points="10 9 9 9 8 9"></polyline>
-          </svg>
-          <span className="theme-toggle-label">Reports &amp; Audit</span>
-        </button>
+        {/* Quick Reports & Download Audit Button in Topbar (Hidden on Mobile, Visible on Desktop) */}
+        {!isMobile && (
+          <button
+            type="button"
+            className="top-pill topbar-reports-btn"
+            onClick={() => navigateToTab('report')}
+            title="Open Reports & Audit Download Center"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              padding: '6px 12px',
+              fontSize: '12.5px',
+              fontWeight: '600',
+              background: activeTab === 'report' ? 'rgba(59, 130, 246, 0.15)' : undefined,
+              borderColor: activeTab === 'report' ? '#3b82f6' : undefined,
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            <span className="theme-toggle-label">Reports &amp; Audit</span>
+          </button>
+        )}
 
         {/* Admin Details Dropdown (Avatar Circle Only) */}
         <div className="top-pill-dropdown-wrap">
@@ -795,12 +870,18 @@ export default function App() {
             }}
             title="Tenant / Admin: Store Administrator"
             aria-label="Admin Avatar"
+            data-testid="top-admin-avatar-btn"
           >
             A
           </button>
 
           {activeDropdown === 'admin' && (
-            <div className="top-pill-menu top-admin-dropdown" style={{ minWidth: '220px', right: 0, left: 'auto' }}>
+            <div
+              className="top-pill-menu top-admin-dropdown"
+              data-testid="top-admin-dropdown"
+              style={{ minWidth: '240px', right: 0, left: 'auto' }}
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="top-pill-menu-title">{t('admin_account')}</div>
               <div className="top-admin-details">
                 <div className="top-admin-user-row">
@@ -861,26 +942,22 @@ export default function App() {
       )}
 
       <aside
-        className={`sidebar${isNavCollapsed ? ' collapsed' : ''}${isNavHovered ? ' hover-expanded' : ''}${sidebarOpen ? ' mobile-open' : ''}`}
-        onMouseEnter={() => {
-          if (isNavCollapsed) setIsNavHovered(true);
-        }}
-        onMouseLeave={() => {
-          setIsNavHovered(false);
-        }}
+        className={`sidebar${!isMobile && isNavCollapsed ? ' collapsed' : ''}${!isMobile && isNavHovered ? ' hover-expanded' : ''}${sidebarOpen ? ' mobile-open' : ''}`}
         aria-label="Main Navigation"
+        onMouseEnter={() => !isMobile && setIsNavHovered(true)}
+        onMouseLeave={() => !isMobile && setIsNavHovered(false)}
       >
         {/* Sidebar Brand Header */}
         <div className="sidebar-brand-header">
           <div
             className="sidebar-brand-logo"
-            title={isNavCollapsed ? 'Washdoor - Click to expand navigation menu' : 'Washdoor'}
-            onClick={isNavCollapsed ? toggleNavCollapse : undefined}
-            style={{ cursor: isNavCollapsed ? 'pointer' : 'default' }}
-            role={isNavCollapsed ? 'button' : undefined}
-            tabIndex={isNavCollapsed ? 0 : undefined}
+            title={!isMobile && isNavCollapsed ? 'Washdoor - Click to expand navigation menu' : 'Washdoor'}
+            onClick={!isMobile && isNavCollapsed ? toggleNavCollapse : undefined}
+            style={{ cursor: !isMobile && isNavCollapsed ? 'pointer' : 'default' }}
+            role={!isMobile && isNavCollapsed ? 'button' : undefined}
+            tabIndex={!isMobile && isNavCollapsed ? 0 : undefined}
             onKeyDown={(e) => {
-              if (isNavCollapsed && (e.key === 'Enter' || e.key === ' ')) {
+              if (!isMobile && isNavCollapsed && (e.key === 'Enter' || e.key === ' ')) {
                 toggleNavCollapse();
               }
             }}
@@ -889,25 +966,26 @@ export default function App() {
               <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z" />
             </svg>
           </div>
-          {isSidebarExpanded && (
+          {showFullSidebarContent && (
             <>
               <div className="sidebar-brand-info">
                 <span className="sidebar-brand-name">{t('brand_name', 'Washdoor')}</span>
                 <span className="sidebar-brand-sub" title="Laundry &amp; Dry Clean POS">{t('brand_subtitle', 'Ranipet')}</span>
               </div>
-              {/* Hamburger Menu Sidebar Collapse/Expand Toggle Button (Only in expanded header) */}
+              {/* Hamburger Menu Sidebar Collapse/Expand Toggle / Close Button */}
               <button
                 type="button"
                 className="sidebar-toggle-btn sidebar-hamburger-btn"
                 onClick={(e) => {
-                  if (window.innerWidth <= 840) {
+                  if (e && e.stopPropagation) e.stopPropagation();
+                  if (isMobile) {
                     setSidebarOpen(false);
                   } else {
                     toggleNavCollapse(e);
                   }
                 }}
-                title="Collapse Navigation Menu"
-                aria-label="Collapse navigation menu"
+                title={isMobile ? "Close Navigation Menu" : "Collapse Navigation Menu"}
+                aria-label={isMobile ? "Close navigation menu" : "Collapse navigation menu"}
               >
                 <svg
                   width="15"
@@ -943,16 +1021,42 @@ export default function App() {
                 type="button"
                 className={`nav ${isActive ? 'active' : ''}`}
                 onClick={() => navigateToTab(item.id)}
-                title={!isSidebarExpanded ? (item.id === 'order' ? 'Orders & POS' : item.label) : undefined}
+                title={
+                  !showFullSidebarContent
+                    ? (item.id === 'dashboard'
+                        ? t('nav_dashboard', 'Dashboard')
+                        : item.id === 'order'
+                        ? t('nav_orders_pos', 'Orders & POS')
+                        : item.id === 'customer'
+                        ? t('nav_customers', 'Customers')
+                        : item.id === 'report'
+                        ? t('nav_reports', 'Reports')
+                        : item.id === 'apps'
+                        ? t('nav_apps', 'Apps')
+                        : item.id === 'account'
+                        ? t('nav_account', 'Account')
+                        : item.id === 'audit'
+                        ? t('nav_audit_log', 'Audit Log')
+                        : item.label)
+                    : undefined
+                }
                 data-nav={item.id}
               >
                 {item.icon}
-                {isSidebarExpanded && (
+                {showFullSidebarContent && (
                   <span className="nav-label">
-                    {item.id === 'order'
-                      ? t('nav_orders_pos')
+                    {item.id === 'dashboard'
+                      ? t('nav_dashboard', 'Dashboard')
+                      : item.id === 'order'
+                      ? t('nav_orders_pos', 'Orders & POS')
                       : item.id === 'customer'
-                      ? t('nav_customers')
+                      ? t('nav_customers', 'Customers')
+                      : item.id === 'report'
+                      ? t('nav_reports', 'Reports')
+                      : item.id === 'apps'
+                      ? t('nav_apps', 'Apps')
+                      : item.id === 'account'
+                      ? t('nav_account', 'Account')
                       : item.id === 'audit'
                       ? t('nav_audit_log', 'Audit Log')
                       : item.label}
@@ -975,11 +1079,11 @@ export default function App() {
                 <path d="M22 7v3a2 2 0 0 1-2 2v0a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12v0a2 2 0 0 1-2-2V7" />
               </svg>
             </div>
-            {isSidebarExpanded && (
+            {showFullSidebarContent && (
               <div className="sidebar-store-info">
-                <div className="sidebar-store-name">Ranipet Store #1</div>
+                <div className="sidebar-store-name">{t('store_name_full', 'Ranipet Store #1')}</div>
                 <div className="sidebar-store-status">
-                  <span className="sidebar-store-dot">●</span> Live Counter Active
+                  <span className="sidebar-store-dot">●</span> {t('live_counter_active', 'Live Counter Active')}
                 </div>
               </div>
             )}
@@ -989,12 +1093,12 @@ export default function App() {
             type="button"
             className="sidebar-signout-btn nav-signout"
             onClick={() => {
-              showToast('Signed out of session');
+              showToast(t('signed_out_session', 'Signed out of session'));
               setActiveTab('dashboard');
               setSidebarOpen(false);
             }}
-            title="Sign Out"
-            aria-label="Sign Out"
+            title={t('btn_sign_out', 'Sign Out')}
+            aria-label={t('btn_sign_out', 'Sign Out')}
           >
             <svg
               width="16"
@@ -1010,13 +1114,13 @@ export default function App() {
               <polyline points="16 17 21 12 16 7"></polyline>
               <line x1="21" y1="12" x2="9" y2="12"></line>
             </svg>
-            {isSidebarExpanded && <span>Sign Out</span>}
+            {showFullSidebarContent && <span>{t('btn_sign_out', 'Sign Out')}</span>}
           </button>
         </div>
       </aside>
 
       {/* ── Main Content ── */}
-      <main className={`main ${isNavCollapsed ? 'sidebar-collapsed' : ''}`}>
+      <main className={`main ${!isMobile && isNavCollapsed ? 'sidebar-collapsed' : ''}`}>
         {activeTab === 'dashboard' ? (
           <DashboardModule
             orders={orders}

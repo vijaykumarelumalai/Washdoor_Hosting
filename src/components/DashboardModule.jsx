@@ -7,6 +7,7 @@
 // 4. Revenue Trend (Last 7 Days - Booked vs Collected) & Payment Mix Donut Chart
 
 import React, { useMemo } from 'react';
+import { useLanguage } from '../context/LanguageContext';
 import '../styles/Dashboard.css';
 
 export default function DashboardModule({
@@ -17,9 +18,12 @@ export default function DashboardModule({
   onNavigateTab,
   onRefreshOrders,
 }) {
+  const { t, language } = useLanguage();
   const now = new Date();
   const todayDateStr = now.toISOString().slice(0, 10);
-  const todayFormatted = now.toLocaleDateString('en-IN', {
+  const localeMap = { ta: 'ta-IN', hi: 'hi-IN', te: 'te-IN', kn: 'kn-IN', ml: 'ml-IN', ar: 'ar-SA', fr: 'fr-FR', es: 'es-ES' };
+  const currentLocale = localeMap[language?.code] || 'en-IN';
+  const todayFormatted = now.toLocaleDateString(currentLocale, {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
@@ -203,13 +207,13 @@ export default function DashboardModule({
             </svg>
           </div>
           <div>
-            <h1 className="dashboard-welcome-title">Welcome to Washdoor</h1>
+            <h1 className="dashboard-welcome-title">{t('welcome_washdoor', 'Welcome to Washdoor')}</h1>
             <p className="dashboard-welcome-sub">
               <span>{todayFormatted}</span>
               <span className="dot-sep">•</span>
-              <span className="dashboard-branch-tag">Ranipet Store #1</span>
+              <span className="dashboard-branch-tag">{t('store_name_full', 'Ranipet Store #1')}</span>
               <span className="dot-sep">•</span>
-              <span className="live-counter-tag">● Live Counter Active</span>
+              <span className="live-counter-tag">{t('live_counter_active', '● Live Counter Active')}</span>
             </p>
           </div>
         </div>
@@ -226,7 +230,7 @@ export default function DashboardModule({
               <polyline points="1 20 1 14 7 14"></polyline>
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
             </svg>
-            <span>Refresh</span>
+            <span>{t('refresh', 'Refresh')}</span>
           </button>
 
           <button
@@ -241,7 +245,7 @@ export default function DashboardModule({
               <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
               <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
             </svg>
-            <span>Customers</span>
+            <span>{t('nav_customers', 'Customers')}</span>
           </button>
 
           <button
@@ -254,7 +258,7 @@ export default function DashboardModule({
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
-            <span>+ New Order</span>
+            <span>{t('btn_new_order', '+ New Order')}</span>
           </button>
         </div>
       </section>
@@ -271,7 +275,7 @@ export default function DashboardModule({
             </svg>
           </div>
           <div className="kpi-content">
-            <span className="kpi-label">Today's Revenue</span>
+            <span className="kpi-label">{t('kpi_today_revenue', "Today's Revenue")}</span>
             <strong className="kpi-value">{currencySymbol}{metrics.todayRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
           </div>
         </div>
@@ -286,7 +290,7 @@ export default function DashboardModule({
             </svg>
           </div>
           <div className="kpi-content">
-            <span className="kpi-label">Orders Today</span>
+            <span className="kpi-label">{t('kpi_orders_today', 'Orders Today')}</span>
             <strong className="kpi-value">{metrics.todayOrdersCount}</strong>
           </div>
         </div>
@@ -301,7 +305,7 @@ export default function DashboardModule({
             </svg>
           </div>
           <div className="kpi-content">
-            <span className="kpi-label">Collected Today</span>
+            <span className="kpi-label">{t('kpi_collected_today', 'Collected Today')}</span>
             <strong className="kpi-value">{currencySymbol}{metrics.todayCollected.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
           </div>
         </div>
@@ -317,7 +321,7 @@ export default function DashboardModule({
             </svg>
           </div>
           <div className="kpi-content">
-            <span className="kpi-label">Outstanding</span>
+            <span className="kpi-label">{t('kpi_outstanding', 'Outstanding')}</span>
             <strong className="kpi-value">{currencySymbol}{metrics.balanceDue.toLocaleString()}</strong>
           </div>
         </div>
@@ -332,7 +336,7 @@ export default function DashboardModule({
             </svg>
           </div>
           <div className="kpi-content">
-            <span className="kpi-label">Ready for Pickup</span>
+            <span className="kpi-label">{t('kpi_ready_pickup', 'Ready for Pickup')}</span>
             <strong className="kpi-value">{metrics.readyCount}</strong>
           </div>
         </div>
@@ -349,8 +353,8 @@ export default function DashboardModule({
                 <polyline points="2 12 12 17 22 12"></polyline>
               </svg>
             </div>
-            <strong className="pipeline-title">Order Pipeline</strong>
-            <span className="pipeline-count-tag">({metrics.totalOrders} Orders)</span>
+            <strong className="pipeline-title">{t('order_pipeline', 'Order Pipeline')}</strong>
+            <span className="pipeline-count-tag">({metrics.totalOrders} {t('nav_orders_pos', 'Orders')})</span>
           </div>
 
           <button
@@ -358,7 +362,7 @@ export default function DashboardModule({
             className="pipeline-view-all-link"
             onClick={() => onNavigateTab && onNavigateTab('order')}
           >
-            View Orders →
+            {t('view_orders', 'View Orders')} →
           </button>
         </div>
 
@@ -372,7 +376,7 @@ export default function DashboardModule({
               </svg>
             </div>
             <div className="stage-info">
-              <span className="stage-label">Received</span>
+              <span className="stage-label">{t('status_received', 'Received')}</span>
               <strong className="stage-count">{metrics.receivedCount}</strong>
             </div>
           </div>
@@ -388,7 +392,7 @@ export default function DashboardModule({
               </svg>
             </div>
             <div className="stage-info">
-              <span className="stage-label">In Progress</span>
+              <span className="stage-label">{t('status_in_progress', 'In Progress')}</span>
               <strong className="stage-count">{metrics.inProgressCount}</strong>
             </div>
           </div>
@@ -404,7 +408,7 @@ export default function DashboardModule({
               </svg>
             </div>
             <div className="stage-info">
-              <span className="stage-label">Ready</span>
+              <span className="stage-label">{t('status_ready', 'Ready')}</span>
               <strong className="stage-count">{metrics.readyCount}</strong>
             </div>
           </div>
@@ -422,7 +426,7 @@ export default function DashboardModule({
               </svg>
             </div>
             <div className="stage-info">
-              <span className="stage-label">Delivered</span>
+              <span className="stage-label">{t('status_delivered', 'Delivered')}</span>
               <strong className="stage-count">{metrics.deliveredCount}</strong>
             </div>
           </div>
@@ -443,17 +447,17 @@ export default function DashboardModule({
                     <line x1="6" y1="20" x2="6" y2="14"></line>
                   </svg>
                 </span>
-                <strong className="chart-title">Revenue Trend</strong>
+                <strong className="chart-title">{t('revenue_trend', 'Revenue Trend')}</strong>
               </div>
-              <span className="chart-sub">Last 7 Days – Booked vs Collected</span>
+              <span className="chart-sub">{t('last_7_days_booked_collected', 'Last 7 Days – Booked vs Collected')}</span>
             </div>
 
             <div className="chart-legend">
               <span className="legend-item">
-                <span className="legend-dot booked"></span> Booked Revenue
+                <span className="legend-dot booked"></span> {t('booked_revenue', 'Booked Revenue')}
               </span>
               <span className="legend-item">
-                <span className="legend-dot collected"></span> Collected Revenue
+                <span className="legend-dot collected"></span> {t('collected_revenue', 'Collected Revenue')}
               </span>
             </div>
           </div>
@@ -545,7 +549,7 @@ export default function DashboardModule({
                   <line x1="1" y1="10" x2="23" y2="10"></line>
                 </svg>
               </span>
-              <strong className="chart-title">Payment Mix</strong>
+              <strong className="chart-title">{t('payment_mix', 'Payment Mix')}</strong>
             </div>
           </div>
 
@@ -594,7 +598,7 @@ export default function DashboardModule({
                   {metrics.collectionEfficiency}%
                 </text>
                 <text x="75" y="90" textAnchor="middle" fontSize="12" fontWeight="600" fill="#64748b">
-                  Collected
+                  {t('collected', 'Collected')}
                 </text>
               </svg>
             </div>
@@ -605,7 +609,7 @@ export default function DashboardModule({
                 <div className="mix-item-left">
                   <span className="mix-dot" style={{ background: '#0284c7' }}></span>
                   <div className="mix-text-group">
-                    <span className="mix-name">UPI / Net Banking</span>
+                    <span className="mix-name">{t('pay_upi', 'UPI / Net Banking')}</span>
                     <strong className="mix-amount">{currencySymbol}{paymentMix.upi.toFixed(2)}</strong>
                   </div>
                 </div>
@@ -616,7 +620,7 @@ export default function DashboardModule({
                 <div className="mix-item-left">
                   <span className="mix-dot" style={{ background: '#16a34a' }}></span>
                   <div className="mix-text-group">
-                    <span className="mix-name">Cash</span>
+                    <span className="mix-name">{t('pay_cash', 'Cash')}</span>
                     <strong className="mix-amount">{currencySymbol}{paymentMix.cash.toFixed(2)}</strong>
                   </div>
                 </div>
@@ -627,7 +631,7 @@ export default function DashboardModule({
                 <div className="mix-item-left">
                   <span className="mix-dot" style={{ background: '#8b5cf6' }}></span>
                   <div className="mix-text-group">
-                    <span className="mix-name">Card</span>
+                    <span className="mix-name">{t('pay_card', 'Card')}</span>
                     <strong className="mix-amount">{currencySymbol}{paymentMix.card.toFixed(2)}</strong>
                   </div>
                 </div>
@@ -638,7 +642,7 @@ export default function DashboardModule({
                 <div className="mix-item-left">
                   <span className="mix-dot" style={{ background: '#f43f5e' }}></span>
                   <div className="mix-text-group">
-                    <span className="mix-name">Outstanding</span>
+                    <span className="mix-name">{t('kpi_outstanding', 'Outstanding')}</span>
                     <strong className="mix-amount">{currencySymbol}{paymentMix.outstanding.toLocaleString()}</strong>
                   </div>
                 </div>
