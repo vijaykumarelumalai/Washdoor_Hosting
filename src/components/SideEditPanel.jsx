@@ -6,6 +6,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import ClothIllustration from './ClothIllustration';
 import GarmentInspectionSection from './GarmentInspectionSection';
 import { updateOrderInSupabase } from '../services/customerService';
+import { ORDER_STATUSES, ORDER_STATUS_CONFIG, PROPERTY_STATUSES, SERVICE_CATEGORIES, normalizeOrderStatus } from '../config/businessRules';
 import '../styles/SideEditPanel.css';
 
 // 16 Standard Catalog Items strictly matching reference mockup display order
@@ -57,7 +58,8 @@ export default function SideEditPanel({
   const initialAltPhone = order?.alternate_phone || order?.customer?.alternate_phone || '';
   const initialEmail = order?.email || order?.customer?.email || '';
   const initialAddress = order?.address || order?.delivery_address || order?.customer?.address || '';
-  const initialStatus = order?.status || order?.order_status || 'In Progress';
+  const initialStatus = normalizeOrderStatus(order?.status || order?.order_status || 'order recived');
+  const initialPropertyStatus = order?.property_status || (order?.priority === 'Yes' ? 'Yes' : 'No') || 'No';
   const initialOrderType = order?.order_type || 'Walk-in';
   const initialExpectedDelivery = order?.expected_delivery || '';
   const initialComments = order?.comments || order?.order_notes || order?.special_instructions || '';
@@ -69,6 +71,7 @@ export default function SideEditPanel({
   const [email, setEmail] = useState(initialEmail);
   const [address, setAddress] = useState(initialAddress);
   const [status, setStatus] = useState(initialStatus);
+  const [propertyStatus, setPropertyStatus] = useState(initialPropertyStatus);
   const [orderType, setOrderType] = useState(initialOrderType);
   const [expectedDelivery, setExpectedDelivery] = useState(initialExpectedDelivery);
   const [comments, setComments] = useState(initialComments);
@@ -256,7 +259,8 @@ export default function SideEditPanel({
       setAlternatePhone(order.alternate_phone || order.customer?.alternate_phone || '');
       setEmail(order.email || order.customer?.email || '');
       setAddress(order.address || order.delivery_address || order.customer?.address || '');
-      setStatus(order.status || order.order_status || 'In Progress');
+      setStatus(normalizeOrderStatus(order.status || order.order_status || 'order recived'));
+      setPropertyStatus(order.property_status || (order.priority === 'Yes' ? 'Yes' : 'No') || 'No');
       setOrderType(order.order_type || 'Walk-in');
       setExpectedDelivery(order.expected_delivery || order.delivery_date || '');
       setComments(order.comments || order.order_notes || order.special_instructions || '');
@@ -407,6 +411,8 @@ export default function SideEditPanel({
       address: address,
       status: status,
       order_status: status,
+      property_status: propertyStatus,
+      priority: propertyStatus === 'Yes' ? 'Yes' : 'No',
       order_type: orderType,
       expected_delivery: expectedDelivery,
       comments: comments,
@@ -509,7 +515,8 @@ export default function SideEditPanel({
         orderType: updatedOrder.order_type,
         expectedDelivery: updatedOrder.expected_delivery,
         deliveryDate: updatedOrder.expected_delivery,
-        priority: updatedOrder.priority || 'Normal',
+        property_status: updatedOrder.property_status,
+        priority: updatedOrder.priority || 'No',
         orderNotes: updatedOrder.comments,
         subtotal: subtotal,
         discountAmount: Number(discountAmount || 0),
@@ -678,14 +685,58 @@ export default function SideEditPanel({
                         value={status}
                         onChange={(e) => setStatus(e.target.value)}
                       >
-                        <option value="In Progress">In Progress</option>
-                        <option value="Order Received">Order Received</option>
-                        <option value="Ready">Ready</option>
-                        <option value="Delivered">Delivered</option>
-                        <option value="Cancelled">Cancelled</option>
+                        {ORDER_STATUSES.map((st) => (
+                          <option key={st} value={st}>
+                            {ORDER_STATUS_CONFIG[st]?.icon || ''} {ORDER_STATUS_CONFIG[st]?.label || st}
+                          </option>
+                        ))}
                       </select>
                     </div>
 
+                    <div className="side-edit-field">
+                      <label className="side-edit-label">
+                        Property / Priority Status <span className="side-edit-req">*</span>
+                      </label>
+                      <div style={{ display: 'flex', gap: '6px', height: '38px', alignItems: 'center' }}>
+                        <button
+                          type="button"
+                          onClick={() => setPropertyStatus('Yes')}
+                          style={{
+                            flex: 1,
+                            padding: '6px 12px',
+                            fontSize: '12.5px',
+                            fontWeight: 700,
+                            borderRadius: '6px',
+                            border: propertyStatus === 'Yes' ? '1px solid #ef4444' : '1px solid #334155',
+                            cursor: 'pointer',
+                            background: propertyStatus === 'Yes' ? '#ef4444' : 'transparent',
+                            color: propertyStatus === 'Yes' ? '#fff' : '#94a3b8',
+                          }}
+                        >
+                          ★ Yes
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPropertyStatus('No')}
+                          style={{
+                            flex: 1,
+                            padding: '6px 12px',
+                            fontSize: '12.5px',
+                            fontWeight: 700,
+                            borderRadius: '6px',
+                            border: propertyStatus === 'No' ? '1px solid #64748b' : '1px solid #334155',
+                            cursor: 'pointer',
+                            background: propertyStatus === 'No' ? '#334155' : 'transparent',
+                            color: propertyStatus === 'No' ? '#fff' : '#94a3b8',
+                          }}
+                        >
+                          No
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="side-edit-row-2col">
                     <div className="side-edit-field">
                       <label className="side-edit-label">
                         Order Type <span className="side-edit-req">*</span>
@@ -696,12 +747,12 @@ export default function SideEditPanel({
                         onChange={(e) => setOrderType(e.target.value)}
                       >
                         <option value="Walk-in">Walk-in</option>
+                        <option value="On-Call">On-Call (Pickup)</option>
                         <option value="Home Delivery">Home Delivery</option>
                         <option value="Express">Express 24H</option>
                         <option value="Commercial">Commercial / B2B</option>
                       </select>
                     </div>
-                  </div>
 
                   <div className="side-edit-field">
                     <label className="side-edit-label">
@@ -723,6 +774,7 @@ export default function SideEditPanel({
                       />
                     </div>
                   </div>
+                </div>
 
                   <div className="side-edit-field">
                     <label className="side-edit-label">Comments / Special Notes</label>
@@ -1134,12 +1186,12 @@ export default function SideEditPanel({
               <div className="side-edit-stepper">
                 <div className="side-edit-stepper-line"></div>
                 {[
-                  { name: 'Order Received', label: 'Order Received' },
-                  { name: 'In Progress', label: 'In Progress' },
-                  { name: 'Ready', label: 'Ready' },
-                  { name: 'Delivered', label: 'Delivered' },
+                  { name: 'order recived', label: 'Order Received' },
+                  { name: 'landry in progress', label: 'In Progress' },
+                  { name: 'ready for delvier', label: 'Ready' },
+                  { name: 'today delivery', label: 'Delivered' },
                 ].map((step, idx) => {
-                  const currentIdx = ['Order Received', 'In Progress', 'Ready', 'Delivered'].indexOf(status === 'Received' ? 'Order Received' : status);
+                  const currentIdx = ['order recived', 'landry in progress', 'ready for delvier', 'today delivery'].indexOf(status);
                   const isCompleted = currentIdx > idx;
                   const isActive = currentIdx === idx;
                   return (
@@ -1147,7 +1199,7 @@ export default function SideEditPanel({
                       key={step.name}
                       className={`side-edit-step-node ${isCompleted ? 'completed' : ''} ${isActive ? 'active' : ''}`}
                       onClick={() => setStatus(step.name)}
-                      title={`Click to switch status to ${step.name}`}
+                      title={`Click to switch status to ${step.label}`}
                     >
                       <div className="side-edit-step-circle">
                         {isCompleted ? '✓' : idx + 1}
@@ -1163,14 +1215,14 @@ export default function SideEditPanel({
                   <label className="side-edit-label">Current Order Status</label>
                   <select
                     className="side-edit-select"
-                    value={status === 'Received' ? 'Order Received' : status}
+                    value={status}
                     onChange={(e) => setStatus(e.target.value)}
                   >
-                    <option value="Order Received">Order Received &amp; Tagged</option>
-                    <option value="In Progress">In Progress / Washing</option>
-                    <option value="Ready">Ready for Pickup / Delivery</option>
-                    <option value="Delivered">Delivered</option>
-                    <option value="Cancelled">Cancelled</option>
+                    {ORDER_STATUSES.map((st) => (
+                      <option key={st} value={st}>
+                        {ORDER_STATUS_CONFIG[st]?.icon || ''} {ORDER_STATUS_CONFIG[st]?.label || st}
+                      </option>
+                    ))}
                   </select>
                 </div>
 

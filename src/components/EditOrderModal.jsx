@@ -732,11 +732,12 @@ export default function EditOrderModal({
                   value={serviceType}
                   onChange={(e) => setServiceType(e.target.value)}
                 >
-                  <option value="Wash & Steam Press">Wash & Steam Press</option>
-                  <option value="Wash & Fold">Wash & Fold</option>
-                  <option value="Dry Cleaning">Dry Cleaning</option>
-                  <option value="Steam Press Only">Steam Press Only</option>
-                  <option value="Premium Care">Premium Care</option>
+                  <option value="Laundry">Laundry</option>
+                  <option value="Dry cleaning">Dry cleaning</option>
+                  <option value="Washing by KG">Washing by KG</option>
+                  <option value="Shoe cleaning">Shoe cleaning</option>
+                  <option value="Ironing only">Ironing only</option>
+                  <option value="Customer category">Customer category</option>
                 </select>
               </div>
 

@@ -6,6 +6,7 @@
 
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient.js';
 import { triggerNotification } from './notificationTemplateService.js';
+import { normalizeOrderStatus } from '../config/businessRules.js';
 
 // Default fallback products matching the database seed
 export const DEFAULT_PRODUCTS = [
@@ -669,14 +670,9 @@ export async function searchCustomers(query) {
 function mapCustomerWorkRowToOrder(row) {
   const orderNum = row.work_number ? formatOrderId(row.work_number) : (row.work_id ? `ORD${String(row.work_id).slice(-5)}` : 'ORD00001');
   const custId = formatCustomerId(row.customer_id || 'CUST-00001');
-  const rawStatus = row.work_status || 'Received';
-  const displayStatus = (rawStatus === 'Received' || rawStatus === 'Order Received') ? 'Order Received' : rawStatus;
-
-  const items = Array.isArray(row.items) ? row.items : [];
-  const itemCount = row.total_pieces !== undefined && row.total_pieces !== null ? Number(row.total_pieces) : (items.length || 1);
-
-  let garmentInspections = {};
+  const rawStatus = row.work_status || 'order recived';
   let internalNotesObj = {};
+  let garmentInspections = {};
   if (row.internal_notes) {
     try {
       const parsed = typeof row.internal_notes === 'string' ? JSON.parse(row.internal_notes) : row.internal_notes;
@@ -688,6 +684,12 @@ function mapCustomerWorkRowToOrder(row) {
       }
     } catch {}
   }
+  const resolvedStatusRaw = internalNotesObj.order_status || row.order_status || rawStatus;
+  const displayStatus = normalizeOrderStatus(resolvedStatusRaw);
+  const propertyStatus = internalNotesObj.property_status || (row.priority === 'Yes' ? 'Yes' : 'No') || (row.property_status === 'Yes' ? 'Yes' : 'No') || 'No';
+
+  const items = Array.isArray(row.items) ? row.items : [];
+  const itemCount = row.total_pieces !== undefined && row.total_pieces !== null ? Number(row.total_pieces) : (items.length || 1);
   if (Object.keys(garmentInspections).length === 0 && Array.isArray(items)) {
     items.forEach((it) => {
       if (it.inspections && Array.isArray(it.inspections)) {
@@ -732,8 +734,9 @@ function mapCustomerWorkRowToOrder(row) {
     comments: row.special_instructions || '',
     order_status: displayStatus,
     status: displayStatus,
-    priority: row.priority || 'Normal',
-    progress: rawStatus === 'Ready' ? 75 : rawStatus === 'Delivered' ? 100 : 25,
+    property_status: propertyStatus,
+    priority: propertyStatus === 'Yes' ? 'Yes' : (row.priority || 'Normal'),
+    progress: displayStatus === 'ready for delvier' ? 75 : (displayStatus === 'dfa' || displayStatus === 'dfa -card' || displayStatus === 'today delivery') ? 100 : 25,
     subtotal: subtotal,
     discount: discountAmount,
     discount_amount: discountAmount,
@@ -816,7 +819,6 @@ export function isCustomerRegistrationRecord(row) {
   if (!row) return false;
   if (row.internal_notes === 'Customer Registered') return true;
   if (Array.isArray(row.items) && row.items.length === 1 && row.items[0]?.type === 'customer_registration') return true;
-  if (Number(row.total_pieces || 0) === 0 && Number(row.total_amount || 0) === 0) return true;
   return false;
 }
 
@@ -964,82 +966,67 @@ export async function createCustomer(payload) {
       marketing_source: clean.marketing_source || 'Walk-in',
     };
 
-    // 2. Prepare customer_works row
-    // Compute exact financial metrics
-      const calculatedSubtotal = cleanCust.subtotal !== undefined && cleanCust.subtotal !== null
-        ? Number(cleanCust.subtotal)
-        : (items && items.length > 0)
-        ? items.reduce((sum, it) => sum + (Number(it.qty || 1) * Number(it.rate || it.price || 0)), 0)
-        : Number(totalAmount) || 0.00;
+    // 2. Also register into customers table (with normalized constraints)
+    const normMobile = String(clean.mobile_number || '').replace(/\D/g, '').slice(-10);
+    const dbClassification = (clean.customer_classification || 'regular').toLowerCase().includes('vip') ? 'vip' :
+      (clean.customer_classification || '').toLowerCase().includes('corp') ? 'corporate' :
+      (clean.customer_classification || '').toLowerCase().includes('fraud') ? 'fraud' : 'regular';
+    const dbStatus = (clean.customer_status || 'active').toLowerCase() === 'inactive' ? 'inactive' :
+      (clean.customer_status || '').toLowerCase() === 'archived' ? 'archived' : 'active';
+    const dbCommPref = ['sms', 'whatsapp', 'email', 'phone', 'none'].includes(String(clean.communication_pref || '').toLowerCase())
+      ? String(clean.communication_pref).toLowerCase()
+      : 'sms';
+    const dbCommLang = ['en', 'ta', 'hi', 'te', 'kn', 'ml'].includes(String(clean.communication_lang || '').toLowerCase())
+      ? String(clean.communication_lang).toLowerCase()
+      : 'en';
 
-      const calculatedDiscount = Number(cleanCust.discount_amount || cleanCust.discount || 0);
+    try {
+      await supabase.from('customers').insert([{
+        customer_name: clean.customer_name,
+        mobile_number: normMobile,
+        alternate_phone: clean.alternate_phone ? String(clean.alternate_phone).replace(/\D/g, '').slice(-10) : null,
+        email: clean.email || null,
+        address: clean.address || null,
+        city: clean.city || null,
+        pincode: clean.pincode && /^[0-9]{6}$/.test(String(clean.pincode)) ? String(clean.pincode) : null,
+        communication_pref: dbCommPref,
+        communication_lang: dbCommLang,
+        tax_exemption: Boolean(clean.tax_exemption),
+        customer_classification: dbClassification,
+        customer_status: dbStatus,
+        tier: clean.tier || 'SILVER',
+        notes: clean.notes || clean.internal_comments || null,
+      }]);
+    } catch (custErr) {
+      console.warn('Customer master auto-insert note:', custErr);
+    }
 
-      const calculatedTax = cleanCust.tax_amount !== undefined && cleanCust.tax_amount !== null
-        ? Number(cleanCust.tax_amount)
-        : (cleanCust.tax_exemption || cleanCust.taxExempt) ? 0.00 : +(calculatedSubtotal * 0.05).toFixed(2);
-
-      const calculatedGrandTotal = Number(totalAmount) || +(calculatedSubtotal + calculatedTax - calculatedDiscount).toFixed(2);
-      const advancePaidVal = Number(cleanCust.advance_paid || 0.00);
-      const calculatedPaymentStatus = cleanCust.payment_status || (advancePaidVal >= calculatedGrandTotal && calculatedGrandTotal > 0 ? 'Paid' : advancePaidVal > 0 ? 'Partially Paid' : 'Unpaid');
-      const calculatedPaymentMethod = cleanCust.payment_method || cleanCust.payment_mode || 'Cash';
-
-      // Parse target delivery date
-      let targetDeliveryDateIso = null;
-      const rawDelivery = cleanCust.target_delivery_date || cleanCust.deliveryDate || cleanCust.delivery_date || cleanCust.expected_delivery || cleanCust.expectedDelivery;
-      if (rawDelivery) {
-        const d = new Date(rawDelivery);
-        if (!isNaN(d.getTime())) {
-          targetDeliveryDateIso = d.toISOString();
-        }
-      }
-
-      // Weight & shelf location
-      const weightVal = cleanCust.weight_kg !== undefined && cleanCust.weight_kg !== null
-        ? Number(cleanCust.weight_kg)
-        : cleanCust.product_weight ? Number(cleanCust.product_weight) : null;
-      const rackLocation = cleanCust.rack_shelf_location || cleanCust.rackShelfLocation || null;
-
-      // Structured internal notes for inspections and extra metadata
-      const structuredInternalNotes = {
-        garment_inspections: cleanCust.garment_inspections || cleanCust.inspections || {},
-        expected_delivery_display: rawDelivery || '',
-        payment_method_display: calculatedPaymentMethod,
-        assigned_driver: cleanCust.assigned_driver || cleanCust.assigned_staff || '',
-        assigned_driver_full: cleanCust.assigned_driver_full || '',
-        staff_notes: cleanCust.internal_comments || cleanCust.notes || '',
-        flags: cleanCust.flags || {},
-      };
-
-      const workRow = {
-        work_number: generatedOrderNumber,
-        customer_id: finalCustId,
-        customer_name: cleanCust.customer_name,
-        mobile_number: cleanCust.mobile_number,
-        alternate_phone: cleanCust.alternate_phone || null,
-        email: cleanCust.email || null,
-        delivery_address: cleanCust.address || cleanCust.street_area || (normalizedIntake === 'Walk-In' ? 'Counter Walk-In' : 'Pending Address'),
-        service_type: orderPreference || cleanCust.service_category || 'Wash & Steam Press',
-        work_status: initialWorkStatus,
-        priority: cleanCust.priority || 'Normal',
-        intake_method: normalizedIntake,
-        items: items || [],
-        total_pieces: calculatedItemCount || 1,
-        weight_kg: weightVal,
-        rack_shelf_location: rackLocation,
-        subtotal: Number(calculatedSubtotal.toFixed(2)),
-        discount_amount: Number(calculatedDiscount.toFixed(2)),
-        tax_amount: Number(calculatedTax.toFixed(2)),
-        total_amount: Number(calculatedGrandTotal.toFixed(2)),
-        advance_paid: Number(advancePaidVal.toFixed(2)),
-        payment_status: calculatedPaymentStatus,
-        payment_method: calculatedPaymentMethod,
-        intake_date: cleanCust.intake_date ? new Date(cleanCust.intake_date).toISOString() : new Date().toISOString(),
-        target_delivery_date: targetDeliveryDateIso,
-        assigned_staff: cleanCust.assigned_staff || cleanCust.assigned_driver || null,
-        special_instructions: orderPreferenceNotes || cleanCust.notes || cleanCust.special_instructions || null,
-        internal_notes: JSON.stringify(structuredInternalNotes),
-      };
-      Object.keys(workRow).forEach((k) => workRow[k] === undefined && delete workRow[k]);
+    // 3. Prepare customer_works row
+    const generatedOrderNum = await getNextOrderId();
+    const workRow = {
+      work_number: generatedOrderNum,
+      customer_id: custId,
+      customer_name: clean.customer_name,
+      mobile_number: normMobile || clean.mobile_number,
+      alternate_phone: clean.alternate_phone || null,
+      email: clean.email || null,
+      delivery_address: clean.address || (clean.city ? `${clean.city}${clean.pincode ? ' - ' + clean.pincode : ''}` : 'Counter Walk-In'),
+      service_type: clean.service_category || clean.order_preference || clean.orderPreference || 'Wash & Steam Press',
+      work_status: 'Received',
+      priority: 'Normal',
+      intake_method: clean.intake_type || 'Walk-In',
+      items: [customerProfileItem],
+      total_pieces: 0,
+      subtotal: 0.00,
+      discount_amount: 0.00,
+      tax_amount: 0.00,
+      total_amount: 0.00,
+      advance_paid: 0.00,
+      payment_status: 'Unpaid',
+      payment_method: 'Cash',
+      internal_notes: 'Customer Registered',
+    };
+    Object.keys(workRow).forEach((k) => workRow[k] === undefined && delete workRow[k]);
 
     // 3. Primary Insert into customer_works table
     const { data: workData, error: workError } = await supabase
@@ -1246,19 +1233,31 @@ export async function createOrderWithCustomer({
     // Try creating record in customers table if it is a newly registered customer
     if (isNewCustomer) {
       try {
+        const dbClassification = (cleanCust.customer_classification || 'regular').toLowerCase().includes('vip') ? 'vip' :
+          (cleanCust.customer_classification || '').toLowerCase().includes('corp') ? 'corporate' :
+          (cleanCust.customer_classification || '').toLowerCase().includes('fraud') ? 'fraud' : 'regular';
+        const dbStatus = (cleanCust.customer_status || 'active').toLowerCase() === 'inactive' ? 'inactive' :
+          (cleanCust.customer_status || '').toLowerCase() === 'archived' ? 'archived' : 'active';
+        const dbCommPref = ['sms', 'whatsapp', 'email', 'phone', 'none'].includes(String(cleanCust.communication_pref || '').toLowerCase())
+          ? String(cleanCust.communication_pref).toLowerCase()
+          : 'sms';
+        const dbCommLang = ['en', 'ta', 'hi', 'te', 'kn', 'ml'].includes(String(cleanCust.communication_lang || '').toLowerCase())
+          ? String(cleanCust.communication_lang).toLowerCase()
+          : 'en';
+
         await supabase.from('customers').insert([{
           customer_name: cleanCust.customer_name,
-          mobile_number: cleanCust.mobile_number,
-          alternate_phone: cleanCust.alternate_phone || null,
+          mobile_number: normMobile,
+          alternate_phone: cleanCust.alternate_phone ? String(cleanCust.alternate_phone).replace(/\D/g, '').slice(-10) : null,
           email: cleanCust.email || null,
           address: cleanCust.address || null,
           city: cleanCust.city || null,
-          pincode: cleanCust.pincode || null,
-          communication_pref: cleanCust.communication_pref || null,
-          communication_lang: cleanCust.communication_lang || null,
+          pincode: cleanCust.pincode && /^[0-9]{6}$/.test(String(cleanCust.pincode)) ? String(cleanCust.pincode) : null,
+          communication_pref: dbCommPref,
+          communication_lang: dbCommLang,
           tax_exemption: Boolean(cleanCust.tax_exemption),
-          customer_classification: cleanCust.customer_classification || 'Regular Customer',
-          customer_status: cleanCust.customer_status || 'Active',
+          customer_classification: dbClassification,
+          customer_status: dbStatus,
           tier: cleanCust.tier || 'SILVER',
           notes: cleanCust.notes || cleanCust.internal_comments || null,
         }]);
@@ -1327,6 +1326,7 @@ export async function createOrderWithCustomer({
 
     // All newly created orders have an initial status of 'Received'
     const initialWorkStatus = 'Received';
+    const rawDelivery = cleanCust.target_delivery_date || cleanCust.deliveryDate || cleanCust.delivery_date || cleanCust.expected_delivery || cleanCust.expectedDelivery;
 
     try {
       // Compute exact financial metrics
@@ -1372,6 +1372,8 @@ export async function createOrderWithCustomer({
         assigned_driver_full: cleanCust.assigned_driver_full || '',
         staff_notes: cleanCust.internal_comments || cleanCust.notes || '',
         flags: cleanCust.flags || {},
+        order_status: cleanCust.order_status || 'order recived',
+        property_status: cleanCust.property_status || (cleanCust.priority === 'Yes' ? 'Yes' : 'No') || 'No',
       };
 
       // Assign standardized ORD00001 order identifier to work_number
@@ -1386,7 +1388,7 @@ export async function createOrderWithCustomer({
         delivery_address: cleanCust.address || cleanCust.street_area || (normalizedIntake === 'Walk-In' ? 'Counter Walk-In' : 'Pending Address'),
         service_type: orderPreference || cleanCust.service_category || 'Wash & Steam Press',
         work_status: initialWorkStatus,
-        priority: cleanCust.priority || 'Normal',
+        priority: normalizeDbPriority(cleanCust.property_status || cleanCust.priority),
         intake_method: normalizedIntake,
         items: items || [],
         total_pieces: calculatedItemCount || 1,
@@ -1419,10 +1421,13 @@ export async function createOrderWithCustomer({
           retryOrderNum = formatOrderId(digits + 1);
         }
         const fallbackRow = { ...workRow, work_number: retryOrderNum };
-        const { data: fbData } = await supabase.from('customer_works').insert([fallbackRow]).select().single();
+        const { data: fbData, error: fbErr } = await supabase.from('customer_works').insert([fallbackRow]).select().single();
         if (fbData) {
           insertedOrderNum = fbData.work_number || retryOrderNum;
           insertedOrderId = fbData.work_id || retryOrderNum;
+        } else {
+          console.error('customer_works insert fatal error:', fbErr || wErr);
+          return { data: null, error: fbErr || wErr };
         }
       }
     } catch (workSyncErr) {
@@ -1553,9 +1558,11 @@ export async function updateOrderStatus(orderIdentifier, newStatus, progressPerc
  */
 function normalizeDbStatus(val) {
   if (!val) return 'Received';
-  const s = String(val).trim();
-  if (s === 'Order Received' || s === 'Received') return 'Received';
-  if (['In Progress', 'Ready', 'Delivered', 'Cancelled'].includes(s)) return s;
+  const s = String(val).trim().toLowerCase();
+  if (s === 'ready for delvier' || s === 'ready for delivery' || s === 'ready') return 'Ready for Delivery';
+  if (s === 'dfa' || s === 'dfa -card' || s === 'today delivery' || s === 'delivered') return 'Delivered';
+  if (s === 'landry in progress' || s === 'ladaery in pro emer' || s === 'in progress' || s === 'not cleared' || s.includes('progress')) return 'In Progress';
+  if (s === 'cancelled' || s === 'other') return 'Cancelled';
   return 'Received';
 }
 
@@ -1570,6 +1577,8 @@ function normalizeDbIntakeMethod(val) {
 function normalizeDbPriority(val) {
   if (!val) return 'Normal';
   const lower = String(val).toLowerCase();
+  if (lower === 'yes' || lower === 'true') return 'Urgent';
+  if (lower === 'no' || lower === 'false') return 'Normal';
   if (lower.includes('urgent') || lower.includes('high') || lower.includes('express')) return 'Urgent';
   return 'Normal';
 }
@@ -1760,6 +1769,8 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
 
     // Internal notes & garment inspection preservation
     const inspData = updatePayload.garment_inspections || updatePayload.inspections || {};
+    const targetStatus = updatePayload.status || updatePayload.order_status;
+    const targetPropertyStatus = updatePayload.property_status || (updatePayload.priority === 'Yes' ? 'Yes' : 'No') || 'No';
     const notesPayload = {
       garment_inspections: inspData,
       expected_delivery_display: expectedDeliveryDisplay,
@@ -1768,6 +1779,8 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       assigned_driver_full: updatePayload.assigned_driver_full || '',
       staff_notes: updatePayload.staff_notes || '',
       flags: updatePayload.flags || {},
+      order_status: targetStatus ? normalizeOrderStatus(targetStatus) : undefined,
+      property_status: targetPropertyStatus,
     };
     workUpdate.internal_notes = JSON.stringify(notesPayload);
     updateObj.customer_history = {
@@ -1848,8 +1861,10 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
                 email: updatePayload.email || o.email,
                 address: updatePayload.address || updatePayload.delivery_address || o.address,
                 delivery_address: updatePayload.address || updatePayload.delivery_address || o.delivery_address,
-                status: updatePayload.status || updatePayload.order_status || o.status,
-                order_status: updatePayload.status || updatePayload.order_status || o.order_status,
+                status: targetStatus ? normalizeOrderStatus(targetStatus) : o.status,
+                order_status: targetStatus ? normalizeOrderStatus(targetStatus) : o.order_status,
+                property_status: targetPropertyStatus || o.property_status || 'No',
+                priority: targetPropertyStatus === 'Yes' ? 'Yes' : (updatePayload.priority || o.priority || 'Normal'),
                 order_type: updatePayload.orderType || updatePayload.order_type || o.order_type,
                 intake_method: updatePayload.orderType || updatePayload.order_type || o.intake_method,
                 expected_delivery: expectedDeliveryDisplay || o.expected_delivery,

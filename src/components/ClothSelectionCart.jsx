@@ -26,7 +26,7 @@ const CATALOG_ITEMS = [
 ];
 
 const CATEGORIES = ['All', 'Men', 'Women', 'Home Linen', 'Accessories'];
-const SERVICE_OPTIONS = ['Ironing', 'Washing', 'Wash & Iron', 'Dry Clean', 'Steam Press'];
+const SERVICE_OPTIONS = ['Laundry', 'Dry cleaning', 'Washing by KG', 'Shoe cleaning', 'Ironing only', 'Customer category'];
 
 export default function ClothSelectionCart({
   initialCart = [],
@@ -41,7 +41,7 @@ export default function ClothSelectionCart({
 
   // Selected item in the detail card
   const [selectedProduct, setSelectedProduct] = useState(CATALOG_ITEMS[0]);
-  const [selectedService, setSelectedService] = useState('Ironing');
+  const [selectedService, setSelectedService] = useState('Laundry');
   const [selectedQty, setSelectedQty] = useState(1);
 
   // Load products from Supabase washdoor_products table

@@ -162,12 +162,12 @@ export const BUSINESS_CONFIG = {
 };
 
 export const SERVICE_CATEGORIES = [
-  'Laundry + Iron',
-  'Normal Wash',
-  'Dry Clean',
-  'Steam Press',
-  'Wash & Fold',
-  'Shoe Spa / Leather Care',
+  'Laundry',
+  'Dry cleaning',
+  'Washing by KG',
+  'Shoe cleaning',
+  'Ironing only',
+  'Customer category',
 ];
 
 export const PAYMENT_MODES = [
@@ -179,12 +179,163 @@ export const PAYMENT_MODES = [
 ];
 
 export const ORDER_STATUSES = [
-  'Received',
-  'In Progress',
-  'Ready',
-  'Delivered',
-  'Cancelled',
+  'order recived',
+  'landry in progress',
+  'ladaery in pro Emer',
+  'ready for delvier',
+  'dfa',
+  'dfa -card',
+  'today delivery',
+  'other',
+  'not cleared',
 ];
+
+export const PROPERTY_STATUSES = [
+  'Yes',
+  'No',
+];
+
+export const ORDER_STATUS_CONFIG = {
+  'order recived': {
+    id: 'order recived',
+    label: 'Order Received',
+    shortLabel: 'Received',
+    color: '#1d4ed8',
+    bg: '#eff6ff',
+    border: '#bfdbfe',
+    dot: '#2563eb',
+    icon: '📥',
+    stage: 1,
+  },
+  'landry in progress': {
+    id: 'landry in progress',
+    label: 'Laundry In Progress',
+    shortLabel: 'In Progress',
+    color: '#b45309',
+    bg: '#fef3c7',
+    border: '#fde68a',
+    dot: '#f59e0b',
+    icon: '⏱',
+    stage: 2,
+  },
+  'ladaery in pro Emer': {
+    id: 'ladaery in pro Emer',
+    label: 'Laundry In Pro (Emer)',
+    shortLabel: 'Emergency / Express',
+    color: '#b91c1c',
+    bg: '#fee2e2',
+    border: '#fca5a5',
+    dot: '#ef4444',
+    icon: '🚨',
+    emergency: true,
+    stage: 2,
+  },
+  'ready for delvier': {
+    id: 'ready for delvier',
+    label: 'Ready For Delivery',
+    shortLabel: 'Ready',
+    color: '#15803d',
+    bg: '#dcfce7',
+    border: '#bbf7d0',
+    dot: '#10b981',
+    icon: '✓',
+    stage: 3,
+  },
+  'dfa': {
+    id: 'dfa',
+    label: 'DFA',
+    shortLabel: 'DFA',
+    color: '#7e22ce',
+    bg: '#f3e8ff',
+    border: '#d8b4fe',
+    dot: '#a855f7',
+    icon: '📦',
+    stage: 4,
+  },
+  'dfa -card': {
+    id: 'dfa -card',
+    label: 'DFA - Card',
+    shortLabel: 'DFA Card',
+    color: '#4338ca',
+    bg: '#e0e7ff',
+    border: '#c7d2fe',
+    dot: '#6366f1',
+    icon: '💳',
+    stage: 4,
+  },
+  'today delivery': {
+    id: 'today delivery',
+    label: 'Today Delivery',
+    shortLabel: 'Today Delivery',
+    color: '#0e7490',
+    bg: '#cffafe',
+    border: '#a5f3fc',
+    dot: '#06b6d4',
+    icon: '🚚',
+    stage: 4,
+  },
+  'not cleared': {
+    id: 'not cleared',
+    label: 'Not Cleared',
+    shortLabel: 'Not Cleared',
+    color: '#be123c',
+    bg: '#ffe4e6',
+    border: '#fecdd3',
+    dot: '#f43f5e',
+    icon: '⚠️',
+    stage: 2,
+  },
+  'other': {
+    id: 'other',
+    label: 'Other',
+    shortLabel: 'Other',
+    color: '#475569',
+    bg: '#f1f5f9',
+    border: '#cbd5e1',
+    dot: '#64748b',
+    icon: '•',
+    stage: 1,
+  },
+};
+
+/**
+ * Normalizes any status string into one of the 9 canonical statuses.
+ */
+export function normalizeOrderStatus(raw) {
+  if (!raw) return 'order recived';
+  const s = String(raw).trim().toLowerCase();
+  if (s === 'order recived' || s === 'order received' || s === 'received' || s.includes('intake') || s === 'new') {
+    return 'order recived';
+  }
+  if (s === 'ladaery in pro emer' || s === 'emergency' || s.includes('emer') || s.includes('urgent')) {
+    return 'ladaery in pro Emer';
+  }
+  if (s === 'landry in progress' || s === 'laundry in progress' || s === 'in progress' || s.includes('wash') || s.includes('progress')) {
+    return 'landry in progress';
+  }
+  if (s === 'ready for delvier' || s === 'ready for delivery' || s === 'ready' || s.includes('ready')) {
+    return 'ready for delvier';
+  }
+  if (s === 'dfa -card' || s === 'dfa card' || s.includes('dfa-card') || s.includes('dfa - card')) {
+    return 'dfa -card';
+  }
+  if (s === 'dfa' || s.includes('agency')) {
+    return 'dfa';
+  }
+  if (s === 'today delivery' || s === 'today' || (s.includes('today') && s.includes('deliver'))) {
+    return 'today delivery';
+  }
+  if (s === 'not cleared' || s.includes('uncleared') || s.includes('not cleared') || s.includes('hold')) {
+    return 'not cleared';
+  }
+  if (s === 'cancelled' || s === 'other' || s.includes('cancel')) {
+    return 'other';
+  }
+  if (s.includes('deliver')) {
+    return 'today delivery';
+  }
+  return 'order recived';
+}
 
 /**
  * Rounds numeric currency value to 2 decimal places.

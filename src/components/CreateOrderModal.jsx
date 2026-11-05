@@ -99,7 +99,7 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
       : `✅ Order ${orderNumber} created for ${customerData?.customer_name || 'customer'}!`;
     showToast(toastMsg);
     
-    const initialStatus = 'Order Received';
+    const initialStatus = 'order recived';
 
     // Pass newly created order so Order Status Dialog opens automatically
     const createdOrderPayload = {
@@ -111,6 +111,8 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
       preference_notes: orderPreferenceNotes || '',
       status: initialStatus,
       order_status: initialStatus,
+      property_status: customerData?.property_status || 'No',
+      priority: customerData?.property_status === 'Yes' ? 'Yes' : 'No',
       progress: 15,
       total_amount: Number(totalAmount) || 0.00,
       item_count: itemCount,

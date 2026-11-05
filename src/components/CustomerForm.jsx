@@ -6,11 +6,12 @@ import { validateCustomer } from '../utils/validation';
 import ClothSelectionCart from './ClothSelectionCart';
 
 const PRODUCT_SERVICES = [
-  { id: 'wp', name: 'Wash & Steam Press', icon: '👔' },
-  { id: 'wf', name: 'Wash & Fold', icon: '🧺' },
-  { id: 'dc', name: 'Dry Cleaning', icon: '🧥' },
-  { id: 'hl', name: 'Heavy Linens & Quilts', icon: '🛏️' },
-  { id: 'ex', name: 'Express 24H Service', icon: '⚡' },
+  { id: 'laundry', name: 'Laundry', icon: '🧺' },
+  { id: 'dry_clean', name: 'Dry cleaning', icon: '🧥' },
+  { id: 'wash_kg', name: 'Washing by KG', icon: '⚖️' },
+  { id: 'shoe_clean', name: 'Shoe cleaning', icon: '👟' },
+  { id: 'ironing', name: 'Ironing only', icon: '👔' },
+  { id: 'custom_cat', name: 'Customer category', icon: '✨' },
 ];
 
 function getAgeFromDOB(dobStr) {
@@ -102,6 +103,8 @@ export default function CustomerForm({
     initialCustomer?.communication_lang || initialCustomer?.preferredCommunicationLanguage || initialCustomer?.preferred_language || 'English'
   );
   const [dnd, setDnd] = useState(initialCustomer?.dnd || false);
+  const [propertyStatus, setPropertyStatus] = useState(initialCustomer?.property_status || (initialCustomer?.priority === 'Yes' ? 'Yes' : 'No') || 'No');
+  const [orderStatus, setOrderStatus] = useState(initialCustomer?.order_status || 'order recived');
   const [internalComments, setInternalComments] = useState(initialCustomer?.internal_comments || initialCustomer?.notes || '');
 
   // Customer & Membership
@@ -257,6 +260,9 @@ export default function CustomerForm({
       communication_pref: communicationPref,
       communication_lang: communicationLang,
       dnd,
+      property_status: propertyStatus,
+      priority: propertyStatus === 'Yes' ? 'Yes' : 'No',
+      order_status: orderStatus,
       internal_comments: internalComments,
       order_preference: orderPreference,
       default_discount: defaultDiscount,
@@ -476,32 +482,75 @@ export default function CustomerForm({
         )}
       </label>
 
-      {/* ── Intake Options (only in Order flow) ── */}
+      {/* ── Intake & Property/Priority Options (only in Order flow) ── */}
       {isOrderFlow && (
-        <div className="intake-options" role="group" aria-label="Order intake method">
-          <button
-            type="button"
-            className={`intake-option ${intakeMethod === 'walk-in' ? 'active' : ''}`}
-            onClick={() => setIntakeMethod('walk-in')}
-          >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
-              <circle cx="12" cy="5" r="3"></circle>
-              <path d="M12 8v8l-3 4"></path>
-              <path d="M12 14l3 4"></path>
-              <path d="M9 12l6-2"></path>
-            </svg>
-            Walk-In (Store Drop)
-          </button>
-          <button
-            type="button"
-            className={`intake-option ${intakeMethod === 'on-call' ? 'active' : ''}`}
-            onClick={() => setIntakeMethod('on-call')}
-          >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
-              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-            </svg>
-            On-Call (Pickup)
-          </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' }}>
+          <div className="intake-options" role="group" aria-label="Order intake method" style={{ margin: 0 }}>
+            <button
+              type="button"
+              className={`intake-option ${intakeMethod === 'walk-in' ? 'active' : ''}`}
+              onClick={() => setIntakeMethod('walk-in')}
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
+                <circle cx="12" cy="5" r="3"></circle>
+                <path d="M12 8v8l-3 4"></path>
+                <path d="M12 14l3 4"></path>
+                <path d="M9 12l6-2"></path>
+              </svg>
+              Walk-In (Store Drop)
+            </button>
+            <button
+              type="button"
+              className={`intake-option ${intakeMethod === 'on-call' ? 'active' : ''}`}
+              onClick={() => setIntakeMethod('on-call')}
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+              </svg>
+              On-Call (Pickup)
+            </button>
+          </div>
+
+          {/* Property / Priority Status Toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255, 255, 255, 0.04)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+              Property / Priority Status:
+            </span>
+            <div style={{ display: 'inline-flex', borderRadius: '6px', overflow: 'hidden', border: '1px solid #29384e' }}>
+              <button
+                type="button"
+                onClick={() => setPropertyStatus('Yes')}
+                style={{
+                  padding: '4px 14px',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: propertyStatus === 'Yes' ? '#ef4444' : 'transparent',
+                  color: propertyStatus === 'Yes' ? '#ffffff' : '#94a3b8',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                ★ Yes
+              </button>
+              <button
+                type="button"
+                onClick={() => setPropertyStatus('No')}
+                style={{
+                  padding: '4px 14px',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: propertyStatus === 'No' ? '#334155' : 'transparent',
+                  color: propertyStatus === 'No' ? '#ffffff' : '#94a3b8',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                No
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

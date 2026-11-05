@@ -13,6 +13,7 @@ import ReportsModule from './components/ReportsModule';
 import { getOrders, updateOrderInSupabase, deleteOrderFromSupabase } from './services/customerService';
 import { isSupabaseConfigured } from './lib/supabaseClient';
 import { useLanguage } from './context/LanguageContext';
+import { normalizeOrderStatus } from './config/businessRules';
 
 const SAMPLE_CURRENCIES = [
   { code: 'IN', symbol: '₹', label: 'INR ₹', name: 'India (INR - ₹)' },
@@ -191,7 +192,7 @@ export default function App() {
     } catch {}
   };
 
-  const isSidebarExpanded = !isNavCollapsed || sidebarOpen;
+  const isSidebarExpanded = (!isNavCollapsed || isNavHovered) || sidebarOpen;
 
   // Orders state with cache support (authentically loaded from database, no hardcoded mock records)
   const [orders, setOrders] = useState(() => {
@@ -201,13 +202,7 @@ export default function App() {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed)) {
           return parsed.map((o) => {
-            const s = String(o.order_status || o.status || '').toLowerCase();
-            let norm = 'Order Received';
-            if (s.includes('cancel')) norm = 'Cancelled';
-            else if (s.includes('deliver') || s.includes('complete')) norm = 'Delivered';
-            else if (s.includes('ready') || s.includes('billing')) norm = 'Ready';
-            else if (s.includes('progress') || s.includes('wash')) norm = 'In Progress';
-            else if (s.includes('receive') || s.includes('intake') || s.includes('overdue')) norm = 'Order Received';
+            const norm = normalizeOrderStatus(o.order_status || o.status);
             return { ...o, status: norm, order_status: norm };
           });
         }
@@ -866,7 +861,13 @@ export default function App() {
       )}
 
       <aside
-        className={`sidebar${isNavCollapsed ? ' collapsed' : ''}${sidebarOpen ? ' mobile-open' : ''}`}
+        className={`sidebar${isNavCollapsed ? ' collapsed' : ''}${isNavHovered ? ' hover-expanded' : ''}${sidebarOpen ? ' mobile-open' : ''}`}
+        onMouseEnter={() => {
+          if (isNavCollapsed) setIsNavHovered(true);
+        }}
+        onMouseLeave={() => {
+          setIsNavHovered(false);
+        }}
         aria-label="Main Navigation"
       >
         {/* Sidebar Brand Header */}

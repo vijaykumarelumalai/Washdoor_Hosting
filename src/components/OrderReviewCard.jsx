@@ -5,6 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import { formatPhoneDisplay } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
+import { ORDER_STATUS_CONFIG, normalizeOrderStatus } from '../config/businessRules';
 
 export default function OrderReviewCard({
   order,
@@ -51,37 +52,30 @@ export default function OrderReviewCard({
     : 0;
   const totalAmount = Number(order.total_amount || 0);
 
-  // Workflow pipeline & badge status (Received, In Progress, Ready, Delivered, Cancelled)
+  // Workflow pipeline & dynamic status configuration
   const progress = Number(order.progress || 25);
+  const normStatus = normalizeOrderStatus(order.order_status || order.status);
+  const statusCfg = ORDER_STATUS_CONFIG[normStatus] || ORDER_STATUS_CONFIG['order recived'];
+  const isPropertyPriorityYes = (order.property_status === 'Yes' || order.priority === 'Yes');
   const rawStatus = (order.order_status || order.status || '').trim().toLowerCase();
 
   let activePipelineStage = 1;
-  let statusBadgeLabel = 'In Progress';
+  let statusBadgeLabel = statusCfg.label;
   let statusBadgeClass = 'in-progress';
   let statusPercentage = 30;
 
-  if (rawStatus.includes('cancel')) {
-    statusBadgeLabel = 'Cancelled';
-    statusBadgeClass = 'cancelled';
-    statusPercentage = 0;
-  } else if (rawStatus.includes('deliver') || rawStatus.includes('complete') || progress >= 90) {
-    activePipelineStage = 3;
-    statusBadgeLabel = 'Delivered';
-    statusBadgeClass = 'delivered';
-    statusPercentage = 100;
-  } else if (rawStatus.includes('ready') || rawStatus.includes('billing') || progress >= 50) {
+  if (normStatus === 'ready for delvier' || progress >= 75) {
     activePipelineStage = 2;
-    statusBadgeLabel = 'Ready';
-    statusBadgeClass = 'ready';
     statusPercentage = 75;
-  } else if (rawStatus.includes('receive') || rawStatus.includes('intake')) {
+  } else if (normStatus === 'today delivery' || normStatus === 'dfa' || normStatus === 'dfa -card' || progress >= 90) {
+    activePipelineStage = 3;
+    statusPercentage = 100;
+  } else if (normStatus === 'order recived') {
     activePipelineStage = 1;
-    statusBadgeLabel = 'Order Received';
-    statusBadgeClass = 'received';
     statusPercentage = 15;
   }
 
-  const isComplete = activePipelineStage === 3 || rawStatus.includes('deliver') || rawStatus.includes('complete') || progress >= 90;
+  const isComplete = activePipelineStage === 3 || normStatus === 'today delivery' || normStatus === 'dfa' || normStatus === 'dfa -card' || progress >= 90;
 
   const handleSaveStaffNote = (e) => {
     e.stopPropagation();
@@ -146,22 +140,45 @@ export default function OrderReviewCard({
           {address && <span className="review-meta-item review-address-item">• {address}</span>}
         </div>
 
-        {/* Right Header Section: Status, Bill */}
-        <div className="order-review-header-right" onClick={(e) => e.stopPropagation()}>
+        {/* Right Header Section: Property Status, Order Status, Bill */}
+        <div className="order-review-header-right" onClick={(e) => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Property / Priority Badge */}
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '4px 8px',
+            borderRadius: '6px',
+            fontSize: '11px',
+            fontWeight: 700,
+            background: isPropertyPriorityYes ? 'rgba(239, 68, 68, 0.18)' : 'rgba(255, 255, 255, 0.05)',
+            color: isPropertyPriorityYes ? '#f87171' : '#94a3b8',
+            border: `1px solid ${isPropertyPriorityYes ? 'rgba(239, 68, 68, 0.4)' : 'rgba(255, 255, 255, 0.1)'}`,
+            whiteSpace: 'nowrap',
+          }}>
+            {isPropertyPriorityYes ? '★ Property: Yes' : '• Property: No'}
+          </span>
+
           <button
             type="button"
-            className={`order-status-pill ${statusBadgeClass}`}
-            title={`Status: ${statusBadgeLabel} (${statusPercentage}%) - Click to change status`}
+            className="order-status-pill"
+            style={{
+              background: statusCfg.bg,
+              color: statusCfg.color,
+              border: `1px solid ${statusCfg.border}`,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '5px 12px',
+              borderRadius: '8px',
+              fontWeight: 650,
+              fontSize: '12px',
+            }}
+            title={`Status: ${statusCfg.label} - Click to change status`}
             onClick={() => onOpenStatus(order)}
           >
-            <span className="status-dot" />
-            <span>
-              {statusBadgeLabel === 'Cancelled' ? t('status_cancelled') :
-               statusBadgeLabel === 'Delivered' ? t('status_delivered') :
-               statusBadgeLabel === 'Ready' ? t('status_ready') :
-               statusBadgeLabel === 'In Progress' ? t('status_progress') :
-               t('status_received')}
-            </span>
+            <span style={{ fontSize: '12px' }}>{statusCfg.icon}</span>
+            <span>{statusCfg.label}</span>
           </button>
 
           <button

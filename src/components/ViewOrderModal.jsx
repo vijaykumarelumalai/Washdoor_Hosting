@@ -2,6 +2,7 @@
 // Comprehensive Quick View Order Modal for Washdoor POS (Read-Only Dynamic Overview)
 
 import React, { useState, useEffect } from 'react';
+import { ORDER_STATUS_CONFIG, normalizeOrderStatus } from '../config/businessRules';
 import '../styles/ViewOrderModal.css';
 
 export default function ViewOrderModal({
@@ -40,8 +41,12 @@ export default function ViewOrderModal({
   const altPhone = order.alternate_phone || order.customer?.alternate_phone || '';
   const email = order.email || order.customer?.email || '';
   const address = order.address || order.delivery_address || order.customer?.address || 'Counter Walk-In';
-  const status = order.status || order.order_status || 'Order Received';
-  const priority = order.priority || 'Normal';
+  const normStatus = normalizeOrderStatus(order.status || order.order_status || 'order recived');
+  const statusCfg = ORDER_STATUS_CONFIG[normStatus] || ORDER_STATUS_CONFIG['order recived'];
+  const status = statusCfg.label;
+  const propertyStatus = order.property_status || (order.priority === 'Yes' ? 'Yes' : 'No') || 'No';
+  const isPropertyPriorityYes = propertyStatus === 'Yes';
+  const priority = isPropertyPriorityYes ? 'Yes' : 'No';
   const intakeMethod = order.intake_method || order.order_type || 'Walk-In';
   const expectedDelivery = order.expected_delivery || order.delivery_date || '—';
   const notes = order.order_notes || order.comments || order.special_instructions || '';
@@ -130,13 +135,35 @@ export default function ViewOrderModal({
             </button>
 
             {/* Badges */}
-            <span className={`view-order-badge ${getStatusBadgeClass()}`}>
-              <span>●</span>
-              <span>{status}</span>
+            <span
+              className="view-order-badge"
+              style={{
+                background: statusCfg.bg,
+                color: statusCfg.color,
+                border: `1px solid ${statusCfg.border}`,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}
+            >
+              <span>{statusCfg.icon}</span>
+              <span>{statusCfg.label}</span>
             </span>
 
-            <span className={`view-order-badge ${priority === 'Urgent' ? 'priority-urgent' : 'priority-normal'}`}>
-              {priority === 'Urgent' ? '⚡ Urgent' : '● Normal'}
+            <span
+              className="view-order-badge"
+              style={{
+                background: isPropertyPriorityYes ? '#fee2e2' : 'rgba(255, 255, 255, 0.05)',
+                color: isPropertyPriorityYes ? '#dc2626' : '#64748b',
+                border: `1px solid ${isPropertyPriorityYes ? '#fca5a5' : '#334155'}`,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontWeight: 700,
+              }}
+            >
+              <span>{isPropertyPriorityYes ? '★' : '•'}</span>
+              <span>Property: {isPropertyPriorityYes ? 'Yes' : 'No'}</span>
             </span>
 
             <span className="view-order-badge intake-badge">
