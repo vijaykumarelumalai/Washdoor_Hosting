@@ -3269,7 +3269,7 @@ export default function POSModule({
                           {isEditingThisOrder && editFormData && (
                             <tr key={`${orderNum}_edit_dropdown_card`} className="pos-edit-dropdown-row">
                               <td
-                                colSpan={selectedColumns.length}
+                                colSpan={ORDER_COLUMNS.filter((col) => selectedColumns.includes(col.id)).length}
                                 className="pos-inline-edit-wrap"
                               >
                                 <div className="pos-inline-edit-sticky">
