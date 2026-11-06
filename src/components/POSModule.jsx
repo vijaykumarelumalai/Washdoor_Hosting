@@ -210,6 +210,13 @@ export default function POSModule({
   const [editingOrderRecord, setEditingOrderRecord] = useState(null);
   const [editFormData, setEditFormData] = useState(null);
 
+  // Reset Table Scroll When Editing Starts
+  useEffect(() => {
+    if (editingOrderRecord && tableScrollRef.current) {
+      tableScrollRef.current.scrollLeft = 0;
+    }
+  }, [editingOrderRecord]);
+
   // Static Side Edit Panel Target Order
   const [sideEditTargetOrder, setSideEditTargetOrder] = useState(null);
 
@@ -1413,7 +1420,7 @@ export default function POSModule({
             }}
             title="Create new order (Press N)"
           >
-            <span style={{ fontSize: '16px', lineHeight: 1 }}>＋</span>
+            <span style={{ fontSize: '16px', marginBottom: '2px' }}>＋</span>
             <span className="pos-btn-label-full">{t('pos_create_order')}</span>
             <span className="pos-btn-label-short">Order</span>
             <span className="pos-key-badge">N</span>
@@ -2044,7 +2051,7 @@ export default function POSModule({
                   </div>
                 </>
               ) : (
-                <div className="pos-orders-table-card">
+                <div className={`pos-orders-table-card ${editingOrderRecord ? 'has-active-edit' : ''}`}>
                   <div className="pos-orders-table-scroll" ref={tableScrollRef}>
                     <table className="pos-orders-table">
                     <thead>
@@ -2228,15 +2235,22 @@ export default function POSModule({
                                   }}>
                                     {custName.charAt(0).toUpperCase() || 'C'}
                                   </div>
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                    <div style={{ fontWeight: 750, color: '#0f172a', fontSize: '13.5px' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0, whiteSpace: 'nowrap' }}>
+                                    <div
+                                      className="pos-cust-name"
+                                      style={{ fontWeight: 750, color: 'inherit', fontSize: '13.5px', whiteSpace: 'nowrap', lineHeight: 1.3 }}
+                                      title={custName}
+                                    >
                                       {custName}
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#475569' }}>
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                    <div
+                                      className="pos-cust-phone"
+                                      style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#475569', whiteSpace: 'nowrap', lineHeight: 1.3 }}
+                                    >
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                                         <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
                                       </svg>
-                                      <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{phone}</span>
+                                      <span dir="ltr" style={{ unicodeBidi: 'isolate', whiteSpace: 'nowrap' }}>{phone}</span>
                                     </div>
                                   </div>
                                 </div>
@@ -2948,9 +2962,13 @@ export default function POSModule({
                           {/* ── Inline Edit Dropdown Accordion Row ── */}
                           {isEditingThisOrder && editFormData && (
                             <tr key={`${orderNum}_edit_dropdown_card`} className="pos-edit-dropdown-row">
-                              <td colSpan={selectedColumns.length} className="pos-inline-edit-wrap">
-                                <div className="pos-inline-edit-card">
-                                  {/* ── Header ── */}
+                              <td
+                                colSpan={selectedColumns.length}
+                                className="pos-inline-edit-wrap"
+                              >
+                                <div className="pos-inline-edit-sticky">
+                                  <div className="pos-inline-edit-card">
+                                    {/* ── Header ── */}
                                   <div className="pos-edit-header-bar">
                                     <div className="pos-edit-header-title">
                                       <span style={{ color: '#2563eb', fontSize: '15px', fontWeight: 800 }}>◆</span>
@@ -2959,6 +2977,12 @@ export default function POSModule({
                                       </span>
                                       <span className="pos-edit-status-pill">
                                         ● Status: {normalizeOrderStatus(editFormData.status || editFormData.order_status)}
+                                      </span>
+                                      <span className="pos-edit-status-pill" style={{ background: '#f8fafc', color: '#475569', borderColor: '#e2e8f0' }}>
+                                        🧺 {editCartTotalPieces} Pieces
+                                      </span>
+                                      <span className="pos-edit-status-pill" style={{ background: '#f0fdf4', color: '#16a34a', borderColor: '#bbf7d0' }}>
+                                        ₹{editCartGrandTotal.toFixed(2)}
                                       </span>
                                     </div>
 
@@ -2970,15 +2994,17 @@ export default function POSModule({
                                       }}
                                       title="Collapse Edit Form"
                                       className="pos-edit-collapse-btn"
+                                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', width: 'auto', padding: '0 12px', fontSize: '12px' }}
                                     >
-                                      ▲
+                                      <span>▲</span>
+                                      <span>Close Form</span>
                                     </button>
                                   </div>
 
                                   <form onSubmit={handleSaveOrderEdit}>
                                     {/* ══════════════════════════════════════════════════════════════════
                                         SECTION 1: TWO COLUMN TOP GRID
-                                        Col 1 (Left): Customer & Order Information (~360px)
+                                        Col 1 (Left): Customer & Order Information (Balanced 2-Column Inputs)
                                         Col 2 (Right): Services Allocated & Garment Selection (Catalog + Cart)
                                        ══════════════════════════════════════════════════════════════════ */}
                                     <div className="pos-inline-edit-top-grid">
@@ -2989,7 +3015,7 @@ export default function POSModule({
                                           <span>Customer &amp; Order Information</span>
                                         </div>
 
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '11px', flex: 1 }}>
+                                        <div className="pos-edit-customer-form-grid">
                                           {/* Customer Name */}
                                           <div>
                                             <label className="pos-edit-label">
@@ -3018,10 +3044,10 @@ export default function POSModule({
                                             />
                                           </div>
 
-                                          {/* Address */}
-                                          <div>
+                                          {/* Address (Spans 2 columns) */}
+                                          <div style={{ gridColumn: '1 / -1' }}>
                                             <label className="pos-edit-label">
-                                              Address <span className="required">*</span>
+                                              Delivery Address <span className="required">*</span>
                                             </label>
                                             <input
                                               type="text"
@@ -3032,49 +3058,48 @@ export default function POSModule({
                                             />
                                           </div>
 
-                                          {/* Row with Status * and Order Type * side-by-side (matching user screenshot) */}
-                                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                                            <div>
-                                              <label className="pos-edit-label">
-                                                Status <span className="required">*</span>
-                                              </label>
-                                              <select
-                                                className="pos-edit-field"
-                                                value={normalizeOrderStatus(editFormData.status || editFormData.order_status)}
-                                                onChange={(e) => {
-                                                  const val = e.target.value;
-                                                  setEditFormData({ ...editFormData, status: val, order_status: val });
-                                                  handleQuickStatusUpdate(val);
-                                                }}
-                                              >
-                                                <option value="Order Received">Order Received</option>
-                                                <option value="In Progress">In Progress</option>
-                                                <option value="Ready">Ready</option>
-                                                <option value="Delivered">Delivered</option>
-                                                <option value="Cancelled">Cancelled</option>
-                                              </select>
-                                            </div>
-
-                                            <div>
-                                              <label className="pos-edit-label">
-                                                Order Type <span className="required">*</span>
-                                              </label>
-                                              <select
-                                                className="pos-edit-field"
-                                                value={editFormData.order_type || 'Walk-in'}
-                                                onChange={(e) => setEditFormData({ ...editFormData, order_type: e.target.value })}
-                                              >
-                                                <option value="Walk-in">Walk-in</option>
-                                                <option value="Home Delivery">Home Delivery</option>
-                                                <option value="Express 24H">Express 24H</option>
-                                              </select>
-                                            </div>
-                                          </div>
-
-                                          {/* Expected Delivery with Calendar icon */}
+                                          {/* Status */}
                                           <div>
                                             <label className="pos-edit-label">
-                                              Expected Delivery <span className="required">*</span>
+                                              Status <span className="required">*</span>
+                                            </label>
+                                            <select
+                                              className="pos-edit-field"
+                                              value={normalizeOrderStatus(editFormData.status || editFormData.order_status)}
+                                              onChange={(e) => {
+                                                const val = e.target.value;
+                                                setEditFormData({ ...editFormData, status: val, order_status: val });
+                                                handleQuickStatusUpdate(val);
+                                              }}
+                                            >
+                                              <option value="Order Received">Order Received</option>
+                                              <option value="In Progress">In Progress</option>
+                                              <option value="Ready">Ready</option>
+                                              <option value="Delivered">Delivered</option>
+                                              <option value="Cancelled">Cancelled</option>
+                                            </select>
+                                          </div>
+
+                                          {/* Order Type */}
+                                          <div>
+                                            <label className="pos-edit-label">
+                                              Order Type <span className="required">*</span>
+                                            </label>
+                                            <select
+                                              className="pos-edit-field"
+                                              value={editFormData.order_type || 'Walk-in'}
+                                              onChange={(e) => setEditFormData({ ...editFormData, order_type: e.target.value })}
+                                            >
+                                              <option value="Walk-in">Walk-in</option>
+                                              <option value="Home Delivery">Home Delivery</option>
+                                              <option value="Express 24H">Express 24H</option>
+                                            </select>
+                                          </div>
+
+                                          {/* Expected Delivery (Spans 2 columns) */}
+                                          <div style={{ gridColumn: '1 / -1' }}>
+                                            <label className="pos-edit-label">
+                                              Expected Delivery Date &amp; Time <span className="required">*</span>
                                             </label>
                                             <div style={{ position: 'relative' }}>
                                               <input
@@ -3103,22 +3128,19 @@ export default function POSModule({
                                             </div>
                                           </div>
 
-                                          {/* Comments Textarea */}
-                                          <div>
-                                            <label className="pos-edit-label">
-                                              Comments
-                                            </label>
-                                            <textarea
-                                              rows={2}
-                                              className="pos-edit-textarea"
-                                              value={editFormData.comments || ''}
-                                              onChange={(e) => setEditFormData({ ...editFormData, comments: e.target.value })}
-                                              placeholder="Customer special notes, delicate fabric instructions, or delivery directions..."
-                                            />
-                                          </div>
+                                          {/* Comments Textarea (Spans 2 columns) */}
+                                          <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                                          <label className="pos-edit-label">Comments / Special Instructions</label>
+                                          <textarea
+                                           className="pos-edit-textarea pos-edit-textarea-grow"
+                                           value={editFormData.comments || ''}
+                                           onChange={(e) => setEditFormData({ ...editFormData, comments: e.target.value })}
+                                           placeholder="Customer special notes, delicate fabric instructions, or delivery directions..."
+                                           />
+                                           </div>
 
-                                          {/* Live Status Quick Action & Pills */}
-                                          <div className="pos-edit-sub-panel" style={{ marginTop: '4px', gap: '8px' }}>
+                                          {/* Live Status Quick Action & Pills (Spans 2 columns) */}
+                                         <div className="pos-edit-sub-panel" style={{ gridColumn: '1 / -1', gap: '8px', alignSelf: 'end' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                               <span style={{ fontSize: '11.5px', fontWeight: 700, color: 'var(--text-primary)' }}>Live Status Actions</span>
                                               <button
@@ -3304,21 +3326,23 @@ export default function POSModule({
                                               })}
                                             </div>
 
-                                            {/* 3-Column Garment Cards Grid with Scroller */}
+                                            {/* 2-Column Spacious Garment Cards Grid */}
                                             <div
                                               id="pos-edit-cloth-grid"
                                               className="pos-cloth-catalog-scroller"
                                               style={{
-                                                display: 'grid',
-                                                gridTemplateColumns: 'repeat(3, 1fr)',
-                                                gap: '10px',
-                                                flex: 1,
-                                                minHeight: '340px',
-                                                maxHeight: '430px',
-                                                overflowY: 'auto',
-                                                paddingRight: '6px',
-                                                scrollbarGutter: 'stable'
-                                              }}
+  display: 'grid',
+  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+  gap: '10px',
+  flex: '1 1 0',
+  minHeight: '260px',
+  maxHeight: 'none',
+  overflowY: 'auto',
+  overflowX: 'hidden',
+  alignContent: 'start',
+  paddingRight: '4px',
+  scrollbarGutter: 'stable'
+}}
                                             >
                                               {EDIT_CATALOG_ITEMS.filter((item) => {
                                                 const matchesCat =
@@ -3340,10 +3364,10 @@ export default function POSModule({
                                                       setEditSelectedRate(item.price);
                                                     }}
                                                   >
-                                                    <div style={{ height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '4px' }}>
-                                                      <ClothIllustration itemId={item.id} size={40} />
+                                                    <div style={{ height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '4px' }}>
+                                                      <ClothIllustration itemId={item.id} size={36} />
                                                     </div>
-                                                    <div className="pos-edit-garment-name">
+                                                    <div className="pos-edit-garment-name" title={item.name}>
                                                       {item.name}
                                                     </div>
                                                     <div className="pos-edit-garment-rate">
@@ -3367,7 +3391,7 @@ export default function POSModule({
                                             </div>
 
                                             {/* Scroller bottom indicator */}
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '11px', color: 'var(--text-muted, #64748b)', marginTop: 'auto', paddingTop: '8px' }}>
+                                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '11px', color: 'var(--text-muted, #64748b)', flexShrink: 0, paddingTop: '8px' }}>
                                               <span>↕</span>
                                               <span>Scroll up / down to view all 12 garments</span>
                                             </div>
@@ -3418,7 +3442,7 @@ export default function POSModule({
                                               </div>
 
                                               {/* Quantity & Rate Row */}
-                                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px', marginBottom: '8px' }}>
                                                 <div>
                                                   <label className="pos-edit-label">{t('pos_quantity', 'Quantity')}</label>
                                                   <div className="pos-edit-qty-group">
@@ -3480,7 +3504,7 @@ export default function POSModule({
                                                 <span>Cart Items ({editCart.length})</span>
                                               </div>
 
-                                              <div style={{ maxHeight: '145px', overflowY: 'auto', marginBottom: '10px', paddingRight: '2px' }}>
+                                              <div className="pos-edit-cart-list" style={{ maxHeight: '145px', overflowY: 'auto', marginBottom: '10px', paddingRight: '6px' }}>
                                                 {editCart.map((it, idx) => (
                                                   <div
                                                     key={`${it.id}_${it.serviceType}_${idx}`}
@@ -3584,485 +3608,601 @@ export default function POSModule({
 
                                     {/* ══════════════════════════════════════════════════════════════════
                                         SECTION 3: 6 TABS & TAB CONTENT
-                                        1. Order Details, 2. Logistics & Factory, 3. Status Updates,
-                                        4. Payments, 5. Customer Messages, 6. Comments & Audit
+                                        1. Order Information, 2. Laundry Processing, 3. Order Status,
+                                        4. Payments & Billing, 5. Customer Messages, 6. Notes & History
                                        ══════════════════════════════════════════════════════════════════ */}
-                                    <div className="pos-edit-section-card" style={{ marginBottom: '18px' }}>
-                                      {/* Tabs Navigation Bar */}
-                                      <div
-                                        style={{
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '8px',
-                                          borderBottom: '1.5px solid var(--border, #f1f5f9)',
-                                          paddingBottom: '10px',
-                                          marginBottom: '14px',
-                                          overflowX: 'auto'
-                                        }}
-                                      >
-                                        {[
-                                          { id: 'details', label: t('tab_order_details', '1. Order Details') },
-                                          { id: 'logistics', label: t('tab_logistics_factory', '2. Logistics & Factory') },
-                                          { id: 'status', label: t('tab_status_updates', '3. Status Updates') },
-                                          { id: 'payments', label: t('tab_payments', '4. Payments') },
-                                          { id: 'messages', label: t('tab_customer_messages', '5. Customer Messages') },
-                                          { id: 'audit', label: t('tab_comments_audit', '6. Comments & Audit') }
-                                        ].map((tab) => {
-                                          const isActive = editActiveTab === tab.id;
-                                          return (
-                                            <button
-                                              key={tab.id}
-                                              type="button"
-                                              onClick={() => setEditActiveTab(tab.id)}
-                                              className={`pos-edit-tab-btn ${isActive ? 'active' : ''}`}
-                                            >
-                                              {tab.label}
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
+                                    {(() => {
+                                      const orderEditTabs = [
+                                        { id: 'details', step: 1, icon: '📋', title: t('tab_order_info', '1. Order Information'), desc: t('tab_order_info_sub', 'Intake & Metadata') },
+                                        { id: 'logistics', step: 2, icon: '🏭', title: t('tab_processing', '2. Laundry Processing'), desc: t('tab_processing_sub', 'Factory & Tracking') },
+                                        { id: 'status', step: 3, icon: '🔄', title: t('tab_status_pipeline', '3. Order Status'), desc: t('tab_status_pipeline_sub', 'Progress & Milestones') },
+                                        { id: 'payments', step: 4, icon: '💳', title: t('tab_payments_billing', '4. Payments & Billing'), desc: t('tab_payments_billing_sub', 'GST, Totals & Balance') },
+                                        { id: 'messages', step: 5, icon: '💬', title: t('tab_customer_alerts', '5. Customer Messages'), desc: t('tab_customer_alerts_sub', 'WhatsApp & SMS Alerts') },
+                                        { id: 'audit', step: 6, icon: '📜', title: t('tab_notes_history', '6. Notes & History'), desc: t('tab_notes_history_sub', 'Staff Notes & Audit Log') }
+                                      ];
+                                      const currentEditTabIndex = orderEditTabs.findIndex((tb) => tb.id === editActiveTab);
 
-                                      {/* Tab 1 Content: Order Details */}
-                                      {editActiveTab === 'details' && (
-                                        <div>
-                                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '12px' }}>
-                                            Order Details Update &amp; Intake Metadata
-                                          </div>
-                                          <div
-                                            style={{
-                                              display: 'grid',
-                                              gridTemplateColumns: 'repeat(3, 1fr)',
-                                              gap: '16px',
-                                              marginBottom: '14px'
-                                            }}
-                                          >
-                                            <div>
-                                              <label className="pos-edit-label">
-                                                Order ID (Database Generated)
-                                              </label>
-                                              <div className="pos-edit-field" style={{ display: 'flex', alignItems: 'center', fontWeight: 750, color: '#2563eb', gap: '6px' }}>
-                                                <span>🔒</span>
-                                                <span>{editFormData.order_number || ''}</span>
-                                              </div>
-                                            </div>
-
-                                            <div>
-                                              <label className="pos-edit-label">
-                                                Created Timestamp (Captured)
-                                              </label>
-                                              <div className="pos-edit-field" style={{ display: 'flex', alignItems: 'center', fontWeight: 650, gap: '6px' }}>
-                                                <span>🕒</span>
-                                                <span>{editFormData.captured_date || '2026-10-28'} {editFormData.captured_time || '10:15 AM'}</span>
-                                              </div>
-                                            </div>
-
-                                            <div>
-                                              <label className="pos-edit-label">
-                                                Current Status
-                                              </label>
-                                              <div className="pos-edit-field" style={{ display: 'flex', alignItems: 'center', fontWeight: 750, color: '#2563eb', gap: '6px' }}>
-                                                <span>●</span>
-                                                <span>{normalizeOrderStatus(editFormData.status || editFormData.order_status)}</span>
-                                              </div>
-                                            </div>
-                                          </div>
-
-                                          <div
-                                            style={{
-                                              display: 'grid',
-                                              gridTemplateColumns: 'repeat(3, 1fr)',
-                                              gap: '16px'
-                                            }}
-                                          >
-                                            <div>
-                                              <label className="pos-edit-label">
-                                                Garment Pieces Count
-                                              </label>
-                                              <input
-                                                type="text"
-                                                disabled
-                                                className="pos-edit-field"
-                                                style={{ fontWeight: 750 }}
-                                                value={`${editCartTotalPieces} Pieces in Order`}
-                                              />
-                                            </div>
-
-                                            <div>
-                                              <label className="pos-edit-label">
-                                                Order Intake Type
-                                              </label>
-                                              <select
-                                                className="pos-edit-field"
-                                                value={editFormData.order_type || 'Walk-in'}
-                                                onChange={(e) => setEditFormData({ ...editFormData, order_type: e.target.value })}
-                                              >
-                                                <option value="Walk-in">Walk-in</option>
-                                                <option value="Pickup &amp; Delivery">Pickup &amp; Delivery</option>
-                                                <option value="On-Call">On-Call</option>
-                                                <option value="Express 24H">Express 24H</option>
-                                              </select>
-                                            </div>
-
-                                            <div>
-                                              <label className="pos-edit-label">
-                                                Expected Delivery Date &amp; Time
-                                              </label>
-                                              <input
-                                                type="text"
-                                                className="pos-edit-field"
-                                                value={editFormData.expected_delivery || ''}
-                                                onChange={(e) => setEditFormData({ ...editFormData, expected_delivery: e.target.value })}
-                                                placeholder="30 Oct 2026, 05:00 PM"
-                                              />
-                                            </div>
-                                          </div>
-                                        </div>
-                                      )}
-
-                                      {/* Tab 2: Logistics & Factory */}
-                                      {editActiveTab === 'logistics' && (
-                                        <div>
-                                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '12px' }}>
-                                            Logistics &amp; Factory Routing Details
-                                          </div>
-                                          <div className="pos-edit-logistics-grid" style={{ marginBottom: '14px' }}>
-                                            <div>
-                                              <label className="pos-edit-label">
-                                                Factory Plant / Processing Hub
-                                              </label>
-                                              <select
-                                                className="pos-edit-field"
-                                                defaultValue="Main Plant (Unit 1)"
-                                              >
-                                                <option value="Main Plant (Unit 1)">Main Plant (Unit 1) - Washer &amp; Pressing</option>
-                                                <option value="Express Plant (Unit 2)">Express Plant (Unit 2) - 24H Quick Turnaround</option>
-                                                <option value="Central Dry Clean Hub">Central Dry Clean Hub - Delicate &amp; Silk</option>
-                                              </select>
-                                            </div>
-                                            <div>
-                                              <label className="pos-edit-label">
-                                                Bag Tag / Barcode Identifier
-                                              </label>
-                                              <div className="pos-edit-field" style={{ display: 'flex', alignItems: 'center', fontWeight: 700, gap: '6px' }}>
-                                                <span>🏷</span>
-                                                <span>BAG-{editFormData.order_number?.replace(/D/g, '') || '00108'}</span>
-                                              </div>
-                                            </div>
-                                            <div>
-                                              <label className="pos-edit-label">
-                                                Assigned Delivery Rider / Van
-                                              </label>
-                                              <select
-                                                className="pos-edit-field"
-                                                defaultValue="Ramesh Kumar (Route 4)"
-                                              >
-                                                <option value="Ramesh Kumar (Route 4)">Ramesh Kumar (Route 4 - Downtown)</option>
-                                                <option value="Suresh Babu (Route 2)">Suresh Babu (Route 2 - Residential)</option>
-                                                <option value="Self Pickup">Counter Self-Pickup</option>
-                                              </select>
-                                            </div>
-                                          </div>
-
-                                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                                            <div>
-                                              <label className="pos-edit-label">
-                                                Plant Transit &amp; Packaging Status
-                                              </label>
-                                              <select
-                                                className="pos-edit-field"
-                                                defaultValue="Washing in Progress"
-                                              >
-                                                <option value="Intake Complete">Intake Complete - Bagged</option>
-                                                <option value="In Transit to Factory">In Transit to Factory</option>
-                                                <option value="Washing in Progress">Washing in Progress</option>
-                                                <option value="Pressed &amp; Quality Checked">Pressed &amp; Quality Checked</option>
-                                                <option value="Ready for Dispatch to Store">Ready for Dispatch to Store</option>
-                                              </select>
-                                            </div>
-                                            <div>
-                                              <label className="pos-edit-label">
-                                                Factory Bin / Storage Shelf
-                                              </label>
-                                              <input
-                                                type="text"
-                                                className="pos-edit-field"
-                                                defaultValue="Bin B-14 (Hanger Rail 2)"
-                                              />
-                                            </div>
-                                          </div>
-                                        </div>
-                                      )}
-
-                                      {/* Tab 3: Status Updates */}
-                                      {editActiveTab === 'status' && (
-                                        <div>
-                                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '12px' }}>
-                                            Live Order Status Pipeline &amp; Milestone Controls
-                                          </div>
-
-                                          {/* Visual Milestone Progression Bar */}
-                                          <div className="pos-edit-sub-panel" style={{ flexDirection: 'row', alignItems: 'center', gap: '10px', fontSize: '12.5px', flexWrap: 'wrap', marginBottom: '16px', padding: '12px' }}>
-                                            {['Order Received', 'In Progress', 'Ready', 'Delivered'].map((step, idx) => {
-                                              const currentNorm = normalizeOrderStatus(editFormData.status || editFormData.order_status);
-                                              const isDone = ['Order Received', 'In Progress', 'Ready', 'Delivered'].indexOf(currentNorm) >= idx;
+                                      return (
+                                        <div className="pos-edit-section-card" style={{ marginBottom: '18px' }}>
+                                          {/* Professional Stepper Tabs Navigation Bar */}
+                                          <div className="pos-edit-stepper-bar">
+                                            {orderEditTabs.map((tab, idx) => {
+                                              const isActive = editActiveTab === tab.id;
+                                              const isCompleted = currentEditTabIndex > idx;
                                               return (
-                                                <React.Fragment key={step}>
-                                                  {idx > 0 && <span style={{ color: 'var(--text-muted)' }}>➔</span>}
-                                                  <span
-                                                    style={{
-                                                      padding: '6px 12px',
-                                                      borderRadius: '6px',
-                                                      background: isDone ? (step === 'Ready' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(37, 99, 235, 0.15)') : 'var(--bg-surface)',
-                                                      color: isDone ? (step === 'Ready' ? '#16a34a' : '#2563eb') : 'var(--text-muted)',
-                                                      fontWeight: isDone ? 750 : 500,
-                                                      border: isDone ? '1px solid rgba(37, 99, 235, 0.3)' : '1px solid var(--border)'
-                                                    }}
-                                                  >
-                                                    {isDone ? '✓ ' : '○ '}{step}
-                                                  </span>
-                                                </React.Fragment>
+                                                <button
+                                                  key={tab.id}
+                                                  type="button"
+                                                  onClick={() => setEditActiveTab(tab.id)}
+                                                  className={`pos-edit-stepper-tab ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''}`}
+                                                >
+                                                  <div className="pos-edit-tab-step-circle">
+                                                    {isCompleted ? '✓' : tab.step}
+                                                  </div>
+                                                  <div className="pos-edit-tab-info">
+                                                    <div className="pos-edit-tab-header-row">
+                                                      <span style={{ fontSize: '12px' }}>{tab.icon}</span>
+                                                      <span className="pos-edit-tab-title">{tab.title}</span>
+                                                    </div>
+                                                    <span className="pos-edit-tab-desc">{tab.desc}</span>
+                                                  </div>
+                                                </button>
                                               );
                                             })}
                                           </div>
 
-                                          {/* Interactive Status Selector Row */}
-                                          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                            <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                                              Change Status:
-                                            </label>
-                                            <select
-                                              className="pos-edit-field"
-                                              style={{ minWidth: '180px', width: 'auto' }}
-                                              value={normalizeOrderStatus(editFormData.status || editFormData.order_status)}
-                                              onChange={(e) => {
-                                                const val = e.target.value;
-                                                setEditFormData({ ...editFormData, status: val, order_status: val });
-                                                handleQuickStatusUpdate(val);
-                                              }}
-                                            >
-                                              <option value="Order Received">🔵 Order Received</option>
-                                              <option value="In Progress">🟡 In Progress</option>
-                                              <option value="Ready">🟢 Ready for Pickup</option>
-                                              <option value="Delivered">🔷 Delivered</option>
-                                              <option value="Cancelled">🔴 Cancelled</option>
-                                            </select>
-
-                                            <button
-                                              type="button"
-                                              className="pos-edit-save-btn"
-                                              style={{ height: '36px', padding: '0 16px', fontSize: '12px' }}
-                                              onClick={() => handleQuickStatusUpdate(editFormData.status || editFormData.order_status)}
-                                            >
-                                              <span>⚡</span>
-                                              <span>Apply &amp; Save Status</span>
-                                            </button>
-                                          </div>
-                                        </div>
-                                      )}
-
-                                      {/* Tab 4: Payments */}
-                                      {editActiveTab === 'payments' && (
-                                        <div>
-                                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '12px' }}>
-                                            Payment Breakdown &amp; Transaction Details
-                                          </div>
-
-                                          {/* 4 Summary Cards */}
-                                          <div
-                                            style={{
-                                              display: 'grid',
-                                              gridTemplateColumns: 'repeat(4, 1fr)',
-                                              gap: '12px',
-                                              marginBottom: '16px'
-                                            }}
-                                          >
-                                            <div className="pos-edit-metric-card">
-                                              <span className="metric-label">Subtotal</span>
-                                              <span className="metric-val">₹{editCartSubtotal.toFixed(2)}</span>
-                                            </div>
-                                            <div className="pos-edit-metric-card">
-                                              <span className="metric-label">Tax (5% GST)</span>
-                                              <span className="metric-val">₹{editCartTax.toFixed(2)}</span>
-                                            </div>
-                                            <div className="pos-edit-metric-card" style={{ borderColor: 'rgba(37, 99, 235, 0.4)', background: 'rgba(37, 99, 235, 0.08)' }}>
-                                              <span className="metric-label" style={{ color: '#2563eb' }}>Grand Total</span>
-                                              <span className="metric-val" style={{ color: '#2563eb' }}>₹{editCartGrandTotal.toFixed(2)}</span>
-                                            </div>
-                                            <div className="pos-edit-metric-card" style={{ borderColor: 'rgba(234, 179, 8, 0.4)', background: 'rgba(234, 179, 8, 0.08)' }}>
-                                              <span className="metric-label" style={{ color: '#d97706' }}>Balance Due</span>
-                                              <span className="metric-val" style={{ color: '#d97706' }}>
-                                                ₹{Math.max(0, editCartGrandTotal - Number(editFormData.advance_paid || 0)).toFixed(2)}
-                                              </span>
-                                            </div>
-                                          </div>
-
-                                          {/* Payment Fields */}
-                                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+                                          {/* Tab 1 Content: Order Information */}
+                                          {editActiveTab === 'details' && (
                                             <div>
-                                              <label className="pos-edit-label">
-                                                Payment Status
-                                              </label>
-                                              <select
-                                                className="pos-edit-field"
-                                                value={editFormData.payment_status || 'Unpaid'}
-                                                onChange={(e) => setEditFormData({ ...editFormData, payment_status: e.target.value })}
-                                              >
-                                                <option value="Paid">🟢 Fully Paid</option>
-                                                <option value="Partially Paid">🟡 Partially Paid</option>
-                                                <option value="Unpaid">🔴 Unpaid</option>
-                                              </select>
-                                            </div>
+                                              {/* Subcard A: Order Summary */}
+                                              <div className="pos-edit-subcard">
+                                                <div className="pos-edit-subcard-title">
+                                                  <span>📋</span>
+                                                  <span>Order Summary &amp; Intake Metadata</span>
+                                                </div>
+                                                <div className="pos-edit-grid-3" style={{ marginBottom: '14px' }}>
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Order ID (Database Generated)
+                                                    </label>
+                                                    <div className="pos-edit-field" style={{ display: 'flex', alignItems: 'center', fontWeight: 750, color: '#2563eb', gap: '6px' }}>
+                                                      <span>🔒</span>
+                                                      <span>{editFormData.order_number || ''}</span>
+                                                    </div>
+                                                  </div>
 
-                                            <div>
-                                              <label className="pos-edit-label">
-                                                Payment Mode / Gateway
-                                              </label>
-                                              <select
-                                                className="pos-edit-field"
-                                                defaultValue="UPI / QR Code"
-                                              >
-                                                <option value="Cash">Cash at Counter</option>
-                                                <option value="UPI / QR Code">UPI (GPay / PhonePe / Paytm)</option>
-                                                <option value="Credit / Debit Card">Credit / Debit Card</option>
-                                                <option value="Net Banking">Net Banking</option>
-                                                <option value="Store Credit">Store Credit / Wallet</option>
-                                              </select>
-                                            </div>
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Created Timestamp (Captured)
+                                                    </label>
+                                                    <div className="pos-edit-field" style={{ display: 'flex', alignItems: 'center', fontWeight: 650, gap: '6px' }}>
+                                                      <span>🕒</span>
+                                                      <span>{editFormData.captured_date || '2026-10-28'} {editFormData.captured_time || '10:15 AM'}</span>
+                                                    </div>
+                                                  </div>
 
-                                            <div>
-                                              <label className="pos-edit-label">
-                                                Advance Paid (₹)
-                                              </label>
-                                              <input
-                                                type="number"
-                                                min="0"
-                                                className="pos-edit-field"
-                                                value={editFormData.advance_paid || 0}
-                                                onChange={(e) => setEditFormData({ ...editFormData, advance_paid: e.target.value })}
-                                              />
-                                            </div>
-                                          </div>
-                                        </div>
-                                      )}
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Current Status
+                                                    </label>
+                                                    <div className="pos-edit-field" style={{ display: 'flex', alignItems: 'center', fontWeight: 750, color: '#2563eb', gap: '6px' }}>
+                                                      <span>●</span>
+                                                      <span>{normalizeOrderStatus(editFormData.status || editFormData.order_status)}</span>
+                                                    </div>
+                                                  </div>
+                                                </div>
 
-                                      {/* Tab 5: Customer Messages */}
-                                      {editActiveTab === 'messages' && (
-                                        <div>
-                                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '10px' }}>
-                                            Customer Messaging &amp; Automated Notifications
-                                          </div>
+                                                <div className="pos-edit-grid-3">
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Garment Pieces Count
+                                                    </label>
+                                                    <input
+                                                      type="text"
+                                                      disabled
+                                                      className="pos-edit-field"
+                                                      style={{ fontWeight: 750 }}
+                                                      value={`${editCartTotalPieces} Pieces in Order`}
+                                                    />
+                                                  </div>
 
-                                          {/* Customer Contact Snapshot */}
-                                          <div className="pos-edit-sub-panel" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', padding: '12px 14px' }}>
-                                            <div>
-                                              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                                                {editFormData.customer_name || 'Customer'}
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Order Intake Type
+                                                    </label>
+                                                    <select
+                                                      className="pos-edit-field"
+                                                      value={editFormData.order_type || 'Walk-in'}
+                                                      onChange={(e) => setEditFormData({ ...editFormData, order_type: e.target.value })}
+                                                    >
+                                                      <option value="Walk-in">Walk-in</option>
+                                                      <option value="Pickup &amp; Delivery">Pickup &amp; Delivery</option>
+                                                      <option value="On-Call">On-Call</option>
+                                                      <option value="Express 24H">Express 24H</option>
+                                                    </select>
+                                                  </div>
+
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Expected Delivery Date &amp; Time
+                                                    </label>
+                                                    <input
+                                                      type="text"
+                                                      className="pos-edit-field"
+                                                      value={editFormData.expected_delivery || ''}
+                                                      onChange={(e) => setEditFormData({ ...editFormData, expected_delivery: e.target.value })}
+                                                      placeholder="30 Oct 2026, 05:00 PM"
+                                                    />
+                                                  </div>
+                                                </div>
                                               </div>
-                                              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                                                📱 <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>+91 {editFormData.mobile_number || '9876543210'}</span> • {editFormData.address || 'MG Road, Vellore'}
+
+                                              {/* Subcard B: Customer Information Snapshot */}
+                                              <div className="pos-edit-subcard" style={{ marginBottom: 0 }}>
+                                                <div className="pos-edit-subcard-title">
+                                                  <span>👤</span>
+                                                  <span>Customer Information Snapshot</span>
+                                                </div>
+                                                <div className="pos-edit-grid-3">
+                                                  <div>
+                                                    <label className="pos-edit-label">Customer Name</label>
+                                                    <div className="pos-edit-field" style={{ fontWeight: 650 }}>
+                                                      {editFormData.customer_name || 'Counter Customer'}
+                                                    </div>
+                                                  </div>
+                                                  <div>
+                                                    <label className="pos-edit-label">Mobile Number</label>
+                                                    <div className="pos-edit-field" style={{ fontWeight: 650 }}>
+                                                      <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>+91 {editFormData.mobile_number || '9876543210'}</span>
+                                                    </div>
+                                                  </div>
+                                                  <div>
+                                                    <label className="pos-edit-label">Delivery Address</label>
+                                                    <div className="pos-edit-field" style={{ fontWeight: 650 }}>
+                                                      {editFormData.address || 'Counter Walk-In'}
+                                                    </div>
+                                                  </div>
+                                                </div>
                                               </div>
                                             </div>
-                                            <button
-                                              type="button"
-                                              onClick={() => showToast?.(`💬 WhatsApp opened for +91 ${editFormData.mobile_number || '9876543210'}`)}
-                                              style={{
-                                                padding: '6px 14px',
-                                                borderRadius: '6px',
-                                                border: '1px solid #22c55e',
-                                                background: 'rgba(34, 197, 94, 0.1)',
-                                                color: '#16a34a',
-                                                fontSize: '12px',
-                                                fontWeight: 700,
-                                                cursor: 'pointer',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '6px'
-                                              }}
-                                            >
-                                              <span>💬</span>
-                                              <span>WhatsApp Customer</span>
-                                            </button>
-                                          </div>
+                                          )}
 
-                                          {/* Notification Template Preview */}
-                                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', background: 'rgba(34, 197, 94, 0.08)', padding: '12px 14px', borderRadius: '6px', border: '1px solid rgba(34, 197, 94, 0.25)', lineHeight: 1.5, marginBottom: '12px' }}>
-                                            <span style={{ fontWeight: 700, color: '#16a34a', display: 'block', marginBottom: '4px' }}>
-                                              Automated WhatsApp &amp; SMS Template:
-                                            </span>
-                                            {t('msg_order_status_template', 'Hello {name}, your laundry order #{orderNumber} with Washdoor is now {status} ({pieces} pieces). Total Bill: ₹{total}. Expected delivery: {delivery}.')
-                                              .replace('{name}', editFormData.customer_name || 'Customer')
-                                              .replace('{orderNumber}', editFormData.order_number || '')
-                                              .replace('{status}', normalizeOrderStatus(editFormData.status || editFormData.order_status))
-                                              .replace('{pieces}', editCartTotalPieces)
-                                              .replace('{total}', editCartGrandTotal.toFixed(2))
-                                              .replace('{delivery}', editFormData.expected_delivery || '30 Oct 2026, 05:00 PM')}
-                                          </div>
+                                          {/* Tab 2: Laundry Processing & Factory */}
+                                          {editActiveTab === 'logistics' && (
+                                            <div>
+                                              {/* Subcard A: Factory Assignment */}
+                                              <div className="pos-edit-subcard">
+                                                <div className="pos-edit-subcard-title">
+                                                  <span>🏭</span>
+                                                  <span>Factory Assignment &amp; Routing</span>
+                                                </div>
+                                                <div className="pos-edit-logistics-grid">
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Factory Plant / Processing Hub
+                                                    </label>
+                                                    <select
+                                                      className="pos-edit-field"
+                                                      defaultValue="Main Plant (Unit 1)"
+                                                    >
+                                                      <option value="Main Plant (Unit 1)">Main Plant (Unit 1) - Washer &amp; Pressing</option>
+                                                      <option value="Express Plant (Unit 2)">Express Plant (Unit 2) - 24H Quick Turnaround</option>
+                                                      <option value="Central Dry Clean Hub">Central Dry Clean Hub - Delicate &amp; Silk</option>
+                                                    </select>
+                                                  </div>
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Bag Tag / Barcode Identifier
+                                                    </label>
+                                                    <div className="pos-edit-field" style={{ display: 'flex', alignItems: 'center', fontWeight: 700, gap: '6px' }}>
+                                                      <span>🏷</span>
+                                                      <span>BAG-{editFormData.order_number?.replace(/D/g, '') || '00108'}</span>
+                                                    </div>
+                                                  </div>
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Assigned Delivery Rider / Van
+                                                    </label>
+                                                    <select
+                                                      className="pos-edit-field"
+                                                      defaultValue="Ramesh Kumar (Route 4)"
+                                                    >
+                                                      <option value="Ramesh Kumar (Route 4)">Ramesh Kumar (Route 4 - Downtown)</option>
+                                                      <option value="Suresh Babu (Route 2)">Suresh Babu (Route 2 - Residential)</option>
+                                                      <option value="Self Pickup">Counter Self-Pickup</option>
+                                                    </select>
+                                                  </div>
+                                                </div>
+                                              </div>
 
-                                          <div style={{ display: 'flex', gap: '8px' }}>
-                                            <button
-                                              type="button"
-                                              onClick={() => showToast?.(`✅ WhatsApp notification sent to ${editFormData.customer_name}!`)}
-                                              style={{ padding: '7px 14px', borderRadius: '6px', border: 'none', background: '#16a34a', color: '#ffffff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
-                                            >
-                                              Send WhatsApp Alert
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => showToast?.(`✅ SMS alert dispatched to +91 ${editFormData.mobile_number}!`)}
-                                              className="pos-edit-cancel-btn"
-                                              style={{ padding: '7px 14px', fontSize: '12px' }}
-                                            >
-                                              Send SMS Alert
-                                            </button>
-                                          </div>
-                                        </div>
-                                      )}
+                                              {/* Subcard B: Washing Progress Stepper */}
+                                              <div className="pos-edit-subcard">
+                                                <div className="pos-edit-subcard-title">
+                                                  <span>🧺</span>
+                                                  <span>Washing Progress &amp; Factory Stage Tracker</span>
+                                                </div>
 
-                                      {/* Tab 6: Comments & Audit */}
-                                      {editActiveTab === 'audit' && (
-                                        <div>
-                                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '12px' }}>
-                                            Internal Staff Comments &amp; Immutable System Audit Trail
-                                          </div>
+                                                <div className="pos-laundry-stepper">
+                                                  {[
+                                                    { label: 'Received at Factory', status: 'completed' },
+                                                    { label: 'Washing & Sorting', status: 'active' },
+                                                    { label: 'Drying', status: 'pending' },
+                                                    { label: 'Ironing & Finishing', status: 'pending' },
+                                                    { label: 'Quality Check', status: 'pending' },
+                                                    { label: 'Ready for Dispatch', status: 'pending' }
+                                                  ].map((step, sIdx) => (
+                                                    <div
+                                                      key={step.label}
+                                                      className={`pos-laundry-step-node ${step.status}`}
+                                                    >
+                                                      <span>{step.status === 'completed' ? '✓' : sIdx + 1}</span>
+                                                      <span>{step.label}</span>
+                                                    </div>
+                                                  ))}
+                                                </div>
 
-                                          {/* Operator Notes Field */}
-                                          <div style={{ marginBottom: '14px' }}>
-                                            <label className="pos-edit-label">
-                                              Internal Staff Instructions / Store Comments
-                                            </label>
-                                            <textarea
-                                              rows={2}
-                                              className="pos-edit-textarea"
-                                              value={editFormData.comments || ''}
-                                              onChange={(e) => setEditFormData({ ...editFormData, comments: e.target.value })}
-                                              placeholder="Internal notes for laundry wash technician or rider..."
-                                            />
-                                          </div>
+                                                <div className="pos-edit-grid-2" style={{ marginTop: '12px' }}>
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Plant Transit &amp; Packaging Status
+                                                    </label>
+                                                    <select
+                                                      className="pos-edit-field"
+                                                      defaultValue="Washing in Progress"
+                                                    >
+                                                      <option value="Intake Complete">Intake Complete - Bagged</option>
+                                                      <option value="In Transit to Factory">In Transit to Factory</option>
+                                                      <option value="Washing in Progress">Washing in Progress</option>
+                                                      <option value="Pressed &amp; Quality Checked">Pressed &amp; Quality Checked</option>
+                                                      <option value="Ready for Dispatch to Store">Ready for Dispatch to Store</option>
+                                                    </select>
+                                                  </div>
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Factory Bin / Storage Shelf
+                                                    </label>
+                                                    <input
+                                                      type="text"
+                                                      className="pos-edit-field"
+                                                      defaultValue="Bin B-14 (Hanger Rail 2)"
+                                                    />
+                                                  </div>
+                                                </div>
+                                              </div>
 
-                                          {/* Audit Trail Timeline */}
-                                          <div className="pos-edit-sub-panel" style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.8 }}>
-                                            <div style={{ fontWeight: 700, fontSize: '12.5px', color: 'var(--text-primary)', marginBottom: '4px' }}>
-                                              📋 Order Audit Trail &amp; Activity Log:
+                                              {/* Subcard C: Factory Notes & Special Handling */}
+                                              <div className="pos-edit-subcard" style={{ marginBottom: 0 }}>
+                                                <div className="pos-edit-subcard-title">
+                                                  <span>🏷️</span>
+                                                  <span>Factory Handling Remarks</span>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                                                  <span className="pos-note-tag-chip" style={{ background: '#f0fdf4', borderColor: '#bbf7d0', color: '#16a34a' }}>🌱 Eco-Friendly Wash</span>
+                                                  <span className="pos-note-tag-chip" style={{ background: '#fef3c7', borderColor: '#fde68a', color: '#d97706' }}>⚠️ Color Bleed Alert</span>
+                                                  <span className="pos-note-tag-chip" style={{ background: '#eff6ff', borderColor: '#bfdbfe', color: '#2563eb' }}>👔 Heavy Starch on Collars</span>
+                                                  <span className="pos-note-tag-chip" style={{ background: '#fdf2f8', borderColor: '#fbcfe8', color: '#db2777' }}>✨ Silk Delicate Care</span>
+                                                </div>
+                                              </div>
                                             </div>
-                                            <div>• <strong>Order Created:</strong> {editFormData.captured_date || '2026-10-28'} at {editFormData.captured_time || '10:15 AM'} by Counter Operator</div>
-                                            {editFormData.assigned_driver && (
-                                              <div style={{ color: '#16a34a', fontWeight: 650 }}>
-                                                • <strong>Assigned for Pickup:</strong> {editFormData.assigned_driver} {editFormData.assigned_driver_full ? `(${editFormData.assigned_driver_full})` : ''}
+                                          )}
+
+                                          {/* Tab 3: Order Status Updates */}
+                                          {editActiveTab === 'status' && (
+                                            <div>
+                                              {/* Subcard A: Current Status & Progression Timeline */}
+                                              <div className="pos-edit-subcard">
+                                                <div className="pos-edit-subcard-title">
+                                                  <span>🔄</span>
+                                                  <span>Order Lifecycle &amp; Milestone Timeline</span>
+                                                </div>
+
+                                                {/* Visual Milestone Progression Bar */}
+                                                <div className="pos-edit-sub-panel" style={{ flexDirection: 'row', alignItems: 'center', gap: '10px', fontSize: '12.5px', flexWrap: 'wrap', marginBottom: '16px', padding: '12px' }}>
+                                                  {['Order Received', 'In Progress', 'Ready', 'Delivered'].map((step, idx) => {
+                                                    const currentNorm = normalizeOrderStatus(editFormData.status || editFormData.order_status);
+                                                    const isDone = ['Order Received', 'In Progress', 'Ready', 'Delivered'].indexOf(currentNorm) >= idx;
+                                                    return (
+                                                      <React.Fragment key={step}>
+                                                        {idx > 0 && <span style={{ color: 'var(--text-muted)' }}>➔</span>}
+                                                        <span
+                                                          style={{
+                                                            padding: '6px 12px',
+                                                            borderRadius: '6px',
+                                                            background: isDone ? (step === 'Ready' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(37, 99, 235, 0.15)') : 'var(--bg-surface)',
+                                                            color: isDone ? (step === 'Ready' ? '#16a34a' : '#2563eb') : 'var(--text-muted)',
+                                                            fontWeight: isDone ? 750 : 500,
+                                                            border: isDone ? '1px solid rgba(37, 99, 235, 0.3)' : '1px solid var(--border)'
+                                                          }}
+                                                        >
+                                                          {isDone ? '✓ ' : '○ '}{step}
+                                                        </span>
+                                                      </React.Fragment>
+                                                    );
+                                                  })}
+                                                </div>
+
+                                                {/* Interactive Status Selector Row */}
+                                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                  <label style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                                    Update Status:
+                                                  </label>
+                                                  <select
+                                                    className="pos-edit-field"
+                                                    style={{ minWidth: '190px', width: 'auto' }}
+                                                    value={normalizeOrderStatus(editFormData.status || editFormData.order_status)}
+                                                    onChange={(e) => {
+                                                      const val = e.target.value;
+                                                      setEditFormData({ ...editFormData, status: val, order_status: val });
+                                                      handleQuickStatusUpdate(val);
+                                                    }}
+                                                  >
+                                                    <option value="Order Received">🔵 Order Received</option>
+                                                    <option value="In Progress">🟡 In Progress</option>
+                                                    <option value="Ready">🟢 Ready for Pickup</option>
+                                                    <option value="Delivered">🔷 Delivered</option>
+                                                    <option value="Cancelled">🔴 Cancelled</option>
+                                                  </select>
+
+                                                  <button
+                                                    type="button"
+                                                    className="pos-edit-save-btn"
+                                                    style={{ height: '36px', padding: '0 16px', fontSize: '12px' }}
+                                                    onClick={() => handleQuickStatusUpdate(editFormData.status || editFormData.order_status)}
+                                                  >
+                                                    <span>⚡</span>
+                                                    <span>Apply &amp; Save Status</span>
+                                                  </button>
+                                                </div>
                                               </div>
-                                            )}
-                                            {(editFormData.audit_logs || editFormData.logs || []).map((l, idx) => (
-                                              <div key={l.id || idx} style={{ color: l.type === 'pickup' ? '#16a34a' : 'inherit' }}>
-                                                • <strong>{l.title}:</strong> {l.detail} <span style={{ fontSize: '11px', color: '#64748b' }}>({l.time})</span>
+                                            </div>
+                                          )}
+
+                                          {/* Tab 4: Payments & Billing */}
+                                          {editActiveTab === 'payments' && (
+                                            <div>
+                                              {/* 4 Summary Cards */}
+                                              <div className="pos-edit-payments-summary-grid">
+                                                <div className="pos-edit-metric-card">
+                                                  <span className="metric-label">Subtotal</span>
+                                                  <span className="metric-val">₹{editCartSubtotal.toFixed(2)}</span>
+                                                </div>
+                                                <div className="pos-edit-metric-card">
+                                                  <span className="metric-label">Tax (5% GST)</span>
+                                                  <span className="metric-val">₹{editCartTax.toFixed(2)}</span>
+                                                </div>
+                                                <div className="pos-edit-metric-card" style={{ borderColor: 'rgba(37, 99, 235, 0.4)', background: 'rgba(37, 99, 235, 0.08)' }}>
+                                                  <span className="metric-label" style={{ color: '#2563eb' }}>Grand Total</span>
+                                                  <span className="metric-val" style={{ color: '#2563eb' }}>₹{editCartGrandTotal.toFixed(2)}</span>
+                                                </div>
+                                                <div className="pos-edit-metric-card" style={{ borderColor: 'rgba(234, 179, 8, 0.4)', background: 'rgba(234, 179, 8, 0.08)' }}>
+                                                  <span className="metric-label" style={{ color: '#d97706' }}>Balance Due</span>
+                                                  <span className="metric-val" style={{ color: '#d97706' }}>
+                                                    ₹{Math.max(0, editCartGrandTotal - Number(editFormData.advance_paid || 0)).toFixed(2)}
+                                                  </span>
+                                                </div>
                                               </div>
-                                            ))}
-                                            <div>• <strong>Current Work Status:</strong> {normalizeOrderStatus(editFormData.status || editFormData.order_status)}</div>
-                                            <div>• <strong>Items Logged:</strong> {editCartTotalPieces} pieces allocated across {editCart.length} service line(s)</div>
-                                            <div>• <strong>Garment Inspection:</strong> {editInspection.garment} ({editInspection.color || 'Standard'}) — {editInspectionPhotos.length} photo evidence image(s) attached</div>
-                                            <div>• <strong>Financial Status:</strong> {editFormData.payment_status || 'Unpaid'} — Total ₹{editCartGrandTotal.toFixed(2)}</div>
-                                          </div>
+
+                                              {/* Subcard A: Payment Configuration */}
+                                              <div className="pos-edit-subcard" style={{ marginBottom: 0 }}>
+                                                <div className="pos-edit-subcard-title">
+                                                  <span>💳</span>
+                                                  <span>Payment &amp; Gateway Configuration</span>
+                                                </div>
+                                                <div className="pos-edit-grid-3" style={{ marginBottom: '14px' }}>
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Payment Status
+                                                    </label>
+                                                    <select
+                                                      className="pos-edit-field"
+                                                      value={editFormData.payment_status || 'Unpaid'}
+                                                      onChange={(e) => setEditFormData({ ...editFormData, payment_status: e.target.value })}
+                                                    >
+                                                      <option value="Paid">🟢 Fully Paid</option>
+                                                      <option value="Partially Paid">🟡 Partially Paid</option>
+                                                      <option value="Unpaid">🔴 Unpaid</option>
+                                                    </select>
+                                                  </div>
+
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Payment Mode / Gateway
+                                                    </label>
+                                                    <select
+                                                      className="pos-edit-field"
+                                                      defaultValue="UPI / QR Code"
+                                                    >
+                                                      <option value="Cash">Cash at Counter</option>
+                                                      <option value="UPI / QR Code">UPI (GPay / PhonePe / Paytm)</option>
+                                                      <option value="Credit / Debit Card">Credit / Debit Card</option>
+                                                      <option value="Net Banking">Net Banking</option>
+                                                      <option value="Store Credit">Store Credit / Wallet</option>
+                                                    </select>
+                                                  </div>
+
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Advance Paid (₹)
+                                                    </label>
+                                                    <input
+                                                      type="number"
+                                                      min="0"
+                                                      className="pos-edit-field"
+                                                      value={editFormData.advance_paid || 0}
+                                                      onChange={(e) => setEditFormData({ ...editFormData, advance_paid: e.target.value })}
+                                                    />
+                                                  </div>
+                                                </div>
+
+                                                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      setEditFormData({
+                                                        ...editFormData,
+                                                        advance_paid: editCartGrandTotal,
+                                                        payment_status: 'Paid'
+                                                      });
+                                                      showToast?.('✅ Marked order as fully paid!');
+                                                    }}
+                                                    className="pos-edit-save-btn"
+                                                    style={{ height: '34px', fontSize: '12px', background: '#16a34a', borderColor: '#16a34a' }}
+                                                  >
+                                                    ✓ Mark as Fully Paid
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {/* Tab 5: Customer Messages */}
+                                          {editActiveTab === 'messages' && (
+                                            <div>
+                                              {/* Subcard A: Customer Contact Snapshot */}
+                                              <div className="pos-edit-subcard">
+                                                <div className="pos-edit-subcard-title">
+                                                  <span>💬</span>
+                                                  <span>Customer Notification Hub</span>
+                                                </div>
+
+                                                <div className="pos-edit-sub-panel" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', padding: '12px 14px' }}>
+                                                  <div>
+                                                    <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                                      {editFormData.customer_name || 'Customer'}
+                                                    </div>
+                                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                                      📱 <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>+91 {editFormData.mobile_number || '9876543210'}</span> • {editFormData.address || 'MG Road, Vellore'}
+                                                    </div>
+                                                  </div>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => showToast?.(`💬 WhatsApp opened for +91 ${editFormData.mobile_number || '9876543210'}`)}
+                                                    style={{
+                                                      padding: '6px 14px',
+                                                      borderRadius: '6px',
+                                                      border: '1px solid #22c55e',
+                                                      background: 'rgba(34, 197, 94, 0.1)',
+                                                      color: '#16a34a',
+                                                      fontSize: '12px',
+                                                      fontWeight: 700,
+                                                      cursor: 'pointer',
+                                                      display: 'inline-flex',
+                                                      alignItems: 'center',
+                                                      gap: '6px'
+                                                    }}
+                                                  >
+                                                    <span>💬</span>
+                                                    <span>WhatsApp Customer</span>
+                                                  </button>
+                                                </div>
+
+                                                {/* Notification Template Preview */}
+                                                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', background: 'rgba(34, 197, 94, 0.08)', padding: '12px 14px', borderRadius: '6px', border: '1px solid rgba(34, 197, 94, 0.25)', lineHeight: 1.5, marginBottom: '12px' }}>
+                                                  <span style={{ fontWeight: 700, color: '#16a34a', display: 'block', marginBottom: '4px' }}>
+                                                    Automated WhatsApp &amp; SMS Template:
+                                                  </span>
+                                                  {t('msg_order_status_template', 'Hello {name}, your laundry order #{orderNumber} with Washdoor is now {status} ({pieces} pieces). Total Bill: ₹{total}. Expected delivery: {delivery}.')
+                                                    .replace('{name}', editFormData.customer_name || 'Customer')
+                                                    .replace('{orderNumber}', editFormData.order_number || '')
+                                                    .replace('{status}', normalizeOrderStatus(editFormData.status || editFormData.order_status))
+                                                    .replace('{pieces}', editCartTotalPieces)
+                                                    .replace('{total}', editCartGrandTotal.toFixed(2))
+                                                    .replace('{delivery}', editFormData.expected_delivery || '30 Oct 2026, 05:00 PM')}
+                                                </div>
+
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => showToast?.(`✅ WhatsApp notification sent to ${editFormData.customer_name}!`)}
+                                                    style={{ padding: '7px 14px', borderRadius: '6px', border: 'none', background: '#16a34a', color: '#ffffff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                                                  >
+                                                    Send WhatsApp Alert
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => showToast?.(`✅ SMS alert dispatched to +91 ${editFormData.mobile_number}!`)}
+                                                    className="pos-edit-cancel-btn"
+                                                    style={{ padding: '7px 14px', fontSize: '12px' }}
+                                                  >
+                                                    Send SMS Alert
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {/* Tab 6: Notes & History */}
+                                          {editActiveTab === 'audit' && (
+                                            <div>
+                                              {/* Subcard A: Operator Notes & Quick Chips */}
+                                              <div className="pos-edit-subcard">
+                                                <div className="pos-edit-subcard-title">
+                                                  <span>📝</span>
+                                                  <span>Internal Store Instructions &amp; Operator Remarks</span>
+                                                </div>
+
+                                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                                                  {[
+                                                    { label: '📌 Fabric Care', text: '[Fabric Care: Use Gentle Cycle] ' },
+                                                    { label: '⚠️ Stain Alert', text: '[Stain Alert: Collar stain requires pre-treatment] ' },
+                                                    { label: '🚚 Delivery Direction', text: '[Delivery: Call customer before arrival] ' },
+                                                    { label: '⭐ VIP Customer', text: '[VIP Customer: Priority Express Handling] ' }
+                                                  ].map((chip) => (
+                                                    <button
+                                                      key={chip.label}
+                                                      type="button"
+                                                      className="pos-note-tag-chip"
+                                                      onClick={() => {
+                                                        const current = editFormData.comments || '';
+                                                        setEditFormData({
+                                                          ...editFormData,
+                                                          comments: current ? `${current} ${chip.text}` : chip.text
+                                                        });
+                                                      }}
+                                                    >
+                                                      {chip.label}
+                                                    </button>
+                                                  ))}
+                                                </div>
+
+                                                <textarea
+                                                  rows={3}
+                                                  className="pos-edit-textarea"
+                                                  value={editFormData.comments || ''}
+                                                  onChange={(e) => setEditFormData({ ...editFormData, comments: e.target.value })}
+                                                  placeholder="Internal notes for laundry wash technician or rider..."
+                                                />
+                                              </div>
+
+                                              {/* Subcard B: System Audit Trail Timeline */}
+                                              <div className="pos-edit-subcard" style={{ marginBottom: 0 }}>
+                                                <div className="pos-edit-subcard-title">
+                                                  <span>📜</span>
+                                                  <span>Immutable System Audit Trail</span>
+                                                </div>
+                                                <div className="pos-edit-sub-panel" style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.8 }}>
+                                                  <div>• <strong>Order Created:</strong> {editFormData.captured_date || '2026-10-28'} at {editFormData.captured_time || '10:15 AM'} by Counter Operator</div>
+                                                  {editFormData.assigned_driver && (
+                                                    <div style={{ color: '#16a34a', fontWeight: 650 }}>
+                                                      • <strong>Assigned for Pickup:</strong> {editFormData.assigned_driver} {editFormData.assigned_driver_full ? `(${editFormData.assigned_driver_full})` : ''}
+                                                    </div>
+                                                  )}
+                                                  {(editFormData.audit_logs || editFormData.logs || []).map((l, idx) => (
+                                                    <div key={l.id || idx} style={{ color: l.type === 'pickup' ? '#16a34a' : 'inherit' }}>
+                                                      • <strong>{l.title}:</strong> {l.detail} <span style={{ fontSize: '11px', color: '#64748b' }}>({l.time})</span>
+                                                    </div>
+                                                  ))}
+                                                  <div>• <strong>Current Work Status:</strong> {normalizeOrderStatus(editFormData.status || editFormData.order_status)}</div>
+                                                  <div>• <strong>Items Logged:</strong> {editCartTotalPieces} pieces allocated across {editCart.length} service line(s)</div>
+                                                  <div>• <strong>Garment Inspection:</strong> {editInspection.garment} ({editInspection.color || 'Standard'}) — {editInspectionPhotos.length} photo evidence image(s) attached</div>
+                                                  <div>• <strong>Financial Status:</strong> {editFormData.payment_status || 'Unpaid'} — Total ₹{editCartGrandTotal.toFixed(2)}</div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          )}
                                         </div>
-                                      )}
-                                    </div>
+                                      );
+                                    })()}
 
                                     {/* Lightbox Modal for Photo Preview */}
                                     {photoPreviewModal && (
@@ -4115,33 +4255,70 @@ export default function POSModule({
                                     )}
 
                                     {/* ══════════════════════════════════════════════════════════════════
-                                        FOOTER ACTION BUTTONS (Bottom Right)
+                                        FOOTER ACTION BUTTONS (Tab Stepper Navigation + Save)
                                        ══════════════════════════════════════════════════════════════════ */}
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px' }}>
-                                      <button
-                                        type="button"
-                                        className="pos-edit-cancel-btn"
-                                        onClick={() => {
-                                          setEditingOrderRecord(null);
-                                          setEditFormData(null);
-                                        }}
-                                      >
-                                        Cancel
-                                      </button>
-                                      <button
-                                        type="submit"
-                                        className="pos-edit-save-btn"
-                                      >
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                                          <polyline points="20 6 9 17 4 12" />
-                                        </svg>
-                                        <span>Save Changes</span>
-                                      </button>
-                                    </div>
+                                    {(() => {
+                                      const tabSequence = ['details', 'logistics', 'status', 'payments', 'messages', 'audit'];
+                                      const currentTabIdx = tabSequence.indexOf(editActiveTab);
+
+                                      return (
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <button
+                                              type="button"
+                                              className="pos-nav-prev-btn"
+                                              disabled={currentTabIdx <= 0}
+                                              onClick={() => {
+                                                if (currentTabIdx > 0) {
+                                                  setEditActiveTab(tabSequence[currentTabIdx - 1]);
+                                                }
+                                              }}
+                                            >
+                                              ← Previous Tab
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className="pos-nav-next-btn"
+                                              disabled={currentTabIdx >= tabSequence.length - 1}
+                                              onClick={() => {
+                                                if (currentTabIdx < tabSequence.length - 1) {
+                                                  setEditActiveTab(tabSequence[currentTabIdx + 1]);
+                                                }
+                                              }}
+                                            >
+                                              Next Tab →
+                                            </button>
+                                          </div>
+
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <button
+                                              type="button"
+                                              className="pos-edit-cancel-btn"
+                                              onClick={() => {
+                                                setEditingOrderRecord(null);
+                                                setEditFormData(null);
+                                              }}
+                                            >
+                                              Cancel
+                                            </button>
+                                            <button
+                                              type="submit"
+                                              className="pos-edit-save-btn"
+                                            >
+                                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                                                <polyline points="20 6 9 17 4 12" />
+                                              </svg>
+                                              <span>Save Changes</span>
+                                            </button>
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
                                   </form>
                                 </div>
-                              </td>
-                            </tr>
+                              </div>
+                            </td>
+                          </tr>
                           )}
                         </React.Fragment>
                       );

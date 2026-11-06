@@ -6,7 +6,6 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import ClothIllustration from './ClothIllustration';
 import GarmentInspectionSection from './GarmentInspectionSection';
 import { updateOrderInSupabase } from '../services/customerService';
-import { ORDER_STATUSES, ORDER_STATUS_CONFIG, PROPERTY_STATUSES, SERVICE_CATEGORIES, normalizeOrderStatus } from '../config/businessRules';
 import '../styles/SideEditPanel.css';
 
 // 16 Standard Catalog Items strictly matching reference mockup display order
@@ -30,6 +29,29 @@ const CATALOG_ITEMS = [
 ];
 
 const CATEGORIES = ['All', 'Men', 'Women', 'Home Linen', 'Accessories'];
+
+const getClothId = (item) => {
+  if (item?.itemId) return item.itemId;
+  if (item?.item_id) return item.item_id;
+  const name = String(item?.name || item?.item_name || '').toLowerCase();
+  if (name.includes('t-shirt') || name.includes('tshirt')) return 'tshirt';
+  if (name.includes('formal') || name.includes('trouser') || name.includes('pant')) return 'formal_pant';
+  if (name.includes('jean')) return 'jeans';
+  if (name.includes('shirt')) return 'shirt';
+  if (name.includes('saree')) return 'saree';
+  if (name.includes('towel')) return 'towel';
+  if (name.includes('bedsheet') || name.includes('bed sheet')) return 'bedsheet';
+  if (name.includes('pillow')) return 'pillow_cover';
+  if (name.includes('blazer') || name.includes('suit')) return 'blazer_suit';
+  if (name.includes('sweater')) return 'sweater';
+  if (name.includes('jacket')) return 'jacket';
+  if (name.includes('cap')) return 'cap';
+  if (name.includes('chudidar') || name.includes('salwar')) return 'chudidar';
+  if (name.includes('kurti')) return 'kurti';
+  if (name.includes('short')) return 'shorts';
+  if (name.includes('curtain')) return 'curtain';
+  return 'shirt';
+};
 
 const TABS = [
   '1. Order Details',
@@ -58,8 +80,7 @@ export default function SideEditPanel({
   const initialAltPhone = order?.alternate_phone || order?.customer?.alternate_phone || '';
   const initialEmail = order?.email || order?.customer?.email || '';
   const initialAddress = order?.address || order?.delivery_address || order?.customer?.address || '';
-  const initialStatus = normalizeOrderStatus(order?.status || order?.order_status || 'order recived');
-  const initialPropertyStatus = order?.property_status || (order?.priority === 'Yes' ? 'Yes' : 'No') || 'No';
+  const initialStatus = order?.status || order?.order_status || 'In Progress';
   const initialOrderType = order?.order_type || 'Walk-in';
   const initialExpectedDelivery = order?.expected_delivery || '';
   const initialComments = order?.comments || order?.order_notes || order?.special_instructions || '';
@@ -71,7 +92,6 @@ export default function SideEditPanel({
   const [email, setEmail] = useState(initialEmail);
   const [address, setAddress] = useState(initialAddress);
   const [status, setStatus] = useState(initialStatus);
-  const [propertyStatus, setPropertyStatus] = useState(initialPropertyStatus);
   const [orderType, setOrderType] = useState(initialOrderType);
   const [expectedDelivery, setExpectedDelivery] = useState(initialExpectedDelivery);
   const [comments, setComments] = useState(initialComments);
@@ -89,6 +109,7 @@ export default function SideEditPanel({
     order?.items?.length
       ? order.items.map((it, idx) => ({
           id: it.id || idx + 1,
+          itemId: it.itemId || it.item_id || getClothId(it),
           name: it.name || it.item_name || 'Garment',
           service: it.service || it.service_type || 'Laundry',
           rate: Number(it.rate || it.price || 20),
@@ -259,8 +280,7 @@ export default function SideEditPanel({
       setAlternatePhone(order.alternate_phone || order.customer?.alternate_phone || '');
       setEmail(order.email || order.customer?.email || '');
       setAddress(order.address || order.delivery_address || order.customer?.address || '');
-      setStatus(normalizeOrderStatus(order.status || order.order_status || 'order recived'));
-      setPropertyStatus(order.property_status || (order.priority === 'Yes' ? 'Yes' : 'No') || 'No');
+      setStatus(order.status || order.order_status || 'In Progress');
       setOrderType(order.order_type || 'Walk-in');
       setExpectedDelivery(order.expected_delivery || order.delivery_date || '');
       setComments(order.comments || order.order_notes || order.special_instructions || '');
@@ -329,6 +349,7 @@ export default function SideEditPanel({
     if (!selectedProduct) return;
     const newItem = {
       id: Date.now(),
+      itemId: selectedProduct.id,
       name: `${selectedProduct.name} (${selectedServiceType})`,
       service: selectedServiceType,
       rate: Number(ratePerPiece) || selectedProduct.price,
@@ -411,8 +432,6 @@ export default function SideEditPanel({
       address: address,
       status: status,
       order_status: status,
-      property_status: propertyStatus,
-      priority: propertyStatus === 'Yes' ? 'Yes' : 'No',
       order_type: orderType,
       expected_delivery: expectedDelivery,
       comments: comments,
@@ -515,8 +534,7 @@ export default function SideEditPanel({
         orderType: updatedOrder.order_type,
         expectedDelivery: updatedOrder.expected_delivery,
         deliveryDate: updatedOrder.expected_delivery,
-        property_status: updatedOrder.property_status,
-        priority: updatedOrder.priority || 'No',
+        priority: updatedOrder.priority || 'Normal',
         orderNotes: updatedOrder.comments,
         subtotal: subtotal,
         discountAmount: Number(discountAmount || 0),
@@ -685,58 +703,14 @@ export default function SideEditPanel({
                         value={status}
                         onChange={(e) => setStatus(e.target.value)}
                       >
-                        {ORDER_STATUSES.map((st) => (
-                          <option key={st} value={st}>
-                            {ORDER_STATUS_CONFIG[st]?.icon || ''} {ORDER_STATUS_CONFIG[st]?.label || st}
-                          </option>
-                        ))}
+                        <option value="In Progress">In Progress</option>
+                        <option value="Order Received">Order Received</option>
+                        <option value="Ready">Ready</option>
+                        <option value="Delivered">Delivered</option>
+                        <option value="Cancelled">Cancelled</option>
                       </select>
                     </div>
 
-                    <div className="side-edit-field">
-                      <label className="side-edit-label">
-                        Property / Priority Status <span className="side-edit-req">*</span>
-                      </label>
-                      <div style={{ display: 'flex', gap: '6px', height: '38px', alignItems: 'center' }}>
-                        <button
-                          type="button"
-                          onClick={() => setPropertyStatus('Yes')}
-                          style={{
-                            flex: 1,
-                            padding: '6px 12px',
-                            fontSize: '12.5px',
-                            fontWeight: 700,
-                            borderRadius: '6px',
-                            border: propertyStatus === 'Yes' ? '1px solid #ef4444' : '1px solid #334155',
-                            cursor: 'pointer',
-                            background: propertyStatus === 'Yes' ? '#ef4444' : 'transparent',
-                            color: propertyStatus === 'Yes' ? '#fff' : '#94a3b8',
-                          }}
-                        >
-                          ★ Yes
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPropertyStatus('No')}
-                          style={{
-                            flex: 1,
-                            padding: '6px 12px',
-                            fontSize: '12.5px',
-                            fontWeight: 700,
-                            borderRadius: '6px',
-                            border: propertyStatus === 'No' ? '1px solid #64748b' : '1px solid #334155',
-                            cursor: 'pointer',
-                            background: propertyStatus === 'No' ? '#334155' : 'transparent',
-                            color: propertyStatus === 'No' ? '#fff' : '#94a3b8',
-                          }}
-                        >
-                          No
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="side-edit-row-2col">
                     <div className="side-edit-field">
                       <label className="side-edit-label">
                         Order Type <span className="side-edit-req">*</span>
@@ -747,12 +721,12 @@ export default function SideEditPanel({
                         onChange={(e) => setOrderType(e.target.value)}
                       >
                         <option value="Walk-in">Walk-in</option>
-                        <option value="On-Call">On-Call (Pickup)</option>
                         <option value="Home Delivery">Home Delivery</option>
                         <option value="Express">Express 24H</option>
                         <option value="Commercial">Commercial / B2B</option>
                       </select>
                     </div>
+                  </div>
 
                   <div className="side-edit-field">
                     <label className="side-edit-label">
@@ -774,7 +748,6 @@ export default function SideEditPanel({
                       />
                     </div>
                   </div>
-                </div>
 
                   <div className="side-edit-field">
                     <label className="side-edit-label">Comments / Special Notes</label>
@@ -838,7 +811,7 @@ export default function SideEditPanel({
                         ))}
                       </div>
 
-                      {/* 3-Column Garment Cards Grid with Balanced Dimensions */}
+                      {/* Single-Grid (1 Card Per Row) for Desktop & Clean Visibility matching Image 2 */}
                       <div className="side-edit-catalog-grid">
                         {filteredCatalog.map((item) => {
                           const isSelected = selectedProduct?.id === item.id;
@@ -849,14 +822,17 @@ export default function SideEditPanel({
                               onClick={() => setSelectedProduct(item)}
                             >
                               <div className="side-edit-prod-img">
-                                <ClothIllustration itemId={item.id} size={38} />
+                                <ClothIllustration itemId={item.id} size={36} />
                               </div>
-                              <span className="side-edit-prod-name" title={item.name}>
-                                {item.name}
-                              </span>
-                              <span className="side-edit-prod-price">
-                                {currencySymbol}{item.price} / {item.unit}
-                              </span>
+                              <div className="side-edit-prod-info">
+                                <span className="side-edit-prod-name" title={item.name}>
+                                  {item.name}
+                                </span>
+                                <span className="side-edit-prod-price">
+                                  <span>{currencySymbol}{item.price}</span>
+                                  <span className="side-edit-prod-unit"> / {item.unit}</span>
+                                </span>
+                              </div>
                               <button
                                 type="button"
                                 className="side-edit-prod-add"
@@ -964,8 +940,10 @@ export default function SideEditPanel({
                           {cartItems.map((c) => (
                             <div key={c.id} className="side-edit-cart-item">
                               <div className="side-edit-cart-item-title">
-                                <span>{c.icon || '•'}</span>
-                                <span>{c.name} × {c.qty}</span>
+                                <div className="side-edit-cart-item-thumb">
+                                  <ClothIllustration itemId={c.itemId || getClothId(c)} size={24} />
+                                </div>
+                                <span className="side-edit-cart-item-name">{c.name.split(' (')[0]} × {c.qty}</span>
                               </div>
                               <div className="side-edit-cart-item-price">
                                 <span>{currencySymbol}{(c.rate * c.qty).toFixed(2)}</span>
@@ -1186,12 +1164,12 @@ export default function SideEditPanel({
               <div className="side-edit-stepper">
                 <div className="side-edit-stepper-line"></div>
                 {[
-                  { name: 'order recived', label: 'Order Received' },
-                  { name: 'landry in progress', label: 'In Progress' },
-                  { name: 'ready for delvier', label: 'Ready' },
-                  { name: 'today delivery', label: 'Delivered' },
+                  { name: 'Order Received', label: 'Order Received' },
+                  { name: 'In Progress', label: 'In Progress' },
+                  { name: 'Ready', label: 'Ready' },
+                  { name: 'Delivered', label: 'Delivered' },
                 ].map((step, idx) => {
-                  const currentIdx = ['order recived', 'landry in progress', 'ready for delvier', 'today delivery'].indexOf(status);
+                  const currentIdx = ['Order Received', 'In Progress', 'Ready', 'Delivered'].indexOf(status === 'Received' ? 'Order Received' : status);
                   const isCompleted = currentIdx > idx;
                   const isActive = currentIdx === idx;
                   return (
@@ -1199,7 +1177,7 @@ export default function SideEditPanel({
                       key={step.name}
                       className={`side-edit-step-node ${isCompleted ? 'completed' : ''} ${isActive ? 'active' : ''}`}
                       onClick={() => setStatus(step.name)}
-                      title={`Click to switch status to ${step.label}`}
+                      title={`Click to switch status to ${step.name}`}
                     >
                       <div className="side-edit-step-circle">
                         {isCompleted ? '✓' : idx + 1}
@@ -1215,14 +1193,14 @@ export default function SideEditPanel({
                   <label className="side-edit-label">Current Order Status</label>
                   <select
                     className="side-edit-select"
-                    value={status}
+                    value={status === 'Received' ? 'Order Received' : status}
                     onChange={(e) => setStatus(e.target.value)}
                   >
-                    {ORDER_STATUSES.map((st) => (
-                      <option key={st} value={st}>
-                        {ORDER_STATUS_CONFIG[st]?.icon || ''} {ORDER_STATUS_CONFIG[st]?.label || st}
-                      </option>
-                    ))}
+                    <option value="Order Received">Order Received &amp; Tagged</option>
+                    <option value="In Progress">In Progress / Washing</option>
+                    <option value="Ready">Ready for Pickup / Delivery</option>
+                    <option value="Delivered">Delivered</option>
+                    <option value="Cancelled">Cancelled</option>
                   </select>
                 </div>
 
