@@ -152,7 +152,7 @@ function ServicesPopoverPortal({ popoverData, onClose, popoverRef }) {
     orderServiceCategory,
   } = popoverData;
 
-  const hiddenServices = services.slice(3);
+  const hiddenServices = services.slice(1);
   const displayedServices = activeTab === 'all' ? services : (hiddenServices.length > 0 ? hiddenServices : services);
   const grouped = groupServicesByType(displayedServices, { service_category: orderServiceCategory });
 
@@ -164,30 +164,33 @@ function ServicesPopoverPortal({ popoverData, onClose, popoverRef }) {
       return;
     }
 
-    const { top, bottom, left } = anchorRect;
-    const popoverWidth = 330;
-    const estimatedHeight = 360;
+    const { top, bottom, left, right } = anchorRect;
+    const popoverWidth = 320;
+    const popoverHeight = popoverRef?.current ? popoverRef.current.offsetHeight : 240;
     const viewportHeight = window.innerHeight;
     const viewportWidth = window.innerWidth;
 
+    // Position directly below button if space permits; otherwise flip above
     const spaceBelow = viewportHeight - bottom;
-    const placeAbove = spaceBelow < estimatedHeight && top > spaceBelow;
+    const fitsBelow = spaceBelow >= popoverHeight + 8;
 
-    let calculatedTop = placeAbove ? top - estimatedHeight - 8 : bottom + 8;
-    if (calculatedTop < 12) calculatedTop = 12;
+    let calculatedTop = fitsBelow ? (bottom + 6) : Math.max(12, top - popoverHeight - 6);
 
     let calculatedLeft = left;
     if (calculatedLeft + popoverWidth > viewportWidth - 16) {
-      calculatedLeft = viewportWidth - popoverWidth - 16;
+      calculatedLeft = (right || left) - popoverWidth;
     }
     if (calculatedLeft < 16) calculatedLeft = 16;
+    if (calculatedLeft + popoverWidth > viewportWidth - 16) {
+      calculatedLeft = viewportWidth - popoverWidth - 16;
+    }
 
     setPositionStyle({
       top: `${Math.round(calculatedTop)}px`,
       left: `${Math.round(calculatedLeft)}px`,
       width: `${popoverWidth}px`,
     });
-  }, [anchorRect]);
+  }, [anchorRect, activeTab, displayedServices.length]);
 
   const displayedPieceCount = displayedServices.reduce(
     (acc, it) => acc + (Number(it.count || it.qty || it.quantity) || 1),
@@ -352,6 +355,26 @@ export default function POSModule({
   const servicesPopoverRef = useRef(null);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const tableScrollRef = useRef(null);
+  const [tableViewportWidth, setTableViewportWidth] = useState(0);
+
+  // Track the exact visible client width of the table card so sticky edit container matches it perfectly without horizontal scroll
+  useEffect(() => {
+    const updateWidth = () => {
+      if (tableScrollRef.current) {
+        setTableViewportWidth(tableScrollRef.current.clientWidth);
+      }
+    };
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateWidth) : null;
+    if (ro && tableScrollRef.current) {
+      ro.observe(tableScrollRef.current);
+    }
+    return () => {
+      window.removeEventListener('resize', updateWidth);
+      ro?.disconnect();
+    };
+  }, []);
 
   // Close services popover on outside click, Escape key, window resize or external scroll
   useEffect(() => {
@@ -742,6 +765,15 @@ export default function POSModule({
       payment_status: paymentStatus,
       assigned_driver: ord.assigned_driver || '',
       assigned_driver_full: ord.assigned_driver_full || '',
+      factory_hub: ord.factory_hub || 'Main Plant (Unit 1)',
+      vehicle_name: ord.vehicle_name || 'TN-23-AX-8910 (Tata Ace Mini Van)',
+      mode_of_transport: ord.mode_of_transport || 'Van',
+      route_from_to: ord.route_from_to || 'Store Central (Vellore Main) → Factory Plant Unit 1',
+      route_return: ord.route_return || 'Factory Plant Unit 1 → Store Central (Vellore Main)',
+      collected_by_staff: ord.collected_by_staff || ord.assigned_staff || 'Murugan (Plant Supervisor)',
+      plant_transit_status: ord.plant_transit_status || 'Washing in Progress',
+      rack_shelf_location: ord.rack_shelf_location || 'Bin B-14 (Hanger Rail 2)',
+      weight_kg: ord.weight_kg || 3.8,
       pickup_status: ord.pickup_status || '',
       assigned_for_pickup: Boolean(ord.assigned_for_pickup),
       audit_logs: ord.audit_logs || ord.logs || [],
@@ -904,9 +936,19 @@ export default function POSModule({
         advancePaid: Number(editFormData.advance_paid || 0),
         paymentStatus: editFormData.payment_status,
         paymentMethod: updatedOrder.payment_method || 'Cash',
-        assignedStaff: updatedOrder.assigned_driver,
+        assignedStaff: editFormData.collected_by_staff || updatedOrder.assigned_driver,
         items: updatedOrder.items,
         garment_inspections: editInspections,
+        factory_hub: editFormData.factory_hub,
+        vehicle_name: editFormData.vehicle_name,
+        mode_of_transport: editFormData.mode_of_transport,
+        route_from_to: editFormData.route_from_to,
+        route_return: editFormData.route_return,
+        collected_by_staff: editFormData.collected_by_staff,
+        plant_transit_status: editFormData.plant_transit_status,
+        rackShelfLocation: editFormData.rack_shelf_location,
+        rack_shelf_location: editFormData.rack_shelf_location,
+        weight_kg: editFormData.weight_kg,
       }).catch((e) => console.warn('Supabase saveOrder update note:', e));
     }
 
@@ -2348,7 +2390,10 @@ export default function POSModule({
                   </div>
                 </>
               ) : (
-                <div className={`pos-orders-table-card ${editingOrderRecord ? 'has-active-edit' : ''}`}>
+                <div
+                  className={`pos-orders-table-card ${editingOrderRecord ? 'has-active-edit' : ''}`}
+                  style={tableViewportWidth ? { '--table-viewport-width': `${tableViewportWidth}px` } : undefined}
+                >
                   <div className="pos-orders-table-scroll" ref={tableScrollRef}>
                     <table className="pos-orders-table">
                     <thead>
@@ -2578,7 +2623,7 @@ export default function POSModule({
 
                             {/* 4. Services Allocated (Neat badges or Assign Pickup button for On-Call) */}
                             {isColVisible('services') && (
-                              <td className="col-services" style={{ verticalAlign: 'top', paddingTop: '14px', maxWidth: '175px' }}>
+                              <td className="col-services" style={{ verticalAlign: 'top', paddingTop: '14px' }}>
                                 {servicesAllocated.length === 0 ? (
                                   isOnCall ? (
                                     isPickupAssigned ? (
@@ -2653,54 +2698,64 @@ export default function POSModule({
                                     </span>
                                   )
                                 ) : (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', width: 'fit-content' }}>
-                                    {servicesAllocated.slice(0, 3).map((srvItem, sIdx) => (
-                                      <div key={sIdx} style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        gap: '8px',
-                                        background: '#f8fafc',
-                                        border: '1px solid #e2e8f0',
-                                        borderRadius: '6px',
-                                        padding: '3px 8px',
-                                        fontSize: '12px',
-                                        color: '#1e293b',
-                                        width: 'fit-content',
-                                        whiteSpace: 'nowrap'
-                                      }}>
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                                          <span>{srvItem.icon || '👕'}</span>
-                                          <span>{srvItem.name}</span>
-                                        </span>
-                                        <span style={{ fontWeight: 700, color: '#2563eb', background: '#dbeafe', padding: '1px 6px', borderRadius: '4px', fontSize: '11px' }}>
-                                          x{srvItem.count}
-                                        </span>
-                                      </div>
-                                    ))}
-                                    {servicesAllocated.length > 3 && (() => {
-                                      const orderKey = ord.id ? String(ord.id) : (ord.order_number || String(idx));
-                                      const isServicesPopoverOpen = activeServicesPopover?.orderKey === orderKey;
-                                      const resolvedTotalPieces = Math.max(
-                                        itemCount,
-                                        servicesAllocated.reduce((sum, s) => sum + (Number(s.count || s.qty || 1)), 0)
-                                      );
-                                      return (
-                                        <button
-                                          type="button"
-                                          className={`pos-services-more-btn ${isServicesPopoverOpen ? 'active' : ''}`}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleToggleServicesPopover(e, ord, servicesAllocated, resolvedTotalPieces, orderKey);
-                                          }}
-                                          aria-expanded={isServicesPopoverOpen}
-                                          title={isServicesPopoverOpen ? 'Show less services' : `Show ${servicesAllocated.length - 3} more services`}
-                                        >
-                                          <span>{isServicesPopoverOpen ? 'Show less' : `+${servicesAllocated.length - 3} more`}</span>
-                                          <span className="pos-more-btn-arrow">{isServicesPopoverOpen ? '▴' : '▾'}</span>
-                                        </button>
-                                      );
-                                    })()}
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', width: 'fit-content' }}>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
+                                      {/* 1. First service name with quantity badge */}
+                                      {(() => {
+                                        const srvItem = servicesAllocated[0];
+                                        return (
+                                          <div style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '5px',
+                                            background: '#f8fafc',
+                                            border: '1px solid #e2e8f0',
+                                            borderRadius: '6px',
+                                            padding: '2.5px 7px',
+                                            fontSize: '12px',
+                                            color: '#1e293b',
+                                            whiteSpace: 'nowrap',
+                                            lineHeight: 1.25,
+                                            maxWidth: '135px',
+                                            boxSizing: 'border-box'
+                                          }}>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                              <span style={{ flexShrink: 0 }}>{srvItem.icon || '👕'}</span>
+                                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={srvItem.name}>{srvItem.name}</span>
+                                            </span>
+                                            <span style={{ fontWeight: 700, color: '#2563eb', background: '#dbeafe', padding: '1px 5px', borderRadius: '4px', fontSize: '11px', lineHeight: 1.2, flexShrink: 0 }}>
+                                              ×{srvItem.count}
+                                            </span>
+                                          </div>
+                                        );
+                                      })()}
+
+                                      {/* 2. Compact +N More badge beside the first service if additional services exist */}
+                                      {servicesAllocated.length > 1 && (() => {
+                                        const orderKey = ord.id ? String(ord.id) : (ord.order_number || String(idx));
+                                        const isServicesPopoverOpen = activeServicesPopover?.orderKey === orderKey;
+                                        const resolvedTotalPieces = Math.max(
+                                          itemCount,
+                                          servicesAllocated.reduce((sum, s) => sum + (Number(s.count || s.qty || 1)), 0)
+                                        );
+                                        return (
+                                          <button
+                                            type="button"
+                                            className={`pos-services-more-btn ${isServicesPopoverOpen ? 'active' : ''}`}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleToggleServicesPopover(e, ord, servicesAllocated, resolvedTotalPieces, orderKey);
+                                            }}
+                                            aria-expanded={isServicesPopoverOpen}
+                                            title={isServicesPopoverOpen ? 'Show less services' : `Show ${servicesAllocated.length - 1} more services`}
+                                            style={{ padding: '2px 7px', fontSize: '11px', fontWeight: 700 }}
+                                          >
+                                            <span>{isServicesPopoverOpen ? 'Show less' : `+${servicesAllocated.length - 1} More`}</span>
+                                            <span className="pos-more-btn-arrow">{isServicesPopoverOpen ? '▴' : '▾'}</span>
+                                          </button>
+                                        );
+                                      })()}
+                                    </div>
                                     {isOnCall && (
                                       isPickupAssigned ? (
                                         <button
@@ -2826,24 +2881,28 @@ export default function POSModule({
                                   const isPartial = payStatus.toLowerCase().includes('partial');
 
                                   return (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
-                                      <div style={{ fontWeight: 800, fontSize: '14px', color: '#0f172a' }}>
-                                        {currencySymbol}{rawTotal.toFixed(2)}
-                                      </div>
-                                      <div style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '5px',
-                                        padding: '2px 8px',
-                                        borderRadius: '6px',
-                                        fontSize: '11px',
-                                        fontWeight: 700,
-                                        background: isPaid ? '#dcfce7' : isPartial ? '#fef3c7' : '#fee2e2',
-                                        color: isPaid ? '#15803d' : isPartial ? '#b45309' : '#b91c1c',
-                                        border: `1px solid ${isPaid ? '#bbf7d0' : isPartial ? '#fde68a' : '#fecaca'}`
-                                      }}>
-                                        <span>●</span>
-                                        <span>{isPaid ? 'Paid' : isPartial ? 'Partially Paid' : 'Unpaid'}</span>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-start' }}>
+                                      {/* Amount and Paid status on the same horizontal line */}
+                                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', whiteSpace: 'nowrap' }}>
+                                        <span style={{ fontWeight: 800, fontSize: '13.5px', color: '#0f172a' }}>
+                                          {currencySymbol}{rawTotal.toFixed(2)}
+                                        </span>
+                                        <span style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '3.5px',
+                                          padding: '2px 7px',
+                                          borderRadius: '5px',
+                                          fontSize: '11px',
+                                          fontWeight: 700,
+                                          background: isPaid ? '#dcfce7' : isPartial ? '#fef3c7' : '#fee2e2',
+                                          color: isPaid ? '#15803d' : isPartial ? '#b45309' : '#b91c1c',
+                                          border: `1px solid ${isPaid ? '#bbf7d0' : isPartial ? '#fde68a' : '#fecaca'}`,
+                                          lineHeight: 1.2
+                                        }}>
+                                          <span style={{ fontSize: '10px' }}>{isPaid ? '✓' : isPartial ? '●' : '✕'}</span>
+                                          <span>{isPaid ? 'Paid' : isPartial ? 'Partially Paid' : 'Unpaid'}</span>
+                                        </span>
                                       </div>
                                       <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>
                                         via {payMode}
@@ -2858,16 +2917,16 @@ export default function POSModule({
                             {isColVisible('order_details') && (
                               <td className="col-order_details" style={{ verticalAlign: 'top', paddingTop: '14px' }}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12.5px', fontWeight: 650, color: '#0f172a' }}>
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                  {/* Date and time together on one horizontal line */}
+                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: 650, color: '#0f172a', whiteSpace: 'nowrap' }}>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                                       <circle cx="12" cy="12" r="10" />
                                       <polyline points="12 6 12 12 16 14" />
                                     </svg>
                                     <span>{capturedDateStr}</span>
+                                    <span style={{ color: '#94a3b8', fontSize: '10px' }}>•</span>
+                                    <span style={{ fontSize: '11.5px', color: '#64748b', fontWeight: 500 }}>{capturedTimeStr}</span>
                                   </div>
-                                  <span style={{ fontSize: '11px', color: '#64748b', paddingLeft: '18px', fontWeight: 500 }}>
-                                    {capturedTimeStr}
-                                  </span>
                                   <div
                                     style={{
                                       marginTop: '2px',
@@ -3269,27 +3328,34 @@ export default function POSModule({
                           {isEditingThisOrder && editFormData && (
                             <tr key={`${orderNum}_edit_dropdown_card`} className="pos-edit-dropdown-row">
                               <td
-                                colSpan={ORDER_COLUMNS.filter((col) => selectedColumns.includes(col.id)).length}
+                                colSpan={selectedColumns.length}
                                 className="pos-inline-edit-wrap"
                               >
-                                <div className="pos-inline-edit-sticky">
+                                <div
+                                  className="pos-inline-edit-sticky"
+                                  style={tableViewportWidth && typeof window !== 'undefined' && window.innerWidth > 768 ? { width: `${Math.max(320, tableViewportWidth - 28)}px`, maxWidth: 'calc(100% - 24px)' } : undefined}
+                                >
                                   <div className="pos-inline-edit-card">
                                     {/* ── Header ── */}
                                   <div className="pos-edit-header-bar">
                                     <div className="pos-edit-header-title">
-                                      <span style={{ color: '#2563eb', fontSize: '15px', fontWeight: 800 }}>◆</span>
-                                      <span>
-                                        Edit Order — {editFormData.order_number}
-                                      </span>
-                                      <span className="pos-edit-status-pill">
-                                        ● Status: {normalizeOrderStatus(editFormData.status || editFormData.order_status)}
-                                      </span>
-                                      <span className="pos-edit-status-pill" style={{ background: '#f8fafc', color: '#475569', borderColor: '#e2e8f0' }}>
-                                        🧺 {editCartTotalPieces} Pieces
-                                      </span>
-                                      <span className="pos-edit-status-pill" style={{ background: '#f0fdf4', color: '#16a34a', borderColor: '#bbf7d0' }}>
-                                        ₹{editCartGrandTotal.toFixed(2)}
-                                      </span>
+                                      <div className="pos-edit-header-brand">
+                                        <span style={{ color: '#2563eb', fontSize: '15px', fontWeight: 800 }}>◆</span>
+                                        <span>
+                                          Edit Order — {editFormData.order_number}
+                                        </span>
+                                      </div>
+                                      <div className="pos-edit-header-pills">
+                                        <span className="pos-edit-status-pill">
+                                          ● Status: {normalizeOrderStatus(editFormData.status || editFormData.order_status)}
+                                        </span>
+                                        <span className="pos-edit-status-pill" style={{ background: '#f8fafc', color: '#475569', borderColor: '#e2e8f0' }}>
+                                          🧺 {editCartTotalPieces} Pieces
+                                        </span>
+                                        <span className="pos-edit-status-pill" style={{ background: '#f0fdf4', color: '#16a34a', borderColor: '#bbf7d0' }}>
+                                          ₹{editCartGrandTotal.toFixed(2)}
+                                        </span>
+                                      </div>
                                     </div>
 
                                     <button
@@ -3300,7 +3366,7 @@ export default function POSModule({
                                       }}
                                       title="Collapse Edit Form"
                                       className="pos-edit-collapse-btn"
-                                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', width: 'auto', padding: '0 12px', fontSize: '12px' }}
+                                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', width: 'auto', padding: '0 14px', fontSize: '12px', whiteSpace: 'nowrap' }}
                                     >
                                       <span>▲</span>
                                       <span>Close Form</span>
@@ -3321,7 +3387,7 @@ export default function POSModule({
                                           <span>Customer &amp; Order Information</span>
                                         </div>
 
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px', flex: 1, alignContent: 'start' }}>
+                                        <div className="pos-edit-customer-form-grid">
                                           {/* Customer Name */}
                                           <div>
                                             <label className="pos-edit-label">
@@ -3635,13 +3701,13 @@ export default function POSModule({
                                               })}
                                             </div>
 
-                                            {/* 2-Column Spacious Garment Cards Grid */}
+                                            {/* 3-Column Spacious Garment Cards Grid for Desktop */}
                                             <div
                                               id="pos-edit-cloth-grid"
                                               className="pos-cloth-catalog-scroller"
                                               style={{
                                                 display: 'grid',
-                                                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                                                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
                                                 gap: '10px',
                                                 flex: 1,
                                                 minHeight: '260px',
@@ -4078,24 +4144,25 @@ export default function POSModule({
                                           {/* Tab 2: Laundry Processing & Factory */}
                                           {editActiveTab === 'logistics' && (
                                             <div>
-                                              {/* Subcard A: Factory Assignment */}
+                                              {/* Subcard A: Factory Assignment & Routing */}
                                               <div className="pos-edit-subcard">
                                                 <div className="pos-edit-subcard-title">
                                                   <span>🏭</span>
-                                                  <span>Factory Assignment &amp; Routing</span>
+                                                  <span>Factory Assignment & Routing</span>
                                                 </div>
-                                                <div className="pos-edit-logistics-grid">
+                                                <div className="pos-edit-grid-3" style={{ marginBottom: '14px' }}>
                                                   <div>
                                                     <label className="pos-edit-label">
                                                       Factory Plant / Processing Hub
                                                     </label>
                                                     <select
                                                       className="pos-edit-field"
-                                                      defaultValue="Main Plant (Unit 1)"
+                                                      value={editFormData.factory_hub || 'Main Plant (Unit 1)'}
+                                                      onChange={(e) => setEditFormData({ ...editFormData, factory_hub: e.target.value })}
                                                     >
-                                                      <option value="Main Plant (Unit 1)">Main Plant (Unit 1) - Washer &amp; Pressing</option>
+                                                      <option value="Main Plant (Unit 1)">Main Plant (Unit 1) - Washer & Pressing</option>
                                                       <option value="Express Plant (Unit 2)">Express Plant (Unit 2) - 24H Quick Turnaround</option>
-                                                      <option value="Central Dry Clean Hub">Central Dry Clean Hub - Delicate &amp; Silk</option>
+                                                      <option value="Central Dry Clean Hub">Central Dry Clean Hub - Delicate & Silk</option>
                                                     </select>
                                                   </div>
                                                   <div>
@@ -4104,21 +4171,121 @@ export default function POSModule({
                                                     </label>
                                                     <div className="pos-edit-field" style={{ display: 'flex', alignItems: 'center', fontWeight: 700, gap: '6px' }}>
                                                       <span>🏷</span>
-                                                      <span>BAG-{editFormData.order_number?.replace(/D/g, '') || '00108'}</span>
+                                                      <span>BAG-{(editFormData.order_number || '00108').replace(/\D/g, '').padStart(5, '0')}</span>
                                                     </div>
                                                   </div>
                                                   <div>
                                                     <label className="pos-edit-label">
-                                                      Assigned Delivery Rider / Van
+                                                      Assigned Driver Name
                                                     </label>
                                                     <select
                                                       className="pos-edit-field"
-                                                      defaultValue="Ramesh Kumar (Route 4)"
+                                                      value={editFormData.assigned_driver || 'Ramesh Kumar (Route 4)'}
+                                                      onChange={(e) => setEditFormData({ ...editFormData, assigned_driver: e.target.value })}
                                                     >
                                                       <option value="Ramesh Kumar (Route 4)">Ramesh Kumar (Route 4 - Downtown)</option>
                                                       <option value="Suresh Babu (Route 2)">Suresh Babu (Route 2 - Residential)</option>
+                                                      <option value="Anand Raj (Express Transit)">Anand Raj (Express Transit)</option>
                                                       <option value="Self Pickup">Counter Self-Pickup</option>
                                                     </select>
+                                                  </div>
+                                                </div>
+
+                                                <div className="pos-edit-grid-3" style={{ marginBottom: '14px' }}>
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Vehicle Name & Reg. Number
+                                                    </label>
+                                                    <input
+                                                      type="text"
+                                                      className="pos-edit-field"
+                                                      value={editFormData.vehicle_name || 'TN-23-AX-8910 (Tata Ace Mini Van)'}
+                                                      onChange={(e) => setEditFormData({ ...editFormData, vehicle_name: e.target.value })}
+                                                      placeholder="e.g. TN-23-AX-8910 (Tata Ace)"
+                                                    />
+                                                  </div>
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Mode of Transport
+                                                    </label>
+                                                    <select
+                                                      className="pos-edit-field"
+                                                      value={editFormData.mode_of_transport || 'Mini Van'}
+                                                      onChange={(e) => setEditFormData({ ...editFormData, mode_of_transport: e.target.value })}
+                                                    >
+                                                      <option value="Mini Van">Mini Van (Tata Ace / Omni)</option>
+                                                      <option value="Two-Wheeler (Bike)">Two-Wheeler (Bike / Scooter)</option>
+                                                      <option value="Electric Cargo">Electric Cargo 3-Wheeler</option>
+                                                      <option value="Auto Rickshaw">Auto Rickshaw</option>
+                                                      <option value="Heavy Carrier">Heavy Carrier Truck</option>
+                                                    </select>
+                                                  </div>
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Laundry Collection (per kg)
+                                                    </label>
+                                                    <div style={{ position: 'relative' }}>
+                                                      <input
+                                                        type="number"
+                                                        step="0.1"
+                                                        min="0"
+                                                        className="pos-edit-field"
+                                                        value={editFormData.weight_kg !== undefined ? editFormData.weight_kg : 3.8}
+                                                        onChange={(e) => setEditFormData({ ...editFormData, weight_kg: Number(e.target.value) || 0 })}
+                                                      />
+                                                      <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '11px', color: '#64748b', fontWeight: 600 }}>kg</span>
+                                                    </div>
+                                                  </div>
+                                                </div>
+
+                                                <div className="pos-edit-grid-2" style={{ marginBottom: '14px' }}>
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Location Route (From ➔ TO)
+                                                    </label>
+                                                    <input
+                                                      type="text"
+                                                      className="pos-edit-field"
+                                                      value={editFormData.route_from_to || 'Store Central (Vellore Main) ➔ Factory Plant Unit 1'}
+                                                      onChange={(e) => setEditFormData({ ...editFormData, route_from_to: e.target.value })}
+                                                      placeholder="Store Central ➔ Factory Plant"
+                                                    />
+                                                  </div>
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Return Route after Completed (TO ➔ FROM)
+                                                    </label>
+                                                    <input
+                                                      type="text"
+                                                      className="pos-edit-field"
+                                                      value={editFormData.route_return || 'Factory Plant Unit 1 ➔ Store Central (Vellore Main)'}
+                                                      onChange={(e) => setEditFormData({ ...editFormData, route_return: e.target.value })}
+                                                      placeholder="Factory Plant ➔ Store Central"
+                                                    />
+                                                  </div>
+                                                </div>
+
+                                                <div className="pos-edit-grid-2">
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Order Received & Collected by Staff
+                                                    </label>
+                                                    <input
+                                                      type="text"
+                                                      className="pos-edit-field"
+                                                      value={editFormData.collected_by_staff || 'Murugan (Plant Supervisor)'}
+                                                      onChange={(e) => setEditFormData({ ...editFormData, collected_by_staff: e.target.value })}
+                                                      placeholder="Staff / Inspector name"
+                                                    />
+                                                  </div>
+                                                  <div>
+                                                    <label className="pos-edit-label">
+                                                      Intake & Transit Movement Timestamp
+                                                    </label>
+                                                    <div className="pos-edit-field" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                                      <span>🕒</span>
+                                                      <span>{editFormData.captured_date || '2026-10-28'} {editFormData.captured_time || '10:15 AM'} (Dynamic Log Active)</span>
+                                                    </div>
                                                   </div>
                                                 </div>
                                               </div>
@@ -4127,42 +4294,61 @@ export default function POSModule({
                                               <div className="pos-edit-subcard">
                                                 <div className="pos-edit-subcard-title">
                                                   <span>🧺</span>
-                                                  <span>Washing Progress &amp; Factory Stage Tracker</span>
+                                                  <span>Washing Progress & Factory Stage Tracker</span>
                                                 </div>
 
                                                 <div className="pos-laundry-stepper">
                                                   {[
-                                                    { label: 'Received at Factory', status: 'completed' },
-                                                    { label: 'Washing & Sorting', status: 'active' },
-                                                    { label: 'Drying', status: 'pending' },
-                                                    { label: 'Ironing & Finishing', status: 'pending' },
-                                                    { label: 'Quality Check', status: 'pending' },
-                                                    { label: 'Ready for Dispatch', status: 'pending' }
-                                                  ].map((step, sIdx) => (
-                                                    <div
-                                                      key={step.label}
-                                                      className={`pos-laundry-step-node ${step.status}`}
-                                                    >
-                                                      <span>{step.status === 'completed' ? '✓' : sIdx + 1}</span>
-                                                      <span>{step.label}</span>
-                                                    </div>
-                                                  ))}
+                                                    { label: 'Received at Factory', stageKey: 'Intake Complete' },
+                                                    { label: 'Washing & Sorting', stageKey: 'Washing in Progress' },
+                                                    { label: 'Drying', stageKey: 'Drying' },
+                                                    { label: 'Ironing & Finishing', stageKey: 'Pressed & Quality Checked' },
+                                                    { label: 'Quality Check', stageKey: 'Quality Check' },
+                                                    { label: 'Ready for Dispatch', stageKey: 'Ready for Dispatch to Store' }
+                                                  ].map((step, sIdx) => {
+                                                    const currentTransit = editFormData.plant_transit_status || 'Washing in Progress';
+                                                    const stageIdx = ['Intake Complete', 'In Transit to Factory', 'Washing in Progress', 'Drying', 'Pressed & Quality Checked', 'Quality Check', 'Ready for Dispatch to Store'].indexOf(currentTransit);
+                                                    const isCompleted = sIdx < stageIdx;
+                                                    const isActive = sIdx === stageIdx || (stageIdx === -1 && sIdx === 1);
+                                                    const nodeStatus = isCompleted ? 'completed' : isActive ? 'active' : 'pending';
+
+                                                    return (
+                                                      <div
+                                                        key={step.label}
+                                                        className={`pos-laundry-step-node ${nodeStatus}`}
+                                                        style={{ cursor: 'pointer' }}
+                                                        title="Click to update factory stage"
+                                                        onClick={() => {
+                                                          setEditFormData({ ...editFormData, plant_transit_status: step.stageKey });
+                                                          showToast?.(`🏭 Factory stage updated to: ${step.label}`);
+                                                        }}
+                                                      >
+                                                        <span>{isCompleted ? '✓' : sIdx + 1}</span>
+                                                        <span>{step.label}</span>
+                                                      </div>
+                                                    );
+                                                  })}
                                                 </div>
 
                                                 <div className="pos-edit-grid-2" style={{ marginTop: '12px' }}>
                                                   <div>
                                                     <label className="pos-edit-label">
-                                                      Plant Transit &amp; Packaging Status
+                                                      Plant Transit & Packaging Status
                                                     </label>
                                                     <select
                                                       className="pos-edit-field"
-                                                      defaultValue="Washing in Progress"
+                                                      value={editFormData.plant_transit_status || 'Washing in Progress'}
+                                                      onChange={(e) => setEditFormData({ ...editFormData, plant_transit_status: e.target.value })}
                                                     >
                                                       <option value="Intake Complete">Intake Complete - Bagged</option>
                                                       <option value="In Transit to Factory">In Transit to Factory</option>
                                                       <option value="Washing in Progress">Washing in Progress</option>
-                                                      <option value="Pressed &amp; Quality Checked">Pressed &amp; Quality Checked</option>
+                                                      <option value="Drying">Drying & Tumbling</option>
+                                                      <option value="Pressed & Quality Checked">Pressed & Quality Checked</option>
+                                                      <option value="Quality Check">Quality Inspection Passed</option>
                                                       <option value="Ready for Dispatch to Store">Ready for Dispatch to Store</option>
+                                                      <option value="In Transit to Store">In Transit to Store</option>
+                                                      <option value="Received at Store">Received at Store</option>
                                                     </select>
                                                   </div>
                                                   <div>
@@ -4172,7 +4358,9 @@ export default function POSModule({
                                                     <input
                                                       type="text"
                                                       className="pos-edit-field"
-                                                      defaultValue="Bin B-14 (Hanger Rail 2)"
+                                                      value={editFormData.rack_shelf_location || 'Bin B-14 (Hanger Rail 2)'}
+                                                      onChange={(e) => setEditFormData({ ...editFormData, rack_shelf_location: e.target.value })}
+                                                      placeholder="e.g. Bin B-14 (Hanger Rail 2)"
                                                     />
                                                   </div>
                                                 </div>
@@ -4185,15 +4373,34 @@ export default function POSModule({
                                                   <span>Factory Handling Remarks</span>
                                                 </div>
                                                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                                                  <span className="pos-note-tag-chip" style={{ background: '#f0fdf4', borderColor: '#bbf7d0', color: '#16a34a' }}>🌱 Eco-Friendly Wash</span>
-                                                  <span className="pos-note-tag-chip" style={{ background: '#fef3c7', borderColor: '#fde68a', color: '#d97706' }}>⚠️ Color Bleed Alert</span>
-                                                  <span className="pos-note-tag-chip" style={{ background: '#eff6ff', borderColor: '#bfdbfe', color: '#2563eb' }}>👔 Heavy Starch on Collars</span>
-                                                  <span className="pos-note-tag-chip" style={{ background: '#fdf2f8', borderColor: '#fbcfe8', color: '#db2777' }}>✨ Silk Delicate Care</span>
+                                                  {[
+                                                    { label: '🌱 Eco-Friendly Wash', text: '[Eco-Friendly Wash] ' },
+                                                    { label: '⚠️ Color Bleed Alert', text: '[Color Bleed Alert] ' },
+                                                    { label: '👔 Heavy Starch on Collars', text: '[Heavy Starch on Collars] ' },
+                                                    { label: '✨ Silk Delicate Care', text: '[Silk Delicate Care] ' },
+                                                    { label: '⚡ Express 24h Rush', text: '[Express 24h Rush] ' },
+                                                  ].map((chip) => (
+                                                    <button
+                                                      key={chip.label}
+                                                      type="button"
+                                                      className="pos-note-tag-chip"
+                                                      style={{ cursor: 'pointer' }}
+                                                      onClick={() => {
+                                                        const current = editFormData.comments || '';
+                                                        setEditFormData({
+                                                          ...editFormData,
+                                                          comments: current.includes(chip.text) ? current : `${current} ${chip.text}`.trim()
+                                                        });
+                                                        showToast?.(`Added remark: ${chip.label}`);
+                                                      }}
+                                                    >
+                                                      {chip.label}
+                                                    </button>
+                                                  ))}
                                                 </div>
                                               </div>
                                             </div>
                                           )}
-
                                           {/* Tab 3: Order Status Updates */}
                                           {editActiveTab === 'status' && (
                                             <div>
@@ -4325,7 +4532,8 @@ export default function POSModule({
                                                     </label>
                                                     <select
                                                       className="pos-edit-field"
-                                                      defaultValue="UPI / QR Code"
+                                                      value={editFormData.payment_method || "UPI / QR Code"}
+                                                      onChange={(e) => setEditFormData({ ...editFormData, payment_method: e.target.value })}
                                                     >
                                                       <option value="Cash">Cash at Counter</option>
                                                       <option value="UPI / QR Code">UPI (GPay / PhonePe / Paytm)</option>

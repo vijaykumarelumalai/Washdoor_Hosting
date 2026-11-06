@@ -1,299 +1,779 @@
--- ============================================================
--- Washdoor Supabase PostgreSQL Schema & RPC
--- Based on Washdoor Counter Intake UI Specification
--- Run in Supabase SQL Editor (Database → SQL Editor)
--- ============================================================
+-- ==============================================================================
+-- WASHDOOR LAUNDRY & DRY CLEANING MANAGEMENT SYSTEM
+-- PostgreSQL / Supabase Database Architecture v2.1 (Production-Ready)
+-- Encompassing Steps 1–6 Workflow, Sequences (ORD, CUS, PAY, MSG, NOTE, AUD),
+-- Double-Entry Financial Ledger, Atomic Wallet RPC, Immutable Audits, and RLS.
+-- ==============================================================================
 
--- ─── Extensions ──────────────────────────────────────────────
-create extension if not exists "uuid-ossp";
+-- ──────────────────────────────────────────────────────────────────────────────
+-- 1. EXTENSIONS
+-- ──────────────────────────────────────────────────────────────────────────────
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- ─── CUSTOMERS TABLE ─────────────────────────────────────────
-create table if not exists public.customers (
-  id                     bigint generated always as identity primary key,
-  customer_name          text not null check (char_length(trim(customer_name)) >= 1),
-  mobile_number          varchar(10) not null unique check (mobile_number ~ '^[0-9]{10}$'),
-  alternate_phone        varchar(10) check (alternate_phone is null or alternate_phone ~ '^[0-9]{10}$'),
-  address                text,
-  city                   text,
-  pincode                varchar(6) check (pincode is null or pincode ~ '^[0-9]{6}$'),
-  date_of_birth          date,
-  map_link               text check (map_link is null or map_link ~ '^https?://'),
-  email                  text check (email is null or email ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$'),
-  gst_number             text,
-  company_name           text,
-  tax_exemption          boolean not null default false,
-  notes                  text,
+-- ──────────────────────────────────────────────────────────────────────────────
+-- 2. SEQUENCES FOR STANDARDIZED BUSINESS IDENTIFIERS
+-- ──────────────────────────────────────────────────────────────────────────────
+CREATE SEQUENCE IF NOT EXISTS public.seq_washdoor_order_number START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE IF NOT EXISTS public.seq_washdoor_customer_number START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE IF NOT EXISTS public.seq_washdoor_payment_number START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE IF NOT EXISTS public.seq_washdoor_message_number START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE IF NOT EXISTS public.seq_washdoor_note_number START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE IF NOT EXISTS public.seq_washdoor_audit_number START WITH 1 INCREMENT BY 1;
+
+-- Compatibility alias for existing legacy sequences
+CREATE SEQUENCE IF NOT EXISTS public.customer_work_seq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE IF NOT EXISTS public.order_number_seq START WITH 1 INCREMENT BY 1;
+
+-- Functions to format 5-digit zero-padded business identifiers
+CREATE OR REPLACE FUNCTION public.generate_order_number()
+RETURNS TEXT LANGUAGE plpgsql AS $$
+BEGIN
+  RETURN 'ORD' || LPAD(nextval('public.seq_washdoor_order_number')::TEXT, 5, '0');
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.generate_customer_number()
+RETURNS TEXT LANGUAGE plpgsql AS $$
+BEGIN
+  RETURN 'CUS' || LPAD(nextval('public.seq_washdoor_customer_number')::TEXT, 5, '0');
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.generate_payment_number()
+RETURNS TEXT LANGUAGE plpgsql AS $$
+BEGIN
+  RETURN 'PAY' || LPAD(nextval('public.seq_washdoor_payment_number')::TEXT, 5, '0');
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.generate_message_number()
+RETURNS TEXT LANGUAGE plpgsql AS $$
+BEGIN
+  RETURN 'MSG' || LPAD(nextval('public.seq_washdoor_message_number')::TEXT, 5, '0');
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.generate_note_number()
+RETURNS TEXT LANGUAGE plpgsql AS $$
+BEGIN
+  RETURN 'NOTE' || LPAD(nextval('public.seq_washdoor_note_number')::TEXT, 5, '0');
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.generate_audit_number()
+RETURNS TEXT LANGUAGE plpgsql AS $$
+BEGIN
+  RETURN 'AUD' || LPAD(nextval('public.seq_washdoor_audit_number')::TEXT, 5, '0');
+END;
+$$;
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- 3. TIMESTAMP & USER ATTRIBUTION HELPER FUNCTION
+-- ──────────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.fn_track_timestamps_and_user()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  IF auth.uid() IS NOT NULL THEN
+    NEW.updated_by = auth.uid();
+    IF TG_OP = 'INSERT' AND NEW.created_by IS NULL THEN
+      NEW.created_by = auth.uid();
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- 4. BASE TABLES: CUSTOMERS & ORDERS (CUSTOMER_WORKS)
+-- ──────────────────────────────────────────────────────────────────────────────
+
+-- 4.1 Master Customers Table
+CREATE TABLE IF NOT EXISTS public.customers (
+  id                     BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  customer_code          VARCHAR(30) UNIQUE NOT NULL DEFAULT public.generate_customer_number(),
+  customer_name          VARCHAR(150) NOT NULL CHECK (char_length(trim(customer_name)) >= 1),
+  mobile_number          VARCHAR(15) NOT NULL UNIQUE CHECK (mobile_number ~ '^(\+91)?[6-9][0-9]{9}$'),
+  alternate_phone        VARCHAR(15) CHECK (alternate_phone IS NULL OR alternate_phone ~ '^(\+91)?[6-9][0-9]{9}$'),
+  email                  VARCHAR(255) CHECK (email IS NULL OR email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'),
+  address                TEXT,
+  city                   VARCHAR(100) DEFAULT 'Vellore',
+  state                  VARCHAR(100) DEFAULT 'Tamil Nadu',
+  pincode                VARCHAR(6) CHECK (pincode IS NULL OR pincode ~ '^[0-9]{6}$'),
+  date_of_birth          DATE,
+  anniversary_date       DATE,
+  map_link               TEXT,
+  gst_number             VARCHAR(15),
+  company_name           VARCHAR(150),
+  tax_exemption          BOOLEAN NOT NULL DEFAULT FALSE,
+  customer_classification VARCHAR(50) NOT NULL DEFAULT 'Regular Customer'
+                         CHECK (customer_classification IN ('Regular Customer', 'VIP Customer', 'Corporate / B2B', 'Student / Senior', 'regular', 'vip', 'fraud', 'corporate')),
+  customer_status        VARCHAR(30) NOT NULL DEFAULT 'Active'
+                         CHECK (customer_status IN ('Active', 'Inactive', 'Blacklisted', 'active', 'inactive', 'archived')),
+  price_list             VARCHAR(50) NOT NULL DEFAULT 'Standard',
+  service_zone           VARCHAR(50) DEFAULT 'Zone 1',
+  credit_limit           NUMERIC(10,2) NOT NULL DEFAULT 0.00 CHECK (credit_limit >= 0),
+  wallet_balance         NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+  default_discount       NUMERIC(5,2) DEFAULT 0.00 CHECK (default_discount >= 0 AND default_discount <= 100),
+  communication_pref     VARCHAR(30) DEFAULT 'WhatsApp'
+                         CHECK (communication_pref IN ('WhatsApp', 'SMS', 'Call', 'Email', 'whatsapp', 'sms', 'email', 'phone', 'none')),
+  preferred_language     VARCHAR(30) DEFAULT 'ta',
+  dnd                    BOOLEAN NOT NULL DEFAULT FALSE,
+  internal_comments      TEXT,
+  notes                  TEXT,
+  created_by             UUID REFERENCES auth.users(id),
+  updated_by             UUID REFERENCES auth.users(id),
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_customers_mobile ON public.customers (mobile_number);
+CREATE INDEX IF NOT EXISTS idx_customers_code   ON public.customers (customer_code);
+CREATE INDEX IF NOT EXISTS idx_customers_name   ON public.customers USING gin (to_tsvector('english', customer_name));
+
+-- 4.2 Customer Works (Primary Service Orders Table)
+CREATE TABLE IF NOT EXISTS public.customer_works (
+  work_id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  work_number            VARCHAR(30) UNIQUE NOT NULL DEFAULT public.generate_order_number(),
+  customer_id            VARCHAR(50) NOT NULL,
+  customer_name          VARCHAR(150) NOT NULL,
+  mobile_number          VARCHAR(15) NOT NULL,
+  alternate_phone        VARCHAR(15),
+  email                  VARCHAR(255),
+  delivery_address       TEXT,
+  service_type           VARCHAR(60) NOT NULL DEFAULT 'Wash & Steam Press',
+  work_status            VARCHAR(40) NOT NULL DEFAULT 'Received'
+                         CHECK (work_status IN (
+                           'Received',
+                           'In Progress',
+                           'Washing',
+                           'Steam Pressing',
+                           'Dry Cleaning',
+                           'Quality Check',
+                           'Ready',
+                           'Ready for Delivery',
+                           'Delivered',
+                           'Cancelled'
+                         )),
+  priority               VARCHAR(20) NOT NULL DEFAULT 'Normal'
+                         CHECK (priority IN ('Normal', 'Express', 'Urgent', 'Express 24H', 'Yes', 'No')),
+  intake_method          VARCHAR(30) NOT NULL DEFAULT 'Walk-In'
+                         CHECK (intake_method IN ('Walk-In', 'On-Call', 'Pickup & Delivery', 'walk-in', 'on-call')),
+  items                  JSONB NOT NULL DEFAULT '[]'::jsonb,
+  total_pieces           INTEGER NOT NULL DEFAULT 1 CHECK (total_pieces >= 0),
+  weight_kg              NUMERIC(6,2) DEFAULT NULL CHECK (weight_kg IS NULL OR weight_kg >= 0),
+  special_instructions   TEXT,
+  rack_shelf_location    VARCHAR(50),
+  subtotal               NUMERIC(10,2) NOT NULL DEFAULT 0.00 CHECK (subtotal >= 0),
+  discount_amount        NUMERIC(10,2) NOT NULL DEFAULT 0.00 CHECK (discount_amount >= 0),
+  tax_amount             NUMERIC(10,2) NOT NULL DEFAULT 0.00 CHECK (tax_amount >= 0),
+  total_amount           NUMERIC(10,2) NOT NULL DEFAULT 0.00 CHECK (total_amount >= 0),
+  advance_paid           NUMERIC(10,2) NOT NULL DEFAULT 0.00 CHECK (advance_paid >= 0),
+  balance_due            NUMERIC(10,2) GENERATED ALWAYS AS (GREATEST(0.00, total_amount - advance_paid)) STORED,
+  payment_status         VARCHAR(30) NOT NULL DEFAULT 'Unpaid'
+                         CHECK (payment_status IN ('Unpaid', 'Partially Paid', 'Paid', 'Refunded')),
+  payment_method         VARCHAR(30) DEFAULT 'Cash'
+                         CHECK (payment_method IN ('Cash', 'UPI / QR', 'Card', 'Wallet', 'Net Banking', 'PaymentLink')),
+  intake_date            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  target_delivery_date   TIMESTAMPTZ,
+  completed_at           TIMESTAMPTZ,
+  delivered_at           TIMESTAMPTZ,
+  assigned_staff         VARCHAR(100),
+  internal_notes         TEXT,
+  created_by             UUID REFERENCES auth.users(id),
+  updated_by             UUID REFERENCES auth.users(id),
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_customer_works_cust_id ON public.customer_works (customer_id);
+CREATE INDEX IF NOT EXISTS idx_customer_works_phone   ON public.customer_works (mobile_number);
+CREATE INDEX IF NOT EXISTS idx_customer_works_status  ON public.customer_works (work_status);
+CREATE INDEX IF NOT EXISTS idx_customer_works_date    ON public.customer_works (intake_date DESC);
+CREATE INDEX IF NOT EXISTS idx_customer_works_items   ON public.customer_works USING gin (items);
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- 5. THE 13 PRODUCTION RELATIONAL TABLES (v2.1 SPECIFICATION)
+-- ──────────────────────────────────────────────────────────────────────────────
+
+-- Table 1: Payment Gateway Transactions
+CREATE TABLE IF NOT EXISTS public.washdoor_payment_gateway_transactions (
+  txn_id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  work_id                UUID NOT NULL REFERENCES public.customer_works(work_id) ON DELETE CASCADE,
+  work_number            VARCHAR(30) NOT NULL,
+  customer_id            VARCHAR(50) NOT NULL,
+  gateway_name           VARCHAR(30) NOT NULL CHECK (gateway_name IN ('Razorpay', 'PhonePe', 'Paytm', 'Cashfree', 'Stripe', 'UPI_Manual', 'Cash_Counter')),
+  gateway_order_id       VARCHAR(100),
+  gateway_payment_id     VARCHAR(100),
+  gateway_signature      TEXT, -- Sensitive
+  payment_method         VARCHAR(30) NOT NULL CHECK (payment_method IN ('UPI', 'Card', 'NetBanking', 'Wallet', 'Cash', 'PaymentLink')),
+  upi_vpa                VARCHAR(100),
+  card_last4             VARCHAR(4),
+  bank_reference         VARCHAR(100),
+  currency               VARCHAR(3) NOT NULL DEFAULT 'INR',
+  amount                 NUMERIC(10,2) NOT NULL CHECK (amount >= 0),
+  gateway_fee            NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+  gst_on_fee             NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+  net_settled_amount     NUMERIC(10,2),
+  txn_status             VARCHAR(20) NOT NULL DEFAULT 'Initiated'
+                         CHECK (txn_status IN ('Initiated', 'Pending', 'Success', 'Failed', 'Refunded', 'Partial_Refund', 'Expired')),
+  failure_code           VARCHAR(50),
+  failure_reason         TEXT,
+  refund_id              VARCHAR(100),
+  refund_amount          NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+  payment_link_url       TEXT,
+  payment_link_expiry    TIMESTAMPTZ,
+  webhook_payload        JSONB, -- Raw payload
+  ip_address             VARCHAR(45),
+  device_info            VARCHAR(200),
+  initiated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at           TIMESTAMPTZ,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_gateway_txns_work_id ON public.washdoor_payment_gateway_transactions(work_id);
+CREATE INDEX IF NOT EXISTS idx_gateway_txns_status  ON public.washdoor_payment_gateway_transactions(txn_status);
+
+-- Table 2: Garment Inspection Categories (Master)
+CREATE TABLE IF NOT EXISTS public.washdoor_inspection_categories (
+  category_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  category_code          VARCHAR(30) UNIQUE NOT NULL,
+  category_name          VARCHAR(100) NOT NULL,
+  category_name_ta       VARCHAR(100),
+  inspection_group       VARCHAR(30) NOT NULL CHECK (inspection_group IN ('Stain', 'Damage', 'Colour', 'Fabric', 'Accessories', 'Pre_Existing', 'Other')),
+  severity_level         VARCHAR(15) NOT NULL DEFAULT 'Low' CHECK (severity_level IN ('Low', 'Medium', 'High', 'Critical')),
+  default_action         VARCHAR(30) NOT NULL DEFAULT 'Proceed' CHECK (default_action IN ('Proceed', 'Spot_Treat', 'Customer_Approval', 'Reject')),
+  requires_photo         BOOLEAN NOT NULL DEFAULT FALSE,
+  requires_customer_ack  BOOLEAN NOT NULL DEFAULT FALSE,
+  extra_charge_applicable BOOLEAN NOT NULL DEFAULT FALSE,
+  default_extra_charge   NUMERIC(10,2) NOT NULL DEFAULT 0.00 CHECK (default_extra_charge >= 0),
+  description            TEXT,
+  is_active              BOOLEAN NOT NULL DEFAULT TRUE,
+  display_order          INTEGER NOT NULL DEFAULT 0,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Table 3: Driver Schedules
+CREATE TABLE IF NOT EXISTS public.washdoor_driver_schedules (
+  schedule_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  driver_id              UUID NOT NULL REFERENCES auth.users(id),
+  driver_name            VARCHAR(100) NOT NULL,
+  driver_phone           VARCHAR(15) NOT NULL,
+  vehicle_number         VARCHAR(20),
+  vehicle_type           VARCHAR(20) NOT NULL DEFAULT 'Two_Wheeler' CHECK (vehicle_type IN ('Two_Wheeler', 'Three_Wheeler', 'Van', 'Electric_Scooter')),
+  schedule_date          DATE NOT NULL,
+  shift                  VARCHAR(20) NOT NULL DEFAULT 'Morning' CHECK (shift IN ('Morning', 'Afternoon', 'Evening', 'Full_Day')),
+  assigned_hub           VARCHAR(50) NOT NULL DEFAULT 'Main_Plant',
+  service_zones          TEXT[] NOT NULL DEFAULT ARRAY['Zone 1']::TEXT[],
+  max_pickups            INTEGER NOT NULL DEFAULT 15,
+  max_deliveries         INTEGER NOT NULL DEFAULT 15,
+  current_pickups_count  INTEGER NOT NULL DEFAULT 0,
+  current_deliveries_count INTEGER NOT NULL DEFAULT 0,
+  schedule_status        VARCHAR(20) NOT NULL DEFAULT 'Scheduled' CHECK (schedule_status IN ('Scheduled', 'On_Duty', 'Completed', 'Cancelled', 'Leave')),
+  check_in_at            TIMESTAMPTZ,
+  check_out_at           TIMESTAMPTZ,
+  notes                  TEXT,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Table 4: Status History (Immutable Audit Log)
+CREATE TABLE IF NOT EXISTS public.washdoor_status_history (
+  history_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  work_id                UUID NOT NULL REFERENCES public.customer_works(work_id) ON DELETE CASCADE,
+  work_number            VARCHAR(30) NOT NULL,
+  item_id                UUID,
+  entity_type            VARCHAR(30) NOT NULL DEFAULT 'Order' CHECK (entity_type IN ('Order', 'Garment_Unit', 'Batch', 'Driver_Assignment')),
+  entity_id              UUID,
+  old_status             VARCHAR(50),
+  new_status             VARCHAR(50) NOT NULL,
+  changed_by_id          UUID REFERENCES auth.users(id),
+  changed_by_name        VARCHAR(100) NOT NULL,
+  changed_by_role        VARCHAR(30) NOT NULL DEFAULT 'Staff' CHECK (changed_by_role IN ('Admin', 'Staff', 'Driver', 'QC_Inspector', 'Customer', 'System')),
+  change_source          VARCHAR(30) NOT NULL DEFAULT 'POS_Web' CHECK (change_source IN ('POS_Web', 'Driver_App', 'Plant_App', 'Customer_Portal', 'WhatsApp_Bot', 'System_Cron')),
+  remarks                TEXT,
+  notify_customer        BOOLEAN NOT NULL DEFAULT FALSE,
+  notification_sent      BOOLEAN NOT NULL DEFAULT FALSE,
+  changed_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_status_history_work_id ON public.washdoor_status_history(work_id);
+
+-- Table 5: Payment Ledger (Double-Entry Financial Transactions)
+CREATE TABLE IF NOT EXISTS public.washdoor_payment_ledger (
+  ledger_id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  payment_number         VARCHAR(30) UNIQUE NOT NULL DEFAULT public.generate_payment_number(),
+  work_id                UUID NOT NULL REFERENCES public.customer_works(work_id) ON DELETE CASCADE,
+  work_number            VARCHAR(30) NOT NULL,
+  customer_id            VARCHAR(50) NOT NULL,
+  entry_type             VARCHAR(30) NOT NULL CHECK (entry_type IN ('Initial_Advance', 'Partial_Payment', 'Full_Payment', 'Due_Settlement', 'Wallet_Debit', 'Refund', 'Discount_Adjustment')),
+  payment_mode           VARCHAR(30) NOT NULL CHECK (payment_mode IN ('Cash', 'UPI', 'Card', 'NetBanking', 'Wallet', 'Razorpay', 'PhonePe', 'Credit')),
+  amount                 NUMERIC(10,2) NOT NULL CHECK (amount > 0),
+  reference_txn_id       UUID REFERENCES public.washdoor_payment_gateway_transactions(txn_id),
+  reference_number       VARCHAR(100),
+  notes                  TEXT,
+  collected_by           VARCHAR(100) NOT NULL DEFAULT 'Store Admin',
+  collected_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_payment_ledger_work_id ON public.washdoor_payment_ledger(work_id);
+
+-- Table 6: Customer Wallets Master
+CREATE TABLE IF NOT EXISTS public.washdoor_wallets (
+  wallet_id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id            VARCHAR(50) UNIQUE NOT NULL,
+  customer_name          VARCHAR(150) NOT NULL,
+  mobile_number          VARCHAR(15) NOT NULL,
+  current_balance        NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+  credit_limit           NUMERIC(10,2) NOT NULL DEFAULT 0.00 CHECK (credit_limit >= 0),
+  is_frozen              BOOLEAN NOT NULL DEFAULT FALSE,
+  freeze_reason          TEXT,
+  last_transaction_at    TIMESTAMPTZ,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Table 7: Wallet Transactions Ledger (Immutable)
+CREATE TABLE IF NOT EXISTS public.washdoor_wallet_transactions (
+  wallet_txn_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  wallet_id              UUID NOT NULL REFERENCES public.washdoor_wallets(wallet_id) ON DELETE RESTRICT,
+  customer_id            VARCHAR(50) NOT NULL,
+  txn_type               VARCHAR(20) NOT NULL CHECK (txn_type IN ('Top_Up', 'Order_Debit', 'Refund_Credit', 'Cashback', 'Manual_Adjustment')),
+  amount                 NUMERIC(10,2) NOT NULL CHECK (amount > 0),
+  balance_before         NUMERIC(10,2) NOT NULL,
+  balance_after          NUMERIC(10,2) NOT NULL,
+  reference_order_id     UUID REFERENCES public.customer_works(work_id),
+  notes                  TEXT,
+  performed_by           UUID REFERENCES auth.users(id),
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_wallet_txns_wallet_id ON public.washdoor_wallet_transactions(wallet_id);
+
+-- Table 8: Wallet Customer Monitor (Fraud & Credit Monitoring)
+CREATE TABLE IF NOT EXISTS public.washdoor_wallet_customer_monitor (
+  monitor_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id            VARCHAR(50) UNIQUE NOT NULL,
+  risk_score             INTEGER NOT NULL DEFAULT 0 CHECK (risk_score >= 0 AND risk_score <= 100),
+  risk_level             VARCHAR(20) NOT NULL DEFAULT 'Low' CHECK (risk_level IN ('Low', 'Medium', 'High', 'Critical')),
+  total_orders_count     INTEGER NOT NULL DEFAULT 0,
+  total_spent            NUMERIC(12,2) NOT NULL DEFAULT 0.00,
+  failed_payments_count  INTEGER NOT NULL DEFAULT 0,
+  overdue_balance        NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+  is_flagged             BOOLEAN NOT NULL DEFAULT FALSE,
+  flag_reason            TEXT,
+  last_evaluated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Table 9: Driver Assignments
+CREATE TABLE IF NOT EXISTS public.washdoor_driver_assignments (
+  assignment_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  work_id                UUID NOT NULL REFERENCES public.customer_works(work_id) ON DELETE CASCADE,
+  driver_id              UUID NOT NULL REFERENCES auth.users(id),
+  schedule_id            UUID REFERENCES public.washdoor_driver_schedules(schedule_id),
+  assignment_type        VARCHAR(20) NOT NULL CHECK (assignment_type IN ('Pickup', 'Delivery', 'Plant_Transfer')),
+  status                 VARCHAR(20) NOT NULL DEFAULT 'Assigned' CHECK (status IN ('Assigned', 'En_Route', 'Arrived', 'Completed', 'Failed', 'Cancelled')),
+  is_active              BOOLEAN NOT NULL DEFAULT TRUE,
+  otp_code               VARCHAR(6),
+  otp_verified           BOOLEAN NOT NULL DEFAULT FALSE,
+  assigned_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at           TIMESTAMPTZ,
+  notes                  TEXT,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Ensure only one active assignment exists per type per order
+CREATE UNIQUE INDEX IF NOT EXISTS uq_active_driver_assignment 
+ON public.washdoor_driver_assignments(work_id, assignment_type) 
+WHERE (is_active = TRUE);
+
+-- Table 10: Live Status Actions (Timeline & Geo-tracking)
+CREATE TABLE IF NOT EXISTS public.washdoor_live_status_actions (
+  action_id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  work_id                UUID NOT NULL REFERENCES public.customer_works(work_id) ON DELETE CASCADE,
+  work_number            VARCHAR(30) NOT NULL,
+  action_code            VARCHAR(50) NOT NULL,
+  action_label           VARCHAR(100) NOT NULL,
+  action_label_ta        VARCHAR(100),
+  stage                  VARCHAR(30) NOT NULL CHECK (stage IN ('Pickup', 'Shop', 'Processing', 'Delivery', 'Payment')),
+  actor_type             VARCHAR(20) NOT NULL CHECK (actor_type IN ('Customer', 'Staff', 'Driver', 'Admin', 'System')),
+  actor_id               UUID REFERENCES auth.users(id),
+  actor_name             VARCHAR(100) NOT NULL,
+  latitude               NUMERIC(10,7),
+  longitude              NUMERIC(10,7),
+  is_customer_visible    BOOLEAN NOT NULL DEFAULT TRUE,
+  action_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_live_status_work_id ON public.washdoor_live_status_actions(work_id);
+
+-- Table 11: Garment Cards (Individual Garment Unit Tracking)
+CREATE TABLE IF NOT EXISTS public.washdoor_garment_cards (
+  card_id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  work_id                UUID NOT NULL REFERENCES public.customer_works(work_id) ON DELETE CASCADE,
+  work_number            VARCHAR(30) NOT NULL,
+  unit_index             INTEGER NOT NULL CHECK (unit_index >= 1),
+  garment_tag_number     VARCHAR(50) UNIQUE NOT NULL,
+  garment_name           VARCHAR(100) NOT NULL,
+  service_type           VARCHAR(60) NOT NULL DEFAULT 'Wash & Steam Press',
+  color                  VARCHAR(50),
+  brand                  VARCHAR(50),
+  fabric_type            VARCHAR(50),
+  garment_condition      VARCHAR(50) DEFAULT 'Good',
+  care_instructions      TEXT,
+  special_instructions   TEXT,
+  processing_stage       VARCHAR(40) NOT NULL DEFAULT 'Received'
+                         CHECK (processing_stage IN ('Received', 'Sorting', 'Washing', 'Drying', 'Ironing', 'QC', 'Ready', 'Packed', 'Delivered')),
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_garment_unit_per_work UNIQUE (work_id, unit_index)
+);
+
+CREATE INDEX IF NOT EXISTS idx_garment_cards_work_id ON public.washdoor_garment_cards(work_id);
+CREATE INDEX IF NOT EXISTS idx_garment_cards_tag     ON public.washdoor_garment_cards(garment_tag_number);
+
+-- Table 12: Garment Inspections (Defect & Stain Logs)
+CREATE TABLE IF NOT EXISTS public.washdoor_garment_inspections (
+  inspection_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  card_id                UUID NOT NULL REFERENCES public.washdoor_garment_cards(card_id) ON DELETE CASCADE,
+  work_id                UUID NOT NULL REFERENCES public.customer_works(work_id) ON DELETE CASCADE,
+  category_id            UUID REFERENCES public.washdoor_inspection_categories(category_id),
+  category_name          VARCHAR(100) NOT NULL,
+  defect_location        VARCHAR(100),
+  severity               VARCHAR(15) NOT NULL DEFAULT 'Low' CHECK (severity IN ('Low', 'Medium', 'High', 'Critical')),
+  action_plan            VARCHAR(50) NOT NULL DEFAULT 'Proceed' CHECK (action_plan IN ('Proceed', 'Spot_Treat', 'Customer_Approval', 'Reject')),
+  extra_charge           NUMERIC(10,2) NOT NULL DEFAULT 0.00 CHECK (extra_charge >= 0),
+  customer_approval      VARCHAR(20) NOT NULL DEFAULT 'Not_Required' CHECK (customer_approval IN ('Not_Required', 'Pending', 'Approved', 'Rejected')),
+  customer_notes         TEXT,
+  inspection_notes       TEXT,
+  inspected_by           VARCHAR(100) NOT NULL DEFAULT 'QC Staff',
+  inspected_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_garment_inspections_card_id ON public.washdoor_garment_inspections(card_id);
+
+-- Table 13: Garment Photos (Visual Evidence)
+CREATE TABLE IF NOT EXISTS public.washdoor_garment_photos (
+  photo_id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  card_id                UUID REFERENCES public.washdoor_garment_cards(card_id) ON DELETE CASCADE,
+  work_id                UUID NOT NULL REFERENCES public.customer_works(work_id) ON DELETE CASCADE,
+  photo_type             VARCHAR(30) NOT NULL CHECK (photo_type IN ('Before_Wash', 'Stain', 'Damage', 'After_Wash', 'After_Press', 'Packed', 'Delivery_Proof')),
+  storage_path           TEXT NOT NULL,
+  photo_url              TEXT NOT NULL,
+  caption                TEXT,
+  captured_by            VARCHAR(100) NOT NULL DEFAULT 'Inspector',
+  captured_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_garment_photos_work_id ON public.washdoor_garment_photos(work_id);
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- 6. ADDITIONAL TABLES FOR STEPS 5 & 6 (MESSAGES, NOTES & AUDIT)
+-- ──────────────────────────────────────────────────────────────────────────────
+
+-- Step 5: Customer Messages Table (MSG00001)
+CREATE TABLE IF NOT EXISTS public.washdoor_customer_messages (
+  message_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_number         VARCHAR(30) UNIQUE NOT NULL DEFAULT public.generate_message_number(),
+  work_id                UUID REFERENCES public.customer_works(work_id) ON DELETE CASCADE,
+  customer_id            VARCHAR(50) NOT NULL,
+  channel                VARCHAR(20) NOT NULL CHECK (channel IN ('WhatsApp', 'SMS', 'Email')),
+  template_category      VARCHAR(50) NOT NULL,
+  recipient_phone        VARCHAR(15) NOT NULL,
+  message_body           TEXT NOT NULL,
+  delivery_status        VARCHAR(20) NOT NULL DEFAULT 'Sent' CHECK (delivery_status IN ('Pending', 'Sent', 'Delivered', 'Read', 'Failed')),
+  sent_by                VARCHAR(100) NOT NULL DEFAULT 'System',
+  sent_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_work_id ON public.washdoor_customer_messages(work_id);
+
+-- Step 6: Order Notes & Instructions Table (NOTE00001)
+CREATE TABLE IF NOT EXISTS public.washdoor_order_notes (
+  note_id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  note_number            VARCHAR(30) UNIQUE NOT NULL DEFAULT public.generate_note_number(),
+  work_id                UUID NOT NULL REFERENCES public.customer_works(work_id) ON DELETE CASCADE,
+  note_type              VARCHAR(30) NOT NULL DEFAULT 'Internal_Remark' CHECK (note_type IN ('Internal_Remark', 'Customer_Instruction', 'Quick_Tag', 'Staff_Observation')),
+  content                TEXT NOT NULL,
+  is_customer_visible    BOOLEAN NOT NULL DEFAULT FALSE,
+  created_by_name        VARCHAR(100) NOT NULL DEFAULT 'Staff',
+  created_by             UUID REFERENCES auth.users(id),
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_order_notes_work_id ON public.washdoor_order_notes(work_id);
+
+-- Step 6: Comprehensive Activity Audit Logs Table (AUD00001)
+CREATE TABLE IF NOT EXISTS public.washdoor_audit_logs (
+  audit_id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_number           VARCHAR(30) UNIQUE NOT NULL DEFAULT public.generate_audit_number(),
+  entity_name            VARCHAR(50) NOT NULL,
+  record_id              UUID NOT NULL,
+  work_id                UUID REFERENCES public.customer_works(work_id) ON DELETE CASCADE,
+  operation              VARCHAR(10) NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+  old_data               JSONB,
+  new_data               JSONB,
+  changed_by             UUID REFERENCES auth.users(id),
+  changed_by_name        VARCHAR(100) NOT NULL DEFAULT 'System Staff',
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_work_id ON public.washdoor_audit_logs(work_id);
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- 7. SECURE VIEWS (SECURITY INVOKER)
+-- ──────────────────────────────────────────────────────────────────────────────
+-- Mask sensitive gateway signatures from public/client queries
+CREATE OR REPLACE VIEW public.customer_payment_transactions_view 
+WITH (security_invoker = true) AS
+SELECT
+  txn_id,
+  work_id,
+  work_number,
+  customer_id,
+  gateway_name,
+  gateway_order_id,
+  gateway_payment_id,
+  payment_method,
+  currency,
+  amount,
+  txn_status,
+  initiated_at,
+  completed_at
+FROM public.washdoor_payment_gateway_transactions;
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- 8. TRIGGERS: AUTOMATED SYNCHRONIZATION & IMMUTABILITY
+-- ──────────────────────────────────────────────────────────────────────────────
+
+-- 8.1 Immutability Trigger: Blocks UPDATE and DELETE on audit and ledger tables
+CREATE OR REPLACE FUNCTION public.fn_prevent_audit_tampering()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'This audit / ledger record is permanently immutable and cannot be updated or deleted.';
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_protect_status_history ON public.washdoor_status_history;
+CREATE TRIGGER trg_protect_status_history
+  BEFORE UPDATE OR DELETE ON public.washdoor_status_history
+  FOR EACH ROW EXECUTE FUNCTION public.fn_prevent_audit_tampering();
+
+DROP TRIGGER IF EXISTS trg_protect_wallet_txns ON public.washdoor_wallet_transactions;
+CREATE TRIGGER trg_protect_wallet_txns
+  BEFORE UPDATE OR DELETE ON public.washdoor_wallet_transactions
+  FOR EACH ROW EXECUTE FUNCTION public.fn_prevent_audit_tampering();
+
+DROP TRIGGER IF EXISTS trg_protect_audit_logs ON public.washdoor_audit_logs;
+CREATE TRIGGER trg_protect_audit_logs
+  BEFORE UPDATE OR DELETE ON public.washdoor_audit_logs
+  FOR EACH ROW EXECUTE FUNCTION public.fn_prevent_audit_tampering();
+
+-- 8.2 Payment Ledger Auto-Sync: Updates advance_paid and payment_status on customer_works
+CREATE OR REPLACE FUNCTION public.fn_sync_ledger_to_order()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_work_id UUID;
+  v_total_paid NUMERIC(10,2);
+  v_order_total NUMERIC(10,2);
+  v_new_status VARCHAR(30);
+BEGIN
+  v_work_id := COALESCE(NEW.work_id, OLD.work_id);
   
-  -- Additional fields matching UI spec
-  communication_pref     text default 'sms' check (communication_pref in ('sms', 'whatsapp', 'email', 'phone', 'none')),
-  communication_lang     text default 'en' check (communication_lang in ('en', 'ta', 'hi', 'te', 'kn', 'ml')),
-  dnd                    boolean not null default false,
-  internal_comments      text,
-  default_discount       numeric(5,2) default 0.00 check (default_discount >= 0 and default_discount <= 100),
-  referral_code          text,
-  marketing_source       text,
-  membership_id          text,
-  tier                   text default 'SILVER' check (tier in ('SILVER', 'GOLD', 'PLATINUM ELITE')),
-  wallet_balance         numeric(10,2) default 0.00 check (wallet_balance >= 0),
-  customer_classification text default 'regular' check (customer_classification in ('regular', 'vip', 'fraud', 'corporate')),
-  customer_status        text default 'active' check (customer_status in ('active', 'inactive', 'archived')),
-  price_list             text default 'standard',
-  service_zone           text default 'zone-1',
-  credit_limit           numeric(10,2) default 0.00 check (credit_limit >= 0),
-  anniversary_date       date,
-  special_occasion       text,
-  special_occasion_date  date,
+  -- Calculate total payments from ledger
+  SELECT COALESCE(SUM(amount), 0.00) INTO v_total_paid
+  FROM public.washdoor_payment_ledger
+  WHERE work_id = v_work_id;
 
-  created_at             timestamptz not null default now(),
-  updated_at             timestamptz not null default now()
-);
+  SELECT total_amount INTO v_order_total
+  FROM public.customer_works
+  WHERE work_id = v_work_id;
 
--- Indexes for ultra-fast customer lookup by mobile and name
-create index if not exists idx_customers_mobile on public.customers (mobile_number);
-create index if not exists idx_customers_name on public.customers (customer_name);
-create index if not exists idx_customers_search on public.customers using gin (to_tsvector('simple', customer_name || ' ' || mobile_number || ' ' || coalesce(address, '')));
+  IF v_total_paid >= v_order_total AND v_order_total > 0 THEN
+    v_new_status := 'Paid';
+  ELSIF v_total_paid > 0 THEN
+    v_new_status := 'Partially Paid';
+  ELSE
+    v_new_status := 'Unpaid';
+  END IF;
 
--- ─── ORDERS TABLE ────────────────────────────────────────────
-create table if not exists public.orders (
-  id                     bigint generated always as identity primary key,
-  order_number           text not null unique,
-  customer_id            bigint not null references public.customers (id) on delete restrict,
-  order_type             text not null default 'walk-in' check (order_type in ('walk-in', 'on-call')),
-  preference             text,
-  preference_notes       text,
-  status                 text not null default 'Laundry In Progress'
-                         check (status in ('Laundry In Progress', 'Ready', 'In Part', 'Completed', 'Cancelled', 'Pending')),
-  total_amount           numeric(10,2) not null default 0.00 check (total_amount >= 0),
-  notes                  text,
-  created_at             timestamptz not null default now(),
-  updated_at             timestamptz not null default now()
-);
+  UPDATE public.customer_works
+  SET
+    advance_paid = v_total_paid,
+    payment_status = v_new_status,
+    updated_at = NOW()
+  WHERE work_id = v_work_id;
 
-create index if not exists idx_orders_customer_id on public.orders (customer_id);
-create index if not exists idx_orders_created_at on public.orders (created_at desc);
-
--- ─── UPDATED_AT TRIGGER ──────────────────────────────────────
-create or replace function public.set_updated_at()
-returns trigger language plpgsql as $$
-begin
-  new.updated_at := now();
-  return new;
-end;
+  RETURN NEW;
+END;
 $$;
 
-create or replace trigger trg_customers_updated_at
-  before update on public.customers
-  for each row execute function public.set_updated_at();
+DROP TRIGGER IF EXISTS trg_sync_payment_ledger_to_work ON public.washdoor_payment_ledger;
+CREATE TRIGGER trg_sync_payment_ledger_to_work
+  AFTER INSERT OR UPDATE OR DELETE ON public.washdoor_payment_ledger
+  FOR EACH ROW EXECUTE FUNCTION public.fn_sync_ledger_to_order();
 
-create or replace trigger trg_orders_updated_at
-  before update on public.orders
-  for each row execute function public.set_updated_at();
-
--- ─── ORDER NUMBER GENERATOR SEQUENCE ─────────────────────────
-create sequence if not exists order_number_seq start 112016;
-
-create or replace function public.generate_order_number()
-returns text language plpgsql as $$
-begin
-  return 'WD-' || nextval('order_number_seq')::text;
-end;
+-- 8.3 Live Status Actions Auto-Sync: Synchronizes latest milestone to customer_works.work_status
+CREATE OR REPLACE FUNCTION public.fn_sync_live_status_to_order()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  IF NEW.stage = 'Processing' THEN
+    UPDATE public.customer_works
+    SET work_status = 'In Progress', updated_at = NOW()
+    WHERE work_id = NEW.work_id;
+  ELSIF NEW.stage = 'Delivery' AND NEW.action_code = 'DELIVERED_SUCCESS' THEN
+    UPDATE public.customer_works
+    SET work_status = 'Delivered', delivered_at = NOW(), updated_at = NOW()
+    WHERE work_id = NEW.work_id;
+  END IF;
+  RETURN NEW;
+END;
 $$;
 
--- ─── TRANSACTIONAL RPC: create_order_with_customer ───────────
--- Executes customer insertion/validation + order creation atomically.
-create or replace function public.create_order_with_customer(
-  p_customer_name          text,
-  p_mobile_number          varchar(10),
-  p_alternate_phone        varchar(10)  default null,
-  p_address                text         default null,
-  p_city                   text         default null,
-  p_pincode                varchar(6)   default null,
-  p_date_of_birth          date         default null,
-  p_map_link               text         default null,
-  p_email                  text         default null,
-  p_gst_number             text         default null,
-  p_company_name           text         default null,
-  p_tax_exemption          boolean      default false,
-  p_notes                  text         default null,
-  p_communication_pref     text         default 'sms',
-  p_communication_lang     text         default 'en',
-  p_dnd                    boolean      default false,
-  p_internal_comments      text         default null,
-  p_default_discount       numeric      default 0.00,
-  p_referral_code          text         default null,
-  p_marketing_source       text         default null,
-  p_membership_id          text         default null,
-  p_customer_classification text        default 'regular',
-  p_customer_status        text         default 'active',
-  p_price_list             text         default 'standard',
-  p_service_zone           text         default 'zone-1',
-  p_credit_limit           numeric      default 0.00,
-  p_anniversary_date       date         default null,
-  p_special_occasion       text         default null,
-  p_special_occasion_date  date         default null,
-  p_order_type             text         default 'walk-in',
-  p_order_preference       text         default null,
-  p_order_preference_notes text         default null,
-  p_total_amount           numeric      default 0.00,
-  p_customer_id            bigint       default null
+DROP TRIGGER IF EXISTS trg_sync_live_action_to_work ON public.washdoor_live_status_actions;
+CREATE TRIGGER trg_sync_live_action_to_work
+  AFTER INSERT ON public.washdoor_live_status_actions
+  FOR EACH ROW EXECUTE FUNCTION public.fn_sync_live_status_to_order();
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- 9. ATOMIC RPC FUNCTION: CONCURRENCY-SAFE WALLET TRANSACTION
+-- ──────────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.process_wallet_transaction(
+  p_customer_id       VARCHAR(50),
+  p_txn_type          VARCHAR(20),
+  p_amount            NUMERIC(10,2),
+  p_reference_work_id UUID DEFAULT NULL,
+  p_notes             TEXT DEFAULT NULL
 )
-returns jsonb
-language plpgsql
-security definer
-as $$
-declare
-  v_customer_id   bigint;
-  v_order_id      bigint;
-  v_order_number  text;
-begin
-  -- Resolve or Insert Customer
-  if p_customer_id is not null then
-    v_customer_id := p_customer_id;
-  else
-    insert into public.customers (
-      customer_name, mobile_number, alternate_phone,
-      address, city, pincode, date_of_birth, map_link,
-      email, gst_number, company_name, tax_exemption, notes,
-      communication_pref, communication_lang, dnd, internal_comments,
-      default_discount, referral_code, marketing_source, membership_id,
-      customer_classification, customer_status, price_list, service_zone,
-      credit_limit, anniversary_date, special_occasion, special_occasion_date
-    ) values (
-      p_customer_name, p_mobile_number, p_alternate_phone,
-      p_address, p_city, p_pincode, p_date_of_birth, p_map_link,
-      p_email, p_gst_number, p_company_name, p_tax_exemption, p_notes,
-      coalesce(p_communication_pref, 'sms'), coalesce(p_communication_lang, 'en'),
-      coalesce(p_dnd, false), p_internal_comments,
-      coalesce(p_default_discount, 0.00), p_referral_code, p_marketing_source, p_membership_id,
-      coalesce(p_customer_classification, 'regular'), coalesce(p_customer_status, 'active'),
-      coalesce(p_price_list, 'standard'), coalesce(p_service_zone, 'zone-1'),
-      coalesce(p_credit_limit, 0.00), p_anniversary_date, p_special_occasion, p_special_occasion_date
-    )
-    returning id into v_customer_id;
-  end if;
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_wallet            RECORD;
+  v_balance_before    NUMERIC(10,2);
+  v_balance_after     NUMERIC(10,2);
+  v_wallet_txn_id     UUID;
+BEGIN
+  IF p_amount <= 0 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Transaction amount must be strictly greater than 0.');
+  END IF;
 
-  -- Generate order number
-  v_order_number := public.generate_order_number();
+  -- Row lock to prevent race conditions
+  SELECT * INTO v_wallet
+  FROM public.washdoor_wallets
+  WHERE customer_id = p_customer_id
+  FOR UPDATE;
 
-  -- Insert Order
-  insert into public.orders (
-    order_number,
-    customer_id,
-    order_type,
-    preference,
-    preference_notes,
-    status,
-    total_amount,
-    notes
-  ) values (
-    v_order_number,
-    v_customer_id,
-    p_order_type,
-    p_order_preference,
-    p_order_preference_notes,
-    'Laundry In Progress',
-    coalesce(p_total_amount, 0.00),
-    p_order_preference_notes
-  )
-  returning id into v_order_id;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Wallet not found for customer.');
+  END IF;
 
-  return jsonb_build_object(
-    'order_id',     v_order_id,
-    'order_number', v_order_number,
-    'customer_id',  v_customer_id,
-    'status',       'success'
+  IF v_wallet.is_frozen THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Wallet is frozen: ' || COALESCE(v_wallet.freeze_reason, 'Admin restriction.'));
+  END IF;
+
+  v_balance_before := v_wallet.current_balance;
+
+  IF p_txn_type IN ('Order_Debit') THEN
+    IF (v_balance_before + v_wallet.credit_limit) < p_amount THEN
+      RETURN jsonb_build_object('success', false, 'error', 'Insufficient wallet balance and credit limit.');
+    END IF;
+    v_balance_after := v_balance_before - p_amount;
+  ELSIF p_txn_type IN ('Top_Up', 'Refund_Credit', 'Cashback') THEN
+    v_balance_after := v_balance_before + p_amount;
+  ELSIF p_txn_type = 'Manual_Adjustment' THEN
+    v_balance_after := v_balance_before + p_amount;
+  ELSE
+    RETURN jsonb_build_object('success', false, 'error', 'Invalid transaction type.');
+  END IF;
+
+  -- Update master balance
+  UPDATE public.washdoor_wallets
+  SET
+    current_balance = v_balance_after,
+    last_transaction_at = NOW(),
+    updated_at = NOW()
+  WHERE wallet_id = v_wallet.wallet_id;
+
+  -- Insert immutable transaction ledger
+  INSERT INTO public.washdoor_wallet_transactions (
+    wallet_id, customer_id, txn_type, amount, balance_before, balance_after, reference_order_id, notes, performed_by
+  ) VALUES (
+    v_wallet.wallet_id, p_customer_id, p_txn_type, p_amount, v_balance_before, v_balance_after, p_reference_work_id, p_notes, auth.uid()
+  ) RETURNING wallet_txn_id INTO v_wallet_txn_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'wallet_txn_id', v_wallet_txn_id,
+    'balance_before', v_balance_before,
+    'balance_after', v_balance_after
   );
-end;
+END;
 $$;
 
--- ─── ROW LEVEL SECURITY ──────────────────────────────────────
-alter table public.customers enable row level security;
-alter table public.orders enable row level security;
+-- ──────────────────────────────────────────────────────────────────────────────
+-- 10. ROW LEVEL SECURITY (RLS) POLICIES
+-- ──────────────────────────────────────────────────────────────────────────────
+ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.customer_works ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.washdoor_payment_gateway_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.washdoor_inspection_categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.washdoor_driver_schedules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.washdoor_status_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.washdoor_payment_ledger ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.washdoor_wallets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.washdoor_wallet_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.washdoor_wallet_customer_monitor ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.washdoor_driver_assignments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.washdoor_live_status_actions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.washdoor_garment_cards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.washdoor_garment_inspections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.washdoor_garment_photos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.washdoor_customer_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.washdoor_order_notes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.washdoor_audit_logs ENABLE ROW LEVEL SECURITY;
 
--- Policies for anon access (ideal for POS counter apps)
-create policy "allow_all_customers_anon" on public.customers
-  for all using (true) with check (true);
+-- Allow all authenticated and counter-POS staff operations
+CREATE POLICY "allow_all_counter_customers" ON public.customers FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all_counter_customer_works" ON public.customer_works FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all_counter_inspection_categories" ON public.washdoor_inspection_categories FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all_counter_driver_schedules" ON public.washdoor_driver_schedules FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all_counter_status_history" ON public.washdoor_status_history FOR SELECT USING (true);
+CREATE POLICY "allow_insert_status_history" ON public.washdoor_status_history FOR INSERT WITH CHECK (true);
+CREATE POLICY "allow_all_counter_payment_ledger" ON public.washdoor_payment_ledger FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all_counter_wallets" ON public.washdoor_wallets FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all_counter_wallet_txns" ON public.washdoor_wallet_transactions FOR SELECT USING (true);
+CREATE POLICY "allow_insert_wallet_txns" ON public.washdoor_wallet_transactions FOR INSERT WITH CHECK (true);
+CREATE POLICY "allow_all_counter_garment_cards" ON public.washdoor_garment_cards FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all_counter_live_status_actions" ON public.washdoor_live_status_actions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all_counter_driver_assignments" ON public.washdoor_driver_assignments FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all_counter_garment_inspections" ON public.washdoor_garment_inspections FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all_counter_garment_photos" ON public.washdoor_garment_photos FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all_counter_customer_messages" ON public.washdoor_customer_messages FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all_counter_order_notes" ON public.washdoor_order_notes FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all_counter_audit_logs" ON public.washdoor_audit_logs FOR SELECT USING (true);
+CREATE POLICY "allow_insert_audit_logs" ON public.washdoor_audit_logs FOR INSERT WITH CHECK (true);
 
-create policy "allow_all_orders_anon" on public.orders
-  for all using (true) with check (true);
-
--- Grant RPC execution
-grant execute on function public.create_order_with_customer to anon, authenticated;
-grant execute on function public.generate_order_number to anon, authenticated;
-grant usage, select on sequence order_number_seq to anon, authenticated;
-
--- ─── SEED SAMPLE DATA (Master Customers CUST-0001 to CUST-0010) ────
-insert into public.customers (
-  customer_code, customer_name, mobile_number, address, city, pincode,
-  intake_type, communication_pref, preferred_language, dnd, internal_comments,
-  default_discount_pct, referral_code, marketing_source, membership_id,
-  customer_classification, status, price_list, area_service_zone, credit_limit,
-  email, alternate_phone, gst_number, company_name, date_of_birth, anniversary_date,
-  special_occasion, special_occasion_date, notes, tier, wallet_balance
-) values
-  ('CUST-0001', 'Vijay Kumar', '9876543210', 'Anna Nagar', 'Vellore', '632001',
-   'Walk-In', 'whatsapp', 'ta', false, 'Regular customer', 5.0, 'REF-001', 'Walk-in', 'MEM-0001',
-   'Regular Customer', 'Active', 'Standard', 'Zone 1', 0, 'vijay@example.com', null, null, null, null, null, null, null, null, 'PLATINUM ELITE', 1500.00),
-  ('CUST-0002', 'Pooja Sharma', '9876543211', 'Gandhi Nagar', 'Vellore', '632006',
-   'On-Call', 'sms', 'en', false, 'Pickup requested', 2.0, null, 'Google', null,
-   'Regular Customer', 'Active', 'Standard', 'Zone 2', 0, 'pooja@example.com', '9876543212', null, null, '1998-07-12', '2026-02-14', 'Birthday', '1998-07-12', 'Prefers morning pickup', 'GOLD', 850.00),
-  ('CUST-0003', 'Arun Prakash', '9876543213', 'Katpadi', 'Vellore', '632007',
-   'Walk-In', 'none', 'en', true, 'Do not send promotional messages', 0.0, null, 'Referral', 'MEM-0003',
-   'VIP Customer', 'Active', 'Premium', 'Zone 1', 0, 'arun@example.com', null, null, null, null, null, null, null, 'VIP customer', 'PLATINUM ELITE', 3200.00),
-  ('CUST-0004', 'Lakshmi Devi', '9876543214', 'Sathuvachari', 'Vellore', '632009',
-   'On-Call', 'phone', 'ta', false, 'Call before delivery', 3.0, 'REF-004', 'WhatsApp', null,
-   'Regular Customer', 'Active', 'Standard', 'Zone 2', 0, 'lakshmi@example.com', null, null, null, null, null, null, null, 'Evening delivery preferred', 'SILVER', 420.00),
-  ('CUST-0005', 'Ramesh Enterprises', '9876543215', 'New Bypass Road', 'Vellore', '632004',
-   'On-Call', 'email', 'en', false, 'Corporate account', 10.0, null, 'Advertisement', 'MEM-0005',
-   'Corporate Customer', 'Active', 'Corporate', 'Zone 3', 25000.00, 'accounts@example.com', null, '33ABCDE1234F1Z5', 'Ramesh Enterprises', null, null, null, null, 'Credit limit requires authorized approval', 'CORPORATE', 0.00),
-  ('CUST-0006', 'Divya Suresh', '9876543216', 'Bagayam', 'Vellore', '632002',
-   'Walk-In', 'whatsapp', 'te', false, 'New customer', 0.0, null, 'Social media', null,
-   'Regular Customer', 'Active', 'Standard', 'Zone 1', 0, 'divya@example.com', null, null, null, null, null, null, null, 'First visit promo applied', 'SILVER', 0.00),
-  ('CUST-0007', 'Suresh Babu', '9876543217', 'Thorapadi', 'Vellore', '632002',
-   'On-Call', 'sms', 'ta', false, 'Prefers weekend delivery', 0.0, 'REF-007', 'Walk-in', null,
-   'Regular Customer', 'Active', 'Standard', 'Zone 2', 0, 'suresh@example.com', null, null, null, null, null, null, null, 'Weekend orders only', 'SILVER', 150.00),
-  ('CUST-0008', 'Meena Raj', '9876543218', 'Otteri', 'Vellore', '632002',
-   'Walk-In', 'whatsapp', 'ta', false, 'Staff discount eligible', 5.0, null, 'Referral', 'MEM-0008',
-   'VIP Customer', 'Active', 'Premium', 'Zone 1', 0, 'meena@example.com', null, null, null, null, null, null, null, 'Express service preferred', 'GOLD', 1100.00),
-  ('CUST-0009', 'Karthik Rajan', '9876543219', 'Saidapet', 'Vellore', '632012',
-   'On-Call', 'phone', 'ta', false, 'Door delivery required', 0.0, null, 'Google', null,
-   'Regular Customer', 'Active', 'Standard', 'Zone 3', 0, 'karthik@example.com', '9876543221', null, null, null, null, null, null, 'Call before coming', 'SILVER', 0.00),
-  ('CUST-0010', 'Priya Natarajan', '9876543220', 'Shenbakkam', 'Vellore', '632008',
-   'Walk-In', 'whatsapp', 'en', false, 'Loyalty member', 7.5, 'REF-010', 'WhatsApp', 'MEM-0010',
-   'VIP Customer', 'Active', 'Premium', 'Zone 1', 0, 'priya@example.com', null, null, null, '1995-11-20', '2025-05-18', 'Anniversary', '2025-05-18', 'Handle silk garments with care', 'PLATINUM ELITE', 2450.00)
-on conflict (mobile_number) do nothing;
-
-insert into public.orders (
-  order_number, customer_id, order_type, status, total_amount
-)
-select 'WD-112016', id, 'walk-in', 'Laundry In Progress', 450.00
-from public.customers where mobile_number = '9876543210'
-on conflict (order_number) do nothing;
-
-insert into public.orders (
-  order_number, customer_id, order_type, status, total_amount
-)
-select 'WD-112015', id, 'on-call', 'Laundry In Progress', 740.00
-from public.customers where mobile_number = '9876543211'
-on conflict (order_number) do nothing;
-
-insert into public.orders (
-  order_number, customer_id, order_type, status, total_amount
-)
-select 'WD-112013', id, 'walk-in', 'Ready', 378.00
-from public.customers where mobile_number = '9876543213'
-on conflict (order_number) do nothing;
-
-insert into public.orders (
-  order_number, customer_id, order_type, status, total_amount
-)
-select 'WD-112014', id, 'on-call', 'Ready', 147.00
-from public.customers where mobile_number = '9876543214'
-on conflict (order_number) do nothing;
-
-insert into public.orders (
-  order_number, customer_id, order_type, status, total_amount
-)
-select 'WD-112012', id, 'on-call', 'In Part', 1850.00
-from public.customers where mobile_number = '9876543215'
-on conflict (order_number) do nothing;
+-- ──────────────────────────────────────────────────────────────────────────────
+-- 11. GRANTS
+-- ──────────────────────────────────────────────────────────────────────────────
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.process_wallet_transaction TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.generate_order_number TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.generate_customer_number TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.generate_payment_number TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.generate_message_number TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.generate_note_number TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.generate_audit_number TO anon, authenticated, service_role;

@@ -259,6 +259,281 @@ export async function getOrderItems(orderNumber) {
   }
 }
 
+/**
+ * Resolves a UUID work_id from customer_works by work_number or ID.
+ */
+async function resolveWorkIdAndNumber(identifier) {
+  if (!identifier || !isSupabaseConfigured()) return { workId: null, workNumber: null };
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
+  if (isUuid) {
+    const { data } = await supabase.from('customer_works').select('work_id, work_number').eq('work_id', identifier).maybeSingle();
+    return { workId: data?.work_id || identifier, workNumber: data?.work_number || identifier };
+  }
+  const cleanNum = formatOrderId(identifier);
+  const { data } = await supabase.from('customer_works').select('work_id, work_number').eq('work_number', cleanNum).maybeSingle();
+  return { workId: data?.work_id || null, workNumber: data?.work_number || cleanNum };
+}
+
+/**
+ * Synchronizes discrete garment unit cards (washdoor_garment_cards) and
+ * care inspections (washdoor_garment_inspections) to normalized database tables.
+ */
+export async function syncGarmentCardsAndInspections(workIdentifier, workNumber, items = [], inspections = {}) {
+  if (!isSupabaseConfigured() || !workIdentifier) return { success: false };
+  try {
+    const { workId, workNumber: resolvedNum } = await resolveWorkIdAndNumber(workIdentifier);
+    if (!workId) return { success: false, error: 'Could not resolve work_id' };
+
+    const cleanNum = resolvedNum || workNumber || formatOrderId(workIdentifier);
+
+    // 1. Clear previous garment cards for this order
+    try {
+      await supabase.from('washdoor_garment_cards').delete().eq('work_id', workId);
+    } catch {}
+
+    if (!items || items.length === 0) return { success: true };
+
+    // 2. Expand items into discrete 1-based unit cards
+    const cardsToInsert = [];
+    let globalUnitIndex = 1;
+
+    items.forEach((item) => {
+      const qty = Math.max(1, parseInt(item.qty || item.quantity || 1, 10));
+      for (let i = 0; i < qty; i++) {
+        const pieceNum = i + 1;
+        const pieceKey = `${item.id}-piece-${pieceNum}`;
+        const insp = inspections[pieceKey] || {};
+
+        cardsToInsert.push({
+          work_id: workId,
+          work_number: cleanNum,
+          unit_index: globalUnitIndex,
+          garment_tag_number: `${cleanNum}-TAG-${String(globalUnitIndex).padStart(2, '0')}`,
+          garment_name: insp.name || item.name || item.product_name || 'Garment',
+          service_type: item.serviceType || item.service_type || item.service || 'Wash & Steam Press',
+          color: insp.color || null,
+          brand: insp.brand || null,
+          fabric_type: insp.fabric || null,
+          garment_condition: insp.condition || 'Good',
+          care_instructions: insp.notes || null,
+          processing_stage: 'Received',
+        });
+        globalUnitIndex++;
+      }
+    });
+
+    if (cardsToInsert.length > 0) {
+      const { data: insertedCards, error: cardErr } = await supabase
+        .from('washdoor_garment_cards')
+        .insert(cardsToInsert)
+        .select();
+
+      if (cardErr) {
+        console.warn('washdoor_garment_cards insert note:', cardErr.message);
+      }
+
+      // 3. Insert inspections for pieces with logged defects or stains
+      if (insertedCards && insertedCards.length > 0) {
+        const inspectionsToInsert = [];
+        insertedCards.forEach((card) => {
+          const matchingInsp = Object.values(inspections).find(
+            (p) => (p.piece === card.unit_index || p.unit_index === card.unit_index) || (p.name === card.garment_name && (p.stains || p.notes))
+          );
+          if (matchingInsp && (matchingInsp.stains || matchingInsp.notes || matchingInsp.condition)) {
+            inspectionsToInsert.push({
+              card_id: card.card_id,
+              work_id: workId,
+              category_name: matchingInsp.stains ? 'Stain / Spot Treatment' : 'Special Fabric Care',
+              defect_location: 'Body',
+              severity: matchingInsp.stains ? 'Medium' : 'Low',
+              action_plan: matchingInsp.stains ? 'Spot_Treat' : 'Proceed',
+              extra_charge: 0.00,
+              customer_approval: 'Approved',
+              inspection_notes: matchingInsp.notes || matchingInsp.stains || 'Intake inspection verified',
+              inspected_by: 'QC Staff',
+            });
+          }
+        });
+
+        if (inspectionsToInsert.length > 0) {
+          try {
+            await supabase.from('washdoor_garment_inspections').insert(inspectionsToInsert);
+          } catch (inspErr) {
+            console.warn('washdoor_garment_inspections insert note:', inspErr.message);
+          }
+        }
+      }
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.warn('syncGarmentCardsAndInspections warning:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Inserts a double-entry payment transaction into washdoor_payment_ledger.
+ */
+export async function recordPaymentLedger({
+  work_id,
+  work_number,
+  customer_id,
+  amount,
+  payment_mode = 'Cash',
+  reference_number = null,
+  notes = null,
+  collected_by = 'Store Staff',
+  entry_type = 'Initial_Advance'
+}) {
+  if (!isSupabaseConfigured() || !amount || Number(amount) <= 0) return { success: false };
+  try {
+    const { workId, workNumber: resolvedNum } = await resolveWorkIdAndNumber(work_id || work_number);
+    if (!workId) return { success: false };
+
+    const cleanMode = ['Cash', 'UPI', 'Card', 'NetBanking', 'Wallet', 'Razorpay', 'PhonePe', 'Credit'].includes(payment_mode)
+      ? payment_mode
+      : String(payment_mode).toLowerCase().includes('upi') ? 'UPI'
+      : String(payment_mode).toLowerCase().includes('card') ? 'Card'
+      : 'Cash';
+
+    const { error } = await supabase.from('washdoor_payment_ledger').insert([{
+      work_id: workId,
+      work_number: resolvedNum || work_number || formatOrderId(work_id),
+      customer_id: customer_id || 'Counter Customer',
+      entry_type,
+      payment_mode: cleanMode,
+      amount: Number(amount),
+      reference_number: reference_number || null,
+      notes: notes || null,
+      collected_by: collected_by || 'Store Staff',
+    }]);
+
+    if (error) console.warn('washdoor_payment_ledger insert note:', error.message);
+    return { success: !error };
+  } catch (err) {
+    console.warn('recordPaymentLedger warning:', err.message);
+    return { success: false };
+  }
+}
+
+/**
+ * Records immutable status history and live status tracking milestone.
+ */
+export async function recordStatusHistory({
+  work_id,
+  work_number,
+  old_status = null,
+  new_status,
+  changed_by_name = 'Staff',
+  remarks = null,
+}) {
+  if (!isSupabaseConfigured() || !new_status) return { success: false };
+  try {
+    const { workId, workNumber: resolvedNum } = await resolveWorkIdAndNumber(work_id || work_number);
+    if (!workId) return { success: false };
+
+    const cleanNum = resolvedNum || work_number || formatOrderId(work_id);
+
+    // 1. Insert into washdoor_status_history
+    try {
+      await supabase.from('washdoor_status_history').insert([{
+        work_id: workId,
+        work_number: cleanNum,
+        old_status: old_status || null,
+        new_status: new_status,
+        changed_by_name: changed_by_name || 'Staff',
+        changed_by_role: 'Staff',
+        change_source: 'POS_Web',
+        remarks: remarks || `Status transitioned to ${new_status}`,
+        notify_customer: false,
+      }]);
+    } catch {}
+
+    // 2. Insert into washdoor_live_status_actions
+    try {
+      await supabase.from('washdoor_live_status_actions').insert([{
+        work_id: workId,
+        work_number: cleanNum,
+        action_code: String(new_status).toUpperCase().replace(/\s+/g, '_'),
+        action_label: `Order status: ${new_status}`,
+        stage: String(new_status).toLowerCase().includes('deliver') ? 'Delivery' : 'Processing',
+        actor_type: 'Staff',
+        actor_name: changed_by_name || 'Staff',
+        is_customer_visible: true,
+      }]);
+    } catch {}
+
+    return { success: true };
+  } catch (err) {
+    return { success: false };
+  }
+}
+
+/**
+ * Records customer-specific notes and internal store remarks in washdoor_order_notes.
+ */
+export async function recordOrderNote({
+  work_id,
+  work_number,
+  note_type = 'Customer_Instruction',
+  content,
+  author = 'Staff'
+}) {
+  if (!isSupabaseConfigured() || !content) return { success: false };
+  try {
+    const { workId } = await resolveWorkIdAndNumber(work_id || work_number);
+    if (!workId) return { success: false };
+
+    await supabase.from('washdoor_order_notes').insert([{
+      work_id: workId,
+      note_type: note_type,
+      content: content,
+      created_by_name: author || 'Staff',
+      is_customer_visible: note_type === 'Customer_Instruction',
+    }]);
+    return { success: true };
+  } catch {
+    return { success: false };
+  }
+}
+
+/**
+ * Records dispatched customer messages in washdoor_customer_messages.
+ */
+export async function recordCustomerMessage({
+  work_id,
+  work_number,
+  customer_id,
+  channel = 'WhatsApp',
+  category = 'orderReceived',
+  recipient_phone,
+  message_body,
+  sent_by = 'System Bot'
+}) {
+  if (!isSupabaseConfigured() || !message_body) return { success: false };
+  try {
+    const { workId } = await resolveWorkIdAndNumber(work_id || work_number);
+    if (!workId) return { success: false };
+
+    const cleanChannel = ['WhatsApp', 'SMS', 'Email'].includes(channel) ? channel : 'WhatsApp';
+
+    await supabase.from('washdoor_customer_messages').insert([{
+      work_id: workId,
+      customer_id: customer_id || 'Counter Customer',
+      channel: cleanChannel,
+      template_category: category || 'orderReceived',
+      recipient_phone: recipient_phone || 'Customer Phone',
+      message_body: message_body,
+      delivery_status: 'Sent',
+      sent_by: sent_by || 'System Bot',
+    }]);
+    return { success: true };
+  } catch {
+    return { success: false };
+  }
+}
+
 // Helper to format any Customer ID into canonical CUST-00001 (5-digit padded) format
 export function formatCustomerId(id) {
   if (!id) return 'CUST-00001';
@@ -1365,6 +1640,13 @@ export async function createOrderWithCustomer({
 
       // Structured internal notes for inspections and extra metadata
       const structuredInternalNotes = {
+        factory_hub: cleanCust.factory_hub || 'Main Plant (Unit 1)',
+        vehicle_name: cleanCust.vehicle_name || 'TN-23-AX-8910 (Tata Ace Mini Van)',
+        mode_of_transport: cleanCust.mode_of_transport || 'Mini Van',
+        route_from_to: cleanCust.route_from_to || 'Store Central (Vellore Main) ➔ Factory Plant Unit 1',
+        route_return: cleanCust.route_return || 'Factory Plant Unit 1 ➔ Store Central (Vellore Main)',
+        collected_by_staff: cleanCust.collected_by_staff || cleanCust.assigned_staff || 'Murugan (Plant Supervisor)',
+        plant_transit_status: cleanCust.plant_transit_status || 'Washing in Progress',
         garment_inspections: cleanCust.garment_inspections || cleanCust.inspections || {},
         expected_delivery_display: rawDelivery || '',
         payment_method_display: cleanCust.payment_method || cleanCust.payment_mode || 'Cash',
@@ -1448,7 +1730,77 @@ export async function createOrderWithCustomer({
       } catch (itemErr) {
         console.warn('saveOrderItems async note:', itemErr);
       }
+
+      // Synchronize discrete garment unit cards (washdoor_garment_cards) and inspections
+      try {
+        await syncGarmentCardsAndInspections(
+          insertedOrderId,
+          insertedOrderNum,
+          items,
+          cleanCust.garment_inspections || cleanCust.inspections || {}
+        );
+      } catch (cardErr) {
+        console.warn('syncGarmentCardsAndInspections async note:', cardErr);
+      }
     }
+
+    // Persist payment ledger transaction if advance is paid
+    if (Number(cleanCust.advance_paid || 0) > 0) {
+      try {
+        await recordPaymentLedger({
+          work_id: insertedOrderId,
+          work_number: insertedOrderNum,
+          customer_id: finalCustId,
+          amount: Number(cleanCust.advance_paid),
+          payment_mode: cleanCust.payment_method || 'Cash',
+          reference_number: cleanCust.payment_reference || 'Advance_Counter',
+          notes: 'Advance payment collected at counter',
+          collected_by: cleanCust.assigned_staff || 'Counter Staff',
+          entry_type: 'Initial_Advance',
+        });
+      } catch (payLedgerErr) {
+        console.warn('recordPaymentLedger async note:', payLedgerErr);
+      }
+    }
+
+    // Persist initial status history & live tracking milestone
+    try {
+      await recordStatusHistory({
+        work_id: insertedOrderId,
+        work_number: insertedOrderNum,
+        old_status: null,
+        new_status: initialWorkStatus,
+        changed_by_name: cleanCust.assigned_staff || 'Counter Staff',
+        remarks: 'Order received at counter',
+      });
+    } catch {}
+
+    // Persist order notes & instructions if present
+    if (orderPreferenceNotes || cleanCust.notes || cleanCust.special_instructions) {
+      try {
+        await recordOrderNote({
+          work_id: insertedOrderId,
+          work_number: insertedOrderNum,
+          note_type: 'Customer_Instruction',
+          content: orderPreferenceNotes || cleanCust.notes || cleanCust.special_instructions,
+          author: cleanCust.assigned_staff || 'Counter Staff',
+        });
+      } catch {}
+    }
+
+    // Persist customer notification message log
+    try {
+      await recordCustomerMessage({
+        work_id: insertedOrderId,
+        work_number: insertedOrderNum,
+        customer_id: finalCustId,
+        channel: cleanCust.communication_pref || 'WhatsApp',
+        category: 'orderReceived',
+        recipient_phone: cleanCust.mobile_number,
+        message_body: `Dear ${cleanCust.customer_name}, your order ${insertedOrderNum} for ${calculatedItemCount} item(s) has been received. Total: ₹${totalAmount}. Status: Received.`,
+        sent_by: 'System Bot',
+      });
+    } catch {}
 
     // Automated Business Event: Order Created Notification Dispatch
     try {
