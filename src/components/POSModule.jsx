@@ -763,9 +763,15 @@ export default function POSModule({
       advance_paid: advancePaid,
       balance_due: balanceDue,
       payment_status: paymentStatus,
-      assigned_driver: ord.assigned_driver || '',
+      assigned_driver: ord.assigned_driver || 'Ramesh Kumar (Route 4)',
       assigned_driver_full: ord.assigned_driver_full || '',
-      factory_hub: ord.factory_hub || 'Main Plant (Unit 1)',
+      factory_hub: ord.factory_hub || ord.factory_outlet || 'Factory Outlet Unit 1 (Main Processing Plant)',
+      factory_outlet: ord.factory_outlet || ord.factory_hub || 'Factory Outlet Unit 1 (Main Processing Plant)',
+      store_outlet: ord.store_outlet || 'Store Outlet #1 (Central Vellore Main)',
+      factory_manifest_no: ord.factory_manifest_no || (ord.order_number ? 'MF-' + ord.order_number.replace(/\D/g, '').padStart(5, '0') : 'MF-00108'),
+      factory_gate_in: ord.factory_gate_in || '',
+      factory_gate_out: ord.factory_gate_out || '',
+      factory_supervisor: ord.factory_supervisor || 'Murugan (Plant Supervisor)',
       vehicle_name: ord.vehicle_name || 'TN-23-AX-8910 (Tata Ace Mini Van)',
       mode_of_transport: ord.mode_of_transport || 'Van',
       route_from_to: ord.route_from_to || 'Store Central (Vellore Main) → Factory Plant Unit 1',
@@ -939,7 +945,13 @@ export default function POSModule({
         assignedStaff: editFormData.collected_by_staff || updatedOrder.assigned_driver,
         items: updatedOrder.items,
         garment_inspections: editInspections,
-        factory_hub: editFormData.factory_hub,
+        factory_hub: editFormData.factory_hub || editFormData.factory_outlet,
+        factory_outlet: editFormData.factory_outlet || editFormData.factory_hub,
+        store_outlet: editFormData.store_outlet,
+        factory_manifest_no: editFormData.factory_manifest_no,
+        factory_gate_in: editFormData.factory_gate_in,
+        factory_gate_out: editFormData.factory_gate_out,
+        factory_supervisor: editFormData.factory_supervisor,
         vehicle_name: editFormData.vehicle_name,
         mode_of_transport: editFormData.mode_of_transport,
         route_from_to: editFormData.route_from_to,
@@ -4145,152 +4157,214 @@ export default function POSModule({
                                           {editActiveTab === 'logistics' && (
                                             <div>
                                               {/* Subcard A: Factory Assignment & Routing */}
-                                              <div className="pos-edit-subcard">
-                                                <div className="pos-edit-subcard-title">
-                                                  <span>🏭</span>
-                                                  <span>Factory Assignment & Routing</span>
-                                                </div>
-                                                <div className="pos-edit-grid-3" style={{ marginBottom: '14px' }}>
-                                                  <div>
-                                                    <label className="pos-edit-label">
-                                                      Factory Plant / Processing Hub
-                                                    </label>
-                                                    <select
-                                                      className="pos-edit-field"
-                                                      value={editFormData.factory_hub || 'Main Plant (Unit 1)'}
-                                                      onChange={(e) => setEditFormData({ ...editFormData, factory_hub: e.target.value })}
-                                                    >
-                                                      <option value="Main Plant (Unit 1)">Main Plant (Unit 1) - Washer & Pressing</option>
-                                                      <option value="Express Plant (Unit 2)">Express Plant (Unit 2) - 24H Quick Turnaround</option>
-                                                      <option value="Central Dry Clean Hub">Central Dry Clean Hub - Delicate & Silk</option>
-                                                    </select>
-                                                  </div>
-                                                  <div>
-                                                    <label className="pos-edit-label">
-                                                      Bag Tag / Barcode Identifier
-                                                    </label>
-                                                    <div className="pos-edit-field" style={{ display: 'flex', alignItems: 'center', fontWeight: 700, gap: '6px' }}>
-                                                      <span>🏷</span>
-                                                      <span>BAG-{(editFormData.order_number || '00108').replace(/\D/g, '').padStart(5, '0')}</span>
-                                                    </div>
-                                                  </div>
-                                                  <div>
-                                                    <label className="pos-edit-label">
-                                                      Assigned Driver Name
-                                                    </label>
-                                                    <select
-                                                      className="pos-edit-field"
-                                                      value={editFormData.assigned_driver || 'Ramesh Kumar (Route 4)'}
-                                                      onChange={(e) => setEditFormData({ ...editFormData, assigned_driver: e.target.value })}
-                                                    >
-                                                      <option value="Ramesh Kumar (Route 4)">Ramesh Kumar (Route 4 - Downtown)</option>
-                                                      <option value="Suresh Babu (Route 2)">Suresh Babu (Route 2 - Residential)</option>
-                                                      <option value="Anand Raj (Express Transit)">Anand Raj (Express Transit)</option>
-                                                      <option value="Self Pickup">Counter Self-Pickup</option>
-                                                    </select>
-                                                  </div>
-                                                </div>
+                                               <div className="pos-edit-subcard">
+                                                 <div className="pos-edit-subcard-title">
+                                                   <span>🏭</span>
+                                                   <span>Factory Outlet Assignment &amp; Routing</span>
+                                                 </div>
 
-                                                <div className="pos-edit-grid-3" style={{ marginBottom: '14px' }}>
-                                                  <div>
-                                                    <label className="pos-edit-label">
-                                                      Vehicle Name & Reg. Number
-                                                    </label>
-                                                    <input
-                                                      type="text"
-                                                      className="pos-edit-field"
-                                                      value={editFormData.vehicle_name || 'TN-23-AX-8910 (Tata Ace Mini Van)'}
-                                                      onChange={(e) => setEditFormData({ ...editFormData, vehicle_name: e.target.value })}
-                                                      placeholder="e.g. TN-23-AX-8910 (Tata Ace)"
-                                                    />
-                                                  </div>
-                                                  <div>
-                                                    <label className="pos-edit-label">
-                                                      Mode of Transport
-                                                    </label>
-                                                    <select
-                                                      className="pos-edit-field"
-                                                      value={editFormData.mode_of_transport || 'Mini Van'}
-                                                      onChange={(e) => setEditFormData({ ...editFormData, mode_of_transport: e.target.value })}
-                                                    >
-                                                      <option value="Mini Van">Mini Van (Tata Ace / Omni)</option>
-                                                      <option value="Two-Wheeler (Bike)">Two-Wheeler (Bike / Scooter)</option>
-                                                      <option value="Electric Cargo">Electric Cargo 3-Wheeler</option>
-                                                      <option value="Auto Rickshaw">Auto Rickshaw</option>
-                                                      <option value="Heavy Carrier">Heavy Carrier Truck</option>
-                                                    </select>
-                                                  </div>
-                                                  <div>
-                                                    <label className="pos-edit-label">
-                                                      Laundry Collection (per kg)
-                                                    </label>
-                                                    <div style={{ position: 'relative' }}>
-                                                      <input
-                                                        type="number"
-                                                        step="0.1"
-                                                        min="0"
-                                                        className="pos-edit-field"
-                                                        value={editFormData.weight_kg !== undefined ? editFormData.weight_kg : 3.8}
-                                                        onChange={(e) => setEditFormData({ ...editFormData, weight_kg: Number(e.target.value) || 0 })}
-                                                      />
-                                                      <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '11px', color: '#64748b', fontWeight: 600 }}>kg</span>
-                                                    </div>
-                                                  </div>
-                                                </div>
+                                                 {/* Row 1: Outlets & Manifest Reference */}
+                                                 <div className="pos-edit-grid-3" style={{ marginBottom: '14px' }}>
+                                                   <div>
+                                                     <label className="pos-edit-label">
+                                                       Origin Store Outlet Branch
+                                                     </label>
+                                                     <select
+                                                       className="pos-edit-field"
+                                                       value={editFormData.store_outlet || 'Store Outlet #1 (Central Vellore Main)'}
+                                                       onChange={(e) => setEditFormData({ ...editFormData, store_outlet: e.target.value })}
+                                                     >
+                                                       <option value="Store Outlet #1 (Central Vellore Main)">Store Outlet #1 (Central Vellore Main)</option>
+                                                       <option value="Store Outlet #2 (Katpadi Junction Branch)">Store Outlet #2 (Katpadi Junction Branch)</option>
+                                                       <option value="Store Outlet #3 (Gandhi Nagar Branch)">Store Outlet #3 (Gandhi Nagar Branch)</option>
+                                                       <option value="Store Outlet #4 (Bagayam Counter)">Store Outlet #4 (Bagayam Counter)</option>
+                                                     </select>
+                                                   </div>
 
-                                                <div className="pos-edit-grid-2" style={{ marginBottom: '14px' }}>
-                                                  <div>
-                                                    <label className="pos-edit-label">
-                                                      Location Route (From ➔ TO)
-                                                    </label>
-                                                    <input
-                                                      type="text"
-                                                      className="pos-edit-field"
-                                                      value={editFormData.route_from_to || 'Store Central (Vellore Main) ➔ Factory Plant Unit 1'}
-                                                      onChange={(e) => setEditFormData({ ...editFormData, route_from_to: e.target.value })}
-                                                      placeholder="Store Central ➔ Factory Plant"
-                                                    />
-                                                  </div>
-                                                  <div>
-                                                    <label className="pos-edit-label">
-                                                      Return Route after Completed (TO ➔ FROM)
-                                                    </label>
-                                                    <input
-                                                      type="text"
-                                                      className="pos-edit-field"
-                                                      value={editFormData.route_return || 'Factory Plant Unit 1 ➔ Store Central (Vellore Main)'}
-                                                      onChange={(e) => setEditFormData({ ...editFormData, route_return: e.target.value })}
-                                                      placeholder="Factory Plant ➔ Store Central"
-                                                    />
-                                                  </div>
-                                                </div>
+                                                   <div>
+                                                     <label className="pos-edit-label">
+                                                       Destination Factory Outlet / Processing Plant
+                                                     </label>
+                                                     <select
+                                                       className="pos-edit-field"
+                                                       value={editFormData.factory_outlet || editFormData.factory_hub || 'Factory Outlet Unit 1 (Main Processing Plant)'}
+                                                       onChange={(e) => setEditFormData({ ...editFormData, factory_outlet: e.target.value, factory_hub: e.target.value })}
+                                                     >
+                                                       <option value="Factory Outlet Unit 1 (Main Processing Plant)">Factory Outlet Unit 1 (Main Processing Plant - Washer &amp; Pressing)</option>
+                                                       <option value="Factory Outlet Unit 2 (Express 24H Facility)">Factory Outlet Unit 2 (Express 24H Quick Turnaround Hub)</option>
+                                                       <option value="Factory Outlet Unit 3 (Central Dry Clean Facility)">Factory Outlet Unit 3 (Central Dry Clean &amp; Silk Delicate Facility)</option>
+                                                     </select>
+                                                   </div>
 
-                                                <div className="pos-edit-grid-2">
-                                                  <div>
-                                                    <label className="pos-edit-label">
-                                                      Order Received & Collected by Staff
-                                                    </label>
-                                                    <input
-                                                      type="text"
-                                                      className="pos-edit-field"
-                                                      value={editFormData.collected_by_staff || 'Murugan (Plant Supervisor)'}
-                                                      onChange={(e) => setEditFormData({ ...editFormData, collected_by_staff: e.target.value })}
-                                                      placeholder="Staff / Inspector name"
-                                                    />
-                                                  </div>
-                                                  <div>
-                                                    <label className="pos-edit-label">
-                                                      Intake & Transit Movement Timestamp
-                                                    </label>
-                                                    <div className="pos-edit-field" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                                                      <span>🕒</span>
-                                                      <span>{editFormData.captured_date || '2026-10-28'} {editFormData.captured_time || '10:15 AM'} (Dynamic Log Active)</span>
-                                                    </div>
-                                                  </div>
-                                                </div>
-                                              </div>
+                                                   <div>
+                                                     <label className="pos-edit-label">
+                                                       Factory Manifest / Batch Reference
+                                                     </label>
+                                                     <div className="pos-edit-field" style={{ display: 'flex', alignItems: 'center', fontWeight: 700, gap: '6px' }}>
+                                                       <span>📦</span>
+                                                       <span>{editFormData.factory_manifest_no || ('MF-' + (editFormData.order_number || '00108').replace(/\D/g, '').padStart(5, '0'))}</span>
+                                                       <span style={{ fontSize: '11px', color: '#64748b', marginLeft: 'auto' }}>
+                                                         [🏷 BAG-{(editFormData.order_number || '00108').replace(/\D/g, '').padStart(5, '0')}]
+                                                       </span>
+                                                     </div>
+                                                   </div>
+                                                 </div>
 
-                                              {/* Subcard B: Washing Progress Stepper */}
+                                                 {/* Row 2: Personnel & Timestamps */}
+                                                 <div className="pos-edit-grid-3" style={{ marginBottom: '14px' }}>
+                                                   <div>
+                                                     <label className="pos-edit-label">
+                                                       Factory Outlet Supervisor / Incharge
+                                                     </label>
+                                                     <input
+                                                       type="text"
+                                                       className="pos-edit-field"
+                                                       value={editFormData.factory_supervisor || 'Murugan (Plant Supervisor)'}
+                                                       onChange={(e) => setEditFormData({ ...editFormData, factory_supervisor: e.target.value })}
+                                                       placeholder="Factory Incharge name"
+                                                     />
+                                                   </div>
+
+                                                   <div>
+                                                     <label className="pos-edit-label">
+                                                       Store Outlet Collecting Staff
+                                                     </label>
+                                                     <input
+                                                       type="text"
+                                                       className="pos-edit-field"
+                                                       value={editFormData.collected_by_staff || 'Karthik (Store Executive)'}
+                                                       onChange={(e) => setEditFormData({ ...editFormData, collected_by_staff: e.target.value })}
+                                                       placeholder="Store Staff name"
+                                                     />
+                                                   </div>
+
+                                                   <div>
+                                                     <label className="pos-edit-label">
+                                                       Assigned Transit Driver
+                                                     </label>
+                                                     <select
+                                                       className="pos-edit-field"
+                                                       value={editFormData.assigned_driver || 'Ramesh Kumar (Route 4)'}
+                                                       onChange={(e) => setEditFormData({ ...editFormData, assigned_driver: e.target.value })}
+                                                     >
+                                                       <option value="Ramesh Kumar (Route 4)">Ramesh Kumar (Route 4 - Downtown)</option>
+                                                       <option value="Suresh Babu (Route 2)">Suresh Babu (Route 2 - Residential)</option>
+                                                       <option value="Anand Raj (Express Transit)">Anand Raj (Express Transit)</option>
+                                                       <option value="Self Pickup">Counter Self-Pickup</option>
+                                                     </select>
+                                                   </div>
+                                                 </div>
+
+                                                 {/* Row 3: Logistics & Vehicle Transport */}
+                                                 <div className="pos-edit-grid-3" style={{ marginBottom: '14px' }}>
+                                                   <div>
+                                                     <label className="pos-edit-label">
+                                                       Vehicle Name &amp; Reg. Number
+                                                     </label>
+                                                     <input
+                                                       type="text"
+                                                       className="pos-edit-field"
+                                                       value={editFormData.vehicle_name || 'TN-23-AX-8910 (Tata Ace Mini Van)'}
+                                                       onChange={(e) => setEditFormData({ ...editFormData, vehicle_name: e.target.value })}
+                                                       placeholder="e.g. TN-23-AX-8910 (Tata Ace)"
+                                                     />
+                                                   </div>
+
+                                                   <div>
+                                                     <label className="pos-edit-label">
+                                                       Mode of Transport
+                                                     </label>
+                                                     <select
+                                                       className="pos-edit-field"
+                                                       value={editFormData.mode_of_transport || 'Mini Van'}
+                                                       onChange={(e) => setEditFormData({ ...editFormData, mode_of_transport: e.target.value })}
+                                                     >
+                                                       <option value="Mini Van">Mini Van (Tata Ace / Omni)</option>
+                                                       <option value="Two-Wheeler (Bike)">Two-Wheeler (Bike / Scooter)</option>
+                                                       <option value="Electric Cargo">Electric Cargo 3-Wheeler</option>
+                                                       <option value="Auto Rickshaw">Auto Rickshaw</option>
+                                                       <option value="Heavy Carrier">Heavy Carrier Truck</option>
+                                                     </select>
+                                                   </div>
+
+                                                   <div>
+                                                     <label className="pos-edit-label">
+                                                       Laundry Collection Weight (per kg)
+                                                     </label>
+                                                     <div style={{ position: 'relative' }}>
+                                                       <input
+                                                         type="number"
+                                                         step="0.1"
+                                                         min="0"
+                                                         className="pos-edit-field"
+                                                         value={editFormData.weight_kg !== undefined ? editFormData.weight_kg : 3.8}
+                                                         onChange={(e) => setEditFormData({ ...editFormData, weight_kg: Number(e.target.value) || 0 })}
+                                                       />
+                                                       <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '11px', color: '#64748b', fontWeight: 600 }}>kg</span>
+                                                     </div>
+                                                   </div>
+                                                 </div>
+
+                                                 {/* Row 4: Route Locations */}
+                                                 <div className="pos-edit-grid-2" style={{ marginBottom: '14px' }}>
+                                                   <div>
+                                                     <label className="pos-edit-label">
+                                                       Forward Route (Store Outlet ➔ Factory Outlet)
+                                                     </label>
+                                                     <input
+                                                       type="text"
+                                                       className="pos-edit-field"
+                                                       value={editFormData.route_from_to || 'Store Outlet #1 (Central) ➔ Factory Outlet Unit 1'}
+                                                       onChange={(e) => setEditFormData({ ...editFormData, route_from_to: e.target.value })}
+                                                       placeholder="Store Outlet ➔ Factory Outlet"
+                                                     />
+                                                   </div>
+
+                                                   <div>
+                                                     <label className="pos-edit-label">
+                                                       Return Route after Completed (Factory Outlet ➔ Store Outlet)
+                                                     </label>
+                                                     <input
+                                                       type="text"
+                                                       className="pos-edit-field"
+                                                       value={editFormData.route_return || 'Factory Outlet Unit 1 ➔ Store Outlet #1 (Central)'}
+                                                       onChange={(e) => setEditFormData({ ...editFormData, route_return: e.target.value })}
+                                                       placeholder="Factory Outlet ➔ Store Outlet"
+                                                     />
+                                                   </div>
+                                                 </div>
+
+                                                 {/* Row 5: Gate Timestamps */}
+                                                 <div className="pos-edit-grid-2">
+                                                   <div>
+                                                     <label className="pos-edit-label">
+                                                       Factory Gate-In Time (Intake Timestamp)
+                                                     </label>
+                                                     <input
+                                                       type="text"
+                                                       className="pos-edit-field"
+                                                       value={editFormData.factory_gate_in || `${editFormData.captured_date || '2026-10-28'} ${editFormData.captured_time || '10:15 AM'}`}
+                                                       onChange={(e) => setEditFormData({ ...editFormData, factory_gate_in: e.target.value })}
+                                                       placeholder="Gate-In Timestamp"
+                                                     />
+                                                   </div>
+
+                                                   <div>
+                                                     <label className="pos-edit-label">
+                                                       Factory Gate-Out Time (Target Dispatch)
+                                                     </label>
+                                                     <input
+                                                       type="text"
+                                                       className="pos-edit-field"
+                                                       value={editFormData.factory_gate_out || editFormData.expected_delivery || '30 Oct 2026, 05:00 PM'}
+                                                       onChange={(e) => setEditFormData({ ...editFormData, factory_gate_out: e.target.value })}
+                                                       placeholder="Gate-Out Target Timestamp"
+                                                     />
+                                                   </div>
+                                                 </div>
+                                               </div>
+
+                                               {/* Subcard B: Washing Progress Stepper */}
                                               <div className="pos-edit-subcard">
                                                 <div className="pos-edit-subcard-title">
                                                   <span>🧺</span>
