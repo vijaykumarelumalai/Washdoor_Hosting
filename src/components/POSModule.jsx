@@ -2524,6 +2524,22 @@ export default function POSModule({
                           (editingOrderRecord.id === ord.id || editingOrderRecord.order_number === ord.order_number)
                         );
                         const isOrderReady = normalizeOrderStatus(ord.order_status || ord.status) === 'Ready';
+                        const isFactoryOrder = Boolean(
+                          ord.routing_type === 'factory' ||
+                          (ord.routing_type !== 'in_store' && (
+                            (ord.factory_outlet && !ord.factory_outlet.includes('In-Store') && !ord.factory_outlet.includes('Counter')) ||
+                            ord.factory_manifest_no ||
+                            (Array.isArray(ord.services_allocated) && ord.services_allocated.some(s => {
+                              const sName = (typeof s === 'string' ? s : s?.name || '').toLowerCase();
+                              return sName.includes('dry') || sName.includes('silk') || sName.includes('factory');
+                            })) ||
+                            (ord.items && ord.items.some(it => {
+                              const itName = (it.name || '').toLowerCase();
+                              const itSvc = (it.service || '').toLowerCase();
+                              return itSvc.includes('dry') || itName.includes('saree') || itName.includes('suit') || itName.includes('coat');
+                            }))
+                          ))
+                        );
 
                         return (
                           <React.Fragment key={ord.id || ord.order_number}>
@@ -2531,10 +2547,10 @@ export default function POSModule({
                               className={`pos-order-row ${isEditingThisOrder ? 'pos-order-row-editing' : ''}`}
                               style={isEditingThisOrder ? { background: '#f8fafc' } : {}}
                             >
-                            {/* 1. Order ID Column (Prominent ID, Walk-In/On-Call Badge directly below, date & time removed) */}
+                            {/* 1. Order ID Column (Prominent ID, Walk-In/On-Call Badge + Factory/In-Store Badge directly below) */}
                             {isColVisible('order_id') && (
                               <td className="col-order_id" style={{ borderLeft: isEditingThisOrder ? '4px solid #2563eb' : `4px solid ${accentColor}`, paddingLeft: '14px', verticalAlign: 'top', paddingTop: '14px' }}>
-                                <div className="pos-ticket-cell" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                <div className="pos-ticket-cell" style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                                   <span
                                     className="pos-ticket-num"
                                     onClick={() => setViewOrderTarget(ord)}
@@ -2543,27 +2559,66 @@ export default function POSModule({
                                   >
                                     {orderNum}
                                   </span>
-                                  <div style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '5px',
-                                    padding: '3px 8px',
-                                    borderRadius: '6px',
-                                    fontSize: '11.5px',
-                                    fontWeight: 650,
-                                    width: 'fit-content',
-                                    background: '#eff6ff',
-                                    color: '#2563eb',
-                                    border: '1px solid #dbeafe'
-                                  }}>
-                                    {isOnCall ? (
-                                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                                      </svg>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                    <div style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      padding: '2px 7px',
+                                      borderRadius: '5px',
+                                      fontSize: '11px',
+                                      fontWeight: 650,
+                                      width: 'fit-content',
+                                      background: '#eff6ff',
+                                      color: '#2563eb',
+                                      border: '1px solid #dbeafe'
+                                    }}>
+                                      {isOnCall ? (
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                                        </svg>
+                                      ) : (
+                                        <span style={{ fontSize: '11px', lineHeight: 1 }}>＋</span>
+                                      )}
+                                      <span>{orderTypeBadgeText}</span>
+                                    </div>
+                                    {isFactoryOrder ? (
+                                      <span
+                                        title={`Factory Order • Manifest: ${ord.factory_manifest_no || 'MF-' + orderNum.replace(/\D/g, '').padStart(5, '0')}`}
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '3px',
+                                          padding: '2px 6px',
+                                          borderRadius: '5px',
+                                          fontSize: '10.5px',
+                                          fontWeight: 700,
+                                          background: '#f5f3ff',
+                                          color: '#6d28d9',
+                                          border: '1px solid #ddd6fe'
+                                        }}
+                                      >
+                                        <span>🏭 Factory</span>
+                                      </span>
                                     ) : (
-                                      <span style={{ fontSize: '12px', lineHeight: 1 }}>＋</span>
+                                      <span
+                                        title="In-Store Processing (Counter / Workshop)"
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '3px',
+                                          padding: '2px 6px',
+                                          borderRadius: '5px',
+                                          fontSize: '10.5px',
+                                          fontWeight: 700,
+                                          background: '#f0fdf4',
+                                          color: '#15803d',
+                                          border: '1px solid #bbf7d0'
+                                        }}
+                                      >
+                                        <span>🏪 In-Store</span>
+                                      </span>
                                     )}
-                                    <span>{orderTypeBadgeText}</span>
                                   </div>
                                 </div>
                               </td>
@@ -4154,10 +4209,100 @@ export default function POSModule({
                                           )}
 
                                           {/* Tab 2: Laundry Processing & Factory */}
-                                          {editActiveTab === 'logistics' && (
+                                          {editActiveTab === 'logistics' && (() => {
+                                            const isFactoryOrderMode = editFormData.routing_type !== 'in_store';
+
+                                            return (
                                             <div>
-                                              {/* Subcard A: Factory Assignment & Routing */}
-                                               <div className="pos-edit-subcard">
+                                              {/* Routing Mode Banner & Toggle: Factory Order vs Normal In-Store Order */}
+                                              <div style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                gap: '12px',
+                                                padding: '12px 16px',
+                                                background: isFactoryOrderMode ? '#eff6ff' : '#f0fdf4',
+                                                border: `1.5px solid ${isFactoryOrderMode ? '#bfdbfe' : '#bbf7d0'}`,
+                                                borderRadius: '10px',
+                                                marginBottom: '14px',
+                                                flexWrap: 'wrap'
+                                              }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                  <span style={{ fontSize: '22px' }}>{isFactoryOrderMode ? '🏭' : '🏪'}</span>
+                                                  <div>
+                                                    <div style={{ fontSize: '13.5px', fontWeight: 800, color: isFactoryOrderMode ? '#1e40af' : '#166534' }}>
+                                                      {isFactoryOrderMode ? 'Factory Order (Central Plant Transit & Processing)' : 'Normal / In-Store Order (Local Branch Workshop)'}
+                                                    </div>
+                                                    <div style={{ fontSize: '11.5px', color: isFactoryOrderMode ? '#3b82f6' : '#15803d', fontWeight: 500 }}>
+                                                      {isFactoryOrderMode
+                                                        ? 'High-capacity industrial processing • Inter-branch van transit, batch manifest #, driver & gate timestamps required'
+                                                        : 'On-site counter processing • No inter-branch van transport, driver or manifest required'}
+                                                    </div>
+                                                  </div>
+                                                </div>
+
+                                                <div style={{ display: 'inline-flex', background: '#ffffff', padding: '3px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                                                  <button
+                                                    type="button"
+                                                    style={{
+                                                      padding: '6px 14px',
+                                                      fontSize: '12px',
+                                                      fontWeight: 700,
+                                                      borderRadius: '6px',
+                                                      border: 'none',
+                                                      cursor: 'pointer',
+                                                      background: isFactoryOrderMode ? '#2563eb' : 'transparent',
+                                                      color: isFactoryOrderMode ? '#ffffff' : '#64748b',
+                                                      boxShadow: isFactoryOrderMode ? '0 1px 3px rgba(37,99,235,0.3)' : 'none',
+                                                      display: 'inline-flex',
+                                                      alignItems: 'center',
+                                                      gap: '5px'
+                                                    }}
+                                                    onClick={() => setEditFormData({
+                                                      ...editFormData,
+                                                      routing_type: 'factory',
+                                                      factory_outlet: editFormData.factory_outlet && !editFormData.factory_outlet.includes('In-Store') ? editFormData.factory_outlet : 'Factory Outlet Unit 1 (Main Processing Plant)'
+                                                    })}
+                                                  >
+                                                    <span>🏭 Factory Order</span>
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    style={{
+                                                      padding: '6px 14px',
+                                                      fontSize: '12px',
+                                                      fontWeight: 700,
+                                                      borderRadius: '6px',
+                                                      border: 'none',
+                                                      cursor: 'pointer',
+                                                      background: !isFactoryOrderMode ? '#16a34a' : 'transparent',
+                                                      color: !isFactoryOrderMode ? '#ffffff' : '#64748b',
+                                                      boxShadow: !isFactoryOrderMode ? '0 1px 3px rgba(22,163,74,0.3)' : 'none',
+                                                      display: 'inline-flex',
+                                                      alignItems: 'center',
+                                                      gap: '5px'
+                                                    }}
+                                                    onClick={() => setEditFormData({
+                                                      ...editFormData,
+                                                      routing_type: 'in_store',
+                                                      factory_outlet: 'In-Store Local Counter Workshop',
+                                                      assigned_driver: 'None (Counter Staff)',
+                                                      vehicle_name: 'N/A (Local In-Store)',
+                                                      mode_of_transport: 'N/A (In-Store)',
+                                                      route_from_to: 'Store Front Counter ➔ In-House Pressing Station',
+                                                      route_return: 'In-House Pressing Station ➔ Store Delivery Rack'
+                                                    })}
+                                                  >
+                                                    <span>🏪 Normal / In-Store Order</span>
+                                                  </button>
+                                                </div>
+                                              </div>
+
+                                              {/* ── MODE 1: FACTORY ORDER VIEW ── */}
+                                              {isFactoryOrderMode ? (
+                                                <>
+                                                  {/* Subcard A: Factory Assignment & Routing */}
+                                                  <div className="pos-edit-subcard">
                                                  <div className="pos-edit-subcard-title">
                                                    <span>🏭</span>
                                                    <span>Factory Outlet Assignment &amp; Routing</span>
@@ -4404,10 +4549,10 @@ export default function POSModule({
                                                   })}
                                                 </div>
 
-                                                <div className="pos-edit-grid-2" style={{ marginTop: '12px' }}>
+                                                <div className="pos-edit-grid-2">
                                                   <div>
                                                     <label className="pos-edit-label">
-                                                      Plant Transit & Packaging Status
+                                                      Plant Transit &amp; Packaging Status
                                                     </label>
                                                     <select
                                                       className="pos-edit-field"
@@ -4417,8 +4562,8 @@ export default function POSModule({
                                                       <option value="Intake Complete">Intake Complete - Bagged</option>
                                                       <option value="In Transit to Factory">In Transit to Factory</option>
                                                       <option value="Washing in Progress">Washing in Progress</option>
-                                                      <option value="Drying">Drying & Tumbling</option>
-                                                      <option value="Pressed & Quality Checked">Pressed & Quality Checked</option>
+                                                      <option value="Drying">Drying &amp; Tumbling</option>
+                                                      <option value="Pressed &amp; Quality Checked">Pressed &amp; Quality Checked</option>
                                                       <option value="Quality Check">Quality Inspection Passed</option>
                                                       <option value="Ready for Dispatch to Store">Ready for Dispatch to Store</option>
                                                       <option value="In Transit to Store">In Transit to Store</option>
@@ -4446,7 +4591,7 @@ export default function POSModule({
                                                   <span>🏷️</span>
                                                   <span>Factory Handling Remarks</span>
                                                 </div>
-                                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: 0 }}>
                                                   {[
                                                     { label: '🌱 Eco-Friendly Wash', text: '[Eco-Friendly Wash] ' },
                                                     { label: '⚠️ Color Bleed Alert', text: '[Color Bleed Alert] ' },
@@ -4473,8 +4618,157 @@ export default function POSModule({
                                                   ))}
                                                 </div>
                                               </div>
-                                            </div>
+                                            </>
+                                          ) : (
+                                            <>
+                                              {/* ── MODE 2: NORMAL / IN-STORE ORDER VIEW ── */}
+                                              <div className="pos-edit-subcard">
+                                                <div className="pos-edit-subcard-title">
+                                                  <span>🏪</span>
+                                                  <span>In-Store Workshop Station &amp; Local Assignment</span>
+                                                </div>
+
+                                                <div className="pos-edit-grid-3" style={{ marginBottom: '14px' }}>
+                                                  <div>
+                                                    <label className="pos-edit-label">Store Branch</label>
+                                                    <select
+                                                      className="pos-edit-field"
+                                                      value={editFormData.store_outlet || 'Store Outlet #1 (Central Vellore Main)'}
+                                                      onChange={(e) => setEditFormData({ ...editFormData, store_outlet: e.target.value })}
+                                                    >
+                                                      <option value="Store Outlet #1 (Central Vellore Main)">Store Outlet #1 (Central Vellore Main)</option>
+                                                      <option value="Store Outlet #2 (Katpadi Junction Branch)">Store Outlet #2 (Katpadi Junction Branch)</option>
+                                                      <option value="Store Outlet #3 (Gandhi Nagar Branch)">Store Outlet #3 (Gandhi Nagar Branch)</option>
+                                                      <option value="Store Outlet #4 (Bagayam Counter)">Store Outlet #4 (Bagayam Counter)</option>
+                                                    </select>
+                                                  </div>
+
+                                                  <div>
+                                                    <label className="pos-edit-label">In-House Workshop Station</label>
+                                                    <select
+                                                      className="pos-edit-field"
+                                                      value={editFormData.workshop_station || 'Pressing Table #1 (Steam Iron Station)'}
+                                                      onChange={(e) => setEditFormData({ ...editFormData, workshop_station: e.target.value })}
+                                                    >
+                                                      <option value="Pressing Table #1 (Steam Iron Station)">Pressing Table #1 (Heavy Steam Press)</option>
+                                                      <option value="Pressing Table #2 (Delicate Iron Station)">Pressing Table #2 (Delicate Hand Iron)</option>
+                                                      <option value="Front Mini-Washer Station">Front Mini-Washer Station (Quick 15-min Wash)</option>
+                                                      <option value="Spotting &amp; Stain Removal Table">Spotting &amp; Stain Removal Table</option>
+                                                    </select>
+                                                  </div>
+
+                                                  <div>
+                                                    <label className="pos-edit-label">Store Incharge / Operator</label>
+                                                    <input
+                                                      type="text"
+                                                      className="pos-edit-field"
+                                                      value={editFormData.collected_by_staff || 'Karthik (Store Executive)'}
+                                                      onChange={(e) => setEditFormData({ ...editFormData, collected_by_staff: e.target.value })}
+                                                      placeholder="Staff Incharge"
+                                                    />
+                                                  </div>
+                                                </div>
+
+                                                <div className="pos-edit-grid-2">
+                                                  <div>
+                                                    <label className="pos-edit-label">Handling Protocol</label>
+                                                    <div className="pos-edit-field" style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f8fafc', color: '#166534', fontWeight: 650 }}>
+                                                      <span>✅</span>
+                                                      <span>Direct Store Processing • Zero Van Transit • Same-Day / Express</span>
+                                                    </div>
+                                                  </div>
+
+                                                  <div>
+                                                    <label className="pos-edit-label">Store Ready Shelf / Counter Hanger</label>
+                                                    <input
+                                                      type="text"
+                                                      className="pos-edit-field"
+                                                      value={editFormData.rack_shelf_location || 'Store Rack A-1 (Front Delivery Hanger)'}
+                                                      onChange={(e) => setEditFormData({ ...editFormData, rack_shelf_location: e.target.value })}
+                                                      placeholder="e.g. Store Rack A-1"
+                                                    />
+                                                  </div>
+                                                </div>
+                                              </div>
+
+                                              {/* In-Store Progress Stepper */}
+                                              <div className="pos-edit-subcard">
+                                                <div className="pos-edit-subcard-title">
+                                                  <span>🧺</span>
+                                                  <span>In-Store Progress Tracker</span>
+                                                </div>
+
+                                                <div className="pos-laundry-stepper">
+                                                  {[
+                                                    { label: 'Received at Counter', stageKey: 'Intake Complete' },
+                                                    { label: 'Garment Tagging', stageKey: 'Sorting & Tagging' },
+                                                    { label: 'In-House Steam Pressing', stageKey: 'Washing in Progress' },
+                                                    { label: 'Quality Check', stageKey: 'Quality Check' },
+                                                    { label: 'Ready on Store Shelf', stageKey: 'Ready for Dispatch to Store' }
+                                                  ].map((step, sIdx) => {
+                                                    const currentTransit = editFormData.plant_transit_status || 'Washing in Progress';
+                                                    const stageIdx = ['Intake Complete', 'Sorting & Tagging', 'Washing in Progress', 'Quality Check', 'Ready for Dispatch to Store'].indexOf(currentTransit);
+                                                    const isCompleted = sIdx < stageIdx;
+                                                    const isActive = sIdx === stageIdx || (stageIdx === -1 && sIdx === 2);
+                                                    const nodeStatus = isCompleted ? 'completed' : isActive ? 'active' : 'pending';
+
+                                                    return (
+                                                      <div
+                                                        key={step.label}
+                                                        className={`pos-laundry-step-node ${nodeStatus}`}
+                                                        style={{ cursor: 'pointer' }}
+                                                        title="Click to update in-store stage"
+                                                        onClick={() => {
+                                                          setEditFormData({ ...editFormData, plant_transit_status: step.stageKey });
+                                                          showToast?.(`🏪 In-Store stage updated to: ${step.label}`);
+                                                        }}
+                                                      >
+                                                        <span>{isCompleted ? '✓' : sIdx + 1}</span>
+                                                        <span>{step.label}</span>
+                                                      </div>
+                                                    );
+                                                  })}
+                                                </div>
+                                              </div>
+
+                                              {/* Subcard C: In-Store Remarks */}
+                                              <div className="pos-edit-subcard" style={{ marginBottom: 0 }}>
+                                                <div className="pos-edit-subcard-title">
+                                                  <span>🏷️</span>
+                                                  <span>In-Store Counter Remarks</span>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: 0 }}>
+                                                  {[
+                                                    { label: '⚡ Express 2-Hour Pickup', text: '[Express 2h Pickup] ' },
+                                                    { label: '👔 Crisp Steam Iron', text: '[Crisp Steam Iron] ' },
+                                                    { label: '🛍️ Hanger Packaging', text: '[Hanger Packaging] ' },
+                                                    { label: '📦 Fold & Bag', text: '[Fold & Bag] ' },
+                                                    { label: '⏳ Customer Waiting', text: '[Customer Waiting] ' },
+                                                  ].map((chip) => (
+                                                    <button
+                                                      key={chip.label}
+                                                      type="button"
+                                                      className="pos-note-tag-chip"
+                                                      style={{ cursor: 'pointer' }}
+                                                      onClick={() => {
+                                                        const current = editFormData.comments || '';
+                                                        setEditFormData({
+                                                          ...editFormData,
+                                                          comments: current.includes(chip.text) ? current : `${current} ${chip.text}`.trim()
+                                                        });
+                                                        showToast?.(`Added remark: ${chip.label}`);
+                                                      }}
+                                                    >
+                                                      {chip.label}
+                                                    </button>
+                                                  ))}
+                                                </div>
+                                              </div>
+                                            </>
                                           )}
+                                        </div>
+                                        );
+                                      })()}
                                           {/* Tab 3: Order Status Updates */}
                                           {editActiveTab === 'status' && (
                                             <div>

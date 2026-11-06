@@ -4745,7 +4745,9 @@ body.light-theme .pos-orders-table thead th:first-child,
 /* Navigation footer buttons */
 .pos-nav-prev-btn,
 .pos-nav-next-btn {
-  padding: 8px 16px;
+  height: 38px;
+  box-sizing: border-box;
+  padding: 0 16px;
   border-radius: 6px;
   font-size: 12.5px;
   font-weight: 650;
@@ -4756,6 +4758,7 @@ body.light-theme .pos-orders-table thead th:first-child,
   transition: all 0.15s ease;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
 }
 
@@ -4874,7 +4877,9 @@ body.dark-theme .pos-edit-delete-btn:hover,
 }
 
 .pos-edit-cancel-btn {
-  padding: 9px 24px;
+  height: 38px;
+  box-sizing: border-box;
+  padding: 0 24px;
   border-radius: 6px;
   border: 1.5px solid #cbd5e1;
   background: #ffffff;
@@ -4882,6 +4887,9 @@ body.dark-theme .pos-edit-delete-btn:hover,
   font-size: 13px;
   font-weight: 650;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.15s ease;
 }
 
@@ -4891,7 +4899,9 @@ body.dark-theme .pos-edit-delete-btn:hover,
 }
 
 .pos-edit-save-btn {
-  padding: 9px 28px;
+  height: 38px;
+  box-sizing: border-box;
+  padding: 0 28px;
   border-radius: 6px;
   border: none;
   background: #2563eb;
@@ -4900,8 +4910,9 @@ body.dark-theme .pos-edit-delete-btn:hover,
   font-weight: 700;
   cursor: pointer;
   box-shadow: 0 3px 8px rgba(37, 99, 235, 0.3);
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 7px;
   transition: all 0.15s ease;
 }
