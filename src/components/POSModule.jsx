@@ -3,6 +3,7 @@
 // Matches the exact Orders & POS design with Orders List Table and Counter Intake Register
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import ClothIllustration from './ClothIllustration';
 import OrderReviewCard from './OrderReviewCard';
 import SideEditPanel from './SideEditPanel';
@@ -87,6 +88,233 @@ const EDIT_CATALOG_ITEMS = [
   { id: 'jacket', name: 'Jacket', category: 'Men', secondaryCategory: 'Women', price: 45, unit: 'piece', icon: '🧥' },
 ];
 
+export function groupServicesByType(services = [], ord = {}) {
+  const groups = {};
+  const orderDefaultService = ord.service_category || ord.service_type || ord.preference || 'Standard Services';
+
+  services.forEach((item) => {
+    let group = item.serviceType || item.service || item.category;
+    if (!group) {
+      const lower = (item.name || '').toLowerCase();
+      if (lower.includes('dry clean') || lower.includes('drycleaning')) {
+        group = 'Dry Cleaning';
+      } else if (lower.includes('steam press') || lower.includes('iron') || lower.includes('press')) {
+        group = 'Steam Press & Ironing';
+      } else if (lower.includes('wash') || lower.includes('laundry')) {
+        group = 'Laundry / Normal Wash';
+      } else if (lower.includes('starch') || lower.includes('softener') || lower.includes('finish') || lower.includes('perfume') || lower.includes('addon')) {
+        group = 'Finishes & Add-ons';
+      } else if (lower.includes('curtain') || lower.includes('bedsheet') || lower.includes('towel') || lower.includes('linen') || lower.includes('blanket')) {
+        group = 'Home Linen & Bedding';
+      } else if (lower.includes('shoe') || lower.includes('bag') || lower.includes('leather')) {
+        group = 'Shoe & Special Care';
+      } else {
+        group = orderDefaultService || 'Standard Services';
+      }
+    }
+    if (!groups[group]) {
+      groups[group] = [];
+    }
+    groups[group].push(item);
+  });
+
+  return groups;
+}
+
+export function getServiceItemIcon(item = {}) {
+  if (item.icon) return item.icon;
+  const lower = (item.name || '').toLowerCase();
+  if (lower.includes('steam press') || lower.includes('iron') || lower.includes('press')) return '♨️';
+  if (lower.includes('dry clean') || lower.includes('drycleaning')) return '✨';
+  if (lower.includes('wash') || lower.includes('laundry')) return '🧺';
+  if (lower.includes('starch') || lower.includes('finish')) return '👔';
+  if (lower.includes('softener') || lower.includes('fragrance') || lower.includes('perfume')) return '🌸';
+  if (lower.includes('saree')) return '🥻';
+  if (lower.includes('curtain')) return '🪟';
+  if (lower.includes('bed') || lower.includes('pillow')) return '🛏️';
+  if (lower.includes('shoe')) return '👟';
+  if (lower.includes('towel')) return '🧼';
+  if (lower.includes('pant') || lower.includes('jeans')) return '👖';
+  return '👕';
+}
+
+function ServicesPopoverPortal({ popoverData, onClose, popoverRef }) {
+  if (!popoverData || typeof document === 'undefined') return null;
+
+  const [activeTab, setActiveTab] = useState('hidden'); // 'hidden' | 'all'
+  const [positionStyle, setPositionStyle] = useState({});
+
+  const {
+    orderNum,
+    anchorRect,
+    services = [],
+    totalPieces = 0,
+    orderServiceCategory,
+  } = popoverData;
+
+  const hiddenServices = services.slice(3);
+  const displayedServices = activeTab === 'all' ? services : (hiddenServices.length > 0 ? hiddenServices : services);
+  const grouped = groupServicesByType(displayedServices, { service_category: orderServiceCategory });
+
+  useEffect(() => {
+    if (!anchorRect) return;
+    const isMobile = window.innerWidth <= 640;
+    if (isMobile) {
+      setPositionStyle({});
+      return;
+    }
+
+    const { top, bottom, left } = anchorRect;
+    const popoverWidth = 330;
+    const estimatedHeight = 360;
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+
+    const spaceBelow = viewportHeight - bottom;
+    const placeAbove = spaceBelow < estimatedHeight && top > spaceBelow;
+
+    let calculatedTop = placeAbove ? top - estimatedHeight - 8 : bottom + 8;
+    if (calculatedTop < 12) calculatedTop = 12;
+
+    let calculatedLeft = left;
+    if (calculatedLeft + popoverWidth > viewportWidth - 16) {
+      calculatedLeft = viewportWidth - popoverWidth - 16;
+    }
+    if (calculatedLeft < 16) calculatedLeft = 16;
+
+    setPositionStyle({
+      top: `${Math.round(calculatedTop)}px`,
+      left: `${Math.round(calculatedLeft)}px`,
+      width: `${popoverWidth}px`,
+    });
+  }, [anchorRect]);
+
+  const displayedPieceCount = displayedServices.reduce(
+    (acc, it) => acc + (Number(it.count || it.qty || it.quantity) || 1),
+    0
+  );
+
+  return createPortal(
+    <>
+      {/* Backdrop for mobile bottom sheet */}
+      <div
+        className="pos-services-backdrop"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* Popover / Bottom Sheet Container */}
+      <div
+        ref={popoverRef}
+        className="pos-services-popover-container"
+        style={positionStyle}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label={`Services breakdown for Order ${orderNum}`}
+      >
+        {/* Mobile Drag Handle */}
+        <div className="pos-services-popover-drag-handle" />
+
+        {/* Header */}
+        <div className="pos-services-popover-header">
+          <div className="pos-services-popover-title-wrap">
+            <div className="pos-services-popover-title">
+              <span>Services & Garments</span>
+            </div>
+            <div className="pos-services-popover-order-badge">
+              Order #{orderNum}
+            </div>
+          </div>
+          <div className="pos-services-popover-header-actions">
+            <span className="pos-services-popover-pcs-badge" title="Total Pieces in Order">
+              🏷️ {totalPieces} pcs
+            </span>
+            <button
+              type="button"
+              className="pos-services-popover-close-btn"
+              onClick={onClose}
+              title="Close (Esc)"
+              aria-label="Close popover"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Tab switcher: Hidden vs All */}
+        {services.length > 3 && (
+          <div className="pos-services-popover-tabs">
+            <button
+              type="button"
+              className={`pos-services-tab-btn ${activeTab === 'hidden' ? 'active' : ''}`}
+              onClick={() => setActiveTab('hidden')}
+            >
+              <span>Hidden Services (+{hiddenServices.length})</span>
+            </button>
+            <button
+              type="button"
+              className={`pos-services-tab-btn ${activeTab === 'all' ? 'active' : ''}`}
+              onClick={() => setActiveTab('all')}
+            >
+              <span>All Services ({services.length})</span>
+            </button>
+          </div>
+        )}
+
+        {/* Grouped Services Body */}
+        <div className="pos-services-popover-body">
+          {Object.keys(grouped).length === 0 ? (
+            <div style={{ padding: '16px', textAlign: 'center', color: '#64748b', fontSize: '12px' }}>
+              No services to display
+            </div>
+          ) : (
+            Object.entries(grouped).map(([groupTitle, itemsList]) => {
+              const groupPieces = itemsList.reduce(
+                (acc, it) => acc + (Number(it.count || it.qty || it.quantity) || 1),
+                0
+              );
+              return (
+                <div key={groupTitle} className="pos-services-group">
+                  <div className="pos-services-group-header">
+                    <span>{groupTitle}</span>
+                    <span className="pos-services-group-count">
+                      {itemsList.length} {itemsList.length === 1 ? 'item' : 'items'} • {groupPieces} pcs
+                    </span>
+                  </div>
+                  <div className="pos-services-items-list">
+                    {itemsList.map((item, idx) => (
+                      <div key={`${item.name}-${idx}`} className="pos-services-item-row">
+                        <div className="pos-services-item-left">
+                          <span className="pos-services-item-icon">{getServiceItemIcon(item)}</span>
+                          <span className="pos-services-item-name" title={item.name}>
+                            {item.name}
+                          </span>
+                        </div>
+                        <span className="pos-services-item-badge">
+                          x{item.count || item.qty || 1}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="pos-services-popover-footer">
+          <span>{displayedServices.length} {displayedServices.length === 1 ? 'service' : 'services'} ({displayedPieceCount} pcs)</span>
+          <span className="pos-services-popover-footer-total">
+            Total Order: {totalPieces} pieces
+          </span>
+        </div>
+      </div>
+    </>,
+    document.body
+  );
+}
+
 export default function POSModule({
   orders = [],
   loadingOrders = false,
@@ -120,9 +348,78 @@ export default function POSModule({
   const [posViewMode, setPosViewMode] = useState('orders'); // 'orders' | 'intake'
   const [orderDisplayLayout, setOrderDisplayLayout] = useState('table'); // 'table' | 'cards'
   const [expandedOrderId, setExpandedOrderId] = useState(null);
-  const [expandedServicesOrderId, setExpandedServicesOrderId] = useState(null);
+  const [activeServicesPopover, setActiveServicesPopover] = useState(null);
+  const servicesPopoverRef = useRef(null);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const tableScrollRef = useRef(null);
+
+  // Close services popover on outside click, Escape key, window resize or external scroll
+  useEffect(() => {
+    if (!activeServicesPopover) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setActiveServicesPopover(null);
+      }
+    };
+
+    const handlePointerDown = (e) => {
+      if (
+        servicesPopoverRef.current &&
+        !servicesPopoverRef.current.contains(e.target) &&
+        !e.target.closest('.pos-services-more-btn')
+      ) {
+        setActiveServicesPopover(null);
+      }
+    };
+
+    const handleScroll = (e) => {
+      if (servicesPopoverRef.current && servicesPopoverRef.current.contains(e.target)) {
+        return;
+      }
+      setActiveServicesPopover(null);
+    };
+
+    const handleResize = () => {
+      setActiveServicesPopover(null);
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [activeServicesPopover]);
+
+  const handleToggleServicesPopover = (e, ord, servicesAllocated, totalPieces, orderKey) => {
+    e.stopPropagation();
+    if (activeServicesPopover?.orderKey === orderKey) {
+      setActiveServicesPopover(null);
+    } else {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setActiveServicesPopover({
+        orderKey,
+        orderNum: ord.order_number || ord.order_id || ord.work_number || (ord.id ? String(ord.id) : '—'),
+        orderServiceCategory: ord.service_category || ord.service_type || ord.preference,
+        anchorRect: {
+          top: rect.top,
+          bottom: rect.bottom,
+          left: rect.left,
+          right: rect.right,
+          width: rect.width,
+          height: rect.height,
+        },
+        services: servicesAllocated,
+        totalPieces,
+      });
+    }
+  };
 
   // ── Dynamic Column Management System ──
   const [selectedColumns, setSelectedColumns] = useState(DEFAULT_COLUMN_IDS);
@@ -2381,20 +2678,29 @@ export default function POSModule({
                                         </span>
                                       </div>
                                     ))}
-                                    {servicesAllocated.length > 3 && (
-                                      <span style={{
-                                        fontSize: '11px',
-                                        fontWeight: 700,
-                                        color: '#2563eb',
-                                        background: '#eff6ff',
-                                        border: '1px solid #bfdbfe',
-                                        padding: '2px 6px',
-                                        borderRadius: '4px',
-                                        width: 'fit-content'
-                                      }}>
-                                        +{servicesAllocated.length - 3} more
-                                      </span>
-                                    )}
+                                    {servicesAllocated.length > 3 && (() => {
+                                      const orderKey = ord.id ? String(ord.id) : (ord.order_number || String(idx));
+                                      const isServicesPopoverOpen = activeServicesPopover?.orderKey === orderKey;
+                                      const resolvedTotalPieces = Math.max(
+                                        itemCount,
+                                        servicesAllocated.reduce((sum, s) => sum + (Number(s.count || s.qty || 1)), 0)
+                                      );
+                                      return (
+                                        <button
+                                          type="button"
+                                          className={`pos-services-more-btn ${isServicesPopoverOpen ? 'active' : ''}`}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleToggleServicesPopover(e, ord, servicesAllocated, resolvedTotalPieces, orderKey);
+                                          }}
+                                          aria-expanded={isServicesPopoverOpen}
+                                          title={isServicesPopoverOpen ? 'Show less services' : `Show ${servicesAllocated.length - 3} more services`}
+                                        >
+                                          <span>{isServicesPopoverOpen ? 'Show less' : `+${servicesAllocated.length - 3} more`}</span>
+                                          <span className="pos-more-btn-arrow">{isServicesPopoverOpen ? '▴' : '▾'}</span>
+                                        </button>
+                                      );
+                                    })()}
                                     {isOnCall && (
                                       isPickupAssigned ? (
                                         <button
@@ -3015,7 +3321,7 @@ export default function POSModule({
                                           <span>Customer &amp; Order Information</span>
                                         </div>
 
-                                        <div className="pos-edit-customer-form-grid">
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px', flex: 1, alignContent: 'start' }}>
                                           {/* Customer Name */}
                                           <div>
                                             <label className="pos-edit-label">
@@ -3129,18 +3435,21 @@ export default function POSModule({
                                           </div>
 
                                           {/* Comments Textarea (Spans 2 columns) */}
-                                          <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                                          <label className="pos-edit-label">Comments / Special Instructions</label>
-                                          <textarea
-                                           className="pos-edit-textarea pos-edit-textarea-grow"
-                                           value={editFormData.comments || ''}
-                                           onChange={(e) => setEditFormData({ ...editFormData, comments: e.target.value })}
-                                           placeholder="Customer special notes, delicate fabric instructions, or delivery directions..."
-                                           />
-                                           </div>
+                                          <div style={{ gridColumn: '1 / -1' }}>
+                                            <label className="pos-edit-label">
+                                              Comments / Special Instructions
+                                            </label>
+                                            <textarea
+                                              rows={2}
+                                              className="pos-edit-textarea"
+                                              value={editFormData.comments || ''}
+                                              onChange={(e) => setEditFormData({ ...editFormData, comments: e.target.value })}
+                                              placeholder="Customer special notes, delicate fabric instructions, or delivery directions..."
+                                            />
+                                          </div>
 
                                           {/* Live Status Quick Action & Pills (Spans 2 columns) */}
-                                         <div className="pos-edit-sub-panel" style={{ gridColumn: '1 / -1', gap: '8px', alignSelf: 'end' }}>
+                                          <div className="pos-edit-sub-panel" style={{ gridColumn: '1 / -1', marginTop: '2px', gap: '8px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                               <span style={{ fontSize: '11.5px', fontWeight: 700, color: 'var(--text-primary)' }}>Live Status Actions</span>
                                               <button
@@ -3331,18 +3640,17 @@ export default function POSModule({
                                               id="pos-edit-cloth-grid"
                                               className="pos-cloth-catalog-scroller"
                                               style={{
-  display: 'grid',
-  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-  gap: '10px',
-  flex: '1 1 0',
-  minHeight: '260px',
-  maxHeight: 'none',
-  overflowY: 'auto',
-  overflowX: 'hidden',
-  alignContent: 'start',
-  paddingRight: '4px',
-  scrollbarGutter: 'stable'
-}}
+                                                display: 'grid',
+                                                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                                                gap: '10px',
+                                                flex: 1,
+                                                minHeight: '260px',
+                                                maxHeight: '340px',
+                                                overflowY: 'auto',
+                                                overflowX: 'hidden',
+                                                paddingRight: '4px',
+                                                scrollbarGutter: 'stable'
+                                              }}
                                             >
                                               {EDIT_CATALOG_ITEMS.filter((item) => {
                                                 const matchesCat =
@@ -3391,7 +3699,7 @@ export default function POSModule({
                                             </div>
 
                                             {/* Scroller bottom indicator */}
-                                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '11px', color: 'var(--text-muted, #64748b)', flexShrink: 0, paddingTop: '8px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '11px', color: 'var(--text-muted, #64748b)', marginTop: 'auto', paddingTop: '8px' }}>
                                               <span>↕</span>
                                               <span>Scroll up / down to view all 12 garments</span>
                                             </div>
@@ -3504,7 +3812,7 @@ export default function POSModule({
                                                 <span>Cart Items ({editCart.length})</span>
                                               </div>
 
-                                              <div className="pos-edit-cart-list" style={{ maxHeight: '145px', overflowY: 'auto', marginBottom: '10px', paddingRight: '6px' }}>
+                                              <div style={{ maxHeight: '145px', overflowY: 'auto', marginBottom: '10px', paddingRight: '2px' }}>
                                                 {editCart.map((it, idx) => (
                                                   <div
                                                     key={`${it.id}_${it.serviceType}_${idx}`}
@@ -3961,7 +4269,14 @@ export default function POSModule({
                                           {editActiveTab === 'payments' && (
                                             <div>
                                               {/* 4 Summary Cards */}
-                                              <div className="pos-edit-payments-summary-grid">
+                                              <div
+                                                style={{
+                                                  display: 'grid',
+                                                  gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                                                  gap: '12px',
+                                                  marginBottom: '16px'
+                                                }}
+                                              >
                                                 <div className="pos-edit-metric-card">
                                                   <span className="metric-label">Subtotal</span>
                                                   <span className="metric-val">₹{editCartSubtotal.toFixed(2)}</span>
@@ -5037,6 +5352,13 @@ export default function POSModule({
         isOpen={Boolean(receiptOrderTarget)}
         order={receiptOrderTarget}
         onClose={() => setReceiptOrderTarget(null)}
+      />
+
+      {/* ── POS Services Breakdown Popover & Mobile Bottom Sheet Portal ── */}
+      <ServicesPopoverPortal
+        popoverData={activeServicesPopover}
+        popoverRef={servicesPopoverRef}
+        onClose={() => setActiveServicesPopover(null)}
       />
     </div>
   );
