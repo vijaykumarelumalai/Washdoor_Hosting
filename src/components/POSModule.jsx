@@ -18,7 +18,11 @@ import {
   createOrderWithCustomer,
   getNextOrderId,
   updateOrderInSupabase,
+  recordPickupDeliverySchedule,
+  saveHeldOrder,
+  recordCustomerMessage,
 } from '../services/customerService';
+import { recordNotificationLog } from '../services/notificationTemplateService';
 import {
   normalizeMobileNumber,
   formatPhoneDisplay,
@@ -602,8 +606,9 @@ export default function POSModule({
   }, [editCart]);
 
   const editCartTax = useMemo(() => {
-    return editCartSubtotal * 0.05;
-  }, [editCartSubtotal]);
+    const isExempt = Boolean(editFormData?.tax_exemption ?? editingOrderRecord?.tax_exemption ?? editingOrderRecord?.customer?.tax_exemption);
+    return isExempt ? 0 : editCartSubtotal * 0.05;
+  }, [editCartSubtotal, editFormData?.tax_exemption, editingOrderRecord]);
 
   const editCartGrandTotal = useMemo(() => {
     return editCartSubtotal + editCartTax;
@@ -763,6 +768,10 @@ export default function POSModule({
       advance_paid: advancePaid,
       balance_due: balanceDue,
       payment_status: paymentStatus,
+      payment_method: ord.payment_method || ord.payment?.mode || 'Cash',
+      tax_exemption: Boolean(ord.tax_exemption ?? ord.customer?.tax_exemption),
+      routing_type: ord.routing_type || 'factory',
+      workshop_station: ord.workshop_station || '',
       assigned_driver: ord.assigned_driver || 'Ramesh Kumar (Route 4)',
       assigned_driver_full: ord.assigned_driver_full || '',
       factory_hub: ord.factory_hub || ord.factory_outlet || 'Factory Outlet Unit 1 (Main Processing Plant)',
@@ -844,7 +853,8 @@ export default function POSModule({
 
     const totalPieces = editCart.reduce((sum, it) => sum + (Number(it.qty) || 0), 0);
     const subtotal = editCart.reduce((sum, it) => sum + (Number(it.qty) || 0) * (Number(it.rate) || 0), 0);
-    const taxAmount = subtotal * 0.05;
+    const isExempt = Boolean(editFormData.tax_exemption ?? editingOrderRecord.tax_exemption ?? editingOrderRecord.customer?.tax_exemption);
+    const taxAmount = isExempt ? 0 : subtotal * 0.05;
     const grandTotal = subtotal + taxAmount;
     const advancePaidVal = Number(editFormData.advance_paid || 0);
 
@@ -938,13 +948,17 @@ export default function POSModule({
         orderNotes: updatedOrder.comments,
         subtotal: subtotal,
         taxAmount: taxAmount,
+        taxExemption: isExempt,
         totalAmount: grandTotal,
         advancePaid: Number(editFormData.advance_paid || 0),
         paymentStatus: editFormData.payment_status,
-        paymentMethod: updatedOrder.payment_method || 'Cash',
+        paymentMethod: editFormData.payment_method || updatedOrder.payment_method || 'Cash',
         assignedStaff: editFormData.collected_by_staff || updatedOrder.assigned_driver,
+        assigned_driver: editFormData.assigned_driver || updatedOrder.assigned_driver,
         items: updatedOrder.items,
         garment_inspections: editInspections,
+        routing_type: editFormData.routing_type || 'factory',
+        workshop_station: editFormData.workshop_station || '',
         factory_hub: editFormData.factory_hub || editFormData.factory_outlet,
         factory_outlet: editFormData.factory_outlet || editFormData.factory_hub,
         store_outlet: editFormData.store_outlet,
@@ -1081,6 +1095,7 @@ export default function POSModule({
   // Service Details State
   const [serviceCategory, setServiceCategory] = useState('Wash & Steam Press');
   const [intakeType, setIntakeType] = useState('Walk-In');
+  const [paymentMode, setPaymentMode] = useState('Cash');
   const [pickupDate, setPickupDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [deliveryDate, setDeliveryDate] = useState(() => {
     const d = new Date();
@@ -1419,6 +1434,16 @@ export default function POSModule({
     };
 
     saveHeldOrders([heldItem, ...heldOrders]);
+    saveHeldOrder({
+      customer_id: selectedCustomer?.customer_id || selectedCustomer?.customerId || null,
+      customerName: selectedCustomer?.customer_name || walkinName || 'Walk-In Customer',
+      mobile: selectedCustomer?.mobile_number || walkinPhone || null,
+      cart: [...cart],
+      subtotal,
+      gstAmount,
+      grandTotal,
+      specialNotes,
+    }).catch(() => {});
     setCart([]);
     setSelectedCustomer(null);
     setWalkinName('');
@@ -1618,7 +1643,9 @@ export default function POSModule({
       tax_amount: gstAmount,
       total_amount: grandTotal,
       intake_type: intakeType,
-      payment_method: paymentMode,
+      intake_date: pickupDate || undefined,
+      target_delivery_date: deliveryDate || undefined,
+      payment_method: paymentMode || 'Cash',
       payment_status: paymentMode === 'Cash' || paymentMode === 'UPI / QR Code' ? 'Paid' : 'Unpaid',
       advance_paid: paymentMode === 'Cash' || paymentMode === 'UPI / QR Code' ? grandTotal : 0,
     };
@@ -5004,14 +5031,66 @@ export default function POSModule({
                                                 <div style={{ display: 'flex', gap: '8px' }}>
                                                   <button
                                                     type="button"
-                                                    onClick={() => showToast?.(`✅ WhatsApp notification sent to ${editFormData.customer_name}!`)}
+                                                    onClick={() => {
+                                                      const msg = t('msg_order_status_template', 'Hello {name}, your laundry order #{orderNumber} with Washdoor is now {status} ({pieces} pieces). Total Bill: ₹{total}. Expected delivery: {delivery}.')
+                                                        .replace('{name}', editFormData.customer_name || 'Customer')
+                                                        .replace('{orderNumber}', editFormData.order_number || '')
+                                                        .replace('{status}', normalizeOrderStatus(editFormData.status || editFormData.order_status))
+                                                        .replace('{pieces}', editCartTotalPieces)
+                                                        .replace('{total}', editCartGrandTotal.toFixed(2))
+                                                        .replace('{delivery}', editFormData.expected_delivery || '30 Oct 2026, 05:00 PM');
+                                                      const ordKey = editFormData.rawOrder?.work_id || editFormData.order_number;
+                                                      recordCustomerMessage({
+                                                        work_id: ordKey,
+                                                        work_number: editFormData.order_number,
+                                                        customer_id: editFormData.rawOrder?.customer?.customer_code || 'Counter Customer',
+                                                        channel: 'WhatsApp',
+                                                        category: 'manual_pos_alert',
+                                                        recipient_phone: editFormData.mobile_number,
+                                                        message_body: msg,
+                                                        sent_by: 'POS Staff',
+                                                      }).catch(() => {});
+                                                      recordNotificationLog({
+                                                        order_id: ordKey,
+                                                        event_type: 'manual_pos_alert',
+                                                        channel: 'whatsapp',
+                                                        recipient: editFormData.mobile_number,
+                                                        rendered_message: msg,
+                                                        status: 'Delivered',
+                                                        idempotency_key: `manual_wa_${editFormData.order_number}_${Date.now()}`,
+                                                      }).catch(() => {});
+                                                      showToast?.(`✅ WhatsApp notification sent to ${editFormData.customer_name}!`);
+                                                    }}
                                                     style={{ padding: '7px 14px', borderRadius: '6px', border: 'none', background: '#16a34a', color: '#ffffff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
                                                   >
                                                     Send WhatsApp Alert
                                                   </button>
                                                   <button
                                                     type="button"
-                                                    onClick={() => showToast?.(`✅ SMS alert dispatched to +91 ${editFormData.mobile_number}!`)}
+                                                    onClick={() => {
+                                                      const msg = `Washdoor: Order #${editFormData.order_number} is ${normalizeOrderStatus(editFormData.status || editFormData.order_status)} (${editCartTotalPieces} pcs). Total: ₹${editCartGrandTotal.toFixed(2)}.`;
+                                                      const ordKey = editFormData.rawOrder?.work_id || editFormData.order_number;
+                                                      recordCustomerMessage({
+                                                        work_id: ordKey,
+                                                        work_number: editFormData.order_number,
+                                                        customer_id: editFormData.rawOrder?.customer?.customer_code || 'Counter Customer',
+                                                        channel: 'SMS',
+                                                        category: 'manual_pos_alert',
+                                                        recipient_phone: editFormData.mobile_number,
+                                                        message_body: msg,
+                                                        sent_by: 'POS Staff',
+                                                      }).catch(() => {});
+                                                      recordNotificationLog({
+                                                        order_id: ordKey,
+                                                        event_type: 'manual_pos_alert',
+                                                        channel: 'sms',
+                                                        recipient: editFormData.mobile_number,
+                                                        rendered_message: msg,
+                                                        status: 'Delivered',
+                                                        idempotency_key: `manual_sms_${editFormData.order_number}_${Date.now()}`,
+                                                      }).catch(() => {});
+                                                      showToast?.(`✅ SMS alert dispatched to +91 ${editFormData.mobile_number}!`);
+                                                    }}
                                                     className="pos-edit-cancel-btn"
                                                     style={{ padding: '7px 14px', fontSize: '12px' }}
                                                   >
@@ -5701,6 +5780,21 @@ export default function POSModule({
             </select>
           </div>
 
+          <div className="pos-field-group">
+            <label className="pos-field-label">Payment Mode</label>
+            <select
+              className="pos-select"
+              value={paymentMode}
+              onChange={(e) => setPaymentMode(e.target.value)}
+            >
+              <option value="Cash">Cash</option>
+              <option value="UPI / QR Code">UPI / QR Code</option>
+              <option value="Card">Credit / Debit Card</option>
+              <option value="Net Banking">Net Banking</option>
+              <option value="Pay Later">Pay Later (Unpaid)</option>
+            </select>
+          </div>
+
           {/* Delivery Date */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <div className="pos-field-group">
@@ -5830,7 +5924,16 @@ export default function POSModule({
         isOpen={Boolean(scheduleOrderTarget)}
         order={scheduleOrderTarget}
         onClose={() => setScheduleOrderTarget(null)}
-        onConfirmSchedule={({ scheduleType, scheduleDate, scheduleSlot }) => {
+        onConfirmSchedule={({ order, scheduleType, scheduleDate, scheduleSlot }) => {
+          const ordKey = order?.work_id || order?.order_number || order?.id;
+          if (ordKey) {
+            recordPickupDeliverySchedule(ordKey, {
+              scheduleType,
+              scheduleDate,
+              scheduleSlot,
+              address: order?.address || order?.delivery_address || '',
+            }).catch((e) => console.warn('Schedule save note:', e));
+          }
           showToast?.(`✅ ${scheduleType} scheduled for ${scheduleDate} (${scheduleSlot.split(' ')[0]})`);
         }}
       />
@@ -5878,7 +5981,7 @@ export default function POSModule({
             }
           }
 
-          // Direct Supabase update
+          // Direct Supabase update (preserving all 6 tabs from SideEditPanel)
           const saveKey = updated.order_number || updated.id || updated.work_number;
           if (saveKey) {
             updateOrderInSupabase(saveKey, {
@@ -5902,7 +6005,30 @@ export default function POSModule({
               advancePaid: updated.advance_paid,
               paymentStatus: updated.payment_status,
               paymentMethod: updated.payment_method || updated.payment?.mode || 'Cash',
+              transactionRef: updated.payment?.transactionRef,
+              invoiceNo: updated.payment?.invoiceNo,
+              paymentNote: updated.payment?.note,
               assignedStaff: updated.assigned_driver,
+              assigned_driver: updated.assigned_driver,
+              assigned_driver_full: updated.assigned_driver_full,
+              factoryPlant: updated.logistics?.factoryPlant,
+              factory_outlet: updated.logistics?.factoryPlant,
+              factory_hub: updated.logistics?.factoryPlant,
+              riderPhone: updated.logistics?.riderPhone,
+              vehicleNo: updated.logistics?.vehicleNo,
+              vehicle_name: updated.logistics?.vehicleNo,
+              routeZone: updated.logistics?.routeZone,
+              route_from_to: updated.logistics?.routeZone,
+              pickupTime: updated.logistics?.pickupTime,
+              deliverySlot: updated.logistics?.deliverySlot,
+              dispatchBagTag: updated.logistics?.dispatchBagTag,
+              logisticsStatus: updated.logistics?.logisticsStatus,
+              driverInstructions: updated.logistics?.driverInstructions,
+              assignedMachine: updated.workflow?.assignedMachine,
+              qcInspector: updated.workflow?.qcInspector,
+              statusRemark: updated.workflow?.statusRemark,
+              staff_notes: updated.staff_notes,
+              flags: updated.flags,
               items: updated.items,
               garment_inspections: updated.garment_inspections || updated.inspections,
             }).catch((e) => console.warn('Supabase SideEdit update note:', e));

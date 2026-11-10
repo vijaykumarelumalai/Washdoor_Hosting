@@ -996,7 +996,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                                   {addr.label || addr.addressType || `Address #${idx + 1}`}
                                 </div>
                                 <div className="addr-content">
-                                  {addr.streetAddress || addr.address || addr.addressLine1}
+                                  {addr.addressLine || addr.streetAddress || addr.address || addr.addressLine1}
                                 </div>
                                 {addr.landmark && (
                                   <div className="addr-landmark">🚩 Landmark: {addr.landmark}</div>

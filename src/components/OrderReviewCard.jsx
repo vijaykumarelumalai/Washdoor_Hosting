@@ -6,6 +6,7 @@ import React, { useState, useEffect } from 'react';
 import { formatPhoneDisplay } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
 import { ORDER_STATUS_CONFIG, normalizeOrderStatus } from '../config/businessRules';
+import { updateOrderInSupabase, recordCustomerMessage, recordOrderNote } from '../services/customerService';
 
 export default function OrderReviewCard({
   order,
@@ -80,25 +81,72 @@ export default function OrderReviewCard({
   const handleSaveStaffNote = (e) => {
     e.stopPropagation();
     if (!staffNote.trim()) return;
+    const noteText = staffNote.trim();
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    setLogNotes((prev) => `${prev}\n[${timestamp} Staff]: ${staffNote.trim()}`);
+    const nextNotes = `${logNotes}\n[${timestamp} Staff]: ${noteText}`.trim();
+    setLogNotes(nextNotes);
     setStaffNote('');
+
+    const saveKey = order.work_id || order.order_number || order.id;
+    if (saveKey) {
+      recordOrderNote({
+        work_id: saveKey,
+        work_number: orderNum,
+        note_type: 'Staff_Observation',
+        content: noteText,
+        author: 'Store Staff',
+      }).catch(() => {});
+      updateOrderInSupabase(saveKey, { staff_notes: nextNotes, orderNotes: nextNotes }).catch(() => {});
+    }
     showToast?.(`✓ Staff note saved for order ${orderNum}`);
   };
 
   const handleAutoDispatch = (e) => {
     e.stopPropagation();
-    setAssignedRider('Rider Kumar (Van #02)');
+    const rider = 'Rider Kumar (Van #02)';
+    setAssignedRider(rider);
+    const saveKey = order.work_id || order.order_number || order.id;
+    if (saveKey) {
+      updateOrderInSupabase(saveKey, {
+        assignedStaff: 'Rider Kumar',
+        assigned_driver: 'Rider Kumar',
+        assigned_driver_full: rider,
+        pickupStatus: 'Assigned for Pickup',
+      }).catch(() => {});
+    }
     showToast?.(`🚀 Nearest rider Kumar (Van #02) auto-dispatched for ${orderNum}!`);
   };
 
   const handleSendRdyAlert = (e) => {
     e.stopPropagation();
+    const saveKey = order.work_id || order.order_number || order.id;
+    if (saveKey && phone) {
+      recordCustomerMessage({
+        work_id: saveKey,
+        work_number: orderNum,
+        customer_id: cust.customer_code || order.customer_id || 'Counter Customer',
+        channel: 'WhatsApp',
+        category: 'ready_for_pickup',
+        recipient_phone: phone,
+        message_body: `Hello ${custName}, your laundry order ${orderNum} is fresh, pressed & READY for delivery/pickup.`,
+        sent_by: 'POS Counter',
+      }).catch(() => {});
+    }
     showToast?.(`📱 WhatsApp & SMS RDY Alert sent to ${custName} (${formatPhoneDisplay(phone) || 'Customer'})!`);
   };
 
   const handleSendNrAlert = (e) => {
     e.stopPropagation();
+    const saveKey = order.work_id || order.order_number || order.id;
+    if (saveKey) {
+      recordOrderNote({
+        work_id: saveKey,
+        work_number: orderNum,
+        note_type: 'Internal_Remark',
+        content: `Customer Not-Reachable (NR) alert logged for ${orderNum}`,
+        author: 'POS Counter',
+      }).catch(() => {});
+    }
     showToast?.(`⚠️ Not-Reachable (NR) status logged & reminder queued.`);
   };
 
@@ -297,7 +345,18 @@ export default function OrderReviewCard({
               <select
                 className="review-rider-select"
                 value={assignedRider}
-                onChange={(e) => setAssignedRider(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setAssignedRider(val);
+                  const saveKey = order.work_id || order.order_number || order.id;
+                  if (saveKey && val !== '-- Unassigned --') {
+                    updateOrderInSupabase(saveKey, {
+                      assignedStaff: val.split(' (')[0],
+                      assigned_driver: val.split(' (')[0],
+                      assigned_driver_full: val,
+                    }).catch(() => {});
+                  }
+                }}
               >
                 <option value="-- Unassigned --">-- Unassigned --</option>
                 <option value="Rider Kumar (Van #02)">Rider Kumar (Van #02)</option>

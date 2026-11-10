@@ -270,6 +270,8 @@ export default function EditOrderModal({
     const orderIdentifier = order?.order_number || order?.order_id || order?.id;
 
     const payload = {
+      subtotal: subtotal,
+      taxAmount: gstAmount,
       totalAmount: grandTotal,
       itemCount: totalItemCount,
       serviceCategory: serviceType,
@@ -279,6 +281,8 @@ export default function EditOrderModal({
       alternatePhone: alternatePhone.trim() || null,
       email: email.trim() || null,
       taxExemption: isTaxExempt,
+      pickupDate: pickupDate || undefined,
+      deliveryDate: deliveryDate || undefined,
       status: isHold ? 'Order in Progress' : (order?.status || 'Laundry In Progress'),
       items: cart,
     };

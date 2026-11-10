@@ -273,7 +273,7 @@ export default function ClothSelectionCart({
                     onClick={() => handleSelectProduct(prod)}
                   >
                     <div className="cloth-img-box">
-                      <ClothIllustration itemId={prod.id} size={38} />
+                      <ClothIllustration itemId={prod.id} itemName={prod.name} size={38} />
                     </div>
                     <div className="cloth-item-name" title={prod.name}>
                       {prod.name}
@@ -314,7 +314,7 @@ export default function ClothSelectionCart({
               {/* Item row preview */}
               <div className="cloth-preview-row">
                 <div className="cloth-preview-thumb">
-                  <ClothIllustration itemId={selectedProduct.id} size={40} />
+                  <ClothIllustration itemId={selectedProduct.id} itemName={selectedProduct.name} size={40} />
                 </div>
                 <div className="cloth-preview-info">
                   <div className="cloth-preview-name-row">
@@ -419,7 +419,7 @@ export default function ClothSelectionCart({
                   <div key={`${item.id}-${item.serviceType}-${idx}`} className="cloth-cart-row">
                     <div className="cloth-cart-left">
                       <div className="cloth-cart-thumb">
-                        <ClothIllustration itemId={item.id} size={26} />
+                        <ClothIllustration itemId={item.id} itemName={item.name} size={26} />
                       </div>
                       <div className="cloth-cart-info">
                         <span className="cloth-cart-name">{item.name}</span>

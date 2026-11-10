@@ -3,8 +3,93 @@
 
 import React from 'react';
 
-export default function ClothIllustration({ itemId, size = 64 }) {
-  switch (itemId) {
+const DIRECT_CLOTH_KEYS = new Set([
+  'shirt',
+  'tshirt',
+  'formal_pant',
+  'jeans',
+  'saree',
+  'chudidar',
+  'kurti',
+  'shorts',
+  'bedsheet',
+  'pillow_cover',
+  'towel',
+  'jacket',
+  'blazer_suit',
+  'sweater',
+  'cap',
+  'kurta',
+  'frock',
+  'shoes',
+  'curtain',
+]);
+
+const CLOTH_NAME_PATTERNS = [
+  [/t[\s_-]*shirt|\btee\b/, 'tshirt'],
+  [/\bshirt\b/, 'shirt'],
+  [/formal[\s_-]*pant|\btrouser|\bpants?\b|\bchino/, 'formal_pant'],
+  [/\bjeans?\b|\bdenim\b/, 'jeans'],
+  [/\bsaree\b|\bsari\b/, 'saree'],
+  [/chudidar|churidar|salwar|kameez/, 'chudidar'],
+  [/\bkurti\b/, 'kurti'],
+  [/\bkurta\b/, 'kurta'],
+  [/\bshorts?\b/, 'shorts'],
+  [/pillow/, 'pillow_cover'],
+  [/bed[\s_-]*sheet|\bsheet\b|\bblanket\b|\bquilt\b|\bduvet\b/, 'bedsheet'],
+  [/\btowel\b|\bnapkin\b/, 'towel'],
+  [/\bjacket\b|\bhoodie\b/, 'jacket'],
+  [/\bblazer\b|\bsuit\b|\bcoat\b|\btuxedo\b/, 'blazer_suit'],
+  [/\bsweater\b|\bcardigan\b|\bpullover\b/, 'sweater'],
+  [/\bcap\b|\bhat\b|\bbeanie\b/, 'cap'],
+  [/\bfrock\b|\bdress\b|\bgown\b|\bskirt\b/, 'frock'],
+  [/\bshoes?\b|\bsneaker|\bboot\b/, 'shoes'],
+  [/\bcurtain\b|\bdrape\b/, 'curtain'],
+];
+
+const CLOTH_CODE_FALLBACK = {
+  cloth_01: 'shirt',
+  cloth_02: 'tshirt',
+  cloth_03: 'formal_pant',
+  cloth_04: 'jeans',
+  cloth_05: 'saree',
+  cloth_06: 'towel',
+  cloth_07: 'chudidar',
+  cloth_08: 'kurti',
+  cloth_09: 'shorts',
+  cloth_10: 'bedsheet',
+  cloth_11: 'pillow_cover',
+  cloth_12: 'jacket',
+  cloth_13: 'blazer_suit',
+  cloth_14: 'sweater',
+  cloth_15: 'cap',
+  cloth_16: 'curtain',
+};
+
+function resolveClothKey(itemId, itemName) {
+  const normalizedId = String(itemId || '').toLowerCase().trim().replace(/[\s-]+/g, '_');
+  if (DIRECT_CLOTH_KEYS.has(normalizedId)) {
+    return normalizedId;
+  }
+
+  const candidates = [itemName, itemId]
+    .filter(Boolean)
+    .map((val) => String(val).toLowerCase().trim());
+
+  for (const text of candidates) {
+    for (const [pattern, key] of CLOTH_NAME_PATTERNS) {
+      if (pattern.test(text)) {
+        return key;
+      }
+    }
+  }
+
+  return CLOTH_CODE_FALLBACK[normalizedId] || normalizedId;
+}
+
+export default function ClothIllustration({ itemId, itemName, size = 64 }) {
+  const resolvedKey = resolveClothKey(itemId, itemName);
+  switch (resolvedKey) {
     case 'shirt':
       return (
         <svg width={size} height={size} viewBox="0 0 80 80" fill="none">

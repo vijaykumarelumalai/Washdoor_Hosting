@@ -1,9 +1,10 @@
 // src/components/AuditLogModule.jsx
 // Washdoor Immutable Audit Log & System Activity Trail Module
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { getStoredAuditLogs } from '../services/auditService';
+import { getSupabaseAuditLogs } from '../services/customerService';
 import { exportToExcel, exportToPdf, exportToCsv } from '../services/exportService';
 import '../styles/AuditLog.css';
 
@@ -18,10 +19,55 @@ export default function AuditLogModule({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all'); // 'all' | 'lifecycle' | 'driver' | 'payment' | 'system'
   const [sortAsc, setSortAsc] = useState(false);
+  const [dbAuditRows, setDbAuditRows] = useState([]);
+  const [dbStatusRows, setDbStatusRows] = useState([]);
 
-  // Generate audit trail events aggregated from live orders & system events
+  useEffect(() => {
+    getSupabaseAuditLogs(100)
+      .then(({ auditLogs, statusHistory }) => {
+        if (Array.isArray(auditLogs)) setDbAuditRows(auditLogs);
+        if (Array.isArray(statusHistory)) setDbStatusRows(statusHistory);
+      })
+      .catch(() => {});
+  }, [orders.length]);
+
+  // Generate audit trail events aggregated from live orders, Supabase audit tables & system events
   const auditEvents = useMemo(() => {
     const list = [];
+
+    // Live Supabase washdoor_audit_logs records
+    dbAuditRows.forEach((row) => {
+      list.push({
+        id: `db-aud-${row.audit_id || row.id}`,
+        timestamp: row.created_at || new Date().toISOString(),
+        displayTime: row.created_at ? new Date(row.created_at).toLocaleString('en-IN') : '—',
+        entity: row.new_data?.order_number || row.work_id || row.record_id || 'System',
+        entityType: row.entity_name || 'Order',
+        category: 'system',
+        categoryLabel: `DB Audit (${row.operation || 'UPDATE'})`,
+        actor: row.changed_by_name || 'System Staff',
+        action: `${row.entity_name || 'customer_works'} ${row.operation || 'UPDATE'}`,
+        details: row.new_data ? JSON.stringify(row.new_data) : 'Database mutation recorded',
+        severity: 'info',
+      });
+    });
+
+    // Live Supabase washdoor_status_history records
+    dbStatusRows.forEach((row) => {
+      list.push({
+        id: `db-hist-${row.history_id}`,
+        timestamp: row.changed_at || row.created_at || new Date().toISOString(),
+        displayTime: (row.changed_at || row.created_at) ? new Date(row.changed_at || row.created_at).toLocaleString('en-IN') : '—',
+        entity: row.work_number || row.work_id || 'Order',
+        entityType: row.entity_type || 'Order',
+        category: 'lifecycle',
+        categoryLabel: 'Status Transition (DB)',
+        actor: row.changed_by_name || 'Staff',
+        action: row.old_status ? `${row.old_status} → ${row.new_status}` : `Status set to ${row.new_status}`,
+        details: row.remarks || 'Persisted in washdoor_status_history',
+        severity: 'success',
+      });
+    });
 
     // System Startup Event
     list.push({
@@ -186,7 +232,7 @@ export default function AuditLogModule({
       const tb = new Date(b.timestamp).getTime() || 0;
       return sortAsc ? ta - tb : tb - ta;
     });
-  }, [orders, currencySymbol, sortAsc]);
+  }, [orders, currencySymbol, sortAsc, dbAuditRows, dbStatusRows]);
 
   // Filtered events
   const filteredEvents = useMemo(() => {

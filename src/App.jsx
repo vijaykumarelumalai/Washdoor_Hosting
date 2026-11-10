@@ -360,7 +360,13 @@ export default function App() {
         totalAmount: updatedOrder.total_amount,
         advancePaid: updatedOrder.advance_paid,
         paymentStatus: updatedOrder.payment_status,
-        paymentMethod: updatedOrder.payment_method,
+        paymentMethod: updatedOrder.payment_method || updatedOrder.payment?.mode,
+        assignedStaff: updatedOrder.assigned_driver || updatedOrder.assigned_staff,
+        assigned_driver: updatedOrder.assigned_driver,
+        assigned_driver_full: updatedOrder.assigned_driver_full,
+        staff_notes: updatedOrder.staff_notes,
+        flags: updatedOrder.flags,
+        garment_inspections: updatedOrder.garment_inspections || updatedOrder.inspections,
         items: updatedOrder.items,
       }).catch((err) => console.warn('Background Supabase order update note:', err));
     }

@@ -198,7 +198,7 @@ export const translations = {
     pos_title: 'Orders & POS Counter Intake',
     pos_orders_list: 'Orders List',
     pos_new_intake: 'Counter Intake',
-    pos_create_order: '+ Create Order',
+    pos_create_order: 'Create Order',
     pos_search_placeholder: 'Search by Order ID, Customer Name, Mobile…',
     tab_all: 'All',
     status_received: 'Order Received',
@@ -308,7 +308,7 @@ export const translations = {
 
     // Dashboard Module
     welcome_washdoor: 'வாஷ்டோர்-க்கு வரவேற்கிறோம்',
-    btn_new_order: '+ புதிய ஆர்டர்',
+    btn_new_order: 'புதிய ஆர்டர்',
     kpi_today_revenue: 'இன்றைய வருவாய்',
     kpi_orders_today: 'இன்றைய ஆர்டர்கள்',
     kpi_collected_today: 'இன்று வசூலானது',

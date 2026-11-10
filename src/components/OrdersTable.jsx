@@ -23,11 +23,8 @@ export default function OrdersTable({ refreshKey }) {
     setError('');
 
     const { data, error: err } = await supabase
-      .from('orders')
-      .select(`
-        id, order_type, status, total_amount, notes, created_at,
-        customer:customers(customer_name, mobile_number, city)
-      `)
+      .from('customer_works')
+      .select('work_id, work_number, intake_method, work_status, total_amount, special_instructions, created_at, customer_name, mobile_number, delivery_address')
       .order('created_at', { ascending: false })
       .limit(50);
 
@@ -35,7 +32,20 @@ export default function OrdersTable({ refreshKey }) {
     if (err) {
       setError(err.message);
     } else {
-      setOrders(data ?? []);
+      const mapped = (data ?? []).map((w) => ({
+        id: w.work_number || w.work_id,
+        order_type: w.intake_method || 'Walk-In',
+        status: w.work_status || 'Received',
+        total_amount: w.total_amount,
+        notes: w.special_instructions,
+        created_at: w.created_at,
+        customer: {
+          customer_name: w.customer_name,
+          mobile_number: w.mobile_number,
+          city: w.delivery_address || '—',
+        },
+      }));
+      setOrders(mapped);
     }
   }, []);
 

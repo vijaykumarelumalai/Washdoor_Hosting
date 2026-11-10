@@ -26,6 +26,7 @@ export const DEFAULT_PRODUCTS = [
   { id: 'sweater', item_code: 'CLOTH-14', name: 'Sweater', category: 'Men', secondaryCategory: 'Women', price: 40, base_price: 40, unit: 'piece' },
   { id: 'cap', item_code: 'CLOTH-15', name: 'Cap', category: 'Accessories', secondaryCategory: 'Kids', price: 10, base_price: 10, unit: 'piece' },
   { id: 'curtain', item_code: 'CLOTH-16', name: 'Curtain', category: 'Home Linen', price: 60, base_price: 60, unit: 'piece' },
+  { id: 'shoe', item_code: 'CLOTH-17', name: 'Shoe', category: 'Accessories', price: 80, base_price: 80, unit: 'pair' },
 ];
 
 /**
@@ -278,6 +279,109 @@ async function resolveWorkIdAndNumber(identifier) {
  * Synchronizes discrete garment unit cards (washdoor_garment_cards) and
  * care inspections (washdoor_garment_inspections) to normalized database tables.
  */
+export const GARMENT_PHOTOS_BUCKET = 'washdoor-garment-photos';
+
+/**
+ * Uploads base64/data-URI photos to Supabase Storage and records metadata in washdoor_garment_photos.
+ * Returns updated photo descriptors containing public storage URLs when upload succeeds.
+ */
+export async function uploadGarmentPhotos(workId, workNumber, cardId, photos = []) {
+  if (!isSupabaseConfigured() || !workId || !Array.isArray(photos) || photos.length === 0) {
+    return photos || [];
+  }
+
+  const uploadedPhotos = [];
+  const rowsToInsert = [];
+
+  for (let idx = 0; idx < photos.length; idx++) {
+    const p = photos[idx];
+    if (!p) continue;
+
+    let finalUrl = p.url || p.photo_url || '';
+    let storagePath = p.storage_path || '';
+    const fileName = p.name || `garment-${cardId || workId}-${idx + 1}.jpg`;
+    let mimeType = p.mime_type || 'image/jpeg';
+    let fileSizeKb = p.file_size_kb || (p.size ? Math.max(1, Math.round(Number(p.size) / 1024)) : null);
+
+    // Upload base64 data URI to Supabase Storage bucket
+    if (typeof finalUrl === 'string' && finalUrl.startsWith('data:')) {
+      try {
+        const match = finalUrl.match(/^data:([^;]+);base64,(.+)$/);
+        if (match && supabase?.storage) {
+          mimeType = match[1] || 'image/jpeg';
+          const ext = mimeType.split('/')[1]?.split('+')[0] || 'jpg';
+          const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+          storagePath = `${workNumber || workId}/${cardId || 'order'}/${Date.now()}_${idx}_${safeName}.${ext}`;
+
+          const binaryStr = atob(match[2]);
+          const bytes = new Uint8Array(binaryStr.length);
+          for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+          }
+          fileSizeKb = fileSizeKb || Math.max(1, Math.round(bytes.length / 1024));
+
+          const { error: upErr } = await supabase.storage
+            .from(GARMENT_PHOTOS_BUCKET)
+            .upload(storagePath, bytes, { contentType: mimeType, upsert: true });
+
+          if (!upErr) {
+            const { data: pubData } = supabase.storage.from(GARMENT_PHOTOS_BUCKET).getPublicUrl(storagePath);
+            if (pubData?.publicUrl) {
+              finalUrl = pubData.publicUrl;
+            }
+          }
+        }
+      } catch (storageErr) {
+        console.warn('Garment photo storage upload note:', storageErr?.message || storageErr);
+      }
+    }
+
+    const updatedPhoto = { ...p, url: finalUrl, storage_path: storagePath || undefined };
+    uploadedPhotos.push(updatedPhoto);
+
+    if (finalUrl && !finalUrl.startsWith('data:')) {
+      rowsToInsert.push({
+        card_id: cardId || null,
+        work_id: workId,
+        work_number: workNumber || null,
+        photo_type: p.photo_type || 'Before_Wash',
+        storage_bucket: GARMENT_PHOTOS_BUCKET,
+        storage_path: storagePath || finalUrl,
+        photo_url: finalUrl,
+        file_name: fileName,
+        file_size_kb: fileSizeKb,
+        mime_type: mimeType,
+        caption: p.caption || fileName,
+        captured_by: p.captured_by || 'POS Inspector',
+        is_customer_visible: p.is_customer_visible !== false,
+      });
+    }
+  }
+
+  if (rowsToInsert.length > 0) {
+    try {
+      const { error } = await supabase.from('washdoor_garment_photos').insert(rowsToInsert);
+      if (error && (error.code === 'PGRST204' || String(error.message).includes('column'))) {
+        // Fallback for base schema without extended photo columns
+        const minimalRows = rowsToInsert.map(({ card_id, work_id, photo_type, storage_path, photo_url, caption, captured_by }) => ({
+          card_id,
+          work_id,
+          photo_type,
+          storage_path,
+          photo_url,
+          caption,
+          captured_by,
+        }));
+        await supabase.from('washdoor_garment_photos').insert(minimalRows);
+      }
+    } catch (photoErr) {
+      console.warn('washdoor_garment_photos insert note:', photoErr?.message || photoErr);
+    }
+  }
+
+  return uploadedPhotos;
+}
+
 export async function syncGarmentCardsAndInspections(workIdentifier, workNumber, items = [], inspections = {}) {
   if (!isSupabaseConfigured() || !workIdentifier) return { success: false };
   try {
@@ -295,6 +399,7 @@ export async function syncGarmentCardsAndInspections(workIdentifier, workNumber,
 
     // 2. Expand items into discrete 1-based unit cards
     const cardsToInsert = [];
+    const cardPieceLookup = [];
     let globalUnitIndex = 1;
 
     items.forEach((item) => {
@@ -314,31 +419,49 @@ export async function syncGarmentCardsAndInspections(workIdentifier, workNumber,
           color: insp.color || null,
           brand: insp.brand || null,
           fabric_type: insp.fabric || null,
+          make: insp.make || null,
+          stains: insp.stains || null,
           garment_condition: insp.condition || 'Good',
           care_instructions: insp.notes || null,
           processing_stage: 'Received',
         });
+        cardPieceLookup.push({ unit_index: globalUnitIndex, pieceKey, insp });
         globalUnitIndex++;
       }
     });
 
     if (cardsToInsert.length > 0) {
-      const { data: insertedCards, error: cardErr } = await supabase
-        .from('washdoor_garment_cards')
-        .insert(cardsToInsert)
-        .select();
+      let insertedCards = null;
+      let cardErr = null;
+      const res = await supabase.from('washdoor_garment_cards').insert(cardsToInsert).select();
+      insertedCards = res.data;
+      cardErr = res.error;
+
+      // Fallback if make/stains columns are not yet migrated
+      if (cardErr && (cardErr.code === 'PGRST204' || String(cardErr.message).includes('column'))) {
+        const baseCards = cardsToInsert.map(({ make, stains, ...rest }) => rest);
+        const fbRes = await supabase.from('washdoor_garment_cards').insert(baseCards).select();
+        insertedCards = fbRes.data;
+        cardErr = fbRes.error;
+      }
 
       if (cardErr) {
         console.warn('washdoor_garment_cards insert note:', cardErr.message);
       }
 
-      // 3. Insert inspections for pieces with logged defects or stains
+      // 3. Insert inspections & upload photos for pieces
       if (insertedCards && insertedCards.length > 0) {
         const inspectionsToInsert = [];
-        insertedCards.forEach((card) => {
-          const matchingInsp = Object.values(inspections).find(
+        for (const card of insertedCards) {
+          const entry = cardPieceLookup.find((c) => c.unit_index === card.unit_index);
+          const matchingInsp = entry?.insp || Object.values(inspections).find(
             (p) => (p.piece === card.unit_index || p.unit_index === card.unit_index) || (p.name === card.garment_name && (p.stains || p.notes))
           );
+
+          if (matchingInsp && Array.isArray(matchingInsp.photos) && matchingInsp.photos.length > 0) {
+            await uploadGarmentPhotos(workId, cleanNum, card.card_id, matchingInsp.photos);
+          }
+
           if (matchingInsp && (matchingInsp.stains || matchingInsp.notes || matchingInsp.condition)) {
             inspectionsToInsert.push({
               card_id: card.card_id,
@@ -353,7 +476,7 @@ export async function syncGarmentCardsAndInspections(workIdentifier, workNumber,
               inspected_by: 'QC Staff',
             });
           }
-        });
+        }
 
         if (inspectionsToInsert.length > 0) {
           try {
@@ -369,6 +492,220 @@ export async function syncGarmentCardsAndInspections(workIdentifier, workNumber,
   } catch (err) {
     console.warn('syncGarmentCardsAndInspections warning:', err.message);
     return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Upserts dedicated Factory / Central Plant Transit & Workshop data into washdoor_factory_orders.
+ */
+export async function upsertFactoryOrder(workIdentifier, factoryPayload = {}) {
+  if (!isSupabaseConfigured() || !workIdentifier) return { success: false };
+  try {
+    const { workId, workNumber } = await resolveWorkIdAndNumber(workIdentifier);
+    if (!workId) return { success: false };
+
+    const row = {
+      work_id: workId,
+      work_number: workNumber || formatOrderId(workIdentifier),
+      routing_type: factoryPayload.routing_type === 'in_store' ? 'in_store' : 'factory',
+      store_outlet: factoryPayload.store_outlet || null,
+      factory_outlet: factoryPayload.factory_outlet || factoryPayload.factoryPlant || null,
+      factory_hub: factoryPayload.factory_hub || factoryPayload.factory_outlet || factoryPayload.factoryPlant || null,
+      workshop_station: factoryPayload.workshop_station || null,
+      factory_manifest_no: factoryPayload.factory_manifest_no || null,
+      dispatch_bag_tag: factoryPayload.dispatch_bag_tag || factoryPayload.dispatchBagTag || null,
+      factory_supervisor: factoryPayload.factory_supervisor || null,
+      collected_by_staff: factoryPayload.collected_by_staff || null,
+      assigned_driver: factoryPayload.assigned_driver || factoryPayload.assignedRider || null,
+      driver_phone: factoryPayload.driver_phone || factoryPayload.riderPhone || null,
+      vehicle_name: factoryPayload.vehicle_name || factoryPayload.vehicleNo || null,
+      mode_of_transport: factoryPayload.mode_of_transport || null,
+      route_from_to: factoryPayload.route_from_to || factoryPayload.routeZone || null,
+      route_return: factoryPayload.route_return || null,
+      weight_kg: factoryPayload.weight_kg !== undefined && factoryPayload.weight_kg !== null ? Number(factoryPayload.weight_kg) : null,
+      factory_gate_in: factoryPayload.factory_gate_in || null,
+      factory_gate_out: factoryPayload.factory_gate_out || null,
+      plant_transit_status: factoryPayload.plant_transit_status || null,
+      logistics_status: factoryPayload.logistics_status || factoryPayload.logisticsStatus || null,
+      assigned_machine: factoryPayload.assigned_machine || factoryPayload.assignedMachine || null,
+      qc_inspector: factoryPayload.qc_inspector || factoryPayload.qcInspector || null,
+      rack_shelf_location: factoryPayload.rack_shelf_location || factoryPayload.rackShelfLocation || null,
+      driver_instructions: factoryPayload.driver_instructions || factoryPayload.driverInstructions || null,
+      factory_remarks: factoryPayload.factory_remarks || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from('washdoor_factory_orders')
+      .upsert(row, { onConflict: 'work_id' })
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true, data };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Persists pickup or delivery schedules into washdoor_pickup_delivery_schedules.
+ */
+export async function recordPickupDeliverySchedule(workIdentifier, schedulePayload = {}) {
+  if (!isSupabaseConfigured() || !workIdentifier) return { success: false };
+  try {
+    const { workId, workNumber } = await resolveWorkIdAndNumber(workIdentifier);
+    if (!workId) return { success: false };
+
+    const row = {
+      work_id: workId,
+      work_number: workNumber || formatOrderId(workIdentifier),
+      schedule_type: schedulePayload.scheduleType === 'Delivery' ? 'Delivery' : 'Pickup',
+      scheduled_date: schedulePayload.scheduleDate || new Date().toISOString().split('T')[0],
+      slot_label: schedulePayload.scheduleSlot || schedulePayload.deliverySlot || 'Morning (09:00 AM - 12:00 PM)',
+      pickup_time_display: schedulePayload.pickupTime || null,
+      delivery_slot_display: schedulePayload.deliverySlot || schedulePayload.scheduleSlot || null,
+      assigned_driver_name: schedulePayload.assignedDriver || schedulePayload.assignedRider || null,
+      assigned_driver_full: schedulePayload.assignedDriverFull || null,
+      driver_phone: schedulePayload.riderPhone || null,
+      vehicle_number: schedulePayload.vehicleNo || null,
+      route_zone: schedulePayload.routeZone || null,
+      address_text: schedulePayload.address || null,
+      status: schedulePayload.status || 'Scheduled',
+      notes: schedulePayload.driverInstructions || schedulePayload.notes || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from('washdoor_pickup_delivery_schedules')
+      .insert([row])
+      .select()
+      .maybeSingle();
+
+    if (error) return { success: false, error: error.message };
+    return { success: true, data };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Persists customer additional addresses (1-5) into washdoor_customer_addresses.
+ */
+export async function saveCustomerAddresses(customerId, addresses = []) {
+  if (!isSupabaseConfigured() || !customerId || !Array.isArray(addresses) || addresses.length === 0) {
+    return { success: false };
+  }
+  try {
+    const cleanCustId = formatCustomerId(customerId);
+    await supabase.from('washdoor_customer_addresses').delete().eq('customer_id', cleanCustId);
+
+    const rows = addresses
+      .filter((a) => a && (a.addressLine || a.address_line || a.city))
+      .map((a, idx) => ({
+        customer_id: cleanCustId,
+        address_label: `Additional ${idx + 1}`,
+        address_line: a.addressLine || a.address_line || '',
+        city: a.city || null,
+        pincode: a.pincode && /^[0-9]{6}$/.test(String(a.pincode)) ? String(a.pincode) : null,
+        map_link: a.mapLink || a.map_link || null,
+        alternate_phone: a.altPhone || a.alternate_phone || null,
+        email: a.email || null,
+        is_default: idx === 0,
+      }));
+
+    if (rows.length === 0) return { success: true };
+    const { error } = await supabase.from('washdoor_customer_addresses').insert(rows);
+    return { success: !error, error: error?.message || null };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Persists a parked/held POS order to washdoor_held_orders.
+ */
+export async function saveHeldOrder(heldPayload = {}) {
+  if (!isSupabaseConfigured()) return { success: false };
+  try {
+    const row = {
+      customer_id: heldPayload.customer_id || null,
+      customer_name: heldPayload.customerName || heldPayload.customer_name || 'Walk-In Customer',
+      mobile_number: heldPayload.mobile || heldPayload.mobile_number || null,
+      cart_items: heldPayload.cart || heldPayload.cart_items || [],
+      subtotal: Number(heldPayload.subtotal || 0),
+      tax_amount: Number(heldPayload.gstAmount || heldPayload.tax_amount || 0),
+      total_amount: Number(heldPayload.grandTotal || heldPayload.total_amount || 0),
+      special_notes: heldPayload.specialNotes || heldPayload.special_notes || null,
+      held_by: heldPayload.held_by || 'Store Staff',
+      status: 'Held',
+    };
+    const { data, error } = await supabase.from('washdoor_held_orders').insert([row]).select().maybeSingle();
+    return { success: !error, data, error: error?.message || null };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Inserts an immutable activity log row into washdoor_audit_logs.
+ */
+export async function recordAuditLogEntry({
+  entity_name = 'customer_works',
+  record_id,
+  work_id = null,
+  operation = 'UPDATE',
+  old_data = null,
+  new_data = null,
+  changed_by_name = 'Store Staff',
+}) {
+  if (!isSupabaseConfigured()) return { success: false };
+  try {
+    let resolvedWorkId = work_id;
+    if (!resolvedWorkId && record_id) {
+      const resolved = await resolveWorkIdAndNumber(record_id);
+      resolvedWorkId = resolved.workId;
+    }
+    const targetId = resolvedWorkId || (
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(record_id || ''))
+        ? record_id
+        : null
+    );
+    if (!targetId) return { success: false };
+
+    const { error } = await supabase.from('washdoor_audit_logs').insert([{
+      entity_name,
+      record_id: targetId,
+      work_id: resolvedWorkId || targetId,
+      operation: ['INSERT', 'UPDATE', 'DELETE'].includes(operation) ? operation : 'UPDATE',
+      old_data: old_data || null,
+      new_data: new_data || null,
+      changed_by_name: changed_by_name || 'Store Staff',
+    }]);
+    return { success: !error };
+  } catch {
+    return { success: false };
+  }
+}
+
+/**
+ * Fetches live audit logs & status transitions from washdoor_audit_logs and washdoor_status_history.
+ */
+export async function getSupabaseAuditLogs(limit = 100) {
+  if (!isSupabaseConfigured()) return { auditLogs: [], statusHistory: [] };
+  try {
+    const [audRes, histRes] = await Promise.all([
+      supabase.from('washdoor_audit_logs').select('*').order('created_at', { ascending: false }).limit(limit),
+      supabase.from('washdoor_status_history').select('*').order('changed_at', { ascending: false }).limit(limit),
+    ]);
+    return {
+      auditLogs: (!audRes.error && Array.isArray(audRes.data)) ? audRes.data : [],
+      statusHistory: (!histRes.error && Array.isArray(histRes.data)) ? histRes.data : [],
+    };
+  } catch {
+    return { auditLogs: [], statusHistory: [] };
   }
 }
 
@@ -629,6 +966,24 @@ export async function getNextCustomerId() {
     if (isSupabaseConfigured()) {
       let maxNum = 0;
 
+      // 0. Check customers master table
+      try {
+        const { data: custRows } = await supabase
+          .from('customers')
+          .select('customer_code, id')
+          .order('id', { ascending: false });
+        if (custRows && custRows.length > 0) {
+          custRows.forEach((row) => {
+            const code = row.customer_code || '';
+            const match = String(code).match(/(?:CUST-|CUS)(\d+)/i);
+            if (match) {
+              const num = parseInt(match[1], 10);
+              if (num > maxNum) maxNum = num;
+            }
+          });
+        }
+      } catch {}
+
       // 1. Check customer_works
       try {
         const { data: worksData } = await supabase
@@ -638,7 +993,7 @@ export async function getNextCustomerId() {
         if (worksData && worksData.length > 0) {
           worksData.forEach((row) => {
             if (row.customer_id) {
-              const match = String(row.customer_id).match(/CUST-(\d+)/i);
+              const match = String(row.customer_id).match(/(?:CUST-|CUS)(\d+)/i);
               if (match) {
                 const num = parseInt(match[1], 10);
                 if (num > maxNum) maxNum = num;
@@ -840,8 +1195,63 @@ function mapMasterRowToOrder(row) {
   };
 }
 
+// Convert normalized customers table row into UI Customer shape
+export function mapCustomersTableRow(r) {
+  if (!r) return null;
+  const custId = formatCustomerId(r.customer_code || r.customer_id || (r.id ? formatCustomerId(r.id) : 'CUST-00001'));
+  return {
+    id: custId,
+    db_id: r.id,
+    customerId: custId,
+    customer_id: custId,
+    customer_code: r.customer_code || custId,
+    customer_name: r.customer_name || '',
+    customerName: r.customer_name || '',
+    country_code: '+91',
+    countryCode: '+91',
+    mobile_number: r.mobile_number || '',
+    mobileNumber: r.mobile_number || '',
+    alternate_phone: r.alternate_phone || null,
+    alternatePhoneNumber: r.alternate_phone || null,
+    email: r.email || null,
+    address: r.address || '',
+    streetArea: r.address || '',
+    city: r.city || '',
+    pincode: r.pincode || null,
+    date_of_birth: r.date_of_birth || null,
+    anniversary_date: r.anniversary_date || null,
+    map_link: r.map_link || null,
+    gst_number: r.gst_number || null,
+    gstNumber: r.gst_number || null,
+    company_name: r.company_name || null,
+    companyName: r.company_name || null,
+    tax_exemption: Boolean(r.tax_exemption),
+    customer_classification: r.customer_classification || 'Regular Customer',
+    customerClassification: r.customer_classification || 'Regular Customer',
+    customer_status: r.customer_status || 'Active',
+    price_list: r.price_list || 'Standard',
+    area_service_zone: r.service_zone || 'Zone 1',
+    areaServiceZone: r.service_zone || 'Zone 1',
+    service_zone: r.service_zone || 'Zone 1',
+    credit_limit: Number(r.credit_limit || 0),
+    wallet_balance: Number(r.wallet_balance || 0),
+    default_discount: Number(r.default_discount || 0),
+    communication_pref: r.communication_pref || 'WhatsApp',
+    communicationPreference: r.communication_pref || 'WhatsApp',
+    preferredCommunicationLanguage: r.preferred_language || 'English',
+    preferred_language: r.preferred_language || 'English',
+    dnd: Boolean(r.dnd),
+    internal_comments: r.internal_comments || null,
+    notes: r.notes || r.internal_comments || null,
+    additional_addresses: [],
+    additionalAddresses: [],
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+  };
+}
+
 /**
- * Searches real customer records in Supabase customer_works and washdoor_orders_master.
+ * Searches real customer records in Supabase customers, customer_works, and washdoor_orders_master.
  */
 export async function searchCustomers(query) {
   if (!query || !query.trim()) {
@@ -856,6 +1266,7 @@ export async function searchCustomers(query) {
 
   try {
     const seen = new Set();
+    const seenPhones = new Set();
     const uniqueCustomers = [];
 
     // 1. Search customers table
@@ -863,27 +1274,18 @@ export async function searchCustomers(query) {
       const { data: cData } = await supabase
         .from('customers')
         .select('*')
-        .or(`customer_name.ilike.%${q}%,mobile_number.ilike.%${q}%,address.ilike.%${q}%`)
+        .or(`customer_name.ilike.%${q}%,mobile_number.ilike.%${q}%,address.ilike.%${q}%,customer_code.ilike.%${q}%`)
         .limit(30);
 
       if (cData && cData.length > 0) {
         cData.forEach((r) => {
-          const custId = r.customer_id || (r.id ? formatCustomerId(r.id) : null);
-          const phone = r.mobile_number || '';
-          const key = custId || phone;
+          const mapped = mapCustomersTableRow(r);
+          const key = mapped?.customer_id;
+          const phone = mapped?.mobile_number;
           if (key && !seen.has(key)) {
             seen.add(key);
-            uniqueCustomers.push({
-              id: custId,
-              customer_id: custId,
-              customerId: custId,
-              customer_name: r.customer_name || '',
-              mobile_number: phone,
-              address: r.address || '',
-              email: r.email || '',
-              city: r.city || '',
-              pincode: r.pincode || '',
-            });
+            if (phone) seenPhones.add(phone);
+            uniqueCustomers.push(mapped);
           }
         });
       }
@@ -902,8 +1304,9 @@ export async function searchCustomers(query) {
         worksData.forEach((r) => {
           const c = mapCustomerWorkRow(r);
           const key = c.customer_id || c.mobile_number;
-          if (key && !seen.has(key)) {
+          if (key && !seen.has(key) && (!c.mobile_number || !seenPhones.has(c.mobile_number))) {
             seen.add(key);
+            if (c.mobile_number) seenPhones.add(c.mobile_number);
             uniqueCustomers.push(c);
           }
         });
@@ -942,7 +1345,7 @@ export async function searchCustomers(query) {
 }
 
 // Convert customer_works row into UI Order shape with full fidelity
-function mapCustomerWorkRowToOrder(row) {
+function mapCustomerWorkRowToOrder(row, factoryRow = null, scheduleRow = null) {
   const orderNum = row.work_number ? formatOrderId(row.work_number) : (row.work_id ? `ORD${String(row.work_id).slice(-5)}` : 'ORD00001');
   const custId = formatCustomerId(row.customer_id || 'CUST-00001');
   const rawStatus = row.work_status || 'order recived';
@@ -986,6 +1389,9 @@ function mapCustomerWorkRowToOrder(row) {
 
   const formattedExpectedDelivery = internalNotesObj.expected_delivery_display || (row.target_delivery_date ? new Date(row.target_delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
 
+  const factoryData = factoryRow || {};
+  const schedData = scheduleRow || {};
+
   return {
     id: orderNum,
     order_id: row.work_id || orderNum,
@@ -1015,6 +1421,12 @@ function mapCustomerWorkRowToOrder(row) {
     subtotal: subtotal,
     discount: discountAmount,
     discount_amount: discountAmount,
+    discount_pct: Number(row.discount_pct || 0),
+    taxable_amount: Number(row.taxable_amount ?? Math.max(0, subtotal - discountAmount)),
+    gst_percentage: Number(row.gst_percentage ?? (row.tax_exemption ? 0 : 5)),
+    cgst_amount: Number(row.cgst_amount ?? +(taxAmount / 2).toFixed(2)),
+    sgst_amount: Number(row.sgst_amount ?? +(taxAmount / 2).toFixed(2)),
+    igst_amount: Number(row.igst_amount ?? 0),
     tax: taxAmount,
     tax_amount: taxAmount,
     total_amount: totalAmount,
@@ -1042,18 +1454,57 @@ function mapCustomerWorkRowToOrder(row) {
     customer_history: { items: items },
     intake_date: row.intake_date || row.created_at,
     created_at: row.created_at,
+    updated_at: row.updated_at || row.created_at,
+    created_by: row.created_by || row.created_by_name || 'POS Counter',
+    updated_by: row.updated_by || row.updated_by_name || 'POS Counter',
     target_delivery_date: row.target_delivery_date,
     delivery_date: formattedExpectedDelivery,
     expected_delivery: formattedExpectedDelivery,
-    assigned_staff: row.assigned_staff || '',
-    assigned_driver: row.assigned_staff || internalNotesObj.assigned_driver || '',
-    assigned_driver_full: internalNotesObj.assigned_driver_full || row.assigned_staff || '',
-    rack_shelf_location: row.rack_shelf_location || '',
-    weight_kg: row.weight_kg !== undefined && row.weight_kg !== null ? Number(row.weight_kg) : null,
+    assigned_staff: row.assigned_staff || factoryData.collected_by_staff || '',
+    assigned_driver: factoryData.assigned_driver || schedData.assigned_driver_name || row.assigned_staff || internalNotesObj.assigned_driver || '',
+    assigned_driver_full: schedData.assigned_driver_full || internalNotesObj.assigned_driver_full || row.assigned_staff || '',
+    assigned_for_pickup: Boolean(internalNotesObj.assigned_for_pickup || internalNotesObj.pickup_status === 'Assigned for Pickup' || (row.intake_method === 'On-Call' && (row.assigned_staff || internalNotesObj.assigned_driver))),
+    pickup_status: internalNotesObj.pickup_status || (row.assigned_staff || internalNotesObj.assigned_driver ? 'Assigned for Pickup' : ''),
+    pickup_delivery: internalNotesObj.pickup_delivery || ((row.assigned_staff || internalNotesObj.assigned_driver) ? `Assigned: ${internalNotesObj.assigned_driver || row.assigned_staff}` : ''),
+    rack_shelf_location: row.rack_shelf_location || factoryData.rack_shelf_location || '',
+    weight_kg: row.weight_kg !== undefined && row.weight_kg !== null ? Number(row.weight_kg) : (factoryData.weight_kg ?? null),
     completed_at: row.completed_at || null,
     delivered_at: row.delivered_at || null,
-    staff_notes: internalNotesObj.staff_notes || '',
-    flags: internalNotesObj.flags || {},
+    routing_type: factoryData.routing_type || internalNotesObj.routing_type || 'factory',
+    store_outlet: factoryData.store_outlet || internalNotesObj.store_outlet || '',
+    factory_outlet: factoryData.factory_outlet || internalNotesObj.factory_outlet || '',
+    factory_hub: factoryData.factory_hub || internalNotesObj.factory_hub || '',
+    workshop_station: factoryData.workshop_station || internalNotesObj.workshop_station || '',
+    factory_manifest_no: factoryData.factory_manifest_no || internalNotesObj.factory_manifest_no || '',
+    dispatch_bag_tag: factoryData.dispatch_bag_tag || internalNotesObj.dispatch_bag_tag || '',
+    factory_supervisor: factoryData.factory_supervisor || internalNotesObj.factory_supervisor || '',
+    collected_by_staff: factoryData.collected_by_staff || internalNotesObj.collected_by_staff || '',
+    vehicle_name: factoryData.vehicle_name || internalNotesObj.vehicle_name || '',
+    mode_of_transport: factoryData.mode_of_transport || internalNotesObj.mode_of_transport || '',
+    route_from_to: factoryData.route_from_to || internalNotesObj.route_from_to || '',
+    route_return: factoryData.route_return || internalNotesObj.route_return || '',
+    factory_gate_in: factoryData.factory_gate_in || internalNotesObj.factory_gate_in || '',
+    factory_gate_out: factoryData.factory_gate_out || internalNotesObj.factory_gate_out || '',
+    plant_transit_status: factoryData.plant_transit_status || internalNotesObj.plant_transit_status || '',
+    logistics: {
+      factoryPlant: factoryData.factory_outlet || factoryData.factory_hub || internalNotesObj.factory_outlet || '',
+      assignedRider: factoryData.assigned_driver || schedData.assigned_driver_name || row.assigned_staff || '',
+      riderPhone: factoryData.driver_phone || schedData.driver_phone || '',
+      vehicleNo: factoryData.vehicle_name || schedData.vehicle_number || '',
+      routeZone: factoryData.route_from_to || schedData.route_zone || '',
+      pickupTime: schedData.pickup_time_display || '',
+      deliverySlot: schedData.delivery_slot_display || schedData.slot_label || '',
+      dispatchBagTag: factoryData.dispatch_bag_tag || '',
+      logisticsStatus: factoryData.logistics_status || schedData.status || '',
+      driverInstructions: factoryData.driver_instructions || schedData.notes || '',
+    },
+    workflow: {
+      assignedMachine: factoryData.assigned_machine || '',
+      qcInspector: factoryData.qc_inspector || '',
+      statusRemark: '',
+    },
+    staff_notes: row.staff_notes || internalNotesObj.staff_notes || '',
+    flags: (row.handling_flags && Object.keys(row.handling_flags).length > 0) ? row.handling_flags : (internalNotesObj.flags || {}),
     pincode: row.pincode || row.pin_code || internalNotesObj.pincode || '',
     pin_code: row.pin_code || row.pincode || internalNotesObj.pincode || '',
     business_name: row.business_name || row.company_name || internalNotesObj.business_name || '',
@@ -1098,9 +1549,8 @@ export function isCustomerRegistrationRecord(row) {
 }
 
 /**
- * Fetches real orders from Supabase customer_works and washdoor_orders_master.
- * Excludes pure customer master registration records.
- * Returns only authentic database orders (no hardcoded mock records).
+ * Fetches real orders from Supabase customer_works (hydrated with washdoor_factory_orders
+ * and washdoor_pickup_delivery_schedules) and falls back to washdoor_orders_master.
  */
 export async function getOrders() {
   if (!isSupabaseConfigured()) {
@@ -1117,7 +1567,29 @@ export async function getOrders() {
     if (!worksError && worksData && worksData.length > 0) {
       // Exclude customer master registrations: only real orders with pieces/services
       const realOrdersData = worksData.filter((row) => !isCustomerRegistrationRecord(row));
-      const orders = realOrdersData.map(mapCustomerWorkRowToOrder);
+      const workIds = realOrdersData.map((r) => r.work_id).filter(Boolean);
+
+      // Hydrate dedicated washdoor_factory_orders and washdoor_pickup_delivery_schedules if present
+      const factoryByWorkId = {};
+      const scheduleByWorkId = {};
+      if (workIds.length > 0) {
+        try {
+          const [facRes, schedRes] = await Promise.all([
+            supabase.from('washdoor_factory_orders').select('*').in('work_id', workIds),
+            supabase.from('washdoor_pickup_delivery_schedules').select('*').in('work_id', workIds).order('created_at', { ascending: false }),
+          ]);
+          if (!facRes.error && Array.isArray(facRes.data)) {
+            facRes.data.forEach((f) => { factoryByWorkId[f.work_id] = f; });
+          }
+          if (!schedRes.error && Array.isArray(schedRes.data)) {
+            schedRes.data.forEach((s) => { if (!scheduleByWorkId[s.work_id]) scheduleByWorkId[s.work_id] = s; });
+          }
+        } catch {}
+      }
+
+      const orders = realOrdersData.map((row) =>
+        mapCustomerWorkRowToOrder(row, factoryByWorkId[row.work_id], scheduleByWorkId[row.work_id])
+      );
       return { data: orders, error: null };
     }
 
@@ -1151,9 +1623,32 @@ export async function getAllCustomers() {
 
   try {
     const seen = new Set();
+    const seenPhones = new Set();
     const uniqueCustomers = [];
 
-    // 1. Fetch from primary customer_works table
+    // 1. Fetch from primary normalized customers table
+    try {
+      const { data: custData, error: custErr } = await supabase
+        .from('customers')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!custErr && custData) {
+        custData.forEach((r) => {
+          const c = mapCustomersTableRow(r);
+          const key = c?.customer_id;
+          if (key && !seen.has(key)) {
+            seen.add(key);
+            if (c.mobile_number) seenPhones.add(c.mobile_number);
+            uniqueCustomers.push(c);
+          }
+        });
+      }
+    } catch (cErr) {
+      console.warn('customers getAll notice:', cErr);
+    }
+
+    // 2. Merge additional customer records / profiles from customer_works
     try {
       const { data: worksData, error: worksError } = await supabase
         .from('customer_works')
@@ -1164,9 +1659,16 @@ export async function getAllCustomers() {
         worksData.forEach((r) => {
           const c = mapCustomerWorkRow(r);
           const key = c.customer_id;
-          if (key && !seen.has(key)) {
+          if (key && !seen.has(key) && (!c.mobile_number || !seenPhones.has(c.mobile_number))) {
             seen.add(key);
+            if (c.mobile_number) seenPhones.add(c.mobile_number);
             uniqueCustomers.push(c);
+          } else if (c.mobile_number && seenPhones.has(c.mobile_number) && Array.isArray(c.additional_addresses) && c.additional_addresses.length > 0) {
+            const match = uniqueCustomers.find((u) => u.mobile_number === c.mobile_number);
+            if (match && (!match.additional_addresses || match.additional_addresses.length === 0)) {
+              match.additional_addresses = c.additional_addresses;
+              match.additionalAddresses = c.additional_addresses;
+            }
           }
         });
       }
@@ -1174,7 +1676,7 @@ export async function getAllCustomers() {
       console.warn('customer_works getAll notice:', wErr);
     }
 
-    // 2. Also merge from washdoor_orders_master for backwards compatibility
+    // 3. Also merge from washdoor_orders_master for backwards compatibility
     try {
       const { data: masterData, error: masterError } = await supabase
         .from('washdoor_orders_master')
@@ -1185,8 +1687,9 @@ export async function getAllCustomers() {
         masterData.forEach((r) => {
           const c = mapMasterRowToOrder(r).customer;
           const key = c.customer_id || c.customerId || c.id;
-          if (key && !seen.has(key)) {
+          if (key && !seen.has(key) && (!c.mobile_number || !seenPhones.has(c.mobile_number))) {
             seen.add(key);
+            if (c.mobile_number) seenPhones.add(c.mobile_number);
             uniqueCustomers.push(c);
           }
         });
@@ -1202,9 +1705,7 @@ export async function getAllCustomers() {
 }
 
 /**
- * Creates a real customer record in Supabase customer_works table.
- * Preserves all customer profile details (additional addresses, contact, pricing, preferences)
- * and assigns a sequential CUST-XXXXX customer identifier.
+ * Creates a real customer record in Supabase customers & customer_works tables.
  */
 export async function createCustomer(payload) {
   const clean = cleanPayload(payload);
@@ -1241,7 +1742,7 @@ export async function createCustomer(payload) {
       marketing_source: clean.marketing_source || 'Walk-in',
     };
 
-    // 2. Also register into customers table (with normalized constraints)
+    // 2. Insert into normalized customers master table using exact schema columns
     const normMobile = String(clean.mobile_number || '').replace(/\D/g, '').slice(-10);
     const dbClassification = (clean.customer_classification || 'regular').toLowerCase().includes('vip') ? 'vip' :
       (clean.customer_classification || '').toLowerCase().includes('corp') ? 'corporate' :
@@ -1255,28 +1756,41 @@ export async function createCustomer(payload) {
       ? String(clean.communication_lang).toLowerCase()
       : 'en';
 
+    let createdCustRow = null;
     try {
-      await supabase.from('customers').insert([{
+      const { data: custInsertData, error: custErr } = await supabase.from('customers').insert([{
+        customer_code: custId,
         customer_name: clean.customer_name,
         mobile_number: normMobile,
         alternate_phone: clean.alternate_phone ? String(clean.alternate_phone).replace(/\D/g, '').slice(-10) : null,
         email: clean.email || null,
         address: clean.address || null,
-        city: clean.city || null,
+        city: clean.city || 'Ranipet',
         pincode: clean.pincode && /^[0-9]{6}$/.test(String(clean.pincode)) ? String(clean.pincode) : null,
+        date_of_birth: clean.date_of_birth || null,
+        map_link: clean.map_link || null,
+        gst_number: clean.gst_number || null,
+        company_name: clean.company_name || null,
         communication_pref: dbCommPref,
-        communication_lang: dbCommLang,
+        preferred_language: dbCommLang,
+        dnd: Boolean(clean.dnd),
         tax_exemption: Boolean(clean.tax_exemption),
         customer_classification: dbClassification,
         customer_status: dbStatus,
-        tier: clean.tier || 'SILVER',
+        price_list: clean.price_list || 'Standard',
+        service_zone: customerProfileItem.area_service_zone,
+        credit_limit: customerProfileItem.credit_limit,
+        default_discount: customerProfileItem.default_discount,
+        internal_comments: clean.internal_comments || null,
         notes: clean.notes || clean.internal_comments || null,
-      }]);
+      }]).select().maybeSingle();
+      if (!custErr && custInsertData) createdCustRow = custInsertData;
+      else if (custErr) console.warn('Customer master insert note:', custErr.message);
     } catch (custErr) {
       console.warn('Customer master auto-insert note:', custErr);
     }
 
-    // 3. Prepare customer_works row
+    // 3. Also insert registration row into customer_works for unified lookup & profile JSONB
     const generatedOrderNum = await getNextOrderId();
     const workRow = {
       work_number: generatedOrderNum,
@@ -1303,26 +1817,33 @@ export async function createCustomer(payload) {
     };
     Object.keys(workRow).forEach((k) => workRow[k] === undefined && delete workRow[k]);
 
-    // 3. Primary Insert into customer_works table
     const { data: workData, error: workError } = await supabase
       .from('customer_works')
       .insert([workRow])
       .select()
       .single();
 
-    if (workError) {
+    if (Array.isArray(clean.additional_addresses) && clean.additional_addresses.length > 0) {
+      saveCustomerAddresses(custId, clean.additional_addresses).catch(() => {});
+    }
+
+    if (workError && !createdCustRow) {
       console.error('Error inserting into customer_works:', workError);
       return { data: null, error: workError };
     }
 
-    return { data: mapCustomerWorkRow(workData), error: null };
+    return {
+      data: workData ? mapCustomerWorkRow(workData) : mapCustomersTableRow(createdCustRow),
+      error: null,
+    };
   } catch (err) {
     return { data: null, error: err };
   }
 }
 
 /**
- * Updates a real customer record in Supabase customer_works and washdoor_orders_master.
+ * Updates a real customer record in Supabase customers, customer_works, and washdoor_orders_master.
+ * Safely preserves order JSON internal_notes on existing laundry orders while updating registration JSONB.
  */
 export async function updateCustomer(id, payload) {
   if (!isSupabaseConfigured()) {
@@ -1330,36 +1851,138 @@ export async function updateCustomer(id, payload) {
   }
 
   const clean = cleanPayload(payload);
+  const targetCustId = id || clean.customer_id || clean.customer_code;
+  const normMobile = clean.mobile_number ? String(clean.mobile_number).replace(/\D/g, '').slice(-10) : undefined;
 
   try {
-    // 1. Primary: Update customer_works
+    // 1. Update normalized customers master table
+    const dbClassification = clean.customer_classification
+      ? (clean.customer_classification.toLowerCase().includes('vip') ? 'vip' :
+         clean.customer_classification.toLowerCase().includes('corp') ? 'corporate' :
+         clean.customer_classification.toLowerCase().includes('fraud') ? 'fraud' : 'regular')
+      : undefined;
+    const dbStatus = clean.customer_status
+      ? (clean.customer_status.toLowerCase() === 'inactive' ? 'inactive' :
+         clean.customer_status.toLowerCase() === 'archived' ? 'archived' : 'active')
+      : undefined;
+    const dbCommPref = clean.communication_pref
+      ? (['sms', 'whatsapp', 'email', 'phone', 'none'].includes(String(clean.communication_pref).toLowerCase())
+          ? String(clean.communication_pref).toLowerCase()
+          : 'whatsapp')
+      : undefined;
+    const dbCommLang = clean.communication_lang
+      ? (['en', 'ta', 'hi', 'te', 'kn', 'ml'].includes(String(clean.communication_lang).toLowerCase())
+          ? String(clean.communication_lang).toLowerCase()
+          : 'en')
+      : undefined;
+
+    const custTableUpdate = {
+      customer_name: clean.customer_name,
+      mobile_number: normMobile,
+      alternate_phone: clean.alternate_phone !== undefined ? (clean.alternate_phone ? String(clean.alternate_phone).replace(/\D/g, '').slice(-10) : null) : undefined,
+      email: clean.email !== undefined ? (clean.email || null) : undefined,
+      address: clean.address !== undefined ? (clean.address || null) : undefined,
+      city: clean.city !== undefined ? (clean.city || null) : undefined,
+      pincode: clean.pincode !== undefined ? (clean.pincode && /^[0-9]{6}$/.test(String(clean.pincode)) ? String(clean.pincode) : null) : undefined,
+      date_of_birth: clean.date_of_birth !== undefined ? (clean.date_of_birth || null) : undefined,
+      map_link: clean.map_link !== undefined ? (clean.map_link || null) : undefined,
+      gst_number: clean.gst_number !== undefined ? (clean.gst_number || null) : undefined,
+      company_name: clean.company_name !== undefined ? (clean.company_name || null) : undefined,
+      tax_exemption: clean.tax_exemption !== undefined ? Boolean(clean.tax_exemption) : undefined,
+      customer_classification: dbClassification,
+      customer_status: dbStatus,
+      price_list: clean.price_list,
+      service_zone: clean.service_zone ? (clean.service_zone.startsWith('zone-') ? `Zone ${clean.service_zone.replace('zone-', '')}` : clean.service_zone) : undefined,
+      credit_limit: clean.credit_limit !== undefined && clean.credit_limit !== null ? Number(clean.credit_limit) : undefined,
+      default_discount: clean.default_discount !== undefined && clean.default_discount !== null ? Number(clean.default_discount) : undefined,
+      communication_pref: dbCommPref,
+      preferred_language: dbCommLang,
+      dnd: clean.dnd !== undefined ? Boolean(clean.dnd) : undefined,
+      internal_comments: clean.internal_comments !== undefined ? (clean.internal_comments || null) : undefined,
+      notes: clean.notes !== undefined ? (clean.notes || null) : undefined,
+      updated_at: new Date().toISOString(),
+    };
+    Object.keys(custTableUpdate).forEach((k) => custTableUpdate[k] === undefined && delete custTableUpdate[k]);
+
+    let updatedCustRow = null;
+    let custUpdateErr = null;
+    try {
+      let cQuery = supabase.from('customers').update(custTableUpdate);
+      if (targetCustId && String(targetCustId).match(/^(CUS|CUST-)/i)) {
+        cQuery = cQuery.eq('customer_code', targetCustId);
+      } else if (targetCustId && /^\d+$/.test(String(targetCustId))) {
+        cQuery = cQuery.eq('id', Number(targetCustId));
+      } else if (normMobile) {
+        cQuery = cQuery.eq('mobile_number', normMobile);
+      }
+      const res = await cQuery.select();
+      if (res.error) custUpdateErr = res.error;
+      else if (Array.isArray(res.data) && res.data.length > 0) updatedCustRow = res.data;
+    } catch {}
+
+    // 2. Update contact columns on customer_works WITHOUT overwriting JSON internal_notes on real orders
     const workUpdate = {
       customer_name: clean.customer_name,
-      mobile_number: clean.mobile_number,
-      alternate_phone: clean.alternate_phone || null,
-      email: clean.email || null,
+      mobile_number: normMobile || clean.mobile_number,
+      alternate_phone: clean.alternate_phone !== undefined ? (clean.alternate_phone || null) : undefined,
+      email: clean.email !== undefined ? (clean.email || null) : undefined,
       delivery_address: clean.address || clean.streetArea,
       service_type: clean.service_category || clean.orderPreference,
-      internal_notes: clean.internal_comments || clean.notes,
       updated_at: new Date().toISOString(),
     };
     Object.keys(workUpdate).forEach((k) => workUpdate[k] === undefined && delete workUpdate[k]);
 
     let workQuery = supabase.from('customer_works').update(workUpdate);
-    if (id) {
-      workQuery = workQuery.eq('customer_id', id);
-    } else if (clean.customer_id) {
-      workQuery = workQuery.eq('customer_id', clean.customer_id);
-    } else if (clean.mobile_number) {
-      workQuery = workQuery.eq('mobile_number', clean.mobile_number);
+    if (targetCustId) {
+      workQuery = workQuery.eq('customer_id', targetCustId);
+    } else if (normMobile) {
+      workQuery = workQuery.eq('mobile_number', normMobile);
     }
     const { data: workData, error: workError } = await workQuery.select();
 
-    // 2. Best-effort sync to washdoor_orders_master if present (optional legacy table)
+    // Update items[0] JSONB on pure customer_registration rows so profile fields (city, pincode, GST, additional_addresses) persist
+    if (Array.isArray(workData)) {
+      for (const row of workData) {
+        if (isCustomerRegistrationRecord(row)) {
+          const prevProfile = (Array.isArray(row.items) && row.items[0]) ? row.items[0] : {};
+          const updatedProfile = {
+            ...prevProfile,
+            type: 'customer_registration',
+            city: clean.city !== undefined ? clean.city : prevProfile.city,
+            pincode: clean.pincode !== undefined ? clean.pincode : prevProfile.pincode,
+            additional_addresses: Array.isArray(clean.additional_addresses) ? clean.additional_addresses : prevProfile.additional_addresses,
+            company_name: clean.company_name !== undefined ? clean.company_name : prevProfile.company_name,
+            gst_number: clean.gst_number !== undefined ? clean.gst_number : prevProfile.gst_number,
+            area_service_zone: custTableUpdate.service_zone || prevProfile.area_service_zone,
+            tax_exemption: clean.tax_exemption !== undefined ? Boolean(clean.tax_exemption) : prevProfile.tax_exemption,
+            date_of_birth: clean.date_of_birth !== undefined ? clean.date_of_birth : prevProfile.date_of_birth,
+            map_link: clean.map_link !== undefined ? clean.map_link : prevProfile.map_link,
+            communication_pref: clean.communication_pref || prevProfile.communication_pref,
+            preferred_language: clean.communication_lang || prevProfile.preferred_language,
+            internal_comments: clean.internal_comments !== undefined ? clean.internal_comments : prevProfile.internal_comments,
+            order_preference: clean.order_preference || clean.orderPreference || prevProfile.order_preference,
+            price_list: clean.price_list || prevProfile.price_list,
+            customer_classification: clean.customer_classification || prevProfile.customer_classification,
+            membership_id: clean.membership_id !== undefined ? clean.membership_id : prevProfile.membership_id,
+            default_discount: clean.default_discount !== undefined && clean.default_discount !== null ? Number(clean.default_discount) : prevProfile.default_discount,
+            credit_limit: clean.credit_limit !== undefined && clean.credit_limit !== null ? Number(clean.credit_limit) : prevProfile.credit_limit,
+            referral_code: clean.referral_code !== undefined ? clean.referral_code : prevProfile.referral_code,
+            marketing_source: clean.marketing_source || prevProfile.marketing_source,
+          };
+          await supabase.from('customer_works').update({ items: [updatedProfile] }).eq('work_id', row.work_id);
+        }
+      }
+    }
+
+    if (Array.isArray(clean.additional_addresses) && targetCustId) {
+      saveCustomerAddresses(targetCustId, clean.additional_addresses).catch(() => {});
+    }
+
+    // 3. Best-effort sync to washdoor_orders_master if present
     try {
       const updateObj = {
         customer_name: clean.customer_name,
-        mobile_number: clean.mobile_number,
+        mobile_number: normMobile || clean.mobile_number,
         alternate_phone: clean.alternate_phone,
         email: clean.email,
         company_name: clean.company_name,
@@ -1378,42 +2001,34 @@ export async function updateCustomer(id, payload) {
         customer_classification: clean.customer_classification || 'Regular Customer',
         customer_status: clean.customer_status || 'Active',
         price_list: clean.price_list || 'Standard',
-        area_service_zone: clean.service_zone ? (clean.service_zone.startsWith('zone-') ? `Zone ${clean.service_zone.replace('zone-', '')}` : clean.service_zone) : undefined,
+        area_service_zone: custTableUpdate.service_zone,
         default_discount_pct: clean.default_discount !== undefined && clean.default_discount !== null ? Number(clean.default_discount) : undefined,
         credit_limit: clean.credit_limit !== undefined && clean.credit_limit !== null ? Number(clean.credit_limit) : undefined,
         membership_id: clean.membership_id,
         referral_code: clean.referral_code,
         marketing_source: clean.marketing_source,
-        anniversary_date: clean.anniversary_date,
-        special_occasion: clean.special_occasion,
-        special_occasion_date: clean.special_occasion_date,
-        tier: clean.tier || 'SILVER',
         service_category: clean.service_category || clean.orderPreference,
-        item_count: clean.item_count !== undefined && clean.item_count !== null ? Number(clean.item_count) : undefined,
         updated_at: new Date().toISOString(),
       };
       Object.keys(updateObj).forEach((k) => updateObj[k] === undefined && delete updateObj[k]);
 
       let mQuery = supabase.from('washdoor_orders_master').update(updateObj);
-      if (id) mQuery = mQuery.eq('customer_id', id);
-      else if (clean.customer_id) mQuery = mQuery.eq('customer_id', clean.customer_id);
-      else if (clean.mobile_number) mQuery = mQuery.eq('mobile_number', clean.mobile_number);
+      if (targetCustId) mQuery = mQuery.eq('customer_id', targetCustId);
+      else if (normMobile) mQuery = mQuery.eq('mobile_number', normMobile);
       await mQuery;
-    } catch {
-      // washdoor_orders_master is optional; ignored if not present
-    }
+    } catch {}
 
-    if (workError) {
-      return { data: null, error: workError };
+    if (custUpdateErr && workError) {
+      return { data: null, error: custUpdateErr || workError };
     }
-    return { data: workData, error: null };
+    return { data: updatedCustRow || workData, error: null };
   } catch (err) {
     return { data: null, error: err };
   }
 }
 
 /**
- * Deletes real customer records from Supabase customer_works and washdoor_orders_master.
+ * Deletes real customer records from Supabase customers, customer_works, and washdoor_orders_master.
  */
 export async function deleteCustomer(id) {
   if (!isSupabaseConfigured()) {
@@ -1421,20 +2036,31 @@ export async function deleteCustomer(id) {
   }
 
   try {
-    // 1. Primary: Delete from customer_works
+    let custErr = null;
+    // 1. Delete from normalized customers table
+    try {
+      let cDel = supabase.from('customers').delete();
+      if (/^\d+$/.test(String(id))) {
+        cDel = cDel.eq('id', Number(id));
+      } else {
+        cDel = cDel.or(`customer_code.eq.${id},mobile_number.eq.${id}`);
+      }
+      const res = await cDel;
+      if (res.error) custErr = res.error;
+    } catch {}
+
+    // 2. Delete from customer_works
     const { error: workErr } = await supabase.from('customer_works').delete().eq('customer_id', id);
 
-    // 2. Best-effort delete from washdoor_orders_master if exists
+    // 3. Best-effort delete from washdoor_orders_master if exists
     try {
       await supabase
         .from('washdoor_orders_master')
         .delete()
         .eq('customer_id', id);
-    } catch {
-      // washdoor_orders_master is optional; ignored if not present
-    }
+    } catch {}
 
-    return { error: workErr };
+    return { error: workErr || custErr };
   } catch (err) {
     return { error: err };
   }
@@ -1474,11 +2100,11 @@ export async function createOrderWithCustomer({
         // 1. Check customers table
         const { data: cMatches } = await supabase
           .from('customers')
-          .select('id, customer_name, mobile_number')
+          .select('id, customer_code, customer_name, mobile_number')
           .ilike('mobile_number', `%${normMobile}%`)
           .limit(1);
         if (cMatches && cMatches.length > 0) {
-          finalCustId = cMatches[0].customer_id || (cMatches[0].id ? formatCustomerId(cMatches[0].id) : null);
+          finalCustId = cMatches[0].customer_code || cMatches[0].customer_id || (cMatches[0].id ? formatCustomerId(cMatches[0].id) : null);
         }
       } catch {}
 
@@ -1521,19 +2147,29 @@ export async function createOrderWithCustomer({
           : 'en';
 
         await supabase.from('customers').insert([{
+          customer_code: finalCustId,
           customer_name: cleanCust.customer_name,
           mobile_number: normMobile,
           alternate_phone: cleanCust.alternate_phone ? String(cleanCust.alternate_phone).replace(/\D/g, '').slice(-10) : null,
           email: cleanCust.email || null,
           address: cleanCust.address || null,
-          city: cleanCust.city || null,
+          city: cleanCust.city || 'Ranipet',
           pincode: cleanCust.pincode && /^[0-9]{6}$/.test(String(cleanCust.pincode)) ? String(cleanCust.pincode) : null,
+          map_link: cleanCust.map_link || null,
+          date_of_birth: cleanCust.date_of_birth || null,
+          gst_number: cleanCust.gst_number || null,
+          company_name: cleanCust.company_name || null,
           communication_pref: dbCommPref,
-          communication_lang: dbCommLang,
+          preferred_language: dbCommLang,
+          dnd: Boolean(cleanCust.dnd),
           tax_exemption: Boolean(cleanCust.tax_exemption),
           customer_classification: dbClassification,
           customer_status: dbStatus,
-          tier: cleanCust.tier || 'SILVER',
+          price_list: cleanCust.price_list || 'Standard',
+          service_zone: cleanCust.service_zone || 'Zone 1',
+          credit_limit: Number(cleanCust.credit_limit || 0),
+          default_discount: Number(cleanCust.default_discount || 0),
+          internal_comments: cleanCust.internal_comments || null,
           notes: cleanCust.notes || cleanCust.internal_comments || null,
         }]);
       } catch (custErr) {
@@ -1658,6 +2294,12 @@ export async function createOrderWithCustomer({
         property_status: cleanCust.property_status || (cleanCust.priority === 'Yes' ? 'Yes' : 'No') || 'No',
       };
 
+      const calculatedTaxable = Math.max(0, +(calculatedSubtotal - calculatedDiscount).toFixed(2));
+      const isTaxExempt = Boolean(cleanCust.tax_exemption || cleanCust.taxExempt);
+      const gstPercentage = isTaxExempt ? 0 : Number(cleanCust.gst_percentage ?? 5);
+      const cgstAmount = isTaxExempt ? 0 : +(calculatedTax / 2).toFixed(2);
+      const sgstAmount = isTaxExempt ? 0 : +(calculatedTax - cgstAmount).toFixed(2);
+
       // Assign standardized ORD00001 order identifier to work_number
       // Omit balance_due because PostgreSQL has it defined as a generated column
       const workRow = {
@@ -1678,6 +2320,13 @@ export async function createOrderWithCustomer({
         rack_shelf_location: rackLocation,
         subtotal: Number(calculatedSubtotal.toFixed(2)),
         discount_amount: Number(calculatedDiscount.toFixed(2)),
+        discount_pct: Number(cleanCust.discount_pct || 0),
+        taxable_amount: calculatedTaxable,
+        gst_percentage: gstPercentage,
+        cgst_amount: cgstAmount,
+        sgst_amount: sgstAmount,
+        igst_amount: 0,
+        tax_exemption: isTaxExempt,
         tax_amount: Number(calculatedTax.toFixed(2)),
         total_amount: Number(calculatedGrandTotal.toFixed(2)),
         advance_paid: Number(advancePaidVal.toFixed(2)),
@@ -1687,10 +2336,27 @@ export async function createOrderWithCustomer({
         target_delivery_date: targetDeliveryDateIso,
         assigned_staff: cleanCust.assigned_staff || cleanCust.assigned_driver || null,
         special_instructions: orderPreferenceNotes || cleanCust.notes || cleanCust.special_instructions || null,
+        staff_notes: cleanCust.internal_comments || cleanCust.staff_notes || null,
+        handling_flags: cleanCust.flags || {},
+        created_by_name: cleanCust.created_by_name || cleanCust.assigned_staff || 'POS Counter',
+        updated_by_name: cleanCust.updated_by_name || cleanCust.assigned_staff || 'POS Counter',
         internal_notes: JSON.stringify(structuredInternalNotes),
       };
       Object.keys(workRow).forEach((k) => workRow[k] === undefined && delete workRow[k]);
-      const { data: wData, error: wErr } = await supabase.from('customer_works').insert([workRow]).select().single();
+      let { data: wData, error: wErr } = await supabase.from('customer_works').insert([workRow]).select().single();
+
+      // If extended columns are not yet migrated in live DB, strip them and insert base row
+      if (wErr && (wErr.code === 'PGRST204' || String(wErr.message).includes('column'))) {
+        const {
+          discount_pct, taxable_amount, gst_percentage, cgst_amount, sgst_amount, igst_amount,
+          tax_exemption, staff_notes, handling_flags, created_by_name, updated_by_name,
+          ...baseWorkRow
+        } = workRow;
+        const baseRes = await supabase.from('customer_works').insert([baseWorkRow]).select().single();
+        wData = baseRes.data;
+        wErr = baseRes.error;
+      }
+
       if (!wErr && wData) {
         insertedOrderNum = wData.work_number || generatedOrderNumber;
         insertedOrderId = wData.work_id || generatedOrderNumber;
@@ -1702,7 +2368,12 @@ export async function createOrderWithCustomer({
           const digits = parseInt(String(generatedOrderNumber).replace(/\D/g, '') || '1', 10);
           retryOrderNum = formatOrderId(digits + 1);
         }
-        const fallbackRow = { ...workRow, work_number: retryOrderNum };
+        const {
+          discount_pct, taxable_amount, gst_percentage, cgst_amount, sgst_amount, igst_amount,
+          tax_exemption, staff_notes, handling_flags, created_by_name, updated_by_name,
+          ...baseWorkRow
+        } = workRow;
+        const fallbackRow = { ...baseWorkRow, work_number: retryOrderNum };
         const { data: fbData, error: fbErr } = await supabase.from('customer_works').insert([fallbackRow]).select().single();
         if (fbData) {
           insertedOrderNum = fbData.work_number || retryOrderNum;
@@ -1721,6 +2392,43 @@ export async function createOrderWithCustomer({
       await supabase
         .from('washdoor_orders_master')
         .insert([masterInsert]);
+    } catch {}
+
+    // 3. Synchronize dedicated washdoor_factory_orders and washdoor_customer_addresses
+    try {
+      await upsertFactoryOrder(insertedOrderId, {
+        work_number: insertedOrderNum,
+        routing_type: cleanCust.routing_type || 'factory',
+        store_outlet: cleanCust.store_outlet || 'Store Outlet #1 (Central Vellore Main)',
+        factory_outlet: cleanCust.factory_outlet || cleanCust.factory_hub || 'Main Plant (Unit 1)',
+        factory_hub: cleanCust.factory_hub || 'Main Plant (Unit 1)',
+        vehicle_name: cleanCust.vehicle_name || 'TN-23-AX-8910 (Tata Ace Mini Van)',
+        mode_of_transport: cleanCust.mode_of_transport || 'Mini Van',
+        route_from_to: cleanCust.route_from_to || 'Store Central (Vellore Main) ➔ Factory Plant Unit 1',
+        route_return: cleanCust.route_return || 'Factory Plant Unit 1 ➔ Store Central (Vellore Main)',
+        collected_by_staff: cleanCust.collected_by_staff || cleanCust.assigned_staff || 'Counter Staff',
+        assigned_driver: cleanCust.assigned_driver || cleanCust.assigned_staff || null,
+        plant_transit_status: cleanCust.plant_transit_status || 'Order Intake Logged',
+        rack_shelf_location: cleanCust.rack_shelf_location || cleanCust.rackShelfLocation || null,
+        weight_kg: cleanCust.weight_kg ?? cleanCust.product_weight ?? null,
+      });
+    } catch {}
+
+    if (Array.isArray(cleanCust.additional_addresses) && cleanCust.additional_addresses.length > 0) {
+      try {
+        await saveCustomerAddresses(finalCustId, cleanCust.additional_addresses);
+      } catch {}
+    }
+
+    try {
+      await recordAuditLogEntry({
+        entity_name: 'customer_works',
+        record_id: insertedOrderId,
+        work_id: insertedOrderId,
+        operation: 'INSERT',
+        new_data: { order_number: insertedOrderNum, customer_id: finalCustId, total_amount: Number(totalAmount) || 0 },
+        changed_by_name: cleanCust.assigned_staff || 'POS Counter',
+      });
     } catch {}
 
     // Synchronize item records to washdoor_order_items table if exists
@@ -1854,12 +2562,18 @@ export async function updateOrderStatus(orderIdentifier, newStatus, progressPerc
   try {
     const formattedId = orderIdentifier ? String(orderIdentifier).trim() : '';
 
-    // 1. Update customer_works
-    const dbWorkStatus = (newStatus === 'Order Received') ? 'Received' : newStatus;
+    // 1. Update customer_works using strict PostgreSQL constraint normalizer
+    const dbWorkStatus = normalizeDbStatus(newStatus);
     const workUpdate = {
       work_status: dbWorkStatus,
       updated_at: new Date().toISOString(),
     };
+    if (dbWorkStatus === 'Ready for Delivery') {
+      workUpdate.completed_at = new Date().toISOString();
+    } else if (dbWorkStatus === 'Delivered') {
+      workUpdate.delivered_at = new Date().toISOString();
+    }
+
     try {
       const numMatch = String(formattedId).match(/\d+/);
       const num = numMatch ? parseInt(numMatch[0], 10) : null;
@@ -1896,6 +2610,23 @@ export async function updateOrderStatus(orderIdentifier, newStatus, progressPerc
         query = query.or(`order_number.eq.${formattedId},order_id.eq.${formattedId}`);
       }
       await query;
+    } catch {}
+
+    // 3. Record immutable status history & audit log
+    try {
+      await recordStatusHistory({
+        work_id: formattedId,
+        work_number: formattedId,
+        new_status: dbWorkStatus,
+        remarks: `Status updated to ${newStatus}`,
+      });
+      await recordAuditLogEntry({
+        entity_name: 'customer_works',
+        record_id: formattedId,
+        operation: 'UPDATE',
+        new_data: { work_status: dbWorkStatus, display_status: newStatus },
+        changed_by_name: 'POS Counter',
+      });
     } catch {}
 
     return { data: [{ order_number: formattedId, order_status: newStatus }], error: null };
@@ -2085,8 +2816,34 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       workUpdate.weight_kg = Number(updatePayload.weight_kg ?? updatePayload.product_weight);
     }
 
-    // Auto-capture completion and delivery timestamps
-    if ((workUpdate.work_status === 'Ready' || updatePayload.status === 'Ready') && !updatePayload.completed_at) {
+    // Fetch existing customer_works record so partial updates preserve internal_notes & allow diffing
+    const numMatch = String(formattedId).match(/\d+/);
+    const num = numMatch ? parseInt(numMatch[0], 10) : null;
+    const ordId = num ? `ORD${String(num).padStart(5, '0')}` : formattedId;
+    const workIdPattern = num ? `WORK-${String(num).padStart(5, '0')}` : formattedId;
+    const orderIdPattern = num ? `ORDER-${String(num).padStart(5, '0')}` : formattedId;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(formattedId);
+    const orFilter = isUuid
+      ? `work_number.eq.${ordId},work_number.eq.${workIdPattern},work_number.eq.${orderIdPattern},work_id.eq.${formattedId}`
+      : `work_number.eq.${ordId},work_number.eq.${workIdPattern},work_number.eq.${orderIdPattern},work_number.eq.${formattedId}`;
+
+    let existingRow = null;
+    let prevNotesObj = {};
+    try {
+      const { data: exData } = await supabase.from('customer_works').select('*').or(orFilter).limit(1).maybeSingle();
+      if (exData) {
+        existingRow = exData;
+        if (exData.internal_notes) {
+          prevNotesObj = typeof exData.internal_notes === 'string' ? JSON.parse(exData.internal_notes) : exData.internal_notes;
+        }
+      }
+    } catch {}
+
+    // Auto-capture completion and delivery timestamps (checking normalized 'Ready for Delivery')
+    if (
+      (workUpdate.work_status === 'Ready for Delivery' || workUpdate.work_status === 'Ready' || updatePayload.status === 'Ready') &&
+      !updatePayload.completed_at
+    ) {
       workUpdate.completed_at = new Date().toISOString();
     }
     if ((workUpdate.work_status === 'Delivered' || updatePayload.status === 'Delivered') && !updatePayload.delivered_at) {
@@ -2099,15 +2856,44 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       workUpdate.delivered_at = new Date(updatePayload.delivered_at).toISOString();
     }
 
-    // Delivery date parsing
+    // Delivery & Intake date parsing
+    const rawIntake = updatePayload.intakeDate || updatePayload.intake_date || updatePayload.pickupDate;
+    if (rawIntake) {
+      const dIn = new Date(rawIntake);
+      if (!isNaN(dIn.getTime())) workUpdate.intake_date = dIn.toISOString();
+    }
     const rawDelivery = updatePayload.deliveryDate || updatePayload.expectedDelivery || updatePayload.target_delivery_date;
-    const expectedDeliveryDisplay = rawDelivery || '';
+    const expectedDeliveryDisplay = rawDelivery || prevNotesObj.expected_delivery_display || '';
     if (rawDelivery) {
       const d = new Date(rawDelivery);
       if (!isNaN(d.getTime())) {
         workUpdate.target_delivery_date = d.toISOString();
       }
     }
+
+    // GST & Tax Exemption breakdown
+    const hasTaxExemptFlag = updatePayload.taxExemption !== undefined || updatePayload.tax_exemption !== undefined;
+    const isTaxExempt = hasTaxExemptFlag ? Boolean(updatePayload.taxExemption ?? updatePayload.tax_exemption) : Boolean(existingRow?.tax_exemption);
+    if (hasTaxExemptFlag) {
+      workUpdate.tax_exemption = isTaxExempt;
+    }
+    if (workUpdate.subtotal !== undefined || workUpdate.tax_amount !== undefined) {
+      const effSub = Number(workUpdate.subtotal ?? existingRow?.subtotal ?? 0);
+      const effDisc = Number(workUpdate.discount_amount ?? existingRow?.discount_amount ?? 0);
+      const effTax = Number(workUpdate.tax_amount ?? existingRow?.tax_amount ?? 0);
+      workUpdate.taxable_amount = Math.max(0, +(effSub - effDisc).toFixed(2));
+      workUpdate.gst_percentage = isTaxExempt ? 0 : 5;
+      workUpdate.cgst_amount = isTaxExempt ? 0 : +(effTax / 2).toFixed(2);
+      workUpdate.sgst_amount = isTaxExempt ? 0 : +(effTax - workUpdate.cgst_amount).toFixed(2);
+      workUpdate.igst_amount = 0;
+    }
+    if (updatePayload.staff_notes !== undefined) {
+      workUpdate.staff_notes = updatePayload.staff_notes || null;
+    }
+    if (updatePayload.flags !== undefined) {
+      workUpdate.handling_flags = updatePayload.flags || {};
+    }
+    workUpdate.updated_by_name = updatePayload.updated_by_name || updatePayload.assignedStaff || 'POS Counter';
 
     if (updatePayload.items) {
       workUpdate.items = updatePayload.items;
@@ -2119,33 +2905,40 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       };
     }
 
-    // Internal notes & garment inspection preservation
-    const inspData = updatePayload.garment_inspections || updatePayload.inspections || {};
+    // Merge internal notes cleanly without overwriting existing fields on partial updates
+    const inspData = updatePayload.garment_inspections || updatePayload.inspections || prevNotesObj.garment_inspections || {};
     const targetStatus = updatePayload.status || updatePayload.order_status;
-    const targetPropertyStatus = updatePayload.property_status || (updatePayload.priority === 'Yes' ? 'Yes' : 'No') || 'No';
+    const targetPropertyStatus = updatePayload.property_status || (updatePayload.priority === 'Yes' ? 'Yes' : prevNotesObj.property_status || 'No');
     const notesPayload = {
+      ...prevNotesObj,
       garment_inspections: inspData,
       expected_delivery_display: expectedDeliveryDisplay,
-      payment_method_display: updatePayload.paymentMethod || updatePayload.payment_method || updatePayload.paymentMode || '',
-      assigned_driver: updatePayload.assigned_driver || updatePayload.assignedStaff || '',
-      assigned_driver_full: updatePayload.assigned_driver_full || '',
-      factory_hub: updatePayload.factory_hub || updatePayload.factory_outlet || 'Factory Outlet Unit 1 (Main Processing Plant)',
-      factory_outlet: updatePayload.factory_outlet || updatePayload.factory_hub || 'Factory Outlet Unit 1 (Main Processing Plant)',
-      store_outlet: updatePayload.store_outlet || 'Store Outlet #1 (Central Vellore Main)',
-      factory_manifest_no: updatePayload.factory_manifest_no || '',
-      factory_gate_in: updatePayload.factory_gate_in || '',
-      factory_gate_out: updatePayload.factory_gate_out || '',
-      factory_supervisor: updatePayload.factory_supervisor || 'Murugan (Plant Supervisor)',
-      vehicle_name: updatePayload.vehicle_name || '',
-      mode_of_transport: updatePayload.mode_of_transport || 'Mini Van',
-      weight_kg: updatePayload.weight_kg !== undefined ? updatePayload.weight_kg : 3.8,
-      route_from_to: updatePayload.route_from_to || '',
-      route_return: updatePayload.route_return || '',
-      collected_by_staff: updatePayload.collected_by_staff || updatePayload.assignedStaff || '',
-      plant_transit_status: updatePayload.plant_transit_status || '',
-      staff_notes: updatePayload.staff_notes || '',
-      flags: updatePayload.flags || {},
-      order_status: targetStatus ? normalizeOrderStatus(targetStatus) : undefined,
+      payment_method_display: updatePayload.paymentMethod || updatePayload.payment_method || updatePayload.paymentMode || prevNotesObj.payment_method_display || '',
+      assigned_driver: updatePayload.assigned_driver ?? updatePayload.assignedStaff ?? prevNotesObj.assigned_driver ?? '',
+      assigned_driver_full: updatePayload.assigned_driver_full ?? prevNotesObj.assigned_driver_full ?? '',
+      assigned_for_pickup: updatePayload.assigned_for_pickup ?? prevNotesObj.assigned_for_pickup ?? Boolean(updatePayload.pickupStatus === 'Assigned for Pickup'),
+      pickup_status: updatePayload.pickupStatus ?? updatePayload.pickup_status ?? prevNotesObj.pickup_status ?? '',
+      pickup_delivery: updatePayload.pickupDelivery ?? updatePayload.pickup_delivery ?? prevNotesObj.pickup_delivery ?? '',
+      routing_type: updatePayload.routing_type ?? prevNotesObj.routing_type ?? 'factory',
+      factory_hub: updatePayload.factory_hub ?? updatePayload.factory_outlet ?? prevNotesObj.factory_hub ?? 'Main Plant (Unit 1)',
+      factory_outlet: updatePayload.factory_outlet ?? updatePayload.factory_hub ?? prevNotesObj.factory_outlet ?? 'Main Plant (Unit 1)',
+      store_outlet: updatePayload.store_outlet ?? prevNotesObj.store_outlet ?? 'Store Outlet #1 (Central Vellore Main)',
+      workshop_station: updatePayload.workshop_station ?? prevNotesObj.workshop_station ?? '',
+      factory_manifest_no: updatePayload.factory_manifest_no ?? prevNotesObj.factory_manifest_no ?? '',
+      dispatch_bag_tag: updatePayload.dispatch_bag_tag ?? updatePayload.dispatchBagTag ?? prevNotesObj.dispatch_bag_tag ?? '',
+      factory_gate_in: updatePayload.factory_gate_in ?? prevNotesObj.factory_gate_in ?? '',
+      factory_gate_out: updatePayload.factory_gate_out ?? prevNotesObj.factory_gate_out ?? '',
+      factory_supervisor: updatePayload.factory_supervisor ?? prevNotesObj.factory_supervisor ?? 'Murugan (Plant Supervisor)',
+      vehicle_name: updatePayload.vehicle_name ?? updatePayload.vehicleNo ?? prevNotesObj.vehicle_name ?? '',
+      mode_of_transport: updatePayload.mode_of_transport ?? prevNotesObj.mode_of_transport ?? 'Mini Van',
+      weight_kg: updatePayload.weight_kg !== undefined ? updatePayload.weight_kg : (prevNotesObj.weight_kg ?? existingRow?.weight_kg ?? null),
+      route_from_to: updatePayload.route_from_to ?? updatePayload.routeZone ?? prevNotesObj.route_from_to ?? '',
+      route_return: updatePayload.route_return ?? prevNotesObj.route_return ?? '',
+      collected_by_staff: updatePayload.collected_by_staff ?? updatePayload.assignedStaff ?? prevNotesObj.collected_by_staff ?? '',
+      plant_transit_status: updatePayload.plant_transit_status ?? prevNotesObj.plant_transit_status ?? '',
+      staff_notes: updatePayload.staff_notes ?? prevNotesObj.staff_notes ?? '',
+      flags: updatePayload.flags ?? prevNotesObj.flags ?? {},
+      order_status: targetStatus ? normalizeOrderStatus(targetStatus) : prevNotesObj.order_status,
       property_status: targetPropertyStatus,
     };
     workUpdate.internal_notes = JSON.stringify(notesPayload);
@@ -2155,22 +2948,17 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       ...notesPayload,
     };
 
-    // Execute customer_works update
+    // Execute customer_works update (with automatic fallback if extended columns aren't migrated yet)
     try {
-      const numMatch = String(formattedId).match(/\d+/);
-      const num = numMatch ? parseInt(numMatch[0], 10) : null;
-      const ordId = num ? `ORD${String(num).padStart(5, '0')}` : formattedId;
-      const workId = num ? `WORK-${String(num).padStart(5, '0')}` : formattedId;
-      const orderIdPattern = num ? `ORDER-${String(num).padStart(5, '0')}` : formattedId;
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(formattedId);
-
-      let wQuery = supabase.from('customer_works').update(workUpdate);
-      if (isUuid) {
-        wQuery = wQuery.or(`work_number.eq.${ordId},work_number.eq.${workId},work_number.eq.${orderIdPattern},work_id.eq.${formattedId}`);
-      } else {
-        wQuery = wQuery.or(`work_number.eq.${ordId},work_number.eq.${workId},work_number.eq.${orderIdPattern},work_number.eq.${formattedId}`);
+      const { error: cwUpdateErr } = await supabase.from('customer_works').update(workUpdate).or(orFilter);
+      if (cwUpdateErr && (cwUpdateErr.code === 'PGRST204' || String(cwUpdateErr.message).includes('column'))) {
+        const {
+          tax_exemption, taxable_amount, gst_percentage, cgst_amount, sgst_amount, igst_amount,
+          staff_notes, handling_flags, updated_by_name,
+          ...baseWorkUpdate
+        } = workUpdate;
+        await supabase.from('customer_works').update(baseWorkUpdate).or(orFilter);
       }
-      await wQuery;
     } catch (cwErr) {
       console.warn('customer_works update error:', cwErr);
     }
@@ -2187,14 +2975,108 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       await query;
     } catch {}
 
-    // Synchronize item records to washdoor_order_items table
+    // 3. Synchronize item records, garment cards, inspections & photos
+    const targetWorkKey = existingRow?.work_id || formattedId;
+    const targetWorkNum = existingRow?.work_number || ordId;
     if (updatePayload.items && Array.isArray(updatePayload.items)) {
       try {
-        await saveOrderItems(formattedId, updatePayload.items);
+        await saveOrderItems(targetWorkNum, updatePayload.items);
+        await syncGarmentCardsAndInspections(targetWorkKey, targetWorkNum, updatePayload.items, inspData);
       } catch (itemErr) {
-        console.warn('saveOrderItems update note:', itemErr);
+        console.warn('saveOrderItems/cards update note:', itemErr);
       }
     }
+
+    // 4. Sync dedicated washdoor_factory_orders table
+    const hasFactoryOrLogistics = Boolean(
+      updatePayload.factory_hub || updatePayload.factory_outlet || updatePayload.factoryPlant ||
+      updatePayload.store_outlet || updatePayload.workshop_station || updatePayload.factory_manifest_no ||
+      updatePayload.vehicle_name || updatePayload.vehicleNo || updatePayload.plant_transit_status ||
+      updatePayload.assignedMachine || updatePayload.qcInspector || updatePayload.dispatchBagTag ||
+      updatePayload.logisticsStatus || updatePayload.routing_type
+    );
+    if (hasFactoryOrLogistics) {
+      try {
+        await upsertFactoryOrder(targetWorkKey, {
+          ...updatePayload,
+          work_number: targetWorkNum,
+          weight_kg: workUpdate.weight_kg ?? notesPayload.weight_kg,
+          rack_shelf_location: workUpdate.rack_shelf_location,
+        });
+      } catch {}
+    }
+
+    // 5. Sync dedicated washdoor_pickup_delivery_schedules table
+    if (
+      updatePayload.scheduleType || updatePayload.scheduleDate || updatePayload.scheduleSlot ||
+      updatePayload.pickupTime || updatePayload.deliverySlot || updatePayload.pickupStatus || updatePayload.logisticsStatus
+    ) {
+      try {
+        await recordPickupDeliverySchedule(targetWorkKey, {
+          scheduleType: updatePayload.scheduleType || 'Delivery',
+          scheduleDate: updatePayload.scheduleDate,
+          scheduleSlot: updatePayload.scheduleSlot || updatePayload.deliverySlot,
+          pickupTime: updatePayload.pickupTime,
+          deliverySlot: updatePayload.deliverySlot,
+          assignedDriver: updatePayload.assigned_driver || updatePayload.assignedStaff,
+          assignedDriverFull: updatePayload.assigned_driver_full,
+          riderPhone: updatePayload.riderPhone,
+          vehicleNo: updatePayload.vehicleNo || updatePayload.vehicle_name,
+          routeZone: updatePayload.routeZone || updatePayload.route_from_to,
+          address: updatePayload.address,
+          status: updatePayload.pickupStatus || updatePayload.logisticsStatus || 'Scheduled',
+          driverInstructions: updatePayload.driverInstructions,
+        });
+      } catch {}
+    }
+
+    // 6. Record status transition in washdoor_status_history & live_status_actions
+    if (workUpdate.work_status && workUpdate.work_status !== existingRow?.work_status) {
+      try {
+        await recordStatusHistory({
+          work_id: targetWorkKey,
+          work_number: targetWorkNum,
+          old_status: existingRow?.work_status || null,
+          new_status: workUpdate.work_status,
+          changed_by_name: workUpdate.updated_by_name,
+          remarks: updatePayload.statusRemark || `Updated to ${targetStatus || workUpdate.work_status}`,
+        });
+      } catch {}
+    }
+
+    // 7. Record incremental payment in washdoor_payment_ledger if advance_paid increased
+    if (workUpdate.advance_paid !== undefined) {
+      const prevPaid = Number(existingRow?.advance_paid || 0);
+      const deltaPaid = Number((workUpdate.advance_paid - prevPaid).toFixed(2));
+      if (deltaPaid > 0) {
+        try {
+          await recordPaymentLedger({
+            work_id: targetWorkKey,
+            work_number: targetWorkNum,
+            customer_id: existingRow?.customer_id || 'Counter Customer',
+            amount: deltaPaid,
+            payment_mode: updatePayload.paymentMethod || updatePayload.payment_method || updatePayload.paymentMode || 'Cash',
+            reference_number: updatePayload.transactionRef || null,
+            notes: updatePayload.paymentNote || 'Payment recorded via POS edit',
+            collected_by: workUpdate.updated_by_name,
+            entry_type: workUpdate.payment_status === 'Paid' ? 'Full_Payment' : 'Partial_Payment',
+          });
+        } catch {}
+      }
+    }
+
+    // 8. Record activity in washdoor_audit_logs
+    try {
+      await recordAuditLogEntry({
+        entity_name: 'customer_works',
+        record_id: targetWorkKey,
+        work_id: existingRow?.work_id || null,
+        operation: 'UPDATE',
+        old_data: existingRow ? { work_status: existingRow.work_status, total_amount: existingRow.total_amount, advance_paid: existingRow.advance_paid } : null,
+        new_data: { work_status: workUpdate.work_status || existingRow?.work_status, total_amount: workUpdate.total_amount, advance_paid: workUpdate.advance_paid },
+        changed_by_name: workUpdate.updated_by_name,
+      });
+    } catch {}
 
     // Instant local cache sync
     try {
