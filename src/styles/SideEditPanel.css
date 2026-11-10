@@ -440,16 +440,28 @@
   color: #0f172a;
 }
 
-/* Products Responsive Single-Grid (1 Card Per Row) matching user specification & Image 2 */
+/* ── Products Responsive 3-Column Grid on Desktop Device Side ── */
 .side-edit-catalog-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   max-height: 380px;
   min-height: 290px;
   overflow-y: auto;
   padding: 4px 2px;
   scrollbar-width: thin;
+}
+
+@media (max-width: 600px) {
+  .side-edit-catalog-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 360px) {
+  .side-edit-catalog-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .side-edit-catalog-grid::-webkit-scrollbar {
@@ -461,39 +473,47 @@
   border-radius: 4px;
 }
 
-/* Horizontal 1-Per-Row Card Layout with room for complete titles & reference Image 2 styling */
+/* 3-Column Garment Card Layout for Desktop */
 .side-edit-prod-card {
   border: 1.5px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 8px 12px;
+  border-radius: 8px;
+  padding: 8px 6px;
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  text-align: center;
+  gap: 4px;
   cursor: pointer;
   background: #ffffff;
   transition: all 0.15s ease;
-  min-height: 56px;
+  min-height: 124px;
+  min-width: 0 !important;
   box-sizing: border-box;
 }
 
 .side-edit-prod-card:hover {
   border-color: #3b82f6;
   background: #f8fafc;
-  transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.05);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
 }
 
 .side-edit-prod-card.selected {
-  border-color: #2563eb !important;
+  border: 2px solid #2563eb !important;
   background: #eff6ff !important;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25) !important;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2) !important;
+}
+
+.side-edit-prod-card.selected .side-edit-prod-add {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  border: none !important;
 }
 
 .side-edit-prod-img {
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -501,60 +521,66 @@
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
+  margin-bottom: 2px;
 }
 
 .side-edit-prod-info {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
   flex: 1;
   min-width: 0;
+  width: 100%;
   gap: 2px;
-  text-align: left;
+  text-align: center;
 }
 
 .side-edit-prod-name {
-  font-size: 13px;
-  font-weight: 750;
-  color: #0f172a;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-  line-height: 1.25;
-}
-
-.side-edit-prod-price {
   font-size: 11.5px;
   font-weight: 700;
   color: #0f172a;
+  white-space: normal;
+  line-height: 1.25;
+  text-align: center;
+  width: 100%;
+  word-break: break-word;
+  min-width: 0;
+}
+
+.side-edit-prod-price {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #475569;
   line-height: 1.2;
   display: flex;
   align-items: baseline;
+  justify-content: center;
   gap: 3px;
+  margin-bottom: 4px;
 }
 
 .side-edit-prod-unit {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
   color: #64748b;
 }
 
 .side-edit-prod-add {
-  padding: 6px 14px;
-  border-radius: 8px;
+  padding: 4px 0;
+  border-radius: 5px;
   background: #eff6ff;
   border: 1px solid #bfdbfe;
   color: #2563eb;
-  font-size: 11.5px;
-  font-weight: 750;
-  width: auto;
-  min-width: 54px;
+  font-size: 11px;
+  font-weight: 700;
+  width: 100%;
   text-align: center;
   cursor: pointer;
-  flex-shrink: 0;
   transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .side-edit-prod-add:hover {
@@ -1668,4 +1694,307 @@ body.light-theme .side-edit-panel .side-edit-icon-wrap input.side-edit-input.sid
     padding: 3px 8px;
     font-size: 10px;
   }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   UPI PAYMENT QR CODE MODAL & BUTTON (DESKTOP + TABLET + MOBILE)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* UPI Instant Pay Button in Payments Tab */
+.btn-show-qr {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1.5px solid #2563eb;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 12.5px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.btn-show-qr:hover {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  transform: translateY(-1px);
+}
+
+.pos-held-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(5px);
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  animation: qrBackdropFade 0.18s ease-out;
+}
+
+@keyframes qrBackdropFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.pos-qr-dialog-modal {
+  width: 100% !important;
+  max-width: 380px !important;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 20px 22px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25), 0 4px 16px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  animation: qrModalPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  position: relative;
+}
+
+@keyframes qrModalPop {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.pos-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.pos-dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 750;
+  color: #0f172a;
+}
+
+.pos-dialog-close-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.pos-dialog-close-btn:hover {
+  background: #fee2e2;
+  color: #ef4444;
+  border-color: #fca5a5;
+  transform: rotate(90deg);
+}
+
+.pos-qr-order-banner {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.pos-qr-image-wrapper {
+  margin: 14px auto;
+  padding: 12px;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 210px;
+  height: 210px;
+  box-sizing: border-box;
+}
+
+.pos-qr-image {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 186px !important;
+  max-height: 186px !important;
+  object-fit: contain !important;
+  display: block !important;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
+
+.pos-qr-apps-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+  background: #f1f5f9;
+  border-radius: 20px;
+  padding: 6px 14px;
+  margin: 0 auto;
+  width: fit-content;
+}
+
+.pos-btn-secondary {
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-weight: 650;
+  transition: all 0.15s ease;
+}
+
+.pos-btn-secondary:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+/* Mobile Responsiveness for QR Modal (≤ 480px) */
+@media (max-width: 480px) {
+  .pos-qr-dialog-modal {
+    width: calc(100vw - 28px) !important;
+    max-width: calc(100vw - 28px) !important;
+    padding: 16px !important;
+    border-radius: 14px !important;
+    margin: auto !important;
+  }
+
+  .pos-qr-order-banner {
+    padding: 10px 12px !important;
+  }
+
+  .pos-qr-image-wrapper {
+    width: 175px !important;
+    height: 175px !important;
+    padding: 10px !important;
+    margin: 10px auto !important;
+  }
+
+  .pos-qr-image {
+    max-width: 155px !important;
+    max-height: 155px !important;
+  }
+
+  .pos-qr-apps-badge {
+    font-size: 10px !important;
+    gap: 6px !important;
+    padding: 4px 10px !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .pos-qr-image-wrapper {
+    width: 150px !important;
+    height: 150px !important;
+    padding: 8px !important;
+  }
+
+  .pos-qr-image {
+    max-width: 134px !important;
+    max-height: 134px !important;
+  }
+}
+
+/* Dark Theme Support for QR Modal */
+[data-theme="dark"] .pos-qr-dialog-modal,
+body:not(.light-theme) .pos-qr-dialog-modal {
+  background: #0b172a !important;
+  border-color: #1e3a5f !important;
+  color: #f1f5f9 !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7) !important;
+}
+
+[data-theme="dark"] .pos-dialog-header,
+body:not(.light-theme) .pos-dialog-header {
+  border-bottom-color: #1e293b !important;
+}
+
+[data-theme="dark"] .pos-dialog-title,
+body:not(.light-theme) .pos-dialog-title {
+  color: #f1f5f9 !important;
+}
+
+[data-theme="dark"] .pos-dialog-close-btn,
+body:not(.light-theme) .pos-dialog-close-btn {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .pos-dialog-close-btn:hover,
+body:not(.light-theme) .pos-dialog-close-btn:hover {
+  background: #7f1d1d !important;
+  border-color: #ef4444 !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .pos-qr-order-banner,
+body:not(.light-theme) .pos-qr-order-banner {
+  background: #0d1e34 !important;
+  border-color: #1e3a5f !important;
+}
+
+[data-theme="dark"] .pos-qr-image-wrapper,
+body:not(.light-theme) .pos-qr-image-wrapper {
+  background: #ffffff !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.15) !important;
+}
+
+[data-theme="dark"] .pos-qr-apps-badge,
+body:not(.light-theme) .pos-qr-apps-badge {
+  background: #132338 !important;
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .pos-btn-secondary,
+body:not(.light-theme) .pos-btn-secondary {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .btn-show-qr,
+body:not(.light-theme) .btn-show-qr {
+  background: #0f274a !important;
+  border-color: #1d4ed8 !important;
+  color: #60a5fa !important;
+}
+
+[data-theme="dark"] .btn-show-qr:hover,
+body:not(.light-theme) .btn-show-qr:hover {
+  background: #2563eb !important;
+  color: #ffffff !important;
 }
