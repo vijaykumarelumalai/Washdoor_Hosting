@@ -47,16 +47,16 @@
 .dashboard-welcome-avatar {
   width: 52px;
   height: 52px;
-  border-radius: 14px;
-  background: rgba(8, 121, 249, 0.15);
-  border: 1px solid rgba(8, 121, 249, 0.3);
+  border-radius: 12px;
+  background: transparent;
+  border: none;
   display: grid;
   place-items: center;
-  box-shadow: 0 4px 16px rgba(8, 121, 249, 0.25);
+  box-shadow: none;
   flex-shrink: 0;
-  padding: 5px;
+  padding: 0;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .dashboard-welcome-avatar img {

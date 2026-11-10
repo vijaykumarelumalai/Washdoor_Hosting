@@ -9,6 +9,7 @@
 import React, { useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import '../styles/Dashboard.css';
+import washdoorIcon from '../assets/washdoor-icon.png';
 
 export default function DashboardModule({
   orders = [],
@@ -199,13 +200,8 @@ export default function DashboardModule({
       <section className="dashboard-welcome-banner">
         <div className="dashboard-welcome-left">
           <div className="dashboard-welcome-avatar">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="2" width="20" height="20" rx="4"></rect>
-              <circle cx="12" cy="13" r="5"></circle>
-              <line x1="6" y1="6" x2="6.01" y2="6"></line>
-              <line x1="10" y1="6" x2="10.01" y2="6"></line>
-            </svg>
-          </div>
+  <img src={washdoorIcon} alt="Washdoor" className="dashboard-welcome-avatar-img" />
+</div>
           <div>
             <h1 className="dashboard-welcome-title">{t('welcome_washdoor', 'Welcome to Washdoor')}</h1>
             <p className="dashboard-welcome-sub">
