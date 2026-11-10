@@ -6,28 +6,47 @@
 
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient.js';
 import { triggerNotification } from './notificationTemplateService.js';
+import { logAuditEvent, logWorkflowStep, getActiveStaffProfile } from './auditService.js';
 import { normalizeOrderStatus } from '../config/businessRules.js';
 
 // Default fallback products matching the database seed
 export const DEFAULT_PRODUCTS = [
-  { id: 'shirt', item_code: 'CLOTH-01', name: 'Shirt', category: 'Men', price: 15, base_price: 15, unit: 'piece' },
-  { id: 'tshirt', item_code: 'CLOTH-02', name: 'T-Shirt', category: 'Men', price: 12, base_price: 12, unit: 'piece' },
-  { id: 'formal_pant', item_code: 'CLOTH-03', name: 'Formal Pant', category: 'Men', price: 20, base_price: 20, unit: 'piece' },
-  { id: 'jeans', item_code: 'CLOTH-04', name: 'Jeans', category: 'Men', price: 25, base_price: 25, unit: 'piece' },
-  { id: 'saree', item_code: 'CLOTH-05', name: 'Saree', category: 'Women', price: 60, base_price: 60, unit: 'piece' },
-  { id: 'towel', item_code: 'CLOTH-06', name: 'Towel', category: 'Home Linen', price: 15, base_price: 15, unit: 'piece' },
-  { id: 'chudidar', item_code: 'CLOTH-07', name: 'Chudidar / Salwar', category: 'Women', price: 35, base_price: 35, unit: 'piece' },
-  { id: 'kurti', item_code: 'CLOTH-08', name: 'Kurti', category: 'Women', price: 30, base_price: 30, unit: 'piece' },
-  { id: 'shorts', item_code: 'CLOTH-09', name: 'Shorts', category: 'Kids', secondaryCategory: 'Men', price: 15, base_price: 15, unit: 'piece' },
-  { id: 'bedsheet', item_code: 'CLOTH-10', name: 'Bedsheet', category: 'Home Linen', price: 50, base_price: 50, unit: 'piece' },
-  { id: 'pillow_cover', item_code: 'CLOTH-11', name: 'Pillow Cover', category: 'Home Linen', price: 10, base_price: 10, unit: 'piece' },
-  { id: 'jacket', item_code: 'CLOTH-12', name: 'Jacket', category: 'Men', secondaryCategory: 'Women', price: 50, base_price: 50, unit: 'piece' },
-  { id: 'blazer_suit', item_code: 'CLOTH-13', name: 'Blazer / Suit', category: 'Men', price: 100, base_price: 100, unit: 'piece' },
-  { id: 'sweater', item_code: 'CLOTH-14', name: 'Sweater', category: 'Men', secondaryCategory: 'Women', price: 40, base_price: 40, unit: 'piece' },
-  { id: 'cap', item_code: 'CLOTH-15', name: 'Cap', category: 'Accessories', secondaryCategory: 'Kids', price: 10, base_price: 10, unit: 'piece' },
-  { id: 'curtain', item_code: 'CLOTH-16', name: 'Curtain', category: 'Home Linen', price: 60, base_price: 60, unit: 'piece' },
-  { id: 'shoe', item_code: 'CLOTH-17', name: 'Shoe', category: 'Accessories', price: 80, base_price: 80, unit: 'pair' },
+  { id: 'shirt', item_code: 'CLOTH-01', name: 'Shirt', category: 'Men', price: 15, base_price: 15, iron_price: 15, wash_price: 25, dry_clean_price: 50, unit: 'piece' },
+  { id: 'tshirt', item_code: 'CLOTH-02', name: 'T-Shirt', category: 'Men', price: 12, base_price: 12, iron_price: 12, wash_price: 20, dry_clean_price: 40, unit: 'piece' },
+  { id: 'formal_pant', item_code: 'CLOTH-03', name: 'Formal Pant', category: 'Men', price: 20, base_price: 20, iron_price: 20, wash_price: 30, dry_clean_price: 60, unit: 'piece' },
+  { id: 'jeans', item_code: 'CLOTH-04', name: 'Jeans', category: 'Men', price: 25, base_price: 25, iron_price: 20, wash_price: 35, dry_clean_price: 70, unit: 'piece' },
+  { id: 'saree', item_code: 'CLOTH-05', name: 'Saree', category: 'Women', price: 60, base_price: 60, iron_price: 40, wash_price: 80, dry_clean_price: 150, unit: 'piece' },
+  { id: 'towel', item_code: 'CLOTH-06', name: 'Towel', category: 'Home Linen', price: 15, base_price: 15, iron_price: 10, wash_price: 20, dry_clean_price: 35, unit: 'piece' },
+  { id: 'chudidar', item_code: 'CLOTH-07', name: 'Chudidar / Salwar', category: 'Women', price: 35, base_price: 35, iron_price: 25, wash_price: 45, dry_clean_price: 90, unit: 'piece' },
+  { id: 'kurti', item_code: 'CLOTH-08', name: 'Kurti', category: 'Women', price: 30, base_price: 30, iron_price: 20, wash_price: 40, dry_clean_price: 80, unit: 'piece' },
+  { id: 'shorts', item_code: 'CLOTH-09', name: 'Shorts', category: 'Kids', secondaryCategory: 'Men', price: 15, base_price: 15, iron_price: 10, wash_price: 20, dry_clean_price: 35, unit: 'piece' },
+  { id: 'bedsheet', item_code: 'CLOTH-10', name: 'Bedsheet', category: 'Home Linen', price: 50, base_price: 50, iron_price: 30, wash_price: 60, dry_clean_price: 110, unit: 'piece' },
+  { id: 'pillow_cover', item_code: 'CLOTH-11', name: 'Pillow Cover', category: 'Home Linen', price: 10, base_price: 10, iron_price: 10, wash_price: 15, dry_clean_price: 25, unit: 'piece' },
+  { id: 'jacket', item_code: 'CLOTH-12', name: 'Jacket', category: 'Men', secondaryCategory: 'Women', price: 50, base_price: 50, iron_price: 30, wash_price: 60, dry_clean_price: 120, unit: 'piece' },
+  { id: 'blazer_suit', item_code: 'CLOTH-13', name: 'Blazer / Suit', category: 'Men', price: 100, base_price: 100, iron_price: 60, wash_price: 120, dry_clean_price: 200, unit: 'piece' },
+  { id: 'sweater', item_code: 'CLOTH-14', name: 'Sweater', category: 'Men', secondaryCategory: 'Women', price: 40, base_price: 40, iron_price: 25, wash_price: 50, dry_clean_price: 90, unit: 'piece' },
+  { id: 'cap', item_code: 'CLOTH-15', name: 'Cap', category: 'Accessories', secondaryCategory: 'Kids', price: 10, base_price: 10, iron_price: 10, wash_price: 15, dry_clean_price: 25, unit: 'piece' },
+  { id: 'curtain', item_code: 'CLOTH-16', name: 'Curtain', category: 'Home Linen', price: 60, base_price: 60, iron_price: 35, wash_price: 70, dry_clean_price: 130, unit: 'piece' },
+  { id: 'shoe', item_code: 'CLOTH-17', name: 'Shoe', category: 'Accessories', price: 80, base_price: 80, iron_price: 80, wash_price: 90, dry_clean_price: 140, unit: 'pair' },
 ];
+
+/**
+ * Resolves the appropriate unit rate for a catalog product given a service type.
+ */
+export function resolveServicePrice(product, serviceType = '') {
+  if (!product) return 0;
+  const s = String(serviceType || '').toLowerCase();
+  if (s.includes('dry')) {
+    return Number(product.dry_clean_price || product.base_price || product.price || 0);
+  }
+  if (s.includes('iron')) {
+    return Number(product.iron_price || product.base_price || product.price || 0);
+  }
+  if (s.includes('wash') || s.includes('laundry') || s.includes('shoe')) {
+    return Number(product.wash_price || product.base_price || product.price || 0);
+  }
+  return Number(product.base_price || product.price || 0);
+}
 
 /**
  * Fetches all products from Supabase 'washdoor_products'.
@@ -49,19 +68,29 @@ export async function getProducts() {
       return { data: DEFAULT_PRODUCTS, error: null };
     }
 
-    const products = data.map((row) => ({
-      id: row.item_code ? row.item_code.toLowerCase().replace(/[^a-z0-9]/g, '_') : row.name.toLowerCase().replace(/\s+/g, '_'),
-      product_id: row.product_id,
-      item_code: row.item_code,
-      name: row.name,
-      category: row.category || 'General',
-      secondaryCategory: row.secondary_category || undefined,
-      price: Number(row.base_price || 0),
-      base_price: Number(row.base_price || 0),
-      unit: row.unit || 'piece',
-      isActive: row.is_active,
-      displayOrder: row.display_order,
-    }));
+    const products = data.map((row) => {
+      const fallbackMatch = DEFAULT_PRODUCTS.find(
+        (d) => (row.item_code && d.item_code === row.item_code) || d.name.toLowerCase() === String(row.name || '').toLowerCase()
+      );
+      const slugId = fallbackMatch?.id || String(row.name || row.item_code || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+      const basePrice = Number(row.base_price ?? fallbackMatch?.base_price ?? 0);
+      return {
+        id: slugId,
+        product_id: row.product_id,
+        item_code: row.item_code,
+        name: row.name,
+        category: row.category || fallbackMatch?.category || 'General',
+        secondaryCategory: row.secondary_category || fallbackMatch?.secondaryCategory || undefined,
+        price: basePrice,
+        base_price: basePrice,
+        iron_price: Number(row.iron_price ?? fallbackMatch?.iron_price ?? basePrice),
+        wash_price: Number(row.wash_price ?? fallbackMatch?.wash_price ?? basePrice),
+        dry_clean_price: Number(row.dry_clean_price ?? fallbackMatch?.dry_clean_price ?? basePrice),
+        unit: row.unit || fallbackMatch?.unit || 'piece',
+        isActive: row.is_active,
+        displayOrder: row.display_order,
+      };
+    });
 
     return { data: products, error: null };
   } catch (err) {
@@ -165,7 +194,7 @@ export async function deleteProduct(identifier) {
  * Saves order line items to Supabase 'washdoor_order_items'.
  * Replaces existing items for the order number to ensure synchronization.
  */
-export async function saveOrderItems(orderNumber, items = []) {
+export async function saveOrderItems(orderNumber, items = [], workId = null) {
   if (!orderNumber || !isSupabaseConfigured()) {
     return { data: [], error: null };
   }
@@ -173,6 +202,12 @@ export async function saveOrderItems(orderNumber, items = []) {
   const cleanOrderNum = formatOrderId(orderNumber);
 
   try {
+    let resolvedWorkId = workId;
+    if (!resolvedWorkId) {
+      const resolved = await resolveWorkIdAndNumber(cleanOrderNum);
+      resolvedWorkId = resolved?.workId || null;
+    }
+
     // 1. Clear previous items for this order to prevent duplicates
     await supabase
       .from('washdoor_order_items')
@@ -187,13 +222,14 @@ export async function saveOrderItems(orderNumber, items = []) {
     const rows = items.map((item) => {
       const rate = Number(item.rate ?? item.price ?? 0);
       const qty = Math.max(1, parseInt(item.qty || item.quantity || 1, 10));
-      const amount = Number(item.amount ?? (rate * qty));
+      const amount = Number(item.amount ?? item.total ?? (rate * qty));
 
       return {
         order_number: cleanOrderNum,
+        ...(resolvedWorkId ? { work_id: resolvedWorkId } : {}),
         product_id: item.product_id || item.item_code || item.id || null,
         product_name: item.product_name || item.name || 'Garment',
-        service_type: item.serviceType || item.service_type || 'Ironing',
+        service_type: item.serviceType || item.service_type || item.service || 'Ironing',
         rate: rate,
         quantity: qty,
         line_amount: amount,
@@ -281,27 +317,38 @@ async function resolveWorkIdAndNumber(identifier) {
  */
 export const GARMENT_PHOTOS_BUCKET = 'washdoor-garment-photos';
 
+const VALID_PHOTO_TYPES = new Set(['Before_Wash', 'Stain', 'Damage', 'After_Wash', 'After_Press', 'Packed', 'Delivery_Proof']);
+const VALID_STAGES = new Set(['Received', 'Sorting', 'Washing', 'Drying', 'Ironing', 'QC', 'Ready', 'Packed', 'Delivered']);
+const VALID_SEVERITIES = new Set(['Low', 'Medium', 'High', 'Critical']);
+const VALID_ACTION_PLANS = new Set(['Proceed', 'Spot_Treat', 'Customer_Approval', 'Reject']);
+const VALID_APPROVALS = new Set(['Not_Required', 'Pending', 'Approved', 'Rejected']);
+
 /**
- * Uploads base64/data-URI photos to Supabase Storage and records metadata in washdoor_garment_photos.
- * Returns updated photo descriptors containing public storage URLs when upload succeeds.
+ * Uploads base64/data-URI photos to Supabase Storage and records/updates metadata in washdoor_garment_photos.
+ * Preserves existing persisted photo URLs without creating duplicate DB rows.
  */
-export async function uploadGarmentPhotos(workId, workNumber, cardId, photos = []) {
+export async function uploadGarmentPhotos(workId, workNumber, cardId, photos = [], options = {}) {
   if (!isSupabaseConfigured() || !workId || !Array.isArray(photos) || photos.length === 0) {
     return photos || [];
   }
 
+  const existingByUrl = options.existingByUrl || new Map();
+  const inspectionId = options.inspectionId || null;
   const uploadedPhotos = [];
   const rowsToInsert = [];
 
   for (let idx = 0; idx < photos.length; idx++) {
-    const p = photos[idx];
-    if (!p) continue;
+    const raw = photos[idx];
+    if (!raw) continue;
+    const p = typeof raw === 'string' ? { url: raw, name: `garment-${idx + 1}.jpg` } : raw;
 
     let finalUrl = p.url || p.photo_url || '';
     let storagePath = p.storage_path || '';
-    const fileName = p.name || `garment-${cardId || workId}-${idx + 1}.jpg`;
+    const fileName = p.name || p.file_name || `garment-${cardId || workId}-${idx + 1}.jpg`;
     let mimeType = p.mime_type || 'image/jpeg';
-    let fileSizeKb = p.file_size_kb || (p.size ? Math.max(1, Math.round(Number(p.size) / 1024)) : null);
+    let fileSizeKb = p.file_size_kb || (p.size ? Math.max(1, parseInt(String(p.size), 10) || Math.round(Number(p.size) / 1024)) : null);
+    const photoType = VALID_PHOTO_TYPES.has(p.photo_type) ? p.photo_type : 'Before_Wash';
+    const caption = p.caption ?? fileName;
 
     // Upload base64 data URI to Supabase Storage bucket
     if (typeof finalUrl === 'string' && finalUrl.startsWith('data:')) {
@@ -329,6 +376,8 @@ export async function uploadGarmentPhotos(workId, workNumber, cardId, photos = [
             if (pubData?.publicUrl) {
               finalUrl = pubData.publicUrl;
             }
+          } else {
+            console.warn('Garment photo storage upload warning:', upErr.message || upErr);
           }
         }
       } catch (storageErr) {
@@ -336,25 +385,52 @@ export async function uploadGarmentPhotos(workId, workNumber, cardId, photos = [
       }
     }
 
-    const updatedPhoto = { ...p, url: finalUrl, storage_path: storagePath || undefined };
+    const updatedPhoto = {
+      ...p,
+      url: finalUrl,
+      photo_url: finalUrl,
+      photo_type: photoType,
+      caption,
+      storage_path: storagePath || p.storage_path || undefined,
+    };
     uploadedPhotos.push(updatedPhoto);
 
     if (finalUrl && !finalUrl.startsWith('data:')) {
-      rowsToInsert.push({
-        card_id: cardId || null,
-        work_id: workId,
-        work_number: workNumber || null,
-        photo_type: p.photo_type || 'Before_Wash',
-        storage_bucket: GARMENT_PHOTOS_BUCKET,
-        storage_path: storagePath || finalUrl,
-        photo_url: finalUrl,
-        file_name: fileName,
-        file_size_kb: fileSizeKb,
-        mime_type: mimeType,
-        caption: p.caption || fileName,
-        captured_by: p.captured_by || 'POS Inspector',
-        is_customer_visible: p.is_customer_visible !== false,
-      });
+      const existingRow = existingByUrl.get(finalUrl);
+      if (existingRow) {
+        // Update metadata if changed without inserting a duplicate row
+        if (existingRow.photo_type !== photoType || existingRow.caption !== caption || existingRow.card_id !== cardId) {
+          try {
+            await supabase
+              .from('washdoor_garment_photos')
+              .update({
+                card_id: cardId || existingRow.card_id,
+                inspection_id: inspectionId || existingRow.inspection_id || null,
+                photo_type: photoType,
+                caption,
+                is_customer_visible: p.is_customer_visible !== false,
+              })
+              .eq('photo_id', existingRow.photo_id);
+          } catch {}
+        }
+      } else {
+        rowsToInsert.push({
+          card_id: cardId || null,
+          work_id: workId,
+          work_number: workNumber || null,
+          inspection_id: inspectionId,
+          photo_type: photoType,
+          storage_bucket: GARMENT_PHOTOS_BUCKET,
+          storage_path: storagePath || finalUrl,
+          photo_url: finalUrl,
+          file_name: fileName,
+          file_size_kb: fileSizeKb,
+          mime_type: mimeType,
+          caption,
+          captured_by: p.captured_by || 'POS Inspector',
+          is_customer_visible: p.is_customer_visible !== false,
+        });
+      }
     }
   }
 
@@ -362,7 +438,6 @@ export async function uploadGarmentPhotos(workId, workNumber, cardId, photos = [
     try {
       const { error } = await supabase.from('washdoor_garment_photos').insert(rowsToInsert);
       if (error && (error.code === 'PGRST204' || String(error.message).includes('column'))) {
-        // Fallback for base schema without extended photo columns
         const minimalRows = rowsToInsert.map(({ card_id, work_id, photo_type, storage_path, photo_url, caption, captured_by }) => ({
           card_id,
           work_id,
@@ -390,15 +465,34 @@ export async function syncGarmentCardsAndInspections(workIdentifier, workNumber,
 
     const cleanNum = resolvedNum || workNumber || formatOrderId(workIdentifier);
 
-    // 1. Clear previous garment cards for this order
-    try {
+    if (!items || items.length === 0) {
       await supabase.from('washdoor_garment_cards').delete().eq('work_id', workId);
-    } catch {}
+      return { success: true };
+    }
 
-    if (!items || items.length === 0) return { success: true };
+    // Fetch existing cards & photos to perform non-destructive upsert without cascading photo loss
+    const { data: existingCards } = await supabase
+      .from('washdoor_garment_cards')
+      .select('card_id, unit_index')
+      .eq('work_id', workId);
 
-    // 2. Expand items into discrete 1-based unit cards
-    const cardsToInsert = [];
+    const { data: existingPhotos } = await supabase
+      .from('washdoor_garment_photos')
+      .select('*')
+      .eq('work_id', workId);
+
+    const existingPhotosByUrl = new Map();
+    const existingPhotosByCardId = new Map();
+    (existingPhotos || []).forEach((ph) => {
+      if (ph.photo_url) existingPhotosByUrl.set(ph.photo_url, ph);
+      if (ph.card_id) {
+        if (!existingPhotosByCardId.has(ph.card_id)) existingPhotosByCardId.set(ph.card_id, []);
+        existingPhotosByCardId.get(ph.card_id).push(ph);
+      }
+    });
+
+    // Build 1-based discrete garment cards with complete garment-level fields
+    const cardsToUpsert = [];
     const cardPieceLookup = [];
     let globalUnitIndex = 1;
 
@@ -407,73 +501,153 @@ export async function syncGarmentCardsAndInspections(workIdentifier, workNumber,
       for (let i = 0; i < qty; i++) {
         const pieceNum = i + 1;
         const pieceKey = `${item.id}-piece-${pieceNum}`;
-        const insp = inspections[pieceKey] || {};
+        const altSlug = String(item.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+        const insp = inspections[pieceKey] || inspections[`${altSlug}-piece-${pieceNum}`] || {};
+        const tagNum = (insp.tagNumber || insp.garment_tag_number || '').trim() || `${cleanNum}-TAG-${String(globalUnitIndex).padStart(2, '0')}`;
+        const stageVal = VALID_STAGES.has(insp.processingStage || insp.processing_stage)
+          ? (insp.processingStage || insp.processing_stage)
+          : 'Received';
+        const hasAck = Boolean(insp.customerAck || insp.customer_ack || insp.customerApproval === 'Approved');
 
-        cardsToInsert.push({
+        cardsToUpsert.push({
           work_id: workId,
           work_number: cleanNum,
           unit_index: globalUnitIndex,
-          garment_tag_number: `${cleanNum}-TAG-${String(globalUnitIndex).padStart(2, '0')}`,
+          garment_tag_number: tagNum,
           garment_name: insp.name || item.name || item.product_name || 'Garment',
           service_type: item.serviceType || item.service_type || item.service || 'Wash & Steam Press',
           color: insp.color || null,
           brand: insp.brand || null,
-          fabric_type: insp.fabric || null,
+          fabric_type: insp.fabric && insp.fabric !== 'Select fabric' ? insp.fabric : null,
           make: insp.make || null,
           stains: insp.stains || null,
-          garment_condition: insp.condition || 'Good',
+          damage: insp.damage || null,
+          finish_preference: insp.finishPreference || insp.finish_preference || 'Standard Fold',
+          size: insp.size || null,
+          garment_condition: insp.condition || insp.garment_condition || 'Good',
           care_instructions: insp.notes || null,
-          processing_stage: 'Received',
+          special_instructions: insp.specialInstructions || item.careNotes || item.care_instructions || null,
+          processing_stage: stageVal,
+          assigned_staff: insp.assignedStaff || insp.assigned_staff || null,
+          qc_passed: Boolean(insp.qcPassed || insp.qc_passed),
+          customer_ack: hasAck,
+          customer_ack_at: hasAck ? (insp.customer_ack_at || new Date().toISOString()) : null,
+          updated_at: new Date().toISOString(),
         });
-        cardPieceLookup.push({ unit_index: globalUnitIndex, pieceKey, insp });
+        cardPieceLookup.push({ unit_index: globalUnitIndex, pieceKey, insp, existingPhotosForOrder: existingPhotos });
         globalUnitIndex++;
       }
     });
 
-    if (cardsToInsert.length > 0) {
-      let insertedCards = null;
+    // Remove excess trailing cards if cart quantity decreased
+    const maxUnitIndex = cardsToUpsert.length;
+    if (Array.isArray(existingCards) && existingCards.some((c) => c.unit_index > maxUnitIndex)) {
+      await supabase
+        .from('washdoor_garment_cards')
+        .delete()
+        .eq('work_id', workId)
+        .gt('unit_index', maxUnitIndex);
+    }
+
+    if (cardsToUpsert.length > 0) {
+      let syncedCards = null;
       let cardErr = null;
-      const res = await supabase.from('washdoor_garment_cards').insert(cardsToInsert).select();
-      insertedCards = res.data;
+      const res = await supabase
+        .from('washdoor_garment_cards')
+        .upsert(cardsToUpsert, { onConflict: 'work_id,unit_index' })
+        .select();
+      syncedCards = res.data;
       cardErr = res.error;
 
-      // Fallback if make/stains columns are not yet migrated
       if (cardErr && (cardErr.code === 'PGRST204' || String(cardErr.message).includes('column'))) {
-        const baseCards = cardsToInsert.map(({ make, stains, ...rest }) => rest);
-        const fbRes = await supabase.from('washdoor_garment_cards').insert(baseCards).select();
-        insertedCards = fbRes.data;
+        const baseCards = cardsToUpsert.map(({ make, stains, damage, finish_preference, size, assigned_staff, qc_passed, customer_ack, customer_ack_at, ...rest }) => rest);
+        const fbRes = await supabase.from('washdoor_garment_cards').upsert(baseCards, { onConflict: 'work_id,unit_index' }).select();
+        syncedCards = fbRes.data;
         cardErr = fbRes.error;
       }
 
       if (cardErr) {
-        console.warn('washdoor_garment_cards insert note:', cardErr.message);
+        console.warn('washdoor_garment_cards upsert note:', cardErr.message);
       }
 
-      // 3. Insert inspections & upload photos for pieces
-      if (insertedCards && insertedCards.length > 0) {
+      // Sync inspections & photos for each synced card
+      if (syncedCards && syncedCards.length > 0) {
+        const cardIds = syncedCards.map((c) => c.card_id).filter(Boolean);
+        // Replace inspection log rows for these cards cleanly (without deleting cards or photos)
+        if (cardIds.length > 0) {
+          try {
+            await supabase.from('washdoor_garment_inspections').delete().in('card_id', cardIds);
+          } catch {}
+        }
+
         const inspectionsToInsert = [];
-        for (const card of insertedCards) {
+        for (const card of syncedCards) {
           const entry = cardPieceLookup.find((c) => c.unit_index === card.unit_index);
           const matchingInsp = entry?.insp || Object.values(inspections).find(
             (p) => (p.piece === card.unit_index || p.unit_index === card.unit_index) || (p.name === card.garment_name && (p.stains || p.notes))
+          ) || {};
+
+          const hasExtraCharge = Number(matchingInsp.extraCharge ?? matchingInsp.extra_charge ?? 0) > 0;
+          const hasInspectionData = Boolean(
+            matchingInsp.stains ||
+            matchingInsp.damage ||
+            matchingInsp.notes ||
+            matchingInsp.defectLocation ||
+            matchingInsp.defect_location ||
+            hasExtraCharge ||
+            (matchingInsp.condition && matchingInsp.condition !== 'Good') ||
+            matchingInsp.color ||
+            matchingInsp.brand ||
+            (matchingInsp.fabric && matchingInsp.fabric !== 'Select fabric') ||
+            matchingInsp.make
           );
 
-          if (matchingInsp && Array.isArray(matchingInsp.photos) && matchingInsp.photos.length > 0) {
-            await uploadGarmentPhotos(workId, cleanNum, card.card_id, matchingInsp.photos);
-          }
+          let createdInspectionId = null;
+          if (hasInspectionData) {
+            const severityVal = VALID_SEVERITIES.has(matchingInsp.severity)
+              ? matchingInsp.severity
+              : (matchingInsp.stains || matchingInsp.damage ? 'Medium' : 'Low');
+            const actionVal = VALID_ACTION_PLANS.has(matchingInsp.actionPlan || matchingInsp.action_plan)
+              ? (matchingInsp.actionPlan || matchingInsp.action_plan)
+              : (matchingInsp.stains || matchingInsp.damage ? 'Spot_Treat' : 'Proceed');
+            const approvalVal = VALID_APPROVALS.has(matchingInsp.customerApproval || matchingInsp.customer_approval)
+              ? (matchingInsp.customerApproval || matchingInsp.customer_approval)
+              : (matchingInsp.customerAck ? 'Approved' : 'Not_Required');
 
-          if (matchingInsp && (matchingInsp.stains || matchingInsp.notes || matchingInsp.condition)) {
             inspectionsToInsert.push({
               card_id: card.card_id,
               work_id: workId,
-              category_name: matchingInsp.stains ? 'Stain / Spot Treatment' : 'Special Fabric Care',
-              defect_location: 'Body',
-              severity: matchingInsp.stains ? 'Medium' : 'Low',
-              action_plan: matchingInsp.stains ? 'Spot_Treat' : 'Proceed',
-              extra_charge: 0.00,
-              customer_approval: 'Approved',
-              inspection_notes: matchingInsp.notes || matchingInsp.stains || 'Intake inspection verified',
-              inspected_by: 'QC Staff',
+              category_name: matchingInsp.stains
+                ? 'Stain / Spot Treatment'
+                : matchingInsp.damage
+                ? 'Damage / Mending'
+                : 'Garment Intake Inspection',
+              defect_location: matchingInsp.defectLocation || matchingInsp.defect_location || (matchingInsp.stains || matchingInsp.damage ? 'Body' : null),
+              severity: severityVal,
+              action_plan: actionVal,
+              extra_charge: Number(matchingInsp.extraCharge ?? matchingInsp.extra_charge ?? 0) || 0,
+              customer_approval: approvalVal,
+              customer_notes: matchingInsp.customerNotes || matchingInsp.customer_notes || null,
+              inspection_notes: matchingInsp.notes || [matchingInsp.stains, matchingInsp.damage].filter(Boolean).join(' | ') || 'Intake inspection verified',
+              inspected_by: matchingInsp.assignedStaff || matchingInsp.assigned_staff || 'QC Staff',
+            });
+          }
+
+          // Reconcile photos for this card: remove deleted URLs, upload/keep present photos
+          const desiredPhotos = Array.isArray(matchingInsp.photos) ? matchingInsp.photos : [];
+          const existingForCard = existingPhotosByCardId.get(card.card_id) || [];
+          const desiredUrls = new Set(desiredPhotos.map((ph) => (typeof ph === 'string' ? ph : ph?.url || ph?.photo_url)).filter(Boolean));
+          const removedIds = existingForCard.filter((ex) => ex.photo_url && !desiredUrls.has(ex.photo_url)).map((ex) => ex.photo_id);
+          if (removedIds.length > 0) {
+            try {
+              await supabase.from('washdoor_garment_photos').delete().in('photo_id', removedIds);
+            } catch {}
+          }
+
+          if (desiredPhotos.length > 0) {
+            await uploadGarmentPhotos(workId, cleanNum, card.card_id, desiredPhotos, {
+              existingByUrl: existingPhotosByUrl,
+              inspectionId: createdInspectionId,
             });
           }
         }
@@ -650,7 +824,7 @@ export async function saveHeldOrder(heldPayload = {}) {
 }
 
 /**
- * Inserts an immutable activity log row into washdoor_audit_logs.
+ * Inserts an immutable activity log row into washdoor_audit_logs and local audit trail.
  */
 export async function recordAuditLogEntry({
   entity_name = 'customer_works',
@@ -659,31 +833,58 @@ export async function recordAuditLogEntry({
   operation = 'UPDATE',
   old_data = null,
   new_data = null,
-  changed_by_name = 'Store Staff',
+  changed_by_name = '',
+  changed_by_role = '',
+  entity_label = '',
+  category = '',
+  details = '',
 }) {
+  const activeStaff = getActiveStaffProfile();
+  const staffName = (changed_by_name && String(changed_by_name).trim()) ? String(changed_by_name).trim() : activeStaff.name;
+  const staffRole = (changed_by_role && String(changed_by_role).trim()) ? String(changed_by_role).trim() : (activeStaff.role || 'Staff');
+  const resolvedCategory = category || (entity_name === 'customers' ? 'customer' : operation === 'DELETE' ? 'system' : 'lifecycle');
+
+  // Always record to local audit trail with exact timestamp & staff details
+  logAuditEvent({
+    action: `${entity_name === 'customers' ? 'Customer' : 'Order'} ${operation}`,
+    module: entity_name === 'customers' ? 'Customer Directory' : 'POS & Order Lifecycle',
+    entity: entity_label || new_data?.order_number || new_data?.customer_code || record_id || 'System',
+    entityType: entity_name === 'customers' ? 'Customer' : 'Order',
+    category: resolvedCategory,
+    format: operation,
+    actor: staffName,
+    actorRole: staffRole,
+    details: details || `${operation} on ${entity_name}: ${new_data ? JSON.stringify(new_data) : (entity_label || record_id || '')}`,
+    oldValue: old_data,
+    newValue: new_data,
+    severity: operation === 'DELETE' ? 'danger' : operation === 'INSERT' ? 'success' : 'info',
+  });
+
   if (!isSupabaseConfigured()) return { success: false };
   try {
     let resolvedWorkId = work_id;
-    if (!resolvedWorkId && record_id) {
+    if (!resolvedWorkId && record_id && entity_name !== 'customers') {
       const resolved = await resolveWorkIdAndNumber(record_id);
       resolvedWorkId = resolved.workId;
     }
     const targetId = resolvedWorkId || (
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(record_id || ''))
         ? record_id
-        : null
+        : '00000000-0000-0000-0000-000000000000'
     );
-    if (!targetId) return { success: false };
 
     const { error } = await supabase.from('washdoor_audit_logs').insert([{
       entity_name,
       record_id: targetId,
-      work_id: resolvedWorkId || targetId,
+      work_id: resolvedWorkId || null,
       operation: ['INSERT', 'UPDATE', 'DELETE'].includes(operation) ? operation : 'UPDATE',
       old_data: old_data || null,
       new_data: new_data || null,
-      changed_by_name: changed_by_name || 'Store Staff',
+      changed_by_name: staffName,
     }]);
+    if (error) {
+      console.warn('washdoor_audit_logs insert note:', error.message);
+    }
     return { success: !error };
   } catch {
     return { success: false };
@@ -691,21 +892,24 @@ export async function recordAuditLogEntry({
 }
 
 /**
- * Fetches live audit logs & status transitions from washdoor_audit_logs and washdoor_status_history.
+ * Fetches live audit logs & status transitions from washdoor_audit_logs,
+ * washdoor_status_history, and washdoor_live_status_actions.
  */
-export async function getSupabaseAuditLogs(limit = 100) {
-  if (!isSupabaseConfigured()) return { auditLogs: [], statusHistory: [] };
+export async function getSupabaseAuditLogs(limit = 150) {
+  if (!isSupabaseConfigured()) return { auditLogs: [], statusHistory: [], liveActions: [] };
   try {
-    const [audRes, histRes] = await Promise.all([
+    const [audRes, histRes, actRes] = await Promise.all([
       supabase.from('washdoor_audit_logs').select('*').order('created_at', { ascending: false }).limit(limit),
       supabase.from('washdoor_status_history').select('*').order('changed_at', { ascending: false }).limit(limit),
+      supabase.from('washdoor_live_status_actions').select('*').order('action_at', { ascending: false }).limit(limit),
     ]);
     return {
       auditLogs: (!audRes.error && Array.isArray(audRes.data)) ? audRes.data : [],
       statusHistory: (!histRes.error && Array.isArray(histRes.data)) ? histRes.data : [],
+      liveActions: (!actRes.error && Array.isArray(actRes.data)) ? actRes.data : [],
     };
   } catch {
-    return { auditLogs: [], statusHistory: [] };
+    return { auditLogs: [], statusHistory: [], liveActions: [] };
   }
 }
 
@@ -755,50 +959,91 @@ export async function recordPaymentLedger({
 }
 
 /**
- * Records immutable status history and live status tracking milestone.
+ * Records immutable status history and live status tracking milestone with staff & timestamp attribution.
  */
 export async function recordStatusHistory({
   work_id,
   work_number,
+  entity_type = 'Order',
   old_status = null,
   new_status,
-  changed_by_name = 'Staff',
+  changed_by_name = '',
+  changed_by_role = '',
+  stage = '',
+  action_label = '',
+  step_name = 'Status Update',
   remarks = null,
 }) {
-  if (!isSupabaseConfigured() || !new_status) return { success: false };
+  if (!new_status) return { success: false };
+  const activeStaff = getActiveStaffProfile();
+  const staffName = (changed_by_name && String(changed_by_name).trim()) ? String(changed_by_name).trim() : activeStaff.name;
+  const staffRole = ['Admin', 'Staff', 'Driver', 'QC_Inspector', 'Customer', 'System'].includes(changed_by_role)
+    ? changed_by_role
+    : (['Admin', 'Staff', 'Driver', 'QC_Inspector', 'Customer', 'System'].includes(activeStaff.role) ? activeStaff.role : 'Staff');
+
+  const resolvedStage = ['Pickup', 'Shop', 'Processing', 'Delivery', 'Payment'].includes(stage)
+    ? stage
+    : String(new_status).toLowerCase().includes('deliver') ? 'Delivery'
+    : String(new_status).toLowerCase().includes('pickup') ? 'Pickup'
+    : String(new_status).toLowerCase().includes('paid') ? 'Payment'
+    : 'Processing';
+
+  const cleanFallbackNum = work_number || (work_id ? formatOrderId(work_id) : 'Order');
+
+  // Always record workflow step locally for instant UI timeline & staff tracking
+  logWorkflowStep({
+    workId: work_id,
+    orderNumber: cleanFallbackNum,
+    stepName: step_name,
+    stage: resolvedStage,
+    oldStatus: old_status,
+    newStatus: new_status,
+    staffName,
+    staffRole,
+    remarks: remarks || `${step_name}: ${old_status ? `${old_status} → ` : ''}${new_status}`,
+    entityType: entity_type,
+  });
+
+  if (!isSupabaseConfigured()) return { success: false };
   try {
     const { workId, workNumber: resolvedNum } = await resolveWorkIdAndNumber(work_id || work_number);
     if (!workId) return { success: false };
 
-    const cleanNum = resolvedNum || work_number || formatOrderId(work_id);
+    const cleanNum = resolvedNum || cleanFallbackNum;
 
     // 1. Insert into washdoor_status_history
     try {
-      await supabase.from('washdoor_status_history').insert([{
+      const { error: shErr } = await supabase.from('washdoor_status_history').insert([{
         work_id: workId,
         work_number: cleanNum,
+        entity_type: ['Order', 'Garment_Unit', 'Batch', 'Driver_Assignment'].includes(entity_type) ? entity_type : 'Order',
         old_status: old_status || null,
         new_status: new_status,
-        changed_by_name: changed_by_name || 'Staff',
-        changed_by_role: 'Staff',
+        changed_by_name: staffName,
+        changed_by_role: staffRole,
         change_source: 'POS_Web',
         remarks: remarks || `Status transitioned to ${new_status}`,
         notify_customer: false,
       }]);
+      if (shErr) console.warn('washdoor_status_history insert note:', shErr.message);
     } catch {}
 
     // 2. Insert into washdoor_live_status_actions
     try {
-      await supabase.from('washdoor_live_status_actions').insert([{
+      const actorType = ['Customer', 'Staff', 'Driver', 'Admin', 'System'].includes(staffRole)
+        ? staffRole
+        : 'Staff';
+      const { error: actErr } = await supabase.from('washdoor_live_status_actions').insert([{
         work_id: workId,
         work_number: cleanNum,
-        action_code: String(new_status).toUpperCase().replace(/\s+/g, '_'),
-        action_label: `Order status: ${new_status}`,
-        stage: String(new_status).toLowerCase().includes('deliver') ? 'Delivery' : 'Processing',
-        actor_type: 'Staff',
-        actor_name: changed_by_name || 'Staff',
+        action_code: String(new_status).toUpperCase().replace(/[^A-Z0-9]+/g, '_').slice(0, 50),
+        action_label: action_label || `${step_name}: ${new_status}`,
+        stage: resolvedStage,
+        actor_type: actorType,
+        actor_name: staffName,
         is_customer_visible: true,
       }]);
+      if (actErr) console.warn('washdoor_live_status_actions insert note:', actErr.message);
     } catch {}
 
     return { success: true };
@@ -1037,13 +1282,214 @@ export async function getNextCustomerId() {
 }
 
 // Convert customer_works row into UI Customer shape
+function extractCleanStaffNotes(raw) {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === 'object') {
+    const nested = raw.staff_notes || raw.internal_comments || raw.notes;
+    return typeof nested === 'string' && nested.trim() ? nested.trim() : null;
+  }
+  const str = String(raw).trim();
+  if (!str) return null;
+  if (str.startsWith('{') || str.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(str);
+      if (parsed && typeof parsed === 'object') {
+        const nested = parsed.staff_notes || parsed.internal_comments || parsed.notes;
+        return typeof nested === 'string' && nested.trim() ? nested.trim() : null;
+      }
+    } catch {
+      const match = str.match(/"staff_notes"\s*:\s*"([^"]*)"/);
+      if (match && match[1] && match[1].trim()) return match[1].trim();
+      if (str.includes('"factory_hub"') || str.includes('"garment_inspections"')) return null;
+    }
+  }
+  return str;
+}
+
+const GENERIC_CUSTOMER_DEFAULTS = {
+  customer_classification: 'Regular Customer',
+  customerClassification: 'Regular Customer',
+  price_list: 'Standard',
+  marketing_source: 'Walk-in',
+  communication_pref: 'WhatsApp',
+  communicationPreference: 'WhatsApp',
+  communication_lang: 'English',
+  preferred_language: 'English',
+  preferredCommunicationLanguage: 'English',
+  area_service_zone: 'Zone 1',
+  areaServiceZone: 'Zone 1',
+  service_zone: 'Zone 1',
+  customer_status: 'Active',
+  customerStatus: 'Active',
+  order_preference: 'Wash & Steam Press',
+  orderPreference: 'Wash & Steam Press',
+  service_type: 'Wash & Steam Press',
+  service_category: 'Wash & Steam Press',
+};
+
+function isMeaningfulCustomerField(key, val) {
+  if (val === undefined || val === null || val === '') return false;
+  if (Array.isArray(val) && val.length === 0) return false;
+  if (typeof val === 'number' && val === 0 && (
+    key === 'default_discount' ||
+    key === 'default_discount_pct' ||
+    key === 'defaultDiscountPercentage' ||
+    key === 'credit_limit' ||
+    key === 'wallet_balance' ||
+    key === 'walletBalance'
+  )) {
+    return false;
+  }
+  if (typeof val === 'boolean' && val === false && (
+    key === 'tax_exemption' ||
+    key === 'dnd' ||
+    key === 'doNotDisturb'
+  )) {
+    return false;
+  }
+  if (GENERIC_CUSTOMER_DEFAULTS[key] && val === GENERIC_CUSTOMER_DEFAULTS[key]) {
+    return false;
+  }
+  return true;
+}
+
+function mergeCustomerData(target, source) {
+  if (!source) return target;
+  if (!target) return { ...source };
+  const merged = { ...target };
+  Object.keys(source).forEach((key) => {
+    const incomingVal = source[key];
+    const currentVal = merged[key];
+    if (!isMeaningfulCustomerField(key, currentVal) && incomingVal !== undefined && incomingVal !== null && incomingVal !== '') {
+      merged[key] = incomingVal;
+    }
+  });
+  return merged;
+}
+
+function finalizeCustomerRecord(c) {
+  if (!c) return c;
+  const cleanInternal = extractCleanStaffNotes(c.internal_comments);
+  const cleanNotes = extractCleanStaffNotes(c.notes) || cleanInternal;
+  const zone = c.service_zone || c.area_service_zone || c.areaServiceZone || 'Zone 1';
+  const lang = c.communication_lang || c.preferred_language || c.preferredCommunicationLanguage || 'English';
+  const commPref = c.communication_pref || c.communicationPreference || 'WhatsApp';
+  const classification = c.customer_classification || c.customerClassification || 'Regular Customer';
+  const status = c.customer_status || c.customerStatus || 'Active';
+
+  return {
+    ...c,
+    customer_classification: classification,
+    customerClassification: classification,
+    customer_status: status,
+    customerStatus: status,
+    price_list: c.price_list || 'Standard',
+    service_zone: zone,
+    area_service_zone: zone,
+    areaServiceZone: zone,
+    communication_pref: commPref,
+    communicationPreference: commPref,
+    communication_lang: lang,
+    preferred_language: lang,
+    preferredCommunicationLanguage: lang,
+    marketing_source: c.marketing_source || 'Walk-in',
+    default_discount: c.default_discount ?? c.default_discount_pct ?? 0,
+    credit_limit: c.credit_limit ?? 0,
+    internal_comments: cleanInternal,
+    notes: cleanNotes,
+  };
+}
+
+function mapMasterCustomerRow(r) {
+  if (!r) return null;
+  const custId = formatCustomerId(r.customer_code || r.customer_id || (r.id ? formatCustomerId(r.id) : 'CUST-00001'));
+  const cleanInternal = extractCleanStaffNotes(r.internal_comments);
+  const cleanNotes = extractCleanStaffNotes(r.notes) || cleanInternal;
+  return {
+    id: custId,
+    db_id: r.id,
+    customerId: custId,
+    customer_id: custId,
+    customer_code: r.customer_code || custId,
+    customer_name: r.customer_name || null,
+    customerName: r.customer_name || null,
+    country_code: '+91',
+    countryCode: '+91',
+    mobile_number: r.mobile_number || null,
+    mobileNumber: r.mobile_number || null,
+    alternate_phone: r.alternate_phone || null,
+    alternatePhoneNumber: r.alternate_phone || null,
+    email: r.email || null,
+    address: r.address || null,
+    streetArea: r.address || null,
+    city: r.city || null,
+    state: r.state || null,
+    pincode: r.pincode || null,
+    date_of_birth: r.date_of_birth || null,
+    anniversary_date: r.anniversary_date || null,
+    map_link: r.map_link || null,
+    gst_number: r.gst_number || null,
+    gstNumber: r.gst_number || null,
+    company_name: r.company_name || null,
+    companyName: r.company_name || null,
+    tax_exemption: r.tax_exemption !== undefined ? Boolean(r.tax_exemption) : undefined,
+    customer_classification: r.customer_classification || null,
+    customerClassification: r.customer_classification || null,
+    customer_status: r.customer_status || null,
+    customerStatus: r.customer_status || null,
+    price_list: r.price_list || null,
+    service_zone: r.service_zone || null,
+    area_service_zone: r.service_zone || null,
+    areaServiceZone: r.service_zone || null,
+    credit_limit: r.credit_limit !== undefined && r.credit_limit !== null ? Number(r.credit_limit) : null,
+    wallet_balance: r.wallet_balance !== undefined && r.wallet_balance !== null ? Number(r.wallet_balance) : null,
+    default_discount: r.default_discount !== undefined && r.default_discount !== null ? Number(r.default_discount) : null,
+    communication_pref: r.communication_pref || null,
+    communicationPreference: r.communication_pref || null,
+    communication_lang: r.preferred_language || null,
+    preferred_language: r.preferred_language || null,
+    preferredCommunicationLanguage: r.preferred_language || null,
+    dnd: r.dnd !== undefined ? Boolean(r.dnd) : undefined,
+    internal_comments: cleanInternal || cleanNotes,
+    notes: cleanNotes,
+    tier: r.tier || null,
+    membership_id: r.membership_id || null,
+    membershipId: r.membership_id || null,
+    marketing_source: r.marketing_source || null,
+    referral_code: r.referral_code || null,
+    additional_addresses: [],
+    additionalAddresses: [],
+    created_at: r.created_at || null,
+    updated_at: r.updated_at || null,
+  };
+}
+
 export function mapCustomerWorkRow(row) {
   if (!row) return null;
   const custId = formatCustomerId(row.customer_id || 'CUST-00001');
 
-  // Extract customer profile stored in items array
+  // Extract customer profile stored in items array (avoid treating garment line items as profile metadata)
   const items = Array.isArray(row.items) ? row.items : [];
-  const profileItem = items.find((i) => i && (i.type === 'customer_registration' || i.type === 'customer_profile')) || items[0] || {};
+  const profileItem = items.find((i) => i && (
+    i.type === 'customer_registration' ||
+    i.type === 'customer_profile' ||
+    i.company_name !== undefined ||
+    i.date_of_birth !== undefined ||
+    i.price_list !== undefined ||
+    i.gst_number !== undefined
+  )) || {};
+
+  const cleanInternal =
+    extractCleanStaffNotes(profileItem.internal_comments) ||
+    extractCleanStaffNotes(row.internal_notes) ||
+    null;
+  const cleanNotes =
+    extractCleanStaffNotes(row.special_instructions) ||
+    cleanInternal ||
+    null;
+  const zone = profileItem.area_service_zone || profileItem.service_zone || null;
+  const lang = profileItem.preferred_language || profileItem.communication_lang || null;
+  const commPref = profileItem.communication_pref || null;
 
   return {
     id: custId,
@@ -1069,16 +1515,23 @@ export function mapCustomerWorkRow(row) {
     companyName: profileItem.company_name || null,
     gst_number: profileItem.gst_number || null,
     gstNumber: profileItem.gst_number || null,
-    area_service_zone: profileItem.area_service_zone || 'Zone 1',
-    areaServiceZone: profileItem.area_service_zone || 'Zone 1',
+    service_zone: zone || 'Zone 1',
+    area_service_zone: zone || 'Zone 1',
+    areaServiceZone: zone || 'Zone 1',
     tax_exemption: Boolean(profileItem.tax_exemption),
     date_of_birth: profileItem.date_of_birth || null,
+    anniversary_date: profileItem.anniversary_date || null,
+    special_occasion: profileItem.special_occasion || null,
+    special_occasion_date: profileItem.special_occasion_date || null,
     map_link: profileItem.map_link || null,
-    communication_pref: profileItem.communication_pref || 'WhatsApp',
-    communicationPreference: profileItem.communication_pref || 'WhatsApp',
-    preferredCommunicationLanguage: profileItem.preferred_language || 'English',
-    internal_comments: row.internal_notes || profileItem.internal_comments || null,
-    notes: row.special_instructions || row.internal_notes || null,
+    communication_pref: commPref || 'WhatsApp',
+    communicationPreference: commPref || 'WhatsApp',
+    communication_lang: lang || 'English',
+    preferred_language: lang || 'English',
+    preferredCommunicationLanguage: lang || 'English',
+    dnd: profileItem.dnd !== undefined ? Boolean(profileItem.dnd) : false,
+    internal_comments: cleanInternal,
+    notes: cleanNotes,
     order_preference: row.service_type || profileItem.order_preference || 'Wash & Steam Press',
     orderPreference: row.service_type || profileItem.order_preference || 'Wash & Steam Press',
     service_type: row.service_type || 'Wash & Steam Press',
@@ -1086,7 +1539,7 @@ export function mapCustomerWorkRow(row) {
     price_list: profileItem.price_list || 'Standard',
     customer_classification: profileItem.customer_classification || 'Regular Customer',
     customerClassification: profileItem.customer_classification || 'Regular Customer',
-    customer_status: 'Active',
+    customer_status: profileItem.customer_status || 'Active',
     tier: profileItem.tier || 'SILVER',
     membership_id: profileItem.membership_id || null,
     membershipId: profileItem.membership_id || null,
@@ -1199,6 +1652,8 @@ function mapMasterRowToOrder(row) {
 export function mapCustomersTableRow(r) {
   if (!r) return null;
   const custId = formatCustomerId(r.customer_code || r.customer_id || (r.id ? formatCustomerId(r.id) : 'CUST-00001'));
+  const cleanInternal = extractCleanStaffNotes(r.internal_comments);
+  const cleanNotes = extractCleanStaffNotes(r.notes) || cleanInternal;
   return {
     id: custId,
     db_id: r.id,
@@ -1217,6 +1672,7 @@ export function mapCustomersTableRow(r) {
     address: r.address || '',
     streetArea: r.address || '',
     city: r.city || '',
+    state: r.state || null,
     pincode: r.pincode || null,
     date_of_birth: r.date_of_birth || null,
     anniversary_date: r.anniversary_date || null,
@@ -1238,11 +1694,17 @@ export function mapCustomersTableRow(r) {
     default_discount: Number(r.default_discount || 0),
     communication_pref: r.communication_pref || 'WhatsApp',
     communicationPreference: r.communication_pref || 'WhatsApp',
+    communication_lang: r.preferred_language || 'English',
     preferredCommunicationLanguage: r.preferred_language || 'English',
     preferred_language: r.preferred_language || 'English',
     dnd: Boolean(r.dnd),
-    internal_comments: r.internal_comments || null,
-    notes: r.notes || r.internal_comments || null,
+    internal_comments: cleanInternal || cleanNotes,
+    notes: cleanNotes,
+    tier: r.tier || null,
+    membership_id: r.membership_id || null,
+    membershipId: r.membership_id || null,
+    marketing_source: r.marketing_source || 'Walk-in',
+    referral_code: r.referral_code || null,
     additional_addresses: [],
     additionalAddresses: [],
     created_at: r.created_at,
@@ -1250,8 +1712,45 @@ export function mapCustomersTableRow(r) {
   };
 }
 
+function createCustomerMerger() {
+  const orderedKeys = [];
+  const byKey = new Map();
+  const keyByPhone = new Map();
+
+  const normalizePhoneKey = (phone) => {
+    const digits = String(phone || '').replace(/\D/g, '');
+    return digits.length >= 10 ? digits.slice(-10) : '';
+  };
+
+  return {
+    add(c) {
+      if (!c) return;
+      const rawId = c.customer_id || c.customerId || c.customer_code || c.id;
+      const phoneKey = normalizePhoneKey(c.mobile_number || c.mobileNumber);
+      const existingKey =
+        (rawId && byKey.has(rawId) ? rawId : null) ||
+        (phoneKey && keyByPhone.has(phoneKey) ? keyByPhone.get(phoneKey) : null);
+
+      if (existingKey) {
+        byKey.set(existingKey, mergeCustomerData(byKey.get(existingKey), c));
+        if (phoneKey && !keyByPhone.has(phoneKey)) keyByPhone.set(phoneKey, existingKey);
+      } else {
+        const key = rawId || phoneKey;
+        if (!key) return;
+        orderedKeys.push(key);
+        byKey.set(key, { ...c });
+        if (phoneKey) keyByPhone.set(phoneKey, key);
+      }
+    },
+    toList() {
+      return orderedKeys.map((k) => finalizeCustomerRecord(byKey.get(k)));
+    },
+  };
+}
+
 /**
- * Searches real customer records in Supabase customers, customer_works, and washdoor_orders_master.
+ * Searches real customer records in Supabase customers, customer_works, and washdoor_orders_master,
+ * merging profile fields across rows so order records never mask full customer master details.
  */
 export async function searchCustomers(query) {
   if (!query || !query.trim()) {
@@ -1265,33 +1764,23 @@ export async function searchCustomers(query) {
   }
 
   try {
-    const seen = new Set();
-    const seenPhones = new Set();
-    const uniqueCustomers = [];
+    const merger = createCustomerMerger();
 
-    // 1. Search customers table
+    // 1. Search customers master table first (authoritative full profile metadata)
     try {
       const { data: cData } = await supabase
         .from('customers')
         .select('*')
         .or(`customer_name.ilike.%${q}%,mobile_number.ilike.%${q}%,address.ilike.%${q}%,customer_code.ilike.%${q}%`)
+        .order('created_at', { ascending: false })
         .limit(30);
 
       if (cData && cData.length > 0) {
-        cData.forEach((r) => {
-          const mapped = mapCustomersTableRow(r);
-          const key = mapped?.customer_id;
-          const phone = mapped?.mobile_number;
-          if (key && !seen.has(key)) {
-            seen.add(key);
-            if (phone) seenPhones.add(phone);
-            uniqueCustomers.push(mapped);
-          }
-        });
+        cData.forEach((r) => merger.add(mapMasterCustomerRow(r)));
       }
     } catch {}
 
-    // 2. Search primary customer_works table
+    // 2. Search and merge from primary customer_works table
     try {
       const { data: worksData, error: worksError } = await supabase
         .from('customer_works')
@@ -1301,21 +1790,13 @@ export async function searchCustomers(query) {
         .limit(30);
 
       if (!worksError && worksData) {
-        worksData.forEach((r) => {
-          const c = mapCustomerWorkRow(r);
-          const key = c.customer_id || c.mobile_number;
-          if (key && !seen.has(key) && (!c.mobile_number || !seenPhones.has(c.mobile_number))) {
-            seen.add(key);
-            if (c.mobile_number) seenPhones.add(c.mobile_number);
-            uniqueCustomers.push(c);
-          }
-        });
+        worksData.forEach((r) => merger.add(mapCustomerWorkRow(r)));
       }
     } catch (wErr) {
       console.warn('customer_works search note:', wErr);
     }
 
-    // 2. Also search washdoor_orders_master for backwards compatibility
+    // 3. Also search and merge washdoor_orders_master for backwards compatibility
     try {
       const { data: masterData, error: masterError } = await supabase
         .from('washdoor_orders_master')
@@ -1325,27 +1806,20 @@ export async function searchCustomers(query) {
         .limit(30);
 
       if (!masterError && masterData) {
-        masterData.forEach((r) => {
-          const c = mapMasterRowToOrder(r).customer;
-          const key = c.customer_id || c.customerId || c.id;
-          if (key && !seen.has(key)) {
-            seen.add(key);
-            uniqueCustomers.push(c);
-          }
-        });
+        masterData.forEach((r) => merger.add(mapMasterRowToOrder(r).customer));
       }
     } catch (mErr) {
       console.warn('washdoor_orders_master search note:', mErr);
     }
 
-    return { data: uniqueCustomers, error: null };
+    return { data: merger.toList(), error: null };
   } catch (err) {
     return { data: [], error: err };
   }
 }
 
 // Convert customer_works row into UI Order shape with full fidelity
-function mapCustomerWorkRowToOrder(row, factoryRow = null, scheduleRow = null) {
+function mapCustomerWorkRowToOrder(row, factoryRow = null, scheduleRow = null, garmentBundle = null) {
   const orderNum = row.work_number ? formatOrderId(row.work_number) : (row.work_id ? `ORD${String(row.work_id).slice(-5)}` : 'ORD00001');
   const custId = formatCustomerId(row.customer_id || 'CUST-00001');
   const rawStatus = row.work_status || 'order recived';
@@ -1357,7 +1831,7 @@ function mapCustomerWorkRowToOrder(row, factoryRow = null, scheduleRow = null) {
       if (parsed && typeof parsed === 'object') {
         internalNotesObj = parsed;
         if (parsed.garment_inspections && typeof parsed.garment_inspections === 'object') {
-          garmentInspections = parsed.garment_inspections;
+          garmentInspections = { ...parsed.garment_inspections };
         }
       }
     } catch {}
@@ -1366,7 +1840,27 @@ function mapCustomerWorkRowToOrder(row, factoryRow = null, scheduleRow = null) {
   const displayStatus = normalizeOrderStatus(resolvedStatusRaw);
   const propertyStatus = internalNotesObj.property_status || (row.priority === 'Yes' ? 'Yes' : 'No') || (row.property_status === 'Yes' ? 'Yes' : 'No') || 'No';
 
-  const items = Array.isArray(row.items) ? row.items : [];
+  // Prefer customer_works.items, or reconstruct from washdoor_order_items; merge per-item careNotes
+  const dbOrderItems = Array.isArray(garmentBundle?.orderItems) ? garmentBundle.orderItems : [];
+  let items = Array.isArray(row.items) && row.items.length > 0
+    ? row.items.map((it, idx) => {
+        const matchedDb = dbOrderItems[idx];
+        return {
+          ...it,
+          careNotes: it.careNotes || it.care_instructions || matchedDb?.care_instructions || '',
+        };
+      })
+    : dbOrderItems.map((it, idx) => ({
+        id: it.product_id || `item-${idx + 1}`,
+        name: it.product_name,
+        serviceType: it.service_type,
+        service: it.service_type,
+        rate: Number(it.rate || 0),
+        qty: Number(it.quantity || 1),
+        amount: Number(it.line_amount || 0),
+        careNotes: it.care_instructions || '',
+      }));
+
   const itemCount = row.total_pieces !== undefined && row.total_pieces !== null ? Number(row.total_pieces) : (items.length || 1);
   if (Object.keys(garmentInspections).length === 0 && Array.isArray(items)) {
     items.forEach((it) => {
@@ -1375,6 +1869,94 @@ function mapCustomerWorkRowToOrder(row, factoryRow = null, scheduleRow = null) {
           if (insp.id) garmentInspections[insp.id] = insp;
         });
       }
+    });
+  }
+
+  // Hydrate & overlay normalized garment cards, inspections & photos from relational Supabase tables
+  const dbCards = Array.isArray(garmentBundle?.cards) ? [...garmentBundle.cards].sort((a, b) => (a.unit_index || 0) - (b.unit_index || 0)) : [];
+  const dbInspectionsByCard = {};
+  (garmentBundle?.inspections || []).forEach((ins) => {
+    if (ins.card_id && !dbInspectionsByCard[ins.card_id]) {
+      dbInspectionsByCard[ins.card_id] = ins;
+    }
+  });
+  const dbPhotosByCard = {};
+  (garmentBundle?.photos || []).forEach((ph) => {
+    const key = ph.card_id || 'order';
+    if (!dbPhotosByCard[key]) dbPhotosByCard[key] = [];
+    dbPhotosByCard[key].push({
+      id: ph.photo_id,
+      photo_id: ph.photo_id,
+      name: ph.file_name || ph.caption || 'Garment Photo',
+      caption: ph.caption || '',
+      photo_type: ph.photo_type || 'Before_Wash',
+      url: ph.photo_url,
+      photo_url: ph.photo_url,
+      storage_path: ph.storage_path,
+      file_size_kb: ph.file_size_kb,
+      mime_type: ph.mime_type,
+      is_customer_visible: ph.is_customer_visible,
+    });
+  });
+
+  if (dbCards.length > 0) {
+    // Build unit_index -> cart piece key lookup
+    const unitKeyMap = {};
+    let uIdx = 1;
+    items.forEach((it) => {
+      const q = Math.max(1, parseInt(it.qty || it.quantity || 1, 10));
+      for (let i = 0; i < q; i++) {
+        unitKeyMap[uIdx] = {
+          pieceId: `${it.id}-piece-${i + 1}`,
+          cartItemId: it.id,
+          productId: it.productId || it.id,
+          piece: i + 1,
+        };
+        uIdx++;
+      }
+    });
+
+    dbCards.forEach((card) => {
+      const mapping = unitKeyMap[card.unit_index];
+      const slugFallback = String(card.garment_name || 'garment').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      const pieceId = mapping?.pieceId || `${slugFallback}-piece-${card.unit_index}`;
+      const existing = garmentInspections[pieceId] || {};
+      const insRow = dbInspectionsByCard[card.card_id] || {};
+      const cardPhotos = dbPhotosByCard[card.card_id] || [];
+
+      garmentInspections[pieceId] = {
+        ...existing,
+        id: pieceId,
+        card_id: card.card_id,
+        cartItemId: mapping?.cartItemId || existing.cartItemId || slugFallback,
+        productId: mapping?.productId || existing.productId || slugFallback,
+        piece: mapping?.piece || existing.piece || card.unit_index,
+        unit_index: card.unit_index,
+        name: card.garment_name || existing.name || 'Garment',
+        tagNumber: card.garment_tag_number || existing.tagNumber || '',
+        color: card.color ?? existing.color ?? '',
+        brand: card.brand ?? existing.brand ?? '',
+        fabric: card.fabric_type || existing.fabric || 'Select fabric',
+        make: card.make ?? existing.make ?? '',
+        stains: card.stains ?? existing.stains ?? '',
+        damage: card.damage ?? existing.damage ?? '',
+        condition: card.garment_condition || existing.condition || 'Good',
+        finishPreference: card.finish_preference || existing.finishPreference || 'Standard Fold',
+        size: card.size ?? existing.size ?? '',
+        specialInstructions: card.special_instructions ?? existing.specialInstructions ?? '',
+        processingStage: card.processing_stage || existing.processingStage || 'Received',
+        assignedStaff: card.assigned_staff ?? existing.assignedStaff ?? '',
+        qcPassed: Boolean(card.qc_passed ?? existing.qcPassed),
+        customerAck: Boolean(card.customer_ack ?? existing.customerAck),
+        defectLocation: insRow.defect_location ?? existing.defectLocation ?? '',
+        severity: insRow.severity || existing.severity || 'Low',
+        actionPlan: insRow.action_plan || existing.actionPlan || 'Proceed',
+        extraCharge: Number(insRow.extra_charge ?? existing.extraCharge ?? 0),
+        customerApproval: insRow.customer_approval || existing.customerApproval || 'Not_Required',
+        customerNotes: insRow.customer_notes ?? existing.customerNotes ?? '',
+        notes: card.care_instructions ?? insRow.inspection_notes ?? existing.notes ?? '',
+        photos: cardPhotos.length > 0 ? cardPhotos : (existing.photos || []),
+      };
     });
   }
 
@@ -1505,6 +2087,55 @@ function mapCustomerWorkRowToOrder(row, factoryRow = null, scheduleRow = null) {
     },
     staff_notes: row.staff_notes || internalNotesObj.staff_notes || '',
     flags: (row.handling_flags && Object.keys(row.handling_flags).length > 0) ? row.handling_flags : (internalNotesObj.flags || {}),
+    status_history: (garmentBundle?.statusHistory || []).map((sh) => ({
+      id: sh.history_id,
+      title: sh.old_status ? `Status: ${sh.old_status} → ${sh.new_status}` : `Status: ${sh.new_status}`,
+      detail: sh.remarks || `${sh.entity_type || 'Order'} transitioned`,
+      time: new Date(sh.changed_at || sh.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      timestamp: sh.changed_at || sh.created_at,
+      author: sh.changed_by_name || 'Staff',
+      role: sh.changed_by_role || 'Staff',
+      type: 'lifecycle',
+    })),
+    workflow_steps: (garmentBundle?.liveActions || []).map((act) => ({
+      id: act.action_id,
+      title: act.action_label,
+      detail: `${act.stage} stage`,
+      time: new Date(act.action_at || act.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      timestamp: act.action_at || act.created_at,
+      author: act.actor_name || 'Staff',
+      role: act.actor_type || 'Staff',
+      stage: act.stage,
+      type: act.stage === 'Delivery' || act.stage === 'Pickup' ? 'pickup' : 'workflow',
+    })),
+    audit_logs: (() => {
+      const merged = [
+        ...(garmentBundle?.statusHistory || []).map((sh) => ({
+          id: `sh-${sh.history_id}`,
+          title: sh.old_status ? `Status: ${sh.old_status} → ${sh.new_status}` : `Status: ${sh.new_status}`,
+          detail: sh.remarks || `${sh.entity_type || 'Order'} transition`,
+          time: new Date(sh.changed_at || sh.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          timestamp: sh.changed_at || sh.created_at,
+          author: sh.changed_by_name || 'Staff',
+          staff: sh.changed_by_name || 'Staff',
+          role: sh.changed_by_role || 'Staff',
+          category: 'lifecycle',
+        })),
+        ...(garmentBundle?.liveActions || []).map((act) => ({
+          id: `act-${act.action_id}`,
+          title: act.action_label,
+          detail: `Stage: ${act.stage}`,
+          time: new Date(act.action_at || act.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          timestamp: act.action_at || act.created_at,
+          author: act.actor_name || 'Staff',
+          staff: act.actor_name || 'Staff',
+          role: act.actor_type || 'Staff',
+          category: act.stage === 'Delivery' || act.stage === 'Pickup' ? 'driver' : 'workflow',
+          type: act.stage === 'Delivery' || act.stage === 'Pickup' ? 'pickup' : 'workflow',
+        })),
+      ];
+      return merged.sort((a, b) => (new Date(b.timestamp).getTime() || 0) - (new Date(a.timestamp).getTime() || 0));
+    })(),
     pincode: row.pincode || row.pin_code || internalNotesObj.pincode || '',
     pin_code: row.pin_code || row.pincode || internalNotesObj.pincode || '',
     business_name: row.business_name || row.company_name || internalNotesObj.business_name || '',
@@ -1568,15 +2199,30 @@ export async function getOrders() {
       // Exclude customer master registrations: only real orders with pieces/services
       const realOrdersData = worksData.filter((row) => !isCustomerRegistrationRecord(row));
       const workIds = realOrdersData.map((r) => r.work_id).filter(Boolean);
+      const workNumbers = realOrdersData.map((r) => r.work_number).filter(Boolean);
 
-      // Hydrate dedicated washdoor_factory_orders and washdoor_pickup_delivery_schedules if present
+      // Hydrate dedicated logistics, schedules, garment cards, inspections, photos & line items
       const factoryByWorkId = {};
       const scheduleByWorkId = {};
+      const cardsByWorkId = {};
+      const inspByWorkId = {};
+      const photosByWorkId = {};
+      const itemsByOrderKey = {};
+      const statusHistByWorkId = {};
+      const liveActionsByWorkId = {};
       if (workIds.length > 0) {
         try {
-          const [facRes, schedRes] = await Promise.all([
+          const [facRes, schedRes, cardRes, inspRes, photoRes, orderItemsRes, histRes, actRes] = await Promise.all([
             supabase.from('washdoor_factory_orders').select('*').in('work_id', workIds),
             supabase.from('washdoor_pickup_delivery_schedules').select('*').in('work_id', workIds).order('created_at', { ascending: false }),
+            supabase.from('washdoor_garment_cards').select('*').in('work_id', workIds).order('unit_index', { ascending: true }),
+            supabase.from('washdoor_garment_inspections').select('*').in('work_id', workIds).order('created_at', { ascending: false }),
+            supabase.from('washdoor_garment_photos').select('*').in('work_id', workIds).order('created_at', { ascending: true }),
+            workNumbers.length > 0
+              ? supabase.from('washdoor_order_items').select('*').in('order_number', workNumbers).order('created_at', { ascending: true })
+              : Promise.resolve({ data: [] }),
+            supabase.from('washdoor_status_history').select('*').in('work_id', workIds).order('changed_at', { ascending: false }),
+            supabase.from('washdoor_live_status_actions').select('*').in('work_id', workIds).order('action_at', { ascending: false }),
           ]);
           if (!facRes.error && Array.isArray(facRes.data)) {
             facRes.data.forEach((f) => { factoryByWorkId[f.work_id] = f; });
@@ -1584,11 +2230,56 @@ export async function getOrders() {
           if (!schedRes.error && Array.isArray(schedRes.data)) {
             schedRes.data.forEach((s) => { if (!scheduleByWorkId[s.work_id]) scheduleByWorkId[s.work_id] = s; });
           }
+          if (!cardRes.error && Array.isArray(cardRes.data)) {
+            cardRes.data.forEach((c) => {
+              if (!cardsByWorkId[c.work_id]) cardsByWorkId[c.work_id] = [];
+              cardsByWorkId[c.work_id].push(c);
+            });
+          }
+          if (!inspRes.error && Array.isArray(inspRes.data)) {
+            inspRes.data.forEach((i) => {
+              if (!inspByWorkId[i.work_id]) inspByWorkId[i.work_id] = [];
+              inspByWorkId[i.work_id].push(i);
+            });
+          }
+          if (!photoRes.error && Array.isArray(photoRes.data)) {
+            photoRes.data.forEach((p) => {
+              if (!photosByWorkId[p.work_id]) photosByWorkId[p.work_id] = [];
+              photosByWorkId[p.work_id].push(p);
+            });
+          }
+          if (!orderItemsRes?.error && Array.isArray(orderItemsRes?.data)) {
+            orderItemsRes.data.forEach((it) => {
+              const key = it.work_id || it.order_number;
+              if (!key) return;
+              if (!itemsByOrderKey[key]) itemsByOrderKey[key] = [];
+              itemsByOrderKey[key].push(it);
+            });
+          }
+          if (!histRes?.error && Array.isArray(histRes?.data)) {
+            histRes.data.forEach((h) => {
+              if (!statusHistByWorkId[h.work_id]) statusHistByWorkId[h.work_id] = [];
+              statusHistByWorkId[h.work_id].push(h);
+            });
+          }
+          if (!actRes?.error && Array.isArray(actRes?.data)) {
+            actRes.data.forEach((a) => {
+              if (!liveActionsByWorkId[a.work_id]) liveActionsByWorkId[a.work_id] = [];
+              liveActionsByWorkId[a.work_id].push(a);
+            });
+          }
         } catch {}
       }
 
       const orders = realOrdersData.map((row) =>
-        mapCustomerWorkRowToOrder(row, factoryByWorkId[row.work_id], scheduleByWorkId[row.work_id])
+        mapCustomerWorkRowToOrder(row, factoryByWorkId[row.work_id], scheduleByWorkId[row.work_id], {
+          cards: cardsByWorkId[row.work_id] || [],
+          inspections: inspByWorkId[row.work_id] || [],
+          photos: photosByWorkId[row.work_id] || [],
+          orderItems: itemsByOrderKey[row.work_id] || itemsByOrderKey[row.work_number] || [],
+          statusHistory: statusHistByWorkId[row.work_id] || [],
+          liveActions: liveActionsByWorkId[row.work_id] || [],
+        })
       );
       return { data: orders, error: null };
     }
@@ -1614,7 +2305,8 @@ export async function getOrders() {
 }
 
 /**
- * Fetches unique real customer records from Supabase customer_works and washdoor_orders_master.
+ * Fetches unique real customer records from Supabase customers, customer_works, and washdoor_orders_master,
+ * merging profile fields across rows so order records never mask full customer master details.
  */
 export async function getAllCustomers() {
   if (!isSupabaseConfigured()) {
@@ -1622,11 +2314,9 @@ export async function getAllCustomers() {
   }
 
   try {
-    const seen = new Set();
-    const seenPhones = new Set();
-    const uniqueCustomers = [];
+    const merger = createCustomerMerger();
 
-    // 1. Fetch from primary normalized customers table
+    // 1. Fetch from primary normalized customers table (authoritative full profile metadata)
     try {
       const { data: custData, error: custErr } = await supabase
         .from('customers')
@@ -1634,21 +2324,13 @@ export async function getAllCustomers() {
         .order('created_at', { ascending: false });
 
       if (!custErr && custData) {
-        custData.forEach((r) => {
-          const c = mapCustomersTableRow(r);
-          const key = c?.customer_id;
-          if (key && !seen.has(key)) {
-            seen.add(key);
-            if (c.mobile_number) seenPhones.add(c.mobile_number);
-            uniqueCustomers.push(c);
-          }
-        });
+        custData.forEach((r) => merger.add(mapMasterCustomerRow(r)));
       }
     } catch (cErr) {
       console.warn('customers getAll notice:', cErr);
     }
 
-    // 2. Merge additional customer records / profiles from customer_works
+    // 2. Enrich and merge additional customer records / profiles from customer_works
     try {
       const { data: worksData, error: worksError } = await supabase
         .from('customer_works')
@@ -1656,27 +2338,13 @@ export async function getAllCustomers() {
         .order('created_at', { ascending: false });
 
       if (!worksError && worksData) {
-        worksData.forEach((r) => {
-          const c = mapCustomerWorkRow(r);
-          const key = c.customer_id;
-          if (key && !seen.has(key) && (!c.mobile_number || !seenPhones.has(c.mobile_number))) {
-            seen.add(key);
-            if (c.mobile_number) seenPhones.add(c.mobile_number);
-            uniqueCustomers.push(c);
-          } else if (c.mobile_number && seenPhones.has(c.mobile_number) && Array.isArray(c.additional_addresses) && c.additional_addresses.length > 0) {
-            const match = uniqueCustomers.find((u) => u.mobile_number === c.mobile_number);
-            if (match && (!match.additional_addresses || match.additional_addresses.length === 0)) {
-              match.additional_addresses = c.additional_addresses;
-              match.additionalAddresses = c.additional_addresses;
-            }
-          }
-        });
+        worksData.forEach((r) => merger.add(mapCustomerWorkRow(r)));
       }
     } catch (wErr) {
       console.warn('customer_works getAll notice:', wErr);
     }
 
-    // 3. Also merge from washdoor_orders_master for backwards compatibility
+    // 3. Enrich and merge from washdoor_orders_master for backwards compatibility
     try {
       const { data: masterData, error: masterError } = await supabase
         .from('washdoor_orders_master')
@@ -1684,21 +2352,13 @@ export async function getAllCustomers() {
         .order('created_at', { ascending: false });
 
       if (!masterError && masterData) {
-        masterData.forEach((r) => {
-          const c = mapMasterRowToOrder(r).customer;
-          const key = c.customer_id || c.customerId || c.id;
-          if (key && !seen.has(key) && (!c.mobile_number || !seenPhones.has(c.mobile_number))) {
-            seen.add(key);
-            if (c.mobile_number) seenPhones.add(c.mobile_number);
-            uniqueCustomers.push(c);
-          }
-        });
+        masterData.forEach((r) => merger.add(mapMasterRowToOrder(r).customer));
       }
     } catch (mErr) {
       console.warn('washdoor_orders_master getAll notice:', mErr);
     }
 
-    return { data: uniqueCustomers, error: null };
+    return { data: merger.toList(), error: null };
   } catch (err) {
     return { data: [], error: err };
   }
@@ -1831,6 +2491,17 @@ export async function createCustomer(payload) {
       console.error('Error inserting into customer_works:', workError);
       return { data: null, error: workError };
     }
+
+    await recordAuditLogEntry({
+      entity_name: 'customers',
+      record_id: workData?.work_id || custId,
+      work_id: workData?.work_id || null,
+      operation: 'INSERT',
+      entity_label: `${custId} (${clean.customer_name})`,
+      category: 'customer',
+      new_data: { customer_code: custId, customer_name: clean.customer_name, mobile_number: normMobile || clean.mobile_number },
+      details: `Registered customer ${clean.customer_name} (${custId}, +91 ${normMobile || clean.mobile_number}).`,
+    }).catch(() => {});
 
     return {
       data: workData ? mapCustomerWorkRow(workData) : mapCustomersTableRow(createdCustRow),
@@ -2021,6 +2692,18 @@ export async function updateCustomer(id, payload) {
     if (custUpdateErr && workError) {
       return { data: null, error: custUpdateErr || workError };
     }
+
+    await recordAuditLogEntry({
+      entity_name: 'customers',
+      record_id: workData?.work_id || targetCustId,
+      work_id: workData?.work_id || null,
+      operation: 'UPDATE',
+      entity_label: `${targetCustId}${clean.customer_name ? ` (${clean.customer_name})` : ''}`,
+      category: 'customer',
+      new_data: { customer_id: targetCustId, customer_name: clean.customer_name, mobile_number: normMobile },
+      details: `Updated customer profile ${clean.customer_name || targetCustId}.`,
+    }).catch(() => {});
+
     return { data: updatedCustRow || workData, error: null };
   } catch (err) {
     return { data: null, error: err };
@@ -2059,6 +2742,18 @@ export async function deleteCustomer(id) {
         .delete()
         .eq('customer_id', id);
     } catch {}
+
+    if (!(workErr || custErr)) {
+      await recordAuditLogEntry({
+        entity_name: 'customers',
+        record_id: String(id),
+        operation: 'DELETE',
+        entity_label: String(id),
+        category: 'customer',
+        old_data: { customer_id: id },
+        details: `Deleted customer profile ${id}.`,
+      }).catch(() => {});
+    }
 
     return { error: workErr || custErr };
   } catch (err) {
@@ -2420,21 +3115,25 @@ export async function createOrderWithCustomer({
       } catch {}
     }
 
+    const actorName = cleanCust.created_by_name || cleanCust.assigned_staff || getActiveStaffProfile().name;
     try {
       await recordAuditLogEntry({
         entity_name: 'customer_works',
         record_id: insertedOrderId,
         work_id: insertedOrderId,
         operation: 'INSERT',
-        new_data: { order_number: insertedOrderNum, customer_id: finalCustId, total_amount: Number(totalAmount) || 0 },
-        changed_by_name: cleanCust.assigned_staff || 'POS Counter',
+        entity_label: insertedOrderNum,
+        category: 'lifecycle',
+        new_data: { order_number: insertedOrderNum, customer_id: finalCustId, total_amount: Number(totalAmount) || 0, pieces: items?.length || 0 },
+        changed_by_name: actorName,
+        details: `Created order ${insertedOrderNum} for ${cleanCust.customer_name} (${finalCustId}) • Total ₹${Number(totalAmount || 0).toFixed(2)}.`,
       });
     } catch {}
 
     // Synchronize item records to washdoor_order_items table if exists
     if (items && Array.isArray(items) && items.length > 0) {
       try {
-        await saveOrderItems(insertedOrderNum, items);
+        await saveOrderItems(insertedOrderNum, items, insertedOrderId);
       } catch (itemErr) {
         console.warn('saveOrderItems async note:', itemErr);
       }
@@ -2463,24 +3162,62 @@ export async function createOrderWithCustomer({
           payment_mode: cleanCust.payment_method || 'Cash',
           reference_number: cleanCust.payment_reference || 'Advance_Counter',
           notes: 'Advance payment collected at counter',
-          collected_by: cleanCust.assigned_staff || 'Counter Staff',
+          collected_by: actorName,
           entry_type: 'Initial_Advance',
+        });
+        await recordStatusHistory({
+          work_id: insertedOrderId,
+          work_number: insertedOrderNum,
+          step_name: 'Initial Payment Collected',
+          stage: 'Payment',
+          new_status: `₹${Number(cleanCust.advance_paid).toFixed(2)} (${cleanCust.payment_method || 'Cash'})`,
+          changed_by_name: actorName,
+          remarks: `Advance payment collected at intake by ${actorName}`,
         });
       } catch (payLedgerErr) {
         console.warn('recordPaymentLedger async note:', payLedgerErr);
       }
     }
 
-    // Persist initial status history & live tracking milestone
+    // Persist initial status history & intake workflow steps
     try {
       await recordStatusHistory({
         work_id: insertedOrderId,
         work_number: insertedOrderNum,
+        step_name: 'Order Intake Received',
+        stage: 'Shop',
         old_status: null,
         new_status: initialWorkStatus,
-        changed_by_name: cleanCust.assigned_staff || 'Counter Staff',
-        remarks: 'Order received at counter',
+        changed_by_name: actorName,
+        remarks: `Order ${insertedOrderNum} received at counter (${orderType || 'Walk-In'}) by ${actorName}`,
       });
+
+      const inspCount = Object.keys(cleanCust.garment_inspections || cleanCust.inspections || {}).length;
+      if (inspCount > 0) {
+        await recordStatusHistory({
+          work_id: insertedOrderId,
+          work_number: insertedOrderNum,
+          entity_type: 'Garment_Unit',
+          step_name: 'Garment Inspection & Tagging',
+          stage: 'Processing',
+          new_status: `${inspCount} garment piece(s) tagged`,
+          changed_by_name: actorName,
+          remarks: `${inspCount} garment inspection card(s) logged during intake`,
+        });
+      }
+
+      if (cleanCust.assigned_driver) {
+        await recordStatusHistory({
+          work_id: insertedOrderId,
+          work_number: insertedOrderNum,
+          entity_type: 'Driver_Assignment',
+          step_name: 'Pickup Rider Assigned',
+          stage: 'Pickup',
+          new_status: cleanCust.assigned_driver,
+          changed_by_name: actorName,
+          remarks: `Assigned driver ${cleanCust.assigned_driver} for pickup`,
+        });
+      }
     } catch {}
 
     // Persist order notes & instructions if present
@@ -2612,20 +3349,26 @@ export async function updateOrderStatus(orderIdentifier, newStatus, progressPerc
       await query;
     } catch {}
 
-    // 3. Record immutable status history & audit log
+    // 3. Record immutable status history & audit log with active staff attribution
+    const staffName = getActiveStaffProfile().name;
     try {
       await recordStatusHistory({
         work_id: formattedId,
         work_number: formattedId,
+        step_name: 'Order Status Transition',
+        stage: dbWorkStatus === 'Delivered' ? 'Delivery' : 'Processing',
         new_status: dbWorkStatus,
-        remarks: `Status updated to ${newStatus}`,
+        changed_by_name: staffName,
+        remarks: `Status updated to ${newStatus} (${progressPercentage}%)`,
       });
       await recordAuditLogEntry({
         entity_name: 'customer_works',
         record_id: formattedId,
         operation: 'UPDATE',
-        new_data: { work_status: dbWorkStatus, display_status: newStatus },
-        changed_by_name: 'POS Counter',
+        entity_label: formattedId,
+        new_data: { work_status: dbWorkStatus, display_status: newStatus, progress: progressPercentage },
+        changed_by_name: staffName,
+        details: `Order ${formattedId} status changed to "${newStatus}" (${progressPercentage}%) by ${staffName}.`,
       });
     } catch {}
 
@@ -2978,12 +3721,20 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
     // 3. Synchronize item records, garment cards, inspections & photos
     const targetWorkKey = existingRow?.work_id || formattedId;
     const targetWorkNum = existingRow?.work_number || ordId;
+    const hasInspectionsUpdate = Boolean(updatePayload.garment_inspections || updatePayload.inspections);
+    const itemsForSync = Array.isArray(updatePayload.items) ? updatePayload.items : (existingRow?.items || []);
     if (updatePayload.items && Array.isArray(updatePayload.items)) {
       try {
-        await saveOrderItems(targetWorkNum, updatePayload.items);
-        await syncGarmentCardsAndInspections(targetWorkKey, targetWorkNum, updatePayload.items, inspData);
+        await saveOrderItems(targetWorkNum, updatePayload.items, targetWorkKey);
       } catch (itemErr) {
-        console.warn('saveOrderItems/cards update note:', itemErr);
+        console.warn('saveOrderItems update note:', itemErr);
+      }
+    }
+    if ((updatePayload.items && Array.isArray(updatePayload.items)) || hasInspectionsUpdate) {
+      try {
+        await syncGarmentCardsAndInspections(targetWorkKey, targetWorkNum, itemsForSync, inspData);
+      } catch (cardErr) {
+        console.warn('syncGarmentCardsAndInspections update note:', cardErr);
       }
     }
 
@@ -3030,19 +3781,86 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       } catch {}
     }
 
-    // 6. Record status transition in washdoor_status_history & live_status_actions
-    if (workUpdate.work_status && workUpdate.work_status !== existingRow?.work_status) {
-      try {
+    // 6. Record granular workflow steps & status transitions with timestamps & staff details
+    const staffName = updatePayload.updated_by_name || updatePayload.changed_by_name || getActiveStaffProfile().name;
+    workUpdate.updated_by_name = staffName;
+    try {
+      if (workUpdate.work_status && workUpdate.work_status !== existingRow?.work_status) {
         await recordStatusHistory({
           work_id: targetWorkKey,
           work_number: targetWorkNum,
+          step_name: 'Order Status Update',
+          stage: workUpdate.work_status === 'Delivered' ? 'Delivery' : 'Processing',
           old_status: existingRow?.work_status || null,
           new_status: workUpdate.work_status,
-          changed_by_name: workUpdate.updated_by_name,
-          remarks: updatePayload.statusRemark || `Updated to ${targetStatus || workUpdate.work_status}`,
+          changed_by_name: staffName,
+          remarks: updatePayload.statusRemark || `Status transitioned from "${existingRow?.work_status || 'New'}" to "${targetStatus || workUpdate.work_status}"`,
         });
-      } catch {}
-    }
+      }
+
+      if (notesPayload.plant_transit_status && notesPayload.plant_transit_status !== prevNotesObj.plant_transit_status) {
+        await recordStatusHistory({
+          work_id: targetWorkKey,
+          work_number: targetWorkNum,
+          entity_type: 'Batch',
+          step_name: 'Factory Processing / Transit Stage',
+          stage: String(notesPayload.plant_transit_status).toLowerCase().includes('store') ? 'Delivery' : 'Processing',
+          old_status: prevNotesObj.plant_transit_status || null,
+          new_status: notesPayload.plant_transit_status,
+          changed_by_name: staffName,
+          remarks: `Factory plant stage updated to ${notesPayload.plant_transit_status} (${notesPayload.factory_outlet || notesPayload.factory_hub || 'Plant'})`,
+        });
+      }
+
+      const nextDriver = updatePayload.assigned_driver || updatePayload.assignedDriver;
+      if (nextDriver && nextDriver !== (prevNotesObj.assigned_driver || existingRow?.assigned_staff)) {
+        await recordStatusHistory({
+          work_id: targetWorkKey,
+          work_number: targetWorkNum,
+          entity_type: 'Driver_Assignment',
+          step_name: 'Driver Assigned / Reassigned',
+          stage: updatePayload.scheduleType === 'Pickup' || updatePayload.pickupStatus ? 'Pickup' : 'Delivery',
+          old_status: prevNotesObj.assigned_driver || existingRow?.assigned_staff || null,
+          new_status: nextDriver,
+          changed_by_name: staffName,
+          remarks: `Assigned driver ${nextDriver}${updatePayload.pickupDelivery ? ` (${updatePayload.pickupDelivery})` : ''}`,
+        });
+      }
+
+      if (workUpdate.rack_shelf_location && workUpdate.rack_shelf_location !== existingRow?.rack_shelf_location) {
+        await recordStatusHistory({
+          work_id: targetWorkKey,
+          work_number: targetWorkNum,
+          step_name: 'Rack / Shelf Assigned',
+          stage: 'Shop',
+          old_status: existingRow?.rack_shelf_location || null,
+          new_status: workUpdate.rack_shelf_location,
+          changed_by_name: staffName,
+          remarks: `Order placed on shelf ${workUpdate.rack_shelf_location}`,
+        });
+      }
+
+      if (hasInspectionsUpdate && Object.keys(inspData || {}).length > 0) {
+        const prevInsp = prevNotesObj.garment_inspections || {};
+        const changedStages = Object.entries(inspData).filter(([k, val]) => {
+          const prev = prevInsp[k];
+          return val && (!prev || prev.processingStage !== val.processingStage || Boolean(prev.qcPassed) !== Boolean(val.qcPassed));
+        });
+        if (changedStages.length > 0) {
+          const summaryStr = changedStages.slice(0, 3).map(([, v]) => `${v.name} (${v.processingStage || 'Received'}${v.qcPassed ? ', QC✓' : ''})`).join(', ');
+          await recordStatusHistory({
+            work_id: targetWorkKey,
+            work_number: targetWorkNum,
+            entity_type: 'Garment_Unit',
+            step_name: 'Garment Unit Workflow / QC Update',
+            stage: 'Processing',
+            new_status: summaryStr,
+            changed_by_name: staffName,
+            remarks: `Updated ${changedStages.length} garment unit(s): ${summaryStr}`,
+          });
+        }
+      }
+    } catch {}
 
     // 7. Record incremental payment in washdoor_payment_ledger if advance_paid increased
     if (workUpdate.advance_paid !== undefined) {
@@ -3058,8 +3876,17 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
             payment_mode: updatePayload.paymentMethod || updatePayload.payment_method || updatePayload.paymentMode || 'Cash',
             reference_number: updatePayload.transactionRef || null,
             notes: updatePayload.paymentNote || 'Payment recorded via POS edit',
-            collected_by: workUpdate.updated_by_name,
+            collected_by: staffName,
             entry_type: workUpdate.payment_status === 'Paid' ? 'Full_Payment' : 'Partial_Payment',
+          });
+          await recordStatusHistory({
+            work_id: targetWorkKey,
+            work_number: targetWorkNum,
+            step_name: 'Payment Settlement',
+            stage: 'Payment',
+            new_status: `+₹${deltaPaid.toFixed(2)} (${workUpdate.payment_status || 'Paid'})`,
+            changed_by_name: staffName,
+            remarks: `Collected ₹${deltaPaid.toFixed(2)} via ${updatePayload.paymentMethod || updatePayload.payment_method || 'Cash'}`,
           });
         } catch {}
       }
@@ -3072,9 +3899,11 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
         record_id: targetWorkKey,
         work_id: existingRow?.work_id || null,
         operation: 'UPDATE',
+        entity_label: targetWorkNum,
         old_data: existingRow ? { work_status: existingRow.work_status, total_amount: existingRow.total_amount, advance_paid: existingRow.advance_paid } : null,
-        new_data: { work_status: workUpdate.work_status || existingRow?.work_status, total_amount: workUpdate.total_amount, advance_paid: workUpdate.advance_paid },
-        changed_by_name: workUpdate.updated_by_name,
+        new_data: { order_number: targetWorkNum, work_status: workUpdate.work_status || existingRow?.work_status, total_amount: workUpdate.total_amount, advance_paid: workUpdate.advance_paid },
+        changed_by_name: staffName,
+        details: `Order ${targetWorkNum} updated by ${staffName}${targetStatus ? ` (Status: ${targetStatus})` : ''}.`,
       });
     } catch {}
 
@@ -3223,6 +4052,16 @@ export async function deleteOrderFromSupabase(identifier) {
       console.warn('Supabase deleteOrder warning:', workErr);
       return { success: false, error: workErr.message };
     }
+
+    await recordAuditLogEntry({
+      entity_name: 'customer_works',
+      record_id: String(identifier),
+      operation: 'DELETE',
+      entity_label: ordId,
+      old_data: { order_identifier: identifier },
+      details: `Deleted order ${ordId} (${identifier}).`,
+    }).catch(() => {});
+
     return { success: true, error: null };
   } catch (err) {
     console.error('deleteOrderFromSupabase catch:', err);

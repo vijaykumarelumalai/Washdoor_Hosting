@@ -440,16 +440,34 @@ export default function ViewOrderModal({
                             <span className="view-order-piece-title">
                               <span>👕</span>
                               <span>{piece.name || 'Garment Piece'}</span>
+                              {piece.tagNumber && (
+                                <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '6px' }}>
+                                  ({piece.tagNumber})
+                                </span>
+                              )}
                             </span>
-                            <span className="view-order-piece-badge">
-                              Piece #{piece.pieceNumber || pIdx + 1}
-                            </span>
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                              {piece.processingStage && (
+                                <span className="view-order-piece-badge">{piece.processingStage}</span>
+                              )}
+                              {piece.qcPassed && (
+                                <span className="view-order-piece-badge" style={{ background: '#dcfce7', color: '#166534' }}>✓ QC Passed</span>
+                              )}
+                              <span className="view-order-piece-badge">
+                                Piece #{piece.piece || piece.pieceNumber || pIdx + 1}
+                              </span>
+                            </div>
                           </div>
 
                           <div className="view-order-piece-grid">
                             <div className="view-order-piece-field">
                               <span className="view-order-piece-label">Color</span>
                               <span className="view-order-piece-val">{piece.color || '—'}</span>
+                            </div>
+
+                            <div className="view-order-piece-field">
+                              <span className="view-order-piece-label">Condition</span>
+                              <span className="view-order-piece-val">{piece.condition || 'Good'}</span>
                             </div>
 
                             <div className="view-order-piece-field">
@@ -460,18 +478,51 @@ export default function ViewOrderModal({
                             </div>
 
                             <div className="view-order-piece-field">
+                              <span className="view-order-piece-label">Pre-Existing Damage</span>
+                              <span className="view-order-piece-val" style={{ color: piece.damage ? '#f59e0b' : 'inherit' }}>
+                                {piece.damage || 'None'}
+                              </span>
+                            </div>
+
+                            <div className="view-order-piece-field">
+                              <span className="view-order-piece-label">Defect Location / Severity</span>
+                              <span className="view-order-piece-val">
+                                {piece.defectLocation || 'Whole Body'} ({piece.severity || 'Low'})
+                              </span>
+                            </div>
+
+                            <div className="view-order-piece-field">
+                              <span className="view-order-piece-label">Action Plan / Extra Charge</span>
+                              <span className="view-order-piece-val">
+                                {(piece.actionPlan || 'Proceed').replace('_', ' ')}
+                                {Number(piece.extraCharge) > 0 ? ` (+${currencySymbol}${Number(piece.extraCharge).toFixed(2)})` : ''}
+                              </span>
+                            </div>
+
+                            <div className="view-order-piece-field">
                               <span className="view-order-piece-label">Brand</span>
                               <span className="view-order-piece-val">{piece.brand || '—'}</span>
                             </div>
 
                             <div className="view-order-piece-field">
                               <span className="view-order-piece-label">Fabric Type</span>
-                              <span className="view-order-piece-val">{piece.fabric || '—'}</span>
+                              <span className="view-order-piece-val">{piece.fabric && piece.fabric !== 'Select fabric' ? piece.fabric : '—'}</span>
                             </div>
 
                             <div className="view-order-piece-field">
-                              <span className="view-order-piece-label">Make / Style</span>
-                              <span className="view-order-piece-val">{piece.make || '—'}</span>
+                              <span className="view-order-piece-label">Make / Finish / Size</span>
+                              <span className="view-order-piece-val">
+                                {[piece.make, piece.finishPreference, piece.size].filter(Boolean).join(' • ') || '—'}
+                              </span>
+                            </div>
+
+                            <div className="view-order-piece-field">
+                              <span className="view-order-piece-label">Approval / Assigned</span>
+                              <span className="view-order-piece-val">
+                                {(piece.customerApproval || 'Not_Required').replace('_', ' ')}
+                                {piece.customerAck ? ' • Signed Off' : ''}
+                                {piece.assignedStaff ? ` • ${piece.assignedStaff}` : ''}
+                              </span>
                             </div>
 
                             <div className="view-order-piece-field">
@@ -487,14 +538,18 @@ export default function ViewOrderModal({
                               </span>
                               <div className="view-order-photos-grid">
                                 {piecePhotos.map((photo, phIdx) => (
-                                  <img
-                                    key={photo.id || phIdx}
-                                    src={photo.url}
-                                    alt={photo.name || 'Garment evidence'}
-                                    className="view-order-photo-thumb"
-                                    onClick={() => setEnlargedPhoto(photo.url)}
-                                    title="Click to enlarge"
-                                  />
+                                  <div key={photo.id || phIdx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+                                    <img
+                                      src={photo.url || photo.photo_url}
+                                      alt={photo.caption || photo.name || 'Garment evidence'}
+                                      className="view-order-photo-thumb"
+                                      onClick={() => setEnlargedPhoto(photo.url || photo.photo_url)}
+                                      title="Click to enlarge"
+                                    />
+                                    <span style={{ fontSize: '10px', color: '#64748b' }}>
+                                      {(photo.photo_type || 'Before_Wash').replace('_', ' ')}
+                                    </span>
+                                  </div>
                                 ))}
                               </div>
                             </div>
@@ -560,6 +615,49 @@ export default function ViewOrderModal({
                     </span>
                   </div>
                 </div>
+              </div>
+
+              {/* Workflow Steps & Status History Card */}
+              <div className="view-order-card">
+                <div className="view-order-card-title" style={{ justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>📜</span>
+                    <span>Workflow Steps &amp; Status History</span>
+                  </div>
+                  <span style={{ fontSize: '11.5px', color: '#64748b', fontWeight: 600 }}>
+                    {(order.audit_logs || order.status_history || []).length} event(s)
+                  </span>
+                </div>
+                {(order.audit_logs || order.status_history || []).length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '220px', overflowY: 'auto' }}>
+                    {(order.audit_logs || order.status_history || []).map((ev, idx) => (
+                      <div
+                        key={ev.id || idx}
+                        style={{
+                          padding: '8px 10px',
+                          borderRadius: '8px',
+                          border: '1px solid var(--border, #e2e8f0)',
+                          background: 'var(--bg-secondary, #f8fafc)',
+                          fontSize: '12px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', fontWeight: 700 }}>
+                          <span>{ev.title}</span>
+                          <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>
+                            {ev.time || (ev.timestamp ? new Date(ev.timestamp).toLocaleString('en-IN') : '—')}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '11.5px', color: '#475569', marginTop: '2px' }}>
+                          {ev.detail} · <strong>Staff:</strong> {ev.author || ev.staff || 'Store Staff'}{ev.role ? ` (${ev.role})` : ''}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '12px', color: '#64748b' }}>
+                    Order created on {order.created_at ? new Date(order.created_at).toLocaleString('en-IN') : 'Counter Intake'} by {order.created_by || 'POS Counter'}.
+                  </div>
+                )}
               </div>
             </div>
           </div>

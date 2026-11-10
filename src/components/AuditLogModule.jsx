@@ -3,7 +3,13 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
-import { getStoredAuditLogs } from '../services/auditService';
+import {
+  getStoredAuditLogs,
+  getActiveStaffProfile,
+  setActiveStaffProfile,
+  getStaffActivitySummary,
+  STAFF_DIRECTORY,
+} from '../services/auditService';
 import { getSupabaseAuditLogs } from '../services/customerService';
 import { exportToExcel, exportToPdf, exportToCsv } from '../services/exportService';
 import '../styles/AuditLog.css';
@@ -17,21 +23,44 @@ export default function AuditLogModule({
 }) {
   const { t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all'); // 'all' | 'lifecycle' | 'driver' | 'payment' | 'system'
+  const [selectedCategory, setSelectedCategory] = useState('all'); // 'all' | 'workflow' | 'lifecycle' | 'driver' | 'customer' | 'payment' | 'export' | 'system'
+  const [selectedStaff, setSelectedStaff] = useState('all');
   const [sortAsc, setSortAsc] = useState(false);
   const [dbAuditRows, setDbAuditRows] = useState([]);
   const [dbStatusRows, setDbStatusRows] = useState([]);
+  const [dbLiveActions, setDbLiveActions] = useState([]);
+  const [localRefreshTick, setLocalRefreshTick] = useState(0);
+  const [activeStaff, setActiveStaff] = useState(() => getActiveStaffProfile());
 
   useEffect(() => {
-    getSupabaseAuditLogs(100)
-      .then(({ auditLogs, statusHistory }) => {
+    getSupabaseAuditLogs(150)
+      .then(({ auditLogs, statusHistory, liveActions }) => {
         if (Array.isArray(auditLogs)) setDbAuditRows(auditLogs);
         if (Array.isArray(statusHistory)) setDbStatusRows(statusHistory);
+        if (Array.isArray(liveActions)) setDbLiveActions(liveActions);
       })
       .catch(() => {});
-  }, [orders.length]);
+  }, [orders.length, localRefreshTick]);
 
-  // Generate audit trail events aggregated from live orders, Supabase audit tables & system events
+  useEffect(() => {
+    const onLogged = () => setLocalRefreshTick((n) => n + 1);
+    const onStaffChanged = () => setActiveStaff(getActiveStaffProfile());
+    window.addEventListener('washdoor_audit_logged', onLogged);
+    window.addEventListener('washdoor_staff_changed', onStaffChanged);
+    return () => {
+      window.removeEventListener('washdoor_audit_logged', onLogged);
+      window.removeEventListener('washdoor_staff_changed', onStaffChanged);
+    };
+  }, []);
+
+  const handleStaffSwitch = (name) => {
+    const found = STAFF_DIRECTORY.find((s) => s.name === name) || { name, role: 'Staff', branch: 'Ranipet Store #1' };
+    const updated = setActiveStaffProfile(found);
+    setActiveStaff(updated);
+    showToast(`Active operator set to ${updated.name} (${updated.role})`);
+  };
+
+  // Generate audit trail events aggregated from live orders, Supabase audit tables & workflow steps
   const auditEvents = useMemo(() => {
     const list = [];
 
@@ -41,14 +70,15 @@ export default function AuditLogModule({
         id: `db-aud-${row.audit_id || row.id}`,
         timestamp: row.created_at || new Date().toISOString(),
         displayTime: row.created_at ? new Date(row.created_at).toLocaleString('en-IN') : '—',
-        entity: row.new_data?.order_number || row.work_id || row.record_id || 'System',
+        entity: row.new_data?.order_number || row.new_data?.customer_code || row.work_id || row.record_id || 'System',
         entityType: row.entity_name || 'Order',
-        category: 'system',
+        category: row.entity_name === 'customers' ? 'customer' : 'system',
         categoryLabel: `DB Audit (${row.operation || 'UPDATE'})`,
         actor: row.changed_by_name || 'System Staff',
+        actorRole: 'Staff',
         action: `${row.entity_name || 'customer_works'} ${row.operation || 'UPDATE'}`,
         details: row.new_data ? JSON.stringify(row.new_data) : 'Database mutation recorded',
-        severity: 'info',
+        severity: row.operation === 'DELETE' ? 'danger' : 'info',
       });
     });
 
@@ -63,40 +93,55 @@ export default function AuditLogModule({
         category: 'lifecycle',
         categoryLabel: 'Status Transition (DB)',
         actor: row.changed_by_name || 'Staff',
+        actorRole: row.changed_by_role || 'Staff',
         action: row.old_status ? `${row.old_status} → ${row.new_status}` : `Status set to ${row.new_status}`,
         details: row.remarks || 'Persisted in washdoor_status_history',
         severity: 'success',
       });
     });
 
-    // System Startup Event
-    list.push({
-      id: 'sys-session-start',
-      timestamp: new Date().toISOString(),
-      displayTime: 'Just now',
-      entity: 'Ranipet Store #1',
-      entityType: 'Store',
-      category: 'system',
-      categoryLabel: 'System & Auth',
-      actor: 'Store Administrator (admin@washdoor.in)',
-      action: 'Session Authentication & Counter Intake Active',
-      details: 'Counter operator authenticated session. Connected to Supabase real-time database.',
-      severity: 'info',
+    // Live Supabase washdoor_live_status_actions workflow steps
+    dbLiveActions.forEach((act) => {
+      list.push({
+        id: `db-act-${act.action_id}`,
+        timestamp: act.action_at || act.created_at || new Date().toISOString(),
+        displayTime: (act.action_at || act.created_at) ? new Date(act.action_at || act.created_at).toLocaleString('en-IN') : '—',
+        entity: act.work_number || act.work_id || 'Order',
+        entityType: act.stage || 'Workflow',
+        category: act.stage === 'Delivery' || act.stage === 'Pickup' ? 'driver' : act.stage === 'Payment' ? 'payment' : 'workflow',
+        categoryLabel: `Workflow (${act.stage || 'Processing'})`,
+        actor: act.actor_name || 'Staff',
+        actorRole: act.actor_type || 'Staff',
+        action: act.action_label || act.action_code,
+        details: `Stage: ${act.stage} · Code: ${act.action_code}`,
+        severity: 'info',
+      });
     });
 
-    // Stored Report Download Audit Trail Events
+    // Stored Automated Audit & Workflow Trail Events (localStorage washdoor_audit_trail_v1)
     const storedLogs = getStoredAuditLogs();
     storedLogs.forEach((s) => {
+      const cat = s.category || 'export';
+      const labelMap = {
+        export: `Report Download (${s.format || 'CSV'})`,
+        workflow: `Workflow Step (${s.module || 'Processing'})`,
+        lifecycle: `Order Audit (${s.format || 'UPDATE'})`,
+        customer: `Customer ${s.format || 'UPDATE'}`,
+        driver: 'Driver Dispatch',
+        payment: 'Payment Entry',
+        system: 'System Audit',
+      };
       list.push({
         id: s.id,
         timestamp: s.timestamp,
         displayTime: s.formattedTime || new Date(s.timestamp).toLocaleString('en-IN'),
-        entity: s.tenant || 'Ranipet Store #1',
-        entityType: 'Report Export',
-        category: 'export',
-        categoryLabel: `Report Download (${s.format})`,
+        entity: s.entity || s.tenant || 'Ranipet Store #1',
+        entityType: s.entityType || 'Audit',
+        category: cat,
+        categoryLabel: labelMap[cat] || 'Audit Event',
         actor: s.actor || 'Store Staff',
-        action: s.action || `Report Exported (${s.format})`,
+        actorRole: s.actorRole || 'Staff',
+        action: s.action || `Event Recorded (${s.format})`,
         details: s.details || `Module: ${s.module}. Records: ${s.recordCount}`,
         severity: s.severity || 'success',
       });
@@ -232,7 +277,10 @@ export default function AuditLogModule({
       const tb = new Date(b.timestamp).getTime() || 0;
       return sortAsc ? ta - tb : tb - ta;
     });
-  }, [orders, currencySymbol, sortAsc, dbAuditRows, dbStatusRows]);
+  }, [orders, currencySymbol, sortAsc, dbAuditRows, dbStatusRows, dbLiveActions]);
+
+  // Aggregate staff-wise activity summary
+  const staffSummary = useMemo(() => getStaffActivitySummary(auditEvents), [auditEvents]);
 
   // Filtered events
   const filteredEvents = useMemo(() => {
@@ -241,6 +289,11 @@ export default function AuditLogModule({
     // Filter by category
     if (selectedCategory !== 'all') {
       result = result.filter((e) => e.category === selectedCategory);
+    }
+
+    // Filter by staff operator
+    if (selectedStaff !== 'all') {
+      result = result.filter((e) => (e.actor || 'System Staff') === selectedStaff);
     }
 
     // Filter by search query
@@ -257,7 +310,7 @@ export default function AuditLogModule({
     }
 
     return result;
-  }, [auditEvents, selectedCategory, searchQuery]);
+  }, [auditEvents, selectedCategory, selectedStaff, searchQuery]);
 
   // Export CSV handler
   const handleExportCSV = () => {
@@ -314,6 +367,21 @@ export default function AuditLogModule({
         </div>
 
         <div className="audit-header-actions">
+          <div className="audit-staff-switcher" title="Active Staff Operator attributed to actions">
+            <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>Active Staff:</span>
+            <select
+              value={activeStaff.name}
+              onChange={(e) => handleStaffSwitch(e.target.value)}
+              className="audit-staff-select"
+            >
+              {STAFF_DIRECTORY.map((s) => (
+                <option key={s.name} value={s.name}>
+                  {s.name} ({s.role})
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="audit-status-badge">
             <span className="audit-pulse-dot"></span>
             <span>{t('audit_realtime_active', 'Real-time Logging Active')}</span>
@@ -473,16 +541,68 @@ export default function AuditLogModule({
         </div>
       </div>
 
+      {/* ── Staff-Wise Activity Tracking Panel ── */}
+      {staffSummary.length > 0 && (
+        <div className="audit-staff-panel">
+          <div className="audit-staff-panel-head">
+            <div>
+              <strong>👥 Staff-Wise Activity Tracking ({staffSummary.length} Active Contributors)</strong>
+              <span>Click any staff card to filter the activity ledger below</span>
+            </div>
+            {selectedStaff !== 'all' && (
+              <button
+                type="button"
+                className="audit-action-btn"
+                style={{ padding: '4px 10px', fontSize: '11.5px' }}
+                onClick={() => setSelectedStaff('all')}
+              >
+                Show All Staff
+              </button>
+            )}
+          </div>
+          <div className="audit-staff-grid">
+            {staffSummary.slice(0, 8).map((st) => {
+              const isSelected = selectedStaff === st.name;
+              return (
+                <button
+                  key={st.name}
+                  type="button"
+                  onClick={() => setSelectedStaff(isSelected ? 'all' : st.name)}
+                  className={`audit-staff-card ${isSelected ? 'active' : ''}`}
+                >
+                  <div className="audit-staff-card-top">
+                    <span className="audit-staff-name">{st.name}</span>
+                    <span className="audit-staff-role">{st.role}</span>
+                  </div>
+                  <div className="audit-staff-metrics">
+                    <span><strong>{st.totalActions}</strong> actions</span>
+                    <span>•</span>
+                    <span><strong>{st.workflowUpdates}</strong> steps</span>
+                    {st.driverActions > 0 && <><span>•</span><span><strong>{st.driverActions}</strong> dispatch</span></>}
+                    {st.customerActions > 0 && <><span>•</span><span><strong>{st.customerActions}</strong> cust</span></>}
+                  </div>
+                  <div className="audit-staff-last" title={st.lastAction}>
+                    Last: {st.lastActiveDisplay}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── Filter Toolbar ── */}
       <div className="audit-toolbar-row">
         {/* Category Pills */}
         <div className="audit-filter-pills">
           {[
             { id: 'all', label: 'All Events', count: auditEvents.length },
-            { id: 'export', label: 'Report Downloads', count: auditEvents.filter((e) => e.category === 'export').length },
+            { id: 'workflow', label: 'Workflow Steps', count: auditEvents.filter((e) => e.category === 'workflow').length },
             { id: 'lifecycle', label: 'Order Lifecycle', count: auditEvents.filter((e) => e.category === 'lifecycle').length },
             { id: 'driver', label: 'Driver Dispatch', count: auditEvents.filter((e) => e.category === 'driver').length },
+            { id: 'customer', label: 'Customer CRUD', count: auditEvents.filter((e) => e.category === 'customer').length },
             { id: 'payment', label: 'Payments', count: auditEvents.filter((e) => e.category === 'payment').length },
+            { id: 'export', label: 'Report Downloads', count: auditEvents.filter((e) => e.category === 'export').length },
             { id: 'system', label: 'System & Security', count: auditEvents.filter((e) => e.category === 'system').length },
           ].map((cat) => (
             <button
@@ -497,8 +617,21 @@ export default function AuditLogModule({
           ))}
         </div>
 
-        {/* Search input & Sort button */}
+        {/* Search input, Staff selector & Sort button */}
         <div className="audit-toolbar-right">
+          <select
+            className="audit-staff-select"
+            value={selectedStaff}
+            onChange={(e) => setSelectedStaff(e.target.value)}
+            title="Filter by Staff Member"
+          >
+            <option value="all">All Staff ({staffSummary.length})</option>
+            {staffSummary.map((st) => (
+              <option key={st.name} value={st.name}>
+                {st.name} ({st.totalActions})
+              </option>
+            ))}
+          </select>
           <div className="audit-search-box">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8"></circle>
@@ -597,6 +730,9 @@ export default function AuditLogModule({
                   <td>
                     <div className="audit-actor-info">
                       <span className="audit-actor-name">{evt.actor}</span>
+                      {evt.actorRole && (
+                        <span style={{ fontSize: '10.5px', color: '#64748b', display: 'block' }}>{evt.actorRole}</span>
+                      )}
                     </div>
                   </td>
 

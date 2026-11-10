@@ -445,7 +445,9 @@ export default function SideEditPanel({
         rate: c.rate,
         qty: c.qty,
         quantity: c.qty,
+        amount: c.rate * c.qty,
         total: c.rate * c.qty,
+        careNotes: c.careNotes || c.care_instructions || '',
         icon: c.icon || '👕',
         inspections: Object.values(inspections).filter((p) => p.cartItemId === c.id),
       })),
@@ -1244,29 +1246,30 @@ export default function SideEditPanel({
               </div>
 
               <div className="side-edit-field" style={{ marginTop: '4px' }}>
-                <label className="side-edit-label">Stage Event History</label>
+                <label className="side-edit-label">Stage Event &amp; Workflow History</label>
                 <div className="side-edit-timeline-list">
-                  <div className="side-edit-timeline-item">
-                    <span className="side-edit-timeline-dot"></span>
-                    <div className="side-edit-timeline-content">
-                      <span className="side-edit-timeline-title">Order Received at Intake Register</span>
-                      <span className="side-edit-timeline-time">28 Oct 2026, 10:15 AM · By Counter Lead</span>
+                  {(auditLogs && auditLogs.length > 0 ? auditLogs : [
+                    {
+                      id: 'init-1',
+                      title: 'Order Received at Intake Register',
+                      time: order?.created_at ? new Date(order.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Initial Intake',
+                      author: order?.created_by || 'Counter Staff',
+                      detail: `Current Stage: ${status}`,
+                    },
+                  ]).map((log, idx) => (
+                    <div key={log.id || idx} className="side-edit-timeline-item">
+                      <span
+                        className="side-edit-timeline-dot"
+                        style={log.type === 'pickup' ? { background: '#16a34a' } : idx === 0 ? { background: '#2563eb' } : undefined}
+                      ></span>
+                      <div className="side-edit-timeline-content">
+                        <span className="side-edit-timeline-title">{log.title}</span>
+                        <span className="side-edit-timeline-time">
+                          {log.time || (log.timestamp ? new Date(log.timestamp).toLocaleString('en-IN') : 'Logged')} · By {log.author || log.staff || 'Store Staff'}{log.role ? ` (${log.role})` : ''}{log.detail ? ` — ${log.detail}` : ''}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="side-edit-timeline-item">
-                    <span className="side-edit-timeline-dot"></span>
-                    <div className="side-edit-timeline-content">
-                      <span className="side-edit-timeline-title">Garments Checked &amp; Tagged</span>
-                      <span className="side-edit-timeline-time">28 Oct 2026, 11:20 AM · Bag Tag: {dispatchBagTag}</span>
-                    </div>
-                  </div>
-                  <div className="side-edit-timeline-item">
-                    <span className="side-edit-timeline-dot" style={{ background: '#f59e0b' }}></span>
-                    <div className="side-edit-timeline-content">
-                      <span className="side-edit-timeline-title">Moved to Washing Cycle ({assignedMachine})</span>
-                      <span className="side-edit-timeline-time">28 Oct 2026, 02:40 PM · Active Washing Stage</span>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>

@@ -7376,7 +7376,45 @@ body.light-theme .pagination-btn.pagination-num.active,
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
 }
 
-/* ── Customer Management Pagination Bar ─────────────────────── */
+/* ── Customer Management Unified Table Card & Footer Pagination ── */
+.cust-table-card {
+  background: #081527;
+  border: 1.5px solid #1c2e4a;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: calc(100vh - 220px);
+  max-height: calc(100dvh - 220px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+body.light-theme .cust-table-card,
+[data-theme="light"] .cust-table-card {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+}
+
+.cust-table-card .cust-orders-container {
+  margin-top: 0;
+  padding: 14px 16px;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.cust-table-card .cust-card {
+  padding: 13px 18px !important;
+  border-radius: 14px;
+  gap: 8px;
+}
+
+/* Customer Management Pagination Bar */
 .cust-pagination-bar {
   padding: 12px 18px;
   border-radius: 10px;
@@ -7391,6 +7429,70 @@ body.light-theme .cust-pagination-bar,
   background: #ffffff;
   border: 1px solid #e2e8f0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.cust-table-card .pagination-bar.cust-table-pagination-footer {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap !important;
+  gap: 10px !important;
+  padding: 11px 18px !important;
+  margin-top: 0 !important;
+  border: none !important;
+  border-top: 1px solid #1c2e4a !important;
+  border-radius: 0 0 14px 14px !important;
+  background: #0a1628 !important;
+  box-shadow: none !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  flex-shrink: 0 !important;
+}
+
+body.light-theme .cust-table-card .pagination-bar.cust-table-pagination-footer,
+[data-theme="light"] .cust-table-card .pagination-bar.cust-table-pagination-footer {
+  background: #ffffff !important;
+  border-top: 1px solid #e8edf5 !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 768px) {
+  .cust-table-card {
+    max-height: none;
+    border-radius: 12px;
+  }
+
+  .cust-table-card .cust-orders-container {
+    padding: 10px;
+    gap: 10px;
+    overflow-y: visible;
+  }
+}
+
+@media (max-width: 640px) {
+  .cust-table-card .cust-card {
+    padding: 12px 14px !important;
+    border-radius: 12px;
+  }
+
+  .cust-table-card .pagination-bar.cust-table-pagination-footer {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    padding: 12px 14px !important;
+  }
+
+  .cust-table-card .pagination-bar.cust-table-pagination-footer .pagination-info {
+    text-align: center;
+  }
+
+  .cust-table-card .pagination-bar.cust-table-pagination-footer .pagination-right {
+    width: 100% !important;
+    justify-content: space-between !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    margin-left: 0 !important;
+  }
 }
 
 

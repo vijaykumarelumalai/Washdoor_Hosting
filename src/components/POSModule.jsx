@@ -14,6 +14,7 @@ import ScheduleDeliveryModal from './ScheduleDeliveryModal';
 import DriverAssignModal from './DriverAssignModal';
 import {
   getProducts,
+  resolveServicePrice,
   searchCustomers,
   createOrderWithCustomer,
   getNextOrderId,
@@ -23,6 +24,7 @@ import {
   recordCustomerMessage,
 } from '../services/customerService';
 import { recordNotificationLog } from '../services/notificationTemplateService';
+import { getActiveStaffProfile } from '../services/auditService';
 import {
   normalizeMobileNumber,
   formatPhoneDisplay,
@@ -841,6 +843,7 @@ export default function POSModule({
         mobileNumber: updatedOrder.mobile_number,
         address: updatedOrder.address,
         orderNotes: updatedOrder.comments,
+        updated_by_name: getActiveStaffProfile().name,
       }).catch((e) => console.warn('Supabase status update note:', e));
     }
 
@@ -975,6 +978,7 @@ export default function POSModule({
         rackShelfLocation: editFormData.rack_shelf_location,
         rack_shelf_location: editFormData.rack_shelf_location,
         weight_kg: editFormData.weight_kg,
+        updated_by_name: getActiveStaffProfile().name,
       }).catch((e) => console.warn('Supabase saveOrder update note:', e));
     }
 
@@ -1059,6 +1063,7 @@ export default function POSModule({
         assignedStaff: driverName,
         pickupStatus: 'Assigned for Pickup',
         pickupDelivery: `Assigned: ${driverName}`,
+        updated_by_name: getActiveStaffProfile().name,
         updated_at: new Date().toISOString(),
       }).catch((e) => console.warn('Supabase driver assign note:', e));
     }
@@ -1079,6 +1084,8 @@ export default function POSModule({
 
   // Cart State
   const [cart, setCart] = useState([]);
+  const [counterInspections, setCounterInspections] = useState({});
+  const [counterInspectionOpen, setCounterInspectionOpen] = useState(false);
   const [specialNotes, setSpecialNotes] = useState('');
   const [taxExemption, setTaxExemption] = useState(false);
   const [discountPercent, setDiscountPercent] = useState(0);
@@ -1314,6 +1321,7 @@ export default function POSModule({
 
   // Cart operations
   const handleAddToCart = (product) => {
+    const resolvedRate = resolveServicePrice(product, serviceCategory);
     setCart((prev) => {
       const existingIndex = prev.findIndex(
         (i) => i.id === product.id && i.service === serviceCategory
@@ -1333,12 +1341,15 @@ export default function POSModule({
         ...prev,
         {
           id: product.id,
+          product_id: product.product_id || product.item_code || product.id,
           name: product.name,
-          rate: Number(product.price || product.base_price || 20),
+          rate: resolvedRate,
           qty: 1,
-          amount: Number(product.price || product.base_price || 20),
+          amount: resolvedRate,
           service: serviceCategory,
+          serviceType: serviceCategory,
           unit: product.unit || 'piece',
+          careNotes: '',
         },
       ];
     });
@@ -1369,15 +1380,29 @@ export default function POSModule({
   const handleItemServiceChange = (index, newService) => {
     setCart((prev) => {
       const updated = [...prev];
-      updated[index] = { ...updated[index], service: newService };
+      const item = updated[index];
+      const matchedProd = catalogItems.find((p) => p.id === item.id || p.name === item.name);
+      const nextRate = matchedProd ? resolveServicePrice(matchedProd, newService) : item.rate;
+      updated[index] = {
+        ...item,
+        service: newService,
+        serviceType: newService,
+        rate: nextRate,
+        amount: nextRate * (Number(item.qty) || 1),
+      };
       return updated;
     });
+  };
+
+  const handleItemCareNoteChange = (index, note) => {
+    setCart((prev) => prev.map((it, i) => (i === index ? { ...it, careNotes: note } : it)));
   };
 
   const handleClearCart = () => {
     if (cart.length === 0) return;
     if (window.confirm('Clear all items from the current cart?')) {
       setCart([]);
+      setCounterInspections({});
       showToast?.('🧹 Cart cleared');
     }
   };
@@ -1391,10 +1416,14 @@ export default function POSModule({
     return cart.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   }, [cart]);
 
+  const counterExtraChargesTotal = useMemo(() => {
+    return Object.values(counterInspections || {}).reduce((sum, insp) => sum + (Number(insp?.extraCharge) || 0), 0);
+  }, [counterInspections]);
+
   const effectiveTaxExempt = taxExemption || Boolean(selectedCustomer?.tax_exemption);
   const gstAmount = effectiveTaxExempt ? 0 : subtotal * 0.05;
   const discountAmount = discountPercent > 0 ? (subtotal * discountPercent) / 100 : 0;
-  const grandTotal = Math.max(0, subtotal + gstAmount - discountAmount);
+  const grandTotal = Math.max(0, subtotal + gstAmount + counterExtraChargesTotal - discountAmount);
 
   // Customer selection
   const handleSelectCustomer = (cust) => {
@@ -1421,6 +1450,7 @@ export default function POSModule({
       id: Date.now().toString(),
       heldAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       cart: [...cart],
+      counterInspections: { ...counterInspections },
       selectedCustomer,
       walkinName,
       walkinPhone,
@@ -1445,6 +1475,8 @@ export default function POSModule({
       specialNotes,
     }).catch(() => {});
     setCart([]);
+    setCounterInspections({});
+    setCounterInspectionOpen(false);
     setSelectedCustomer(null);
     setWalkinName('');
     setWalkinPhone('');
@@ -1456,6 +1488,7 @@ export default function POSModule({
   // Restore held order
   const handleRestoreHeld = (item) => {
     setCart(item.cart || []);
+    setCounterInspections(item.counterInspections || {});
     setSelectedCustomer(item.selectedCustomer || null);
     setWalkinName(item.walkinName || '');
     setWalkinPhone(item.walkinPhone || '');
@@ -1480,6 +1513,8 @@ export default function POSModule({
       return;
     }
     setCart([]);
+    setCounterInspections({});
+    setCounterInspectionOpen(false);
     setSelectedCustomer(null);
     setWalkinName('');
     setWalkinPhone('');
@@ -1648,6 +1683,7 @@ export default function POSModule({
       payment_method: paymentMode || 'Cash',
       payment_status: paymentMode === 'Cash' || paymentMode === 'UPI / QR Code' ? 'Paid' : 'Unpaid',
       advance_paid: paymentMode === 'Cash' || paymentMode === 'UPI / QR Code' ? grandTotal : 0,
+      garment_inspections: counterInspections,
     };
 
     const existingCustId = selectedCustomer?.customer_id || selectedCustomer?.customerId || selectedCustomer?.id;
@@ -1685,6 +1721,8 @@ export default function POSModule({
       order_status: initialStatus,
       created_at: data?.created_at || new Date().toISOString(),
       items: cart,
+      garment_inspections: counterInspections,
+      inspections: counterInspections,
       customer: {
         customer_name: customerName,
         mobile_number: cleanMobile,
@@ -5151,7 +5189,7 @@ export default function POSModule({
                                                   <span>Immutable System Audit Trail</span>
                                                 </div>
                                                 <div className="pos-edit-sub-panel" style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.8 }}>
-                                                  <div>• <strong>Order Created:</strong> {editFormData.captured_date || '2026-10-28'} at {editFormData.captured_time || '10:15 AM'} by Counter Operator</div>
+                                                  <div>• <strong>Order Created:</strong> {editFormData.rawOrder?.created_at ? new Date(editFormData.rawOrder.created_at).toLocaleString('en-IN') : `${editFormData.captured_date || '—'} ${editFormData.captured_time || ''}`} by {editFormData.rawOrder?.created_by || 'Counter Operator'}</div>
                                                   {editFormData.assigned_driver && (
                                                     <div style={{ color: '#16a34a', fontWeight: 650 }}>
                                                       • <strong>Assigned for Pickup:</strong> {editFormData.assigned_driver} {editFormData.assigned_driver_full ? `(${editFormData.assigned_driver_full})` : ''}
@@ -5159,7 +5197,7 @@ export default function POSModule({
                                                   )}
                                                   {(editFormData.audit_logs || editFormData.logs || []).map((l, idx) => (
                                                     <div key={l.id || idx} style={{ color: l.type === 'pickup' ? '#16a34a' : 'inherit' }}>
-                                                      • <strong>{l.title}:</strong> {l.detail} <span style={{ fontSize: '11px', color: '#64748b' }}>({l.time})</span>
+                                                      • <strong>{l.title}:</strong> {l.detail} <span style={{ fontSize: '11px', color: '#64748b' }}>({l.time || (l.timestamp ? new Date(l.timestamp).toLocaleString('en-IN') : 'Logged')} · Staff: {l.author || l.staff || 'Store Staff'})</span>
                                                     </div>
                                                   ))}
                                                   <div>• <strong>Current Work Status:</strong> {normalizeOrderStatus(editFormData.status || editFormData.order_status)}</div>
@@ -5504,6 +5542,23 @@ export default function POSModule({
                             </option>
                           ))}
                         </select>
+                        <input
+                          type="text"
+                          value={item.careNotes || ''}
+                          onChange={(e) => handleItemCareNoteChange(idx, e.target.value)}
+                          placeholder="Item care note..."
+                          style={{
+                            marginTop: '4px',
+                            fontSize: '11px',
+                            padding: '3px 6px',
+                            borderRadius: '4px',
+                            border: '1px solid #cbd5e1',
+                            background: 'transparent',
+                            color: 'inherit',
+                            width: '100%',
+                            boxSizing: 'border-box',
+                          }}
+                        />
                       </div>
                     </div>
 
@@ -5559,6 +5614,39 @@ export default function POSModule({
               />
             </div>
 
+            {/* Per-Piece Garment Inspection & Photos */}
+            <div className="pos-field-group" style={{ marginBottom: '12px' }}>
+              <button
+                type="button"
+                onClick={() => setCounterInspectionOpen((prev) => !prev)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border, #cbd5e1)',
+                  background: 'var(--bg-secondary, #f8fafc)',
+                  fontSize: '12px',
+                  fontWeight: 650,
+                  color: 'var(--text-primary, #1e293b)',
+                  cursor: 'pointer',
+                }}
+              >
+                <span>🔍 Garment Inspection, Condition &amp; Photos ({totalItemsCount} pcs)</span>
+                <span>{counterInspectionOpen ? 'Hide ▲' : 'Expand ▼'}</span>
+              </button>
+              {counterInspectionOpen && (
+                <GarmentInspectionSection
+                  cart={cart}
+                  inspections={counterInspections}
+                  onChangeInspections={setCounterInspections}
+                  showToast={showToast}
+                />
+              )}
+            </div>
+
             {/* Financial Breakdown */}
             <div className="pos-summary-box">
               <div className="pos-summary-line">
@@ -5569,6 +5657,12 @@ export default function POSModule({
                 <span>Subtotal:</span>
                 <strong>{currencySymbol}{subtotal.toFixed(2)}</strong>
               </div>
+              {counterExtraChargesTotal > 0 && (
+                <div className="pos-summary-line">
+                  <span>Garment Spot / Care Charges:</span>
+                  <strong>+ {currencySymbol}{counterExtraChargesTotal.toFixed(2)}</strong>
+                </div>
+              )}
               <div className="pos-summary-line">
                 <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
                   <input

@@ -47,6 +47,77 @@ export const GARMENT_OPTIONS = [
   'Sweater',
   'Cap',
   'Curtain',
+  'Shoe',
+];
+
+export const CONDITION_OPTIONS = [
+  'Good',
+  'Delicate',
+  'Torn / Damaged',
+  'Faded',
+  'Missing Button',
+  'Color Bleed Risk',
+];
+
+export const FINISH_OPTIONS = [
+  'Standard Fold',
+  'Hanger',
+  'Medium Starch',
+  'Heavy Starch',
+  'Vacuum Pack',
+];
+
+export const DEFECT_LOCATION_OPTIONS = [
+  '',
+  'Collar',
+  'Cuff',
+  'Sleeve',
+  'Front / Body',
+  'Back',
+  'Pallu',
+  'Zari Border',
+  'Hem',
+  'Pocket',
+  'Button / Zip',
+  'Sole / Upper',
+];
+
+export const SEVERITY_OPTIONS = ['Low', 'Medium', 'High', 'Critical'];
+
+export const ACTION_PLAN_OPTIONS = [
+  { value: 'Proceed', label: 'Proceed Normal Wash' },
+  { value: 'Spot_Treat', label: 'Spot Treat Stain/Defect' },
+  { value: 'Customer_Approval', label: 'Needs Customer Approval' },
+  { value: 'Reject', label: 'Reject / Return Unwashed' },
+];
+
+export const APPROVAL_OPTIONS = [
+  { value: 'Not_Required', label: 'Not Required' },
+  { value: 'Pending', label: 'Pending Approval' },
+  { value: 'Approved', label: 'Approved' },
+  { value: 'Rejected', label: 'Rejected' },
+];
+
+export const STAGE_OPTIONS = [
+  'Received',
+  'Sorting',
+  'Washing',
+  'Drying',
+  'Ironing',
+  'QC',
+  'Ready',
+  'Packed',
+  'Delivered',
+];
+
+export const PHOTO_TYPE_OPTIONS = [
+  { value: 'Before_Wash', label: 'Before Wash' },
+  { value: 'Stain', label: 'Stain Evidence' },
+  { value: 'Damage', label: 'Pre-Existing Damage' },
+  { value: 'After_Wash', label: 'After Wash' },
+  { value: 'After_Press', label: 'After Press' },
+  { value: 'Packed', label: 'Packed' },
+  { value: 'Delivery_Proof', label: 'Delivery Proof' },
 ];
 
 /**
@@ -411,11 +482,26 @@ export default function GarmentInspectionSection({
             productId: item.productId || item.id,
             piece: pieceNum,
             name: item.name || 'Garment',
+            tagNumber: '',
             color: '',
             stains: '',
+            damage: '',
             make: '',
             brand: '',
             fabric: '',
+            condition: 'Good',
+            finishPreference: 'Standard Fold',
+            size: '',
+            defectLocation: '',
+            severity: 'Low',
+            actionPlan: 'Proceed',
+            extraCharge: 0,
+            processingStage: 'Received',
+            assignedStaff: '',
+            qcPassed: false,
+            customerAck: false,
+            customerApproval: 'Not_Required',
+            customerNotes: '',
             notes: '',
             photos: [],
             expanded: true,
@@ -485,6 +571,7 @@ export default function GarmentInspectionSection({
       return;
     }
 
+    const defaultPhotoType = current.stains ? 'Stain' : current.damage ? 'Damage' : 'Before_Wash';
     const filesToRead = files.slice(0, remainingSlots);
     let loadedCount = 0;
     const newPhotos = [];
@@ -495,6 +582,8 @@ export default function GarmentInspectionSection({
         newPhotos.push({
           id: `photo_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
           name: file.name,
+          caption: file.name,
+          photo_type: defaultPhotoType,
           size: `${Math.round(file.size / 1024)} KB`,
           timestamp: new Date().toLocaleDateString('en-IN', {
             day: '2-digit',
@@ -519,6 +608,26 @@ export default function GarmentInspectionSection({
         }
       };
       reader.readAsDataURL(file);
+    });
+  };
+
+  // Update metadata (photo_type / caption) on a single attached photo
+  const handlePhotoFieldChange = (pieceId, photoIndex, field, value) => {
+    if (!onChangeInspections) return;
+    const current = inspections[pieceId] || {};
+    const existingPhotos = current.photos || [];
+    const updatedPhotos = existingPhotos.map((ph, idx) => {
+      if (idx !== photoIndex) return ph;
+      const obj = typeof ph === 'string' ? { url: ph, name: `Photo ${idx + 1}` } : { ...ph };
+      obj[field] = value;
+      return obj;
+    });
+    onChangeInspections({
+      ...inspections,
+      [pieceId]: {
+        ...current,
+        photos: updatedPhotos,
+      },
     });
   };
 
@@ -587,11 +696,26 @@ export default function GarmentInspectionSection({
           pieces.map(({ item, piece, id }) => {
             const data = inspections[id] || {
               name: item.name,
+              tagNumber: '',
               color: '',
               stains: '',
+              damage: '',
               make: '',
               brand: '',
               fabric: '',
+              condition: 'Good',
+              finishPreference: 'Standard Fold',
+              size: '',
+              defectLocation: '',
+              severity: 'Low',
+              actionPlan: 'Proceed',
+              extraCharge: 0,
+              processingStage: 'Received',
+              assignedStaff: '',
+              qcPassed: false,
+              customerAck: false,
+              customerApproval: 'Not_Required',
+              customerNotes: '',
               notes: '',
               photos: [],
               expanded: true,
@@ -601,10 +725,11 @@ export default function GarmentInspectionSection({
             const photosCount = data.photos?.length || 0;
             const garmentName = data.name || item.name || 'Garment';
             const serviceName = item.serviceType || item.service || 'Laundry + Iron';
+            const extraChargeVal = Number(data.extraCharge || 0);
 
             return (
               <article key={id} className="garment-card">
-                {/* ── Top Bar with Vector Icon, Title, ID, Service, Photos Pill & Collapse Pill ── */}
+                {/* ── Top Bar with Vector Icon, Title, ID, Service, Stage, Photos Pill & Collapse Pill ── */}
                 <div className="garment-top">
                   <div className="garment-title">
                     <div className="garment-thumb">
@@ -615,11 +740,15 @@ export default function GarmentInspectionSection({
                         {garmentName} – Piece {piece}
                       </strong>
                       <small>
-                        <span className="garment-id-label">Item ID:</span>
-                        <span className="garment-id-value">{id}</span>
+                        <span className="garment-id-label">Tag:</span>
+                        <span className="garment-id-value">{data.tagNumber || id}</span>
                         <span className="dot-sep">•</span>
                         <span className="garment-service-label">Service:</span>
                         <span className="garment-service-value">{serviceName}</span>
+                        <span className="dot-sep">•</span>
+                        <span className="garment-stage-pill">{data.processingStage || 'Received'}</span>
+                        {data.qcPassed && <span className="garment-stage-pill qc">✓ QC Passed</span>}
+                        {extraChargeVal > 0 && <span className="garment-stage-pill charge">+₹{extraChargeVal.toFixed(0)}</span>}
                       </small>
                     </div>
                   </div>
@@ -844,7 +973,258 @@ export default function GarmentInspectionSection({
                         </div>
                       </div>
 
-                      {/* 7. GARMENT NOTES (Span 2) */}
+                      {/* 7. GARMENT CONDITION */}
+                      <div className="field">
+                        <label><span>CONDITION</span></label>
+                        <div className="input-wrap">
+                          <select
+                            className="field-control has-chevron"
+                            value={data.condition || 'Good'}
+                            onChange={(e) => handleFieldChange(id, 'condition', e.target.value)}
+                          >
+                            {CONDITION_OPTIONS.map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                          <span className="chevron-icon">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5">
+                              <polyline points="6 9 12 15 18 9" />
+                            </svg>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 8. PRE-EXISTING DAMAGE */}
+                      <div className="field">
+                        <label><span>PRE-EXISTING DAMAGE</span></label>
+                        <div className="input-wrap">
+                          <input
+                            type="text"
+                            className="field-control"
+                            placeholder="e.g. Loose button, small tear"
+                            value={data.damage || ''}
+                            onChange={(e) => handleFieldChange(id, 'damage', e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {/* 9. DEFECT LOCATION */}
+                      <div className="field">
+                        <label><span>DEFECT / STAIN LOCATION</span></label>
+                        <div className="input-wrap">
+                          <select
+                            className="field-control has-chevron"
+                            value={data.defectLocation || ''}
+                            onChange={(e) => handleFieldChange(id, 'defectLocation', e.target.value)}
+                          >
+                            <option value="">None / Whole Body</option>
+                            {DEFECT_LOCATION_OPTIONS.filter(Boolean).map((loc) => (
+                              <option key={loc} value={loc}>{loc}</option>
+                            ))}
+                          </select>
+                          <span className="chevron-icon">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5">
+                              <polyline points="6 9 12 15 18 9" />
+                            </svg>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 10. SEVERITY */}
+                      <div className="field">
+                        <label><span>SEVERITY</span></label>
+                        <div className="input-wrap">
+                          <select
+                            className="field-control has-chevron"
+                            value={data.severity || 'Low'}
+                            onChange={(e) => handleFieldChange(id, 'severity', e.target.value)}
+                          >
+                            {SEVERITY_OPTIONS.map((sev) => (
+                              <option key={sev} value={sev}>{sev}</option>
+                            ))}
+                          </select>
+                          <span className="chevron-icon">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5">
+                              <polyline points="6 9 12 15 18 9" />
+                            </svg>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 11. ACTION PLAN */}
+                      <div className="field">
+                        <label><span>TREATMENT ACTION</span></label>
+                        <div className="input-wrap">
+                          <select
+                            className="field-control has-chevron"
+                            value={data.actionPlan || 'Proceed'}
+                            onChange={(e) => handleFieldChange(id, 'actionPlan', e.target.value)}
+                          >
+                            {ACTION_PLAN_OPTIONS.map((act) => (
+                              <option key={act.value} value={act.value}>{act.label}</option>
+                            ))}
+                          </select>
+                          <span className="chevron-icon">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5">
+                              <polyline points="6 9 12 15 18 9" />
+                            </svg>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 12. EXTRA CHARGE */}
+                      <div className="field">
+                        <label><span>EXTRA TREATMENT CHARGE (₹)</span></label>
+                        <div className="input-wrap">
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            className="field-control"
+                            placeholder="0"
+                            value={data.extraCharge ?? ''}
+                            onChange={(e) => handleFieldChange(id, 'extraCharge', Math.max(0, Number(e.target.value) || 0))}
+                          />
+                        </div>
+                      </div>
+
+                      {/* 13. FINISH / FOLDING PREFERENCE */}
+                      <div className="field">
+                        <label><span>FINISH / PACKING</span></label>
+                        <div className="input-wrap">
+                          <select
+                            className="field-control has-chevron"
+                            value={data.finishPreference || 'Standard Fold'}
+                            onChange={(e) => handleFieldChange(id, 'finishPreference', e.target.value)}
+                          >
+                            {FINISH_OPTIONS.map((fin) => (
+                              <option key={fin} value={fin}>{fin}</option>
+                            ))}
+                          </select>
+                          <span className="chevron-icon">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5">
+                              <polyline points="6 9 12 15 18 9" />
+                            </svg>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 14. SIZE */}
+                      <div className="field">
+                        <label><span>SIZE / MEASURE</span></label>
+                        <div className="input-wrap">
+                          <input
+                            type="text"
+                            className="field-control"
+                            placeholder="e.g. M / 40 / Free"
+                            value={data.size || ''}
+                            onChange={(e) => handleFieldChange(id, 'size', e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {/* 15. GARMENT TAG NUMBER */}
+                      <div className="field">
+                        <label><span>GARMENT TAG BARCODE</span></label>
+                        <div className="input-wrap">
+                          <input
+                            type="text"
+                            className="field-control"
+                            placeholder="Auto (e.g. ORD-TAG-01)"
+                            value={data.tagNumber || ''}
+                            onChange={(e) => handleFieldChange(id, 'tagNumber', e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {/* 16. PROCESSING STAGE */}
+                      <div className="field">
+                        <label><span>PROCESSING STAGE</span></label>
+                        <div className="input-wrap">
+                          <select
+                            className="field-control has-chevron"
+                            value={data.processingStage || 'Received'}
+                            onChange={(e) => handleFieldChange(id, 'processingStage', e.target.value)}
+                          >
+                            {STAGE_OPTIONS.map((st) => (
+                              <option key={st} value={st}>{st}</option>
+                            ))}
+                          </select>
+                          <span className="chevron-icon">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5">
+                              <polyline points="6 9 12 15 18 9" />
+                            </svg>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 17. ASSIGNED STAFF & CUSTOMER APPROVAL */}
+                      <div className="field">
+                        <label><span>ASSIGNED HANDLER</span></label>
+                        <div className="input-wrap">
+                          <input
+                            type="text"
+                            className="field-control"
+                            placeholder="QC / Pressing staff name"
+                            value={data.assignedStaff || ''}
+                            onChange={(e) => handleFieldChange(id, 'assignedStaff', e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="field">
+                        <label><span>CUSTOMER APPROVAL</span></label>
+                        <div className="input-wrap">
+                          <select
+                            className="field-control has-chevron"
+                            value={data.customerApproval || 'Not_Required'}
+                            onChange={(e) => handleFieldChange(id, 'customerApproval', e.target.value)}
+                          >
+                            {APPROVAL_OPTIONS.map((ap) => (
+                              <option key={ap.value} value={ap.value}>{ap.label}</option>
+                            ))}
+                          </select>
+                          <span className="chevron-icon">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5">
+                              <polyline points="6 9 12 15 18 9" />
+                            </svg>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="field span2">
+                        <label><span>QC &amp; SIGN-OFF</span></label>
+                        <div className="garment-toggles-wrap">
+                          <label className="garment-check-pill">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(data.qcPassed)}
+                              onChange={(e) => handleFieldChange(id, 'qcPassed', e.target.checked)}
+                            />
+                            <span>QC Passed</span>
+                          </label>
+                          <label className="garment-check-pill">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(data.customerAck)}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                onChangeInspections?.({
+                                  ...inspections,
+                                  [id]: {
+                                    ...data,
+                                    customerAck: checked,
+                                    customerApproval: checked ? 'Approved' : (data.customerApproval || 'Not_Required'),
+                                  },
+                                });
+                              }}
+                            />
+                            <span>Customer Acknowledged Risks</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* 18. GARMENT NOTES (Span 2) */}
                       <div className="field span2">
                         <label>
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -938,28 +1318,49 @@ export default function GarmentInspectionSection({
                         )}
 
                         {(data.photos || []).map((photo, pIdx) => {
-                          const src = typeof photo === 'string' ? photo : photo.url;
+                          const src = typeof photo === 'string' ? photo : (photo.url || photo.photo_url);
                           const name = typeof photo === 'string' ? `Photo ${pIdx + 1}` : photo.name || `Photo ${pIdx + 1}`;
+                          const photoType = typeof photo === 'string' ? 'Before_Wash' : (photo.photo_type || 'Before_Wash');
+                          const caption = typeof photo === 'string' ? '' : (photo.caption || '');
 
                           return (
-                            <div key={photo.id || pIdx} className="photo-preview-tile">
-                              <img
-                                src={src}
-                                alt={name}
-                                onClick={() => setLightboxPhoto({ src, name })}
-                                title="Click to view full photo"
-                              />
-                              <button
-                                type="button"
-                                className="photo-delete-btn"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRemovePhoto(id, pIdx);
-                                }}
-                                title="Remove photo"
+                            <div key={photo.id || pIdx} className="photo-tile-card">
+                              <div className="photo-preview-tile">
+                                <img
+                                  src={src}
+                                  alt={name}
+                                  onClick={() => setLightboxPhoto({ src, name: caption || name })}
+                                  title="Click to view full photo"
+                                />
+                                <button
+                                  type="button"
+                                  className="photo-delete-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemovePhoto(id, pIdx);
+                                  }}
+                                  title="Remove photo"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                              <select
+                                className="photo-meta-select"
+                                value={photoType}
+                                onChange={(e) => handlePhotoFieldChange(id, pIdx, 'photo_type', e.target.value)}
+                                title="Photo Type"
                               >
-                                ×
-                              </button>
+                                {PHOTO_TYPE_OPTIONS.map((pt) => (
+                                  <option key={pt.value} value={pt.value}>{pt.label}</option>
+                                ))}
+                              </select>
+                              <input
+                                type="text"
+                                className="photo-meta-input"
+                                placeholder="Caption..."
+                                value={caption}
+                                onChange={(e) => handlePhotoFieldChange(id, pIdx, 'caption', e.target.value)}
+                              />
                             </div>
                           );
                         })}

@@ -99,6 +99,30 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
     }
   }
 
+  function formatCleanStaffNotes(raw) {
+    if (raw === null || raw === undefined) return null;
+    if (typeof raw === 'object') {
+      const nested = raw.staff_notes || raw.internal_comments || raw.notes;
+      return typeof nested === 'string' && nested.trim() ? nested.trim() : null;
+    }
+    const str = String(raw).trim();
+    if (!str) return null;
+    if (str.startsWith('{') || str.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(str);
+        if (parsed && typeof parsed === 'object') {
+          const nested = parsed.staff_notes || parsed.internal_comments || parsed.notes;
+          return typeof nested === 'string' && nested.trim() ? nested.trim() : null;
+        }
+      } catch {
+        const match = str.match(/"staff_notes"\s*:\s*"([^"]*)"/);
+        if (match && match[1] && match[1].trim()) return match[1].trim();
+        if (str.includes('"factory_hub"') || str.includes('"garment_inspections"')) return null;
+      }
+    }
+    return str;
+  }
+
   // Lock background scroll when any dialog or modal is open
   const isAnyModalOpen = Boolean(editingCustomer || isRegisteringNew || deleteConfirmTarget);
   useEffect(() => {
@@ -218,6 +242,13 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
 
   // ── Pagination computed values ──
   const custTotalPages = Math.max(1, Math.ceil(customers.length / CUSTS_PER_PAGE));
+
+  useEffect(() => {
+    if (custPage > custTotalPages) {
+      setCustPage(custTotalPages);
+    }
+  }, [custPage, custTotalPages]);
+
   const paginatedCustomers = custsPageSizeKey === 'all'
     ? customers
     : customers.slice((custPage - 1) * CUSTS_PER_PAGE, custPage * CUSTS_PER_PAGE);
@@ -626,7 +657,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
           <p className="empty-subtitle">{t('no_customers_subtitle')}</p>
         </div>
       ) : (
-        <>
+        <div className="cust-table-card">
           <div className="orders cust-orders-container" ref={custListScrollRef} onScroll={handleListScroll}>
             {paginatedCustomers.map((c) => {
             const custId = c.customerId || c.customer_code || c.customer_id || c.id || '';
@@ -643,20 +674,22 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
             const cleanMobile = normalizeMobileNumber(c.mobile_number || c.mobileNumber);
             const age = getAgeFromDOB(c.date_of_birth);
             const regDate = formatRegisteredDate(c.created_at || c.registered_at);
+            const displayZone = c.service_zone || c.area_service_zone || c.areaServiceZone;
+            const staffNotesText = formatCleanStaffNotes(c.internal_comments) || formatCleanStaffNotes(c.notes);
 
             return (
               <div key={cardKey} className="cust-card">
                 {/* ── Top Header Row ── */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
-                  <div className="avatar" style={{ width: '46px', height: '46px', fontSize: '18px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  <div className="avatar" style={{ width: '42px', height: '42px', fontSize: '16px' }}>
                     {name.slice(0, 2).toUpperCase()}
                   </div>
 
                   <div style={{ flex: 1, minWidth: '220px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       {custId && <span className="cust-id-pill">{custId}</span>}
-                      <strong className="cust-name-text" style={{ fontSize: '17px' }}>{name}</strong>
-                      <span className="phone" style={{ fontSize: '14px' }}>{formatPhoneDisplay(c.mobile_number || c.mobileNumber)}</span>
+                      <strong className="cust-name-text" style={{ fontSize: '15.5px' }}>{name}</strong>
+                      <span className="phone" style={{ fontSize: '13.5px' }}>{formatPhoneDisplay(c.mobile_number || c.mobileNumber)}</span>
                       {status && (
                         <span className="badge-tag badge-status">
                           {status.toLowerCase() === 'active' ? t('badge_active') : status.toLowerCase() === 'inactive' ? t('badge_inactive') : status}
@@ -670,7 +703,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                     </div>
 
                     {/* ── Subtitle: Contact Details & Location ── */}
-                    <div className="muted" style={{ marginTop: '5px', fontSize: '13px', display: 'flex', flexWrap: 'wrap', gap: '14px' }}>
+                    <div className="muted" style={{ marginTop: '4px', fontSize: '12.5px', display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
                       {locationParts.length > 0 && <span>📍 {locationParts.join(', ')}</span>}
                       {email && <span>✉️ {email}</span>}
                       {altPhone && <span>📞 {t('alt_phone_prefix')} {formatPhoneDisplay(altPhone)}</span>}
@@ -759,9 +792,9 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                         <span className="cust-meta-chip price-chip">
                           💰 {c.price_list || c.priceList || 'Standard Price List'}
                         </span>
-                        {c.service_zone && (
+                        {displayZone && (
                           <span className="cust-meta-chip zone-chip">
-                            📍 {c.service_zone}
+                            📍 {displayZone}
                           </span>
                         )}
                         {regDate && (
@@ -893,11 +926,11 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                           </div>
                           <div className="cust-bento-item">
                             <span className="lbl">Preferred Language</span>
-                            <span className="val">{c.communication_lang || c.preferred_language || 'English'}</span>
+                            <span className="val">{c.communication_lang || c.preferred_language || c.preferredCommunicationLanguage || 'English'}</span>
                           </div>
                           <div className="cust-bento-item">
                             <span className="lbl">Channel Preference</span>
-                            <span className="val">{c.communication_pref || 'WhatsApp'}</span>
+                            <span className="val">{c.communication_pref || c.communicationPreference || 'WhatsApp'}</span>
                           </div>
                           <div className="cust-bento-item">
                             <span className="lbl">DND Notifications</span>
@@ -971,7 +1004,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                               {c.address || c.streetArea || 'No street address recorded'}
                             </div>
                             <div className="addr-sub">
-                              {[c.city, c.pincode ? `PIN: ${c.pincode}` : '', c.service_zone ? `Zone: ${c.service_zone}` : ''].filter(Boolean).join(' • ')}
+                              {[c.city, c.pincode ? `PIN: ${c.pincode}` : '', displayZone ? `Zone: ${displayZone}` : ''].filter(Boolean).join(' • ')}
                             </div>
                           </div>
                           {c.map_link && (
@@ -996,7 +1029,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                                   {addr.label || addr.addressType || `Address #${idx + 1}`}
                                 </div>
                                 <div className="addr-content">
-                                  {addr.addressLine || addr.streetAddress || addr.address || addr.addressLine1}
+                                  {addr.streetAddress || addr.address || addr.addressLine1}
                                 </div>
                                 {addr.landmark && (
                                   <div className="addr-landmark">🚩 Landmark: {addr.landmark}</div>
@@ -1012,7 +1045,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                     </div>
 
                     {/* ── Preferences & Internal Staff Notes (if present) ── */}
-                    {(c.service_category || c.preference || c.preference_notes || c.internal_comments || c.notes) && (
+                    {(c.service_category || c.preference || c.preference_notes || staffNotesText) && (
                       <div className="cust-notes-section">
                         {c.service_category || c.preference ? (
                           <div className="cust-pref-box">
@@ -1023,10 +1056,10 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                             )}
                           </div>
                         ) : null}
-                        {(c.internal_comments || c.notes) && (
+                        {staffNotesText && (
                           <div className="cust-pref-box">
                             <span className="comment-lbl">📌 Staff Notes:</span>
-                            <span className="comment-val">{c.internal_comments || c.notes}</span>
+                            <span className="comment-val">{staffNotesText}</span>
                           </div>
                         )}
                       </div>
@@ -1038,8 +1071,8 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
           })}
           </div>
 
-          {/* ── Customer Pagination Bar ── */}
-          <div className="pagination-bar cust-pagination-bar">
+          {/* ── Customer Table Footer Pagination Bar ── */}
+          <div className="pagination-bar cust-pagination-bar cust-table-pagination-footer">
             <span className="pagination-info">
               Showing {customers.length === 0 ? 0 : ((custPage - 1) * CUSTS_PER_PAGE) + 1}–{Math.min(custPage * CUSTS_PER_PAGE, customers.length)} of {customers.length} customers
             </span>
@@ -1104,7 +1137,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
               </div>
             </div>
           </div>
-        </>
+        </div>
       )}
 
       {/* ── Edit Modal ── */}

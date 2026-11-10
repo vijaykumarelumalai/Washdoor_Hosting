@@ -3,30 +3,14 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import ClothIllustration from './ClothIllustration';
-import { updateOrder, searchCustomers, getProducts } from '../services/customerService';
+import GarmentInspectionSection from './GarmentInspectionSection';
+import { updateOrder, searchCustomers, getProducts, DEFAULT_PRODUCTS, resolveServicePrice } from '../services/customerService';
 import { normalizeMobileNumber, formatPhoneDisplay } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
 import '../styles/EditOrderModal.css';
 
-// 16 Standard Catalog Items exactly from mockup
-export const PRODUCT_CATALOG = [
-  { id: 'shirt', name: 'Shirt', category: 'Men', price: 15, unit: 'piece' },
-  { id: 'tshirt', name: 'T-Shirt', category: 'Men', price: 12, unit: 'piece' },
-  { id: 'formal_pant', name: 'Formal Pant', category: 'Men', price: 20, unit: 'piece' },
-  { id: 'jeans', name: 'Jeans', category: 'Men', price: 25, unit: 'piece' },
-  { id: 'saree', name: 'Saree', category: 'Women', price: 60, unit: 'piece' },
-  { id: 'chudidar', name: 'Chudidar / Salwar', category: 'Women', price: 35, unit: 'piece' },
-  { id: 'kurti', name: 'Kurti', category: 'Women', price: 30, unit: 'piece' },
-  { id: 'shorts', name: 'Shorts', category: 'Kids', secondaryCategory: 'Men', price: 15, unit: 'piece' },
-  { id: 'bedsheet', name: 'Bedsheet', category: 'Home Linen', price: 50, unit: 'piece' },
-  { id: 'pillow_cover', name: 'Pillow Cover', category: 'Home Linen', price: 10, unit: 'piece' },
-  { id: 'towel', name: 'Towel', category: 'Home Linen', price: 15, unit: 'piece' },
-  { id: 'jacket', name: 'Jacket', category: 'Men', secondaryCategory: 'Women', price: 50, unit: 'piece' },
-  { id: 'blazer_suit', name: 'Blazer / Suit', category: 'Men', price: 100, unit: 'piece' },
-  { id: 'sweater', name: 'Sweater', category: 'Men', secondaryCategory: 'Women', price: 40, unit: 'piece' },
-  { id: 'cap', name: 'Cap', category: 'Accessories', secondaryCategory: 'Kids', price: 10, unit: 'piece' },
-  { id: 'curtain', name: 'Curtain', category: 'Home Linen', price: 60, unit: 'piece' },
-];
+// Standard Catalog Items shared with service pricing defaults
+export const PRODUCT_CATALOG = DEFAULT_PRODUCTS;
 
 const CATEGORIES = ['All Items', 'Men', 'Women', 'Kids', 'Home Linen', 'Accessories'];
 
@@ -61,6 +45,8 @@ export default function EditOrderModal({
   // Cart state
   const [cart, setCart] = useState([]);
   const [specialInstructions, setSpecialInstructions] = useState('');
+  const [garmentInspections, setGarmentInspections] = useState({});
+  const [inspectionOpen, setInspectionOpen] = useState(false);
 
   // Customer Form state
   const [customerSearch, setCustomerSearch] = useState('');
@@ -92,6 +78,13 @@ export default function EditOrderModal({
 
     // Special instructions
     setSpecialInstructions(order.preference_notes || order.order_notes || '');
+    setGarmentInspections(
+      (order.garment_inspections && typeof order.garment_inspections === 'object')
+        ? { ...order.garment_inspections }
+        : (order.inspections && typeof order.inspections === 'object' && !Array.isArray(order.inspections))
+        ? { ...order.inspections }
+        : {}
+    );
 
     // Customer details
     const cust = order.customer || {};
@@ -160,6 +153,7 @@ export default function EditOrderModal({
 
   // Cart operations
   const handleAddToCart = (product) => {
+    const rate = resolveServicePrice(product, serviceType);
     setCart((prev) => {
       const existing = prev.find((item) => item.id === product.id || item.name.toLowerCase() === product.name.toLowerCase());
       if (existing) {
@@ -173,14 +167,21 @@ export default function EditOrderModal({
         ...prev,
         {
           id: product.id,
+          product_id: product.product_id || product.item_code || product.id,
           name: product.name,
-          rate: product.price,
+          serviceType: serviceType,
+          rate: rate,
           qty: 1,
-          amount: product.price,
+          amount: rate,
+          careNotes: '',
         },
       ];
     });
     showToast?.(`+ Added ${product.name} to cart`);
+  };
+
+  const handleItemCareChange = (itemId, note) => {
+    setCart((prev) => prev.map((it) => (it.id === itemId ? { ...it, careNotes: note } : it)));
   };
 
   const handleIncrementQty = (itemId) => {
@@ -234,8 +235,12 @@ export default function EditOrderModal({
     order?.customer?.taxExemption
   );
 
+  const extraChargesTotal = useMemo(() => {
+    return Object.values(garmentInspections || {}).reduce((sum, insp) => sum + (Number(insp?.extraCharge) || 0), 0);
+  }, [garmentInspections]);
+
   const gstAmount = isTaxExempt ? 0 : subtotal * 0.05;
-  const grandTotal = subtotal + gstAmount;
+  const grandTotal = subtotal + gstAmount + extraChargesTotal;
 
   // Active status / progress stage
   const currentProgress = order?.progress || 25;
@@ -285,6 +290,7 @@ export default function EditOrderModal({
       deliveryDate: deliveryDate || undefined,
       status: isHold ? 'Order in Progress' : (order?.status || 'Laundry In Progress'),
       items: cart,
+      garment_inspections: garmentInspections,
     };
 
     const { error } = await updateOrder(orderIdentifier, payload);
@@ -526,7 +532,24 @@ export default function EditOrderModal({
                             <div className="pos-cart-item-thumb">
                               <ClothIllustration itemId={item.id} size={28} />
                             </div>
-                            <span className="pos-cart-item-name">{item.name}</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <span className="pos-cart-item-name" style={{ display: 'block' }}>{item.name}</span>
+                              <input
+                                type="text"
+                                value={item.careNotes || ''}
+                                onChange={(e) => handleItemCareChange(item.id, e.target.value)}
+                                placeholder="Item care note..."
+                                style={{
+                                  marginTop: '3px',
+                                  fontSize: '11px',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  border: '1px solid #cbd5e1',
+                                  width: '100%',
+                                  boxSizing: 'border-box',
+                                }}
+                              />
+                            </div>
                           </div>
                         </td>
                         <td>{currencySymbol} {item.rate}</td>
@@ -587,12 +610,51 @@ export default function EditOrderModal({
               />
             </div>
 
+            {/* Per-Piece Garment Inspection & Photos */}
+            <div style={{ marginBottom: '12px' }}>
+              <button
+                type="button"
+                onClick={() => setInspectionOpen((prev) => !prev)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  background: '#f8fafc',
+                  fontSize: '12px',
+                  fontWeight: 650,
+                  color: '#1e293b',
+                  cursor: 'pointer',
+                }}
+              >
+                <span>🔍 Garment Inspection &amp; Photos ({totalItemCount} pcs)</span>
+                <span>{inspectionOpen ? 'Hide ▲' : 'Expand ▼'}</span>
+              </button>
+              {inspectionOpen && (
+                <GarmentInspectionSection
+                  cart={cart}
+                  inspections={garmentInspections}
+                  onChangeInspections={setGarmentInspections}
+                  showToast={showToast}
+                />
+              )}
+            </div>
+
             {/* Price Summary */}
             <div className="pos-summary-card">
               <div className="pos-summary-row">
                 <span>Subtotal</span>
                 <strong>{currencySymbol} {subtotal.toFixed(2)}</strong>
               </div>
+              {extraChargesTotal > 0 && (
+                <div className="pos-summary-row">
+                  <span>Garment Spot / Extra Care Charges</span>
+                  <strong>+ {currencySymbol} {extraChargesTotal.toFixed(2)}</strong>
+                </div>
+              )}
               <div className="pos-summary-row">
                 <span>
                   GST (5%) {isTaxExempt && <span style={{ color: '#d97706', fontSize: '11px' }}>(Tax Exempted)</span>}

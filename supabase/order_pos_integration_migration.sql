@@ -67,15 +67,20 @@ ALTER TABLE public.customer_works
   ADD COLUMN IF NOT EXISTS created_by_name VARCHAR(100) DEFAULT 'POS Counter',
   ADD COLUMN IF NOT EXISTS updated_by_name VARCHAR(100) DEFAULT 'POS Counter';
 
--- 2.2 washdoor_garment_cards: Make, Stains, Damage, Assigned Staff, QC & Customer Ack
+-- 2.2 washdoor_garment_cards: Make, Stains, Damage, Finish, Size, Assigned Staff, QC & Customer Ack
 ALTER TABLE public.washdoor_garment_cards
-  ADD COLUMN IF NOT EXISTS make            VARCHAR(100),
-  ADD COLUMN IF NOT EXISTS stains          TEXT,
-  ADD COLUMN IF NOT EXISTS damage          TEXT,
-  ADD COLUMN IF NOT EXISTS assigned_staff  VARCHAR(100),
-  ADD COLUMN IF NOT EXISTS qc_passed       BOOLEAN NOT NULL DEFAULT FALSE,
-  ADD COLUMN IF NOT EXISTS customer_ack    BOOLEAN NOT NULL DEFAULT FALSE,
-  ADD COLUMN IF NOT EXISTS customer_ack_at TIMESTAMPTZ;
+  ADD COLUMN IF NOT EXISTS make               VARCHAR(100),
+  ADD COLUMN IF NOT EXISTS stains             TEXT,
+  ADD COLUMN IF NOT EXISTS damage             TEXT,
+  ADD COLUMN IF NOT EXISTS finish_preference  VARCHAR(50) DEFAULT 'Standard Fold',
+  ADD COLUMN IF NOT EXISTS size               VARCHAR(30),
+  ADD COLUMN IF NOT EXISTS assigned_staff     VARCHAR(100),
+  ADD COLUMN IF NOT EXISTS qc_passed          BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS customer_ack       BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS customer_ack_at    TIMESTAMPTZ;
+
+ALTER TABLE public.washdoor_order_items
+  ADD COLUMN IF NOT EXISTS work_id UUID REFERENCES public.customer_works(work_id) ON DELETE CASCADE;
 
 -- 2.3 washdoor_garment_photos: Metadata, Storage Bucket & Customer Visibility
 ALTER TABLE public.washdoor_garment_photos
@@ -306,6 +311,30 @@ CREATE POLICY "allow_all_counter_notification_templates" ON public.notification_
 
 DROP POLICY IF EXISTS "allow_all_counter_notification_logs" ON public.notification_logs;
 CREATE POLICY "allow_all_counter_notification_logs" ON public.notification_logs FOR ALL USING (true) WITH CHECK (true);
+
+-- Allow counter anon/authenticated uploads & reads in garment photos Storage bucket
+DROP POLICY IF EXISTS "allow_all_garment_photos_bucket" ON storage.objects;
+CREATE POLICY "allow_all_garment_photos_bucket"
+  ON storage.objects
+  FOR ALL
+  TO anon, authenticated
+  USING (bucket_id = 'washdoor-garment-photos')
+  WITH CHECK (bucket_id = 'washdoor-garment-photos');
+
+-- Ensure POS counter can write/read audit logs & workflow status history tables
+DROP POLICY IF EXISTS "allow_all_counter_audit_logs" ON public.washdoor_audit_logs;
+DROP POLICY IF EXISTS "allow_insert_audit_logs" ON public.washdoor_audit_logs;
+CREATE POLICY "allow_all_counter_audit_logs" ON public.washdoor_audit_logs
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "allow_all_counter_status_history" ON public.washdoor_status_history;
+DROP POLICY IF EXISTS "allow_insert_status_history" ON public.washdoor_status_history;
+CREATE POLICY "allow_all_counter_status_history" ON public.washdoor_status_history
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "allow_all_counter_live_status_actions" ON public.washdoor_live_status_actions;
+CREATE POLICY "allow_all_counter_live_status_actions" ON public.washdoor_live_status_actions
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;

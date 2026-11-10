@@ -3,27 +3,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import ClothIllustration from './ClothIllustration';
-import { getProducts } from '../services/customerService';
+import { getProducts, DEFAULT_PRODUCTS, resolveServicePrice } from '../services/customerService';
 import '../styles/ClothSelectionCart.css';
 
-const CATALOG_ITEMS = [
-  { id: 'shirt', name: 'Shirt', category: 'Men', price: 15, unit: 'piece' },
-  { id: 'tshirt', name: 'T-Shirt', category: 'Men', price: 12, unit: 'piece' },
-  { id: 'formal_pant', name: 'Formal Pant', category: 'Men', price: 20, unit: 'piece' },
-  { id: 'jeans', name: 'Jeans', category: 'Men', price: 25, unit: 'piece' },
-  { id: 'saree', name: 'Saree', category: 'Women', price: 60, unit: 'piece' },
-  { id: 'towel', name: 'Towel', category: 'Home Linen', price: 15, unit: 'piece' },
-  { id: 'chudidar', name: 'Chudidar / Salwar', category: 'Women', price: 35, unit: 'piece' },
-  { id: 'kurti', name: 'Kurti', category: 'Women', price: 30, unit: 'piece' },
-  { id: 'shorts', name: 'Shorts', category: 'Kids', secondaryCategory: 'Men', price: 15, unit: 'piece' },
-  { id: 'bedsheet', name: 'Bedsheet', category: 'Home Linen', price: 50, unit: 'piece' },
-  { id: 'pillow_cover', name: 'Pillow Cover', category: 'Home Linen', price: 10, unit: 'piece' },
-  { id: 'jacket', name: 'Jacket', category: 'Men', secondaryCategory: 'Women', price: 50, unit: 'piece' },
-  { id: 'blazer_suit', name: 'Blazer / Suit', category: 'Men', price: 100, unit: 'piece' },
-  { id: 'sweater', name: 'Sweater', category: 'Men', secondaryCategory: 'Women', price: 40, unit: 'piece' },
-  { id: 'cap', name: 'Cap', category: 'Accessories', secondaryCategory: 'Kids', price: 10, unit: 'piece' },
-  { id: 'curtain', name: 'Curtain', category: 'Home Linen', price: 60, unit: 'piece' },
-];
+const CATALOG_ITEMS = DEFAULT_PRODUCTS;
 
 const CATEGORIES = ['All', 'Men', 'Women', 'Home Linen', 'Accessories'];
 const SERVICE_OPTIONS = ['Laundry', 'Dry cleaning', 'Washing by KG', 'Shoe cleaning', 'Ironing only', 'Customer category'];
@@ -120,7 +103,7 @@ export default function ClothSelectionCart({
   // Add to cart from Selected Item Details
   const handleAddToCart = () => {
     if (!selectedProduct) return;
-    const rate = selectedProduct.price;
+    const rate = resolveServicePrice(selectedProduct, selectedService);
     const qty = Math.max(1, selectedQty);
     const lineAmount = rate * qty;
 
@@ -133,8 +116,9 @@ export default function ClothSelectionCart({
         const nextQty = copy[existingIdx].qty + qty;
         copy[existingIdx] = {
           ...copy[existingIdx],
+          rate,
           qty: nextQty,
-          amount: copy[existingIdx].rate * nextQty,
+          amount: rate * nextQty,
         };
         return copy;
       }
@@ -142,12 +126,14 @@ export default function ClothSelectionCart({
         ...prev,
         {
           id: selectedProduct.id,
+          product_id: selectedProduct.product_id || selectedProduct.item_code || selectedProduct.id,
           name: selectedProduct.name,
           category: selectedProduct.category,
           serviceType: selectedService,
           rate: rate,
           qty: qty,
           amount: lineAmount,
+          careNotes: '',
         },
       ];
     });
@@ -157,7 +143,7 @@ export default function ClothSelectionCart({
   const handleQuickAdd = (e, prod) => {
     e.stopPropagation();
     setSelectedProduct(prod);
-    const rate = prod.price;
+    const rate = resolveServicePrice(prod, selectedService);
     const qty = 1;
 
     setCart((prev) => {
@@ -169,8 +155,9 @@ export default function ClothSelectionCart({
         const nextQty = copy[existingIdx].qty + 1;
         copy[existingIdx] = {
           ...copy[existingIdx],
+          rate,
           qty: nextQty,
-          amount: copy[existingIdx].rate * nextQty,
+          amount: rate * nextQty,
         };
         return copy;
       }
@@ -178,15 +165,21 @@ export default function ClothSelectionCart({
         ...prev,
         {
           id: prod.id,
+          product_id: prod.product_id || prod.item_code || prod.id,
           name: prod.name,
           category: prod.category,
           serviceType: selectedService,
           rate: rate,
           qty: qty,
           amount: rate * qty,
+          careNotes: '',
         },
       ];
     });
+  };
+
+  const handleCartCareChange = (idx, note) => {
+    setCart((prev) => prev.map((c, i) => (i === idx ? { ...c, careNotes: note } : c)));
   };
 
   // Steppers in Cart
@@ -322,7 +315,7 @@ export default function ClothSelectionCart({
                     <span className="cloth-preview-cat">{selectedProduct.category}</span>
                   </div>
                   <div className="cloth-preview-rate">
-                    {currencySymbol} {selectedProduct.price} / {selectedProduct.unit}
+                    {currencySymbol} {resolveServicePrice(selectedProduct, selectedService)} / {selectedProduct.unit}
                   </div>
                 </div>
               </div>
@@ -424,6 +417,23 @@ export default function ClothSelectionCart({
                       <div className="cloth-cart-info">
                         <span className="cloth-cart-name">{item.name}</span>
                         <span className="cloth-cart-srv">{item.serviceType}</span>
+                        <input
+                          type="text"
+                          value={item.careNotes || ''}
+                          onChange={(e) => handleCartCareChange(idx, e.target.value)}
+                          placeholder="Item care note..."
+                          style={{
+                            marginTop: '4px',
+                            fontSize: '11px',
+                            padding: '3px 6px',
+                            borderRadius: '4px',
+                            border: '1px solid #cbd5e1',
+                            background: 'transparent',
+                            color: 'inherit',
+                            width: '100%',
+                            boxSizing: 'border-box',
+                          }}
+                        />
                       </div>
                     </div>
 

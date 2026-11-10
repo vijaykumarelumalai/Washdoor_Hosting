@@ -66,6 +66,7 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
     orderPreference,
     orderPreferenceNotes,
     cartItems = [],
+    garmentInspections = {},
     totalAmount = 0.00,
     itemCount = 1,
     existingCustomerId,
@@ -76,6 +77,7 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
       existingCustomerId,
       customerData: {
         ...customerData,
+        garment_inspections: garmentInspections,
         item_count: itemCount,
         total_amount: totalAmount,
       },
@@ -117,6 +119,8 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
       total_amount: Number(totalAmount) || 0.00,
       item_count: itemCount,
       items: cartItems,
+      garment_inspections: garmentInspections,
+      inspections: garmentInspections,
       customer_history: {
         items: cartItems,
       },

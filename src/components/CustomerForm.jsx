@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { validateCustomer } from '../utils/validation';
 import ClothSelectionCart from './ClothSelectionCart';
+import GarmentInspectionSection from './GarmentInspectionSection';
 
 const PRODUCT_SERVICES = [
   { id: 'laundry', name: 'Laundry', icon: '🧺' },
@@ -91,6 +92,10 @@ export default function CustomerForm({
     totalItemCount: 1,
     careNotes: initialCustomer?.preference_notes || initialCustomer?.order_notes || '',
   });
+  const [garmentInspections, setGarmentInspections] = useState(
+    initialCustomer?.garment_inspections || initialCustomer?.inspections || {}
+  );
+  const [inspectionOpen, setInspectionOpen] = useState(false);
 
   // Expandable details state (always hidden/collapsed by default, expanded manually)
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -288,7 +293,11 @@ export default function CustomerForm({
     setErrors({});
 
     const cartItems = cartData?.cart || [];
-    const calculatedTotal = cartItems.length > 0 ? (cartData?.grandTotal || 0) : 0;
+    const extraChargesTotal = Object.values(garmentInspections || {}).reduce(
+      (sum, insp) => sum + (Number(insp?.extraCharge) || 0),
+      0
+    );
+    const calculatedTotal = cartItems.length > 0 ? ((cartData?.grandTotal || 0) + extraChargesTotal) : 0;
     const calculatedCount = cartItems.length > 0
       ? (cartData?.totalItemCount ?? cartItems.reduce((s, i) => s + (Number(i.qty) || 1), 0))
       : 0;
@@ -306,6 +315,7 @@ export default function CustomerForm({
         item_count: calculatedCount,
         product_weight: productWeight,
         product_garment_type: productGarmentType,
+        garment_inspections: garmentInspections,
         order_notes: finalCareNotes || internalComments,
         total_amount: calculatedTotal,
       },
@@ -313,6 +323,7 @@ export default function CustomerForm({
       orderPreference: primaryService,
       orderPreferenceNotes: finalCareNotes,
       cartItems: cartItems,
+      garmentInspections: garmentInspections,
       totalAmount: calculatedTotal,
       itemCount: calculatedCount,
       existingCustomerId: initialCustomer?.id || null,
@@ -593,6 +604,35 @@ export default function CustomerForm({
                     isTaxExempt={Boolean(taxExemption)}
                     onChange={(cData) => setCartData(cData)}
                   />
+                  <div style={{ marginTop: '12px' }}>
+                    <button
+                      type="button"
+                      className="addr-card-toggle"
+                      style={{
+                        width: '100%',
+                        justifyContent: 'space-between',
+                        padding: '10px 14px',
+                        borderRadius: '10px',
+                        border: '1px solid #cbd5e1',
+                        background: '#f8fafc',
+                        display: 'flex',
+                        alignItems: 'center',
+                        fontWeight: 650,
+                        fontSize: '13px',
+                      }}
+                      onClick={() => setInspectionOpen((prev) => !prev)}
+                    >
+                      <span>🔍 Garment-by-Garment Inspection, Condition &amp; Photos ({cartData?.totalItemCount || 0} pcs)</span>
+                      <span>{inspectionOpen ? 'Hide ▲' : 'Expand ▼'}</span>
+                    </button>
+                    {inspectionOpen && (
+                      <GarmentInspectionSection
+                        cart={cartData?.cart || []}
+                        inspections={garmentInspections}
+                        onChangeInspections={setGarmentInspections}
+                      />
+                    )}
+                  </div>
                 </div>
               )}
 
