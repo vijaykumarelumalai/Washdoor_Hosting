@@ -10,7 +10,7 @@ export const ORDER_COLUMNS = [
     required: true,
     fixed: true,
     purpose: 'Unique order number',
-    minWidth: '130px',
+    minWidth: '185px',
   },
   {
     id: 'customer',
@@ -166,3 +166,4 @@ export function enforceRequiredColumns(selectedIds) {
   const merged = new Set([...current, ...REQUIRED_COLUMN_IDS]);
   return sanitizeAndOrderColumns([...merged]);
 }
+  

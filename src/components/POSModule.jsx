@@ -14,17 +14,11 @@ import ScheduleDeliveryModal from './ScheduleDeliveryModal';
 import DriverAssignModal from './DriverAssignModal';
 import {
   getProducts,
-  resolveServicePrice,
   searchCustomers,
   createOrderWithCustomer,
   getNextOrderId,
   updateOrderInSupabase,
-  recordPickupDeliverySchedule,
-  saveHeldOrder,
-  recordCustomerMessage,
 } from '../services/customerService';
-import { recordNotificationLog } from '../services/notificationTemplateService';
-import { getActiveStaffProfile } from '../services/auditService';
 import {
   normalizeMobileNumber,
   formatPhoneDisplay,
@@ -504,11 +498,123 @@ export default function POSModule({
     }
   };
 
+  const COL_WIDTHS_STORAGE_KEY = 'washdoor_pos_col_widths_v1';
+  const [columnWidths, setColumnWidths] = useState(() => {
+    try {
+      const saved = localStorage.getItem(COL_WIDTHS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return {};
+  });
+  const [resizingColId, setResizingColId] = useState(null);
+  const resizeCleanupRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      if (Object.keys(columnWidths).length === 0) {
+        localStorage.removeItem(COL_WIDTHS_STORAGE_KEY);
+      } else {
+        localStorage.setItem(COL_WIDTHS_STORAGE_KEY, JSON.stringify(columnWidths));
+      }
+    } catch {}
+  }, [columnWidths]);
+
+  useEffect(() => {
+    return () => {
+      resizeCleanupRef.current?.();
+    };
+  }, []);
+
+  const handleColResizeStart = (e, colId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizeCleanupRef.current?.();
+
+    const startX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+    const isRtl =
+      typeof document !== 'undefined' &&
+      (document.dir === 'rtl' || document.body?.classList?.contains('rtl-layout'));
+
+    // Measure actual current widths of all visible columns so adjacent columns stay locked
+    const measuredWidths = {};
+    const thNodes = tableScrollRef.current?.querySelectorAll('thead th[data-col-id]') || [];
+    thNodes.forEach((th) => {
+      const id = th.getAttribute('data-col-id');
+      if (id) {
+        measuredWidths[id] = columnWidths[id] || Math.round(th.getBoundingClientRect().width);
+      }
+    });
+
+    const targetColDef = ORDER_COLUMNS.find((c) => c.id === colId);
+    const fallbackWidth = parseInt(targetColDef?.minWidth, 10) || 150;
+    const startWidth = measuredWidths[colId] || columnWidths[colId] || fallbackWidth;
+    const minAllowed = 70;
+    const maxAllowed = 720;
+
+    setResizingColId(colId);
+
+    const onMove = (moveEvt) => {
+      const currentX =
+        moveEvt.touches && moveEvt.touches.length > 0
+          ? moveEvt.touches[0].clientX
+          : moveEvt.clientX;
+      if (typeof currentX !== 'number') return;
+      const delta = isRtl ? startX - currentX : currentX - startX;
+      const nextWidth = Math.max(minAllowed, Math.min(maxAllowed, Math.round(startWidth + delta)));
+      setColumnWidths((prev) => ({
+        ...measuredWidths,
+        ...prev,
+        [colId]: nextWidth,
+      }));
+    };
+
+    const onEnd = () => {
+      setResizingColId(null);
+      cleanup();
+    };
+
+    const cleanup = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onEnd);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+      window.removeEventListener('touchcancel', onEnd);
+      resizeCleanupRef.current = null;
+    };
+
+    resizeCleanupRef.current = cleanup;
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onEnd);
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onEnd);
+    window.addEventListener('touchcancel', onEnd);
+  };
+
+  const handleResetSingleColumnWidth = (colId) => {
+    setColumnWidths((prev) => {
+      if (!prev || !(colId in prev)) return prev;
+      const copy = { ...prev };
+      delete copy[colId];
+      // If all remaining columns match default or only 1 was customized, reset cleanly
+      if (Object.keys(copy).length === 0) return {};
+      const colDef = ORDER_COLUMNS.find((c) => c.id === colId);
+      copy[colId] = parseInt(colDef?.minWidth, 10) || 150;
+      return copy;
+    });
+    showToast?.('↺ Column width reset');
+  };
+
   const handleResetDefaultColumns = () => {
     const defs = [...DEFAULT_COLUMN_IDS];
     setDraftColumns(defs);
     setSelectedColumns(defs);
     saveColumnPreferences(defs);
+    setColumnWidths({});
     showToast?.('✓ Restored 9 default columns');
   };
 
@@ -608,9 +714,8 @@ export default function POSModule({
   }, [editCart]);
 
   const editCartTax = useMemo(() => {
-    const isExempt = Boolean(editFormData?.tax_exemption ?? editingOrderRecord?.tax_exemption ?? editingOrderRecord?.customer?.tax_exemption);
-    return isExempt ? 0 : editCartSubtotal * 0.05;
-  }, [editCartSubtotal, editFormData?.tax_exemption, editingOrderRecord]);
+    return editCartSubtotal * 0.05;
+  }, [editCartSubtotal]);
 
   const editCartGrandTotal = useMemo(() => {
     return editCartSubtotal + editCartTax;
@@ -770,10 +875,6 @@ export default function POSModule({
       advance_paid: advancePaid,
       balance_due: balanceDue,
       payment_status: paymentStatus,
-      payment_method: ord.payment_method || ord.payment?.mode || 'Cash',
-      tax_exemption: Boolean(ord.tax_exemption ?? ord.customer?.tax_exemption),
-      routing_type: ord.routing_type || 'factory',
-      workshop_station: ord.workshop_station || '',
       assigned_driver: ord.assigned_driver || 'Ramesh Kumar (Route 4)',
       assigned_driver_full: ord.assigned_driver_full || '',
       factory_hub: ord.factory_hub || ord.factory_outlet || 'Factory Outlet Unit 1 (Main Processing Plant)',
@@ -843,7 +944,6 @@ export default function POSModule({
         mobileNumber: updatedOrder.mobile_number,
         address: updatedOrder.address,
         orderNotes: updatedOrder.comments,
-        updated_by_name: getActiveStaffProfile().name,
       }).catch((e) => console.warn('Supabase status update note:', e));
     }
 
@@ -856,8 +956,7 @@ export default function POSModule({
 
     const totalPieces = editCart.reduce((sum, it) => sum + (Number(it.qty) || 0), 0);
     const subtotal = editCart.reduce((sum, it) => sum + (Number(it.qty) || 0) * (Number(it.rate) || 0), 0);
-    const isExempt = Boolean(editFormData.tax_exemption ?? editingOrderRecord.tax_exemption ?? editingOrderRecord.customer?.tax_exemption);
-    const taxAmount = isExempt ? 0 : subtotal * 0.05;
+    const taxAmount = subtotal * 0.05;
     const grandTotal = subtotal + taxAmount;
     const advancePaidVal = Number(editFormData.advance_paid || 0);
 
@@ -951,17 +1050,13 @@ export default function POSModule({
         orderNotes: updatedOrder.comments,
         subtotal: subtotal,
         taxAmount: taxAmount,
-        taxExemption: isExempt,
         totalAmount: grandTotal,
         advancePaid: Number(editFormData.advance_paid || 0),
         paymentStatus: editFormData.payment_status,
-        paymentMethod: editFormData.payment_method || updatedOrder.payment_method || 'Cash',
+        paymentMethod: updatedOrder.payment_method || 'Cash',
         assignedStaff: editFormData.collected_by_staff || updatedOrder.assigned_driver,
-        assigned_driver: editFormData.assigned_driver || updatedOrder.assigned_driver,
         items: updatedOrder.items,
         garment_inspections: editInspections,
-        routing_type: editFormData.routing_type || 'factory',
-        workshop_station: editFormData.workshop_station || '',
         factory_hub: editFormData.factory_hub || editFormData.factory_outlet,
         factory_outlet: editFormData.factory_outlet || editFormData.factory_hub,
         store_outlet: editFormData.store_outlet,
@@ -978,7 +1073,6 @@ export default function POSModule({
         rackShelfLocation: editFormData.rack_shelf_location,
         rack_shelf_location: editFormData.rack_shelf_location,
         weight_kg: editFormData.weight_kg,
-        updated_by_name: getActiveStaffProfile().name,
       }).catch((e) => console.warn('Supabase saveOrder update note:', e));
     }
 
@@ -1063,7 +1157,6 @@ export default function POSModule({
         assignedStaff: driverName,
         pickupStatus: 'Assigned for Pickup',
         pickupDelivery: `Assigned: ${driverName}`,
-        updated_by_name: getActiveStaffProfile().name,
         updated_at: new Date().toISOString(),
       }).catch((e) => console.warn('Supabase driver assign note:', e));
     }
@@ -1084,8 +1177,6 @@ export default function POSModule({
 
   // Cart State
   const [cart, setCart] = useState([]);
-  const [counterInspections, setCounterInspections] = useState({});
-  const [counterInspectionOpen, setCounterInspectionOpen] = useState(false);
   const [specialNotes, setSpecialNotes] = useState('');
   const [taxExemption, setTaxExemption] = useState(false);
   const [discountPercent, setDiscountPercent] = useState(0);
@@ -1102,7 +1193,6 @@ export default function POSModule({
   // Service Details State
   const [serviceCategory, setServiceCategory] = useState('Wash & Steam Press');
   const [intakeType, setIntakeType] = useState('Walk-In');
-  const [paymentMode, setPaymentMode] = useState('Cash');
   const [pickupDate, setPickupDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [deliveryDate, setDeliveryDate] = useState(() => {
     const d = new Date();
@@ -1321,7 +1411,6 @@ export default function POSModule({
 
   // Cart operations
   const handleAddToCart = (product) => {
-    const resolvedRate = resolveServicePrice(product, serviceCategory);
     setCart((prev) => {
       const existingIndex = prev.findIndex(
         (i) => i.id === product.id && i.service === serviceCategory
@@ -1341,15 +1430,12 @@ export default function POSModule({
         ...prev,
         {
           id: product.id,
-          product_id: product.product_id || product.item_code || product.id,
           name: product.name,
-          rate: resolvedRate,
+          rate: Number(product.price || product.base_price || 20),
           qty: 1,
-          amount: resolvedRate,
+          amount: Number(product.price || product.base_price || 20),
           service: serviceCategory,
-          serviceType: serviceCategory,
           unit: product.unit || 'piece',
-          careNotes: '',
         },
       ];
     });
@@ -1380,29 +1466,15 @@ export default function POSModule({
   const handleItemServiceChange = (index, newService) => {
     setCart((prev) => {
       const updated = [...prev];
-      const item = updated[index];
-      const matchedProd = catalogItems.find((p) => p.id === item.id || p.name === item.name);
-      const nextRate = matchedProd ? resolveServicePrice(matchedProd, newService) : item.rate;
-      updated[index] = {
-        ...item,
-        service: newService,
-        serviceType: newService,
-        rate: nextRate,
-        amount: nextRate * (Number(item.qty) || 1),
-      };
+      updated[index] = { ...updated[index], service: newService };
       return updated;
     });
-  };
-
-  const handleItemCareNoteChange = (index, note) => {
-    setCart((prev) => prev.map((it, i) => (i === index ? { ...it, careNotes: note } : it)));
   };
 
   const handleClearCart = () => {
     if (cart.length === 0) return;
     if (window.confirm('Clear all items from the current cart?')) {
       setCart([]);
-      setCounterInspections({});
       showToast?.('🧹 Cart cleared');
     }
   };
@@ -1416,14 +1488,10 @@ export default function POSModule({
     return cart.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   }, [cart]);
 
-  const counterExtraChargesTotal = useMemo(() => {
-    return Object.values(counterInspections || {}).reduce((sum, insp) => sum + (Number(insp?.extraCharge) || 0), 0);
-  }, [counterInspections]);
-
   const effectiveTaxExempt = taxExemption || Boolean(selectedCustomer?.tax_exemption);
   const gstAmount = effectiveTaxExempt ? 0 : subtotal * 0.05;
   const discountAmount = discountPercent > 0 ? (subtotal * discountPercent) / 100 : 0;
-  const grandTotal = Math.max(0, subtotal + gstAmount + counterExtraChargesTotal - discountAmount);
+  const grandTotal = Math.max(0, subtotal + gstAmount - discountAmount);
 
   // Customer selection
   const handleSelectCustomer = (cust) => {
@@ -1450,7 +1518,6 @@ export default function POSModule({
       id: Date.now().toString(),
       heldAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       cart: [...cart],
-      counterInspections: { ...counterInspections },
       selectedCustomer,
       walkinName,
       walkinPhone,
@@ -1464,19 +1531,7 @@ export default function POSModule({
     };
 
     saveHeldOrders([heldItem, ...heldOrders]);
-    saveHeldOrder({
-      customer_id: selectedCustomer?.customer_id || selectedCustomer?.customerId || null,
-      customerName: selectedCustomer?.customer_name || walkinName || 'Walk-In Customer',
-      mobile: selectedCustomer?.mobile_number || walkinPhone || null,
-      cart: [...cart],
-      subtotal,
-      gstAmount,
-      grandTotal,
-      specialNotes,
-    }).catch(() => {});
     setCart([]);
-    setCounterInspections({});
-    setCounterInspectionOpen(false);
     setSelectedCustomer(null);
     setWalkinName('');
     setWalkinPhone('');
@@ -1488,7 +1543,6 @@ export default function POSModule({
   // Restore held order
   const handleRestoreHeld = (item) => {
     setCart(item.cart || []);
-    setCounterInspections(item.counterInspections || {});
     setSelectedCustomer(item.selectedCustomer || null);
     setWalkinName(item.walkinName || '');
     setWalkinPhone(item.walkinPhone || '');
@@ -1513,8 +1567,6 @@ export default function POSModule({
       return;
     }
     setCart([]);
-    setCounterInspections({});
-    setCounterInspectionOpen(false);
     setSelectedCustomer(null);
     setWalkinName('');
     setWalkinPhone('');
@@ -1678,12 +1730,9 @@ export default function POSModule({
       tax_amount: gstAmount,
       total_amount: grandTotal,
       intake_type: intakeType,
-      intake_date: pickupDate || undefined,
-      target_delivery_date: deliveryDate || undefined,
-      payment_method: paymentMode || 'Cash',
+      payment_method: paymentMode,
       payment_status: paymentMode === 'Cash' || paymentMode === 'UPI / QR Code' ? 'Paid' : 'Unpaid',
       advance_paid: paymentMode === 'Cash' || paymentMode === 'UPI / QR Code' ? grandTotal : 0,
-      garment_inspections: counterInspections,
     };
 
     const existingCustId = selectedCustomer?.customer_id || selectedCustomer?.customerId || selectedCustomer?.id;
@@ -1721,8 +1770,6 @@ export default function POSModule({
       order_status: initialStatus,
       created_at: data?.created_at || new Date().toISOString(),
       items: cart,
-      garment_inspections: counterInspections,
-      inspections: counterInspections,
       customer: {
         customer_name: customerName,
         mobile_number: cleanMobile,
@@ -2471,29 +2518,81 @@ export default function POSModule({
                   className={`pos-orders-table-card ${editingOrderRecord ? 'has-active-edit' : ''}`}
                   style={tableViewportWidth ? { '--table-viewport-width': `${tableViewportWidth}px` } : undefined}
                 >
-                  <div className="pos-orders-table-scroll" ref={tableScrollRef}>
-                    <table className="pos-orders-table">
+                  {(() => {
+                    const visibleColumns = ORDER_COLUMNS.filter((col) => selectedColumns.includes(col.id));
+                    const hasCustomColWidths = Object.keys(columnWidths).length > 0;
+                    const totalResizedTableWidth = hasCustomColWidths
+                      ? visibleColumns.reduce(
+                          (sum, col) => sum + (columnWidths[col.id] || parseInt(col.minWidth, 10) || 150),
+                          0
+                        )
+                      : undefined;
+                    return (
+                  <div
+                    className={`pos-orders-table-scroll ${resizingColId ? 'is-col-resizing' : ''}`}
+                    ref={tableScrollRef}
+                  >
+                    <table
+                      className={`pos-orders-table ${hasCustomColWidths ? 'is-resized' : ''}`}
+                      style={hasCustomColWidths ? { width: `${totalResizedTableWidth}px`, minWidth: '100%' } : undefined}
+                    >
+                      {hasCustomColWidths && (
+                        <colgroup>
+                          {visibleColumns.map((col) => (
+                            <col
+                              key={col.id}
+                              style={{ width: `${columnWidths[col.id] || parseInt(col.minWidth, 10) || 150}px` }}
+                            />
+                          ))}
+                        </colgroup>
+                      )}
                     <thead>
                       <tr>
-                        {ORDER_COLUMNS.filter((col) => selectedColumns.includes(col.id)).map((col) => (
-                          <th
-                            key={col.id}
-                            scope="col"
-                            className={`col-${col.id}`}
-                            style={col.id === 'actions' ? { textAlign: 'right', paddingRight: '20px' } : {}}
-                          >
-                            {col.id === 'order_id' ? t('th_order_id', col.label) :
-                             col.id === 'customer' ? t('th_customer', col.label) :
-                             col.id === 'address' ? t('address_label', col.label) :
-                             col.id === 'services' ? t('th_services', col.label) :
-                             col.id === 'status' ? t('th_status', col.label) :
-                             col.id === 'payment' ? t('th_payment', col.label) :
-                             col.id === 'order_details' ? t('th_order_details', col.label) :
-                             col.id === 'pickup_delivery' ? t('th_pickup_delivery', col.label) :
-                             col.id === 'actions' ? t('th_actions', col.label) :
-                             col.label}
-                          </th>
-                        ))}
+                        {visibleColumns.map((col) => {
+                          const customW = hasCustomColWidths
+                            ? (columnWidths[col.id] || parseInt(col.minWidth, 10) || 150)
+                            : undefined;
+                          const thStyle = {
+                            ...(col.id === 'actions' ? { textAlign: 'right', paddingRight: '20px' } : {}),
+                            ...(customW ? { width: `${customW}px`, minWidth: `${customW}px` } : {}),
+                          };
+                          return (
+                            <th
+                              key={col.id}
+                              data-col-id={col.id}
+                              scope="col"
+                              className={`col-${col.id}`}
+                              style={Object.keys(thStyle).length > 0 ? thStyle : undefined}
+                            >
+                              <span className="pos-th-label">
+                                {col.id === 'order_id' ? t('th_order_id', col.label) :
+                                 col.id === 'customer' ? t('th_customer', col.label) :
+                                 col.id === 'address' ? t('address_label', col.label) :
+                                 col.id === 'services' ? t('th_services', col.label) :
+                                 col.id === 'status' ? t('th_status', col.label) :
+                                 col.id === 'payment' ? t('th_payment', col.label) :
+                                 col.id === 'order_details' ? t('th_order_details', col.label) :
+                                 col.id === 'pickup_delivery' ? t('th_pickup_delivery', col.label) :
+                                 col.id === 'actions' ? t('th_actions', col.label) :
+                                 col.label}
+                              </span>
+                              <span
+                                className={`pos-col-resizer ${resizingColId === col.id ? 'is-resizing' : ''}`}
+                                onMouseDown={(e) => handleColResizeStart(e, col.id)}
+                                onTouchStart={(e) => handleColResizeStart(e, col.id)}
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation();
+                                  handleResetSingleColumnWidth(col.id);
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                title="Drag to resize column • Double-click to reset"
+                                role="separator"
+                                aria-orientation="vertical"
+                                aria-label={`Resize ${col.label} column`}
+                              />
+                            </th>
+                          );
+                        })}
                       </tr>
                     </thead>
                     <tbody>
@@ -2636,7 +2735,8 @@ export default function POSModule({
                                       width: 'fit-content',
                                       background: '#eff6ff',
                                       color: '#2563eb',
-                                      border: '1px solid #dbeafe'
+                                      border: '1px solid #dbeafe',
+                                      whiteSpace: 'nowrap'
                                     }}>
                                       {isOnCall ? (
                                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -2660,7 +2760,8 @@ export default function POSModule({
                                           fontWeight: 700,
                                           background: '#f5f3ff',
                                           color: '#6d28d9',
-                                          border: '1px solid #ddd6fe'
+                                          border: '1px solid #ddd6fe',
+                                          whiteSpace: 'nowrap'
                                         }}
                                       >
                                         <span>🏭 Factory</span>
@@ -2678,7 +2779,8 @@ export default function POSModule({
                                           fontWeight: 700,
                                           background: '#f0fdf4',
                                           color: '#15803d',
-                                          border: '1px solid #bbf7d0'
+                                          border: '1px solid #bbf7d0',
+                                          whiteSpace: 'nowrap'
                                         }}
                                       >
                                         <span>🏪 In-Store</span>
@@ -2757,73 +2859,40 @@ export default function POSModule({
                             {isColVisible('services') && (
                               <td className="col-services" style={{ verticalAlign: 'top', paddingTop: '14px' }}>
                                 {servicesAllocated.length === 0 ? (
-                                  isOnCall ? (
-                                    isPickupAssigned ? (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setAssignDriverTarget(ord);
-                                        }}
-                                        title={`Assigned to ${ord.assigned_driver || 'Driver'}. Click to re-assign`}
-                                        style={{
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          gap: '6px',
-                                          padding: '7px 14px',
-                                          borderRadius: '8px',
-                                          border: '1.5px solid #22c55e',
-                                          background: '#f0fdf4',
-                                          color: '#15803d',
-                                          fontSize: '12px',
-                                          fontWeight: 650,
-                                          cursor: 'pointer',
-                                          boxShadow: '0 1px 2px rgba(34,197,94,0.1)',
-                                          transition: 'all 0.15s ease',
-                                          whiteSpace: 'nowrap'
-                                        }}
-                                      >
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                                          <polyline points="20 6 9 17 4 12" />
-                                        </svg>
-                                        <span>Assigned for Pickup</span>
-                                      </button>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setAssignDriverTarget(ord);
-                                        }}
-                                        title={`Assign Pickup for ${orderNum}`}
-                                        style={{
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          gap: '8px',
-                                          padding: '7px 16px',
-                                          borderRadius: '8px',
-                                          border: '1.5px solid #60a5fa',
-                                          background: '#ffffff',
-                                          color: '#2563eb',
-                                          fontSize: '12px',
-                                          fontWeight: 600,
-                                          cursor: 'pointer',
-                                          boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
-                                          transition: 'all 0.15s ease',
-                                          whiteSpace: 'nowrap'
-                                        }}
-                                      >
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                          <rect x="1" y="3" width="15" height="13"></rect>
-                                          <polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon>
-                                          <circle cx="5.5" cy="18.5" r="2.5"></circle>
-                                          <circle cx="18.5" cy="18.5" r="2.5"></circle>
-                                        </svg>
-                                        <span>Assign Pickup</span>
-                                      </button>
-                                    )
+                                  isOnCall && !isPickupAssigned ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setAssignDriverTarget(ord);
+                                      }}
+                                      title={`Assign Pickup for ${orderNum}`}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '8px',
+                                        padding: '7px 16px',
+                                        borderRadius: '8px',
+                                        border: '1.5px solid #60a5fa',
+                                        background: '#ffffff',
+                                        color: '#2563eb',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
+                                        transition: 'all 0.15s ease',
+                                        whiteSpace: 'nowrap'
+                                      }}
+                                    >
+                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="1" y="3" width="15" height="13"></rect>
+                                        <polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon>
+                                        <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                                        <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                                      </svg>
+                                      <span>Assign Pickup</span>
+                                    </button>
                                   ) : (
                                     <span style={{ fontSize: '12px', color: '#64748b', fontStyle: 'italic', display: 'inline-block', paddingTop: '4px' }}>
                                       No services allocated
@@ -2888,75 +2957,41 @@ export default function POSModule({
                                         );
                                       })()}
                                     </div>
-                                    {isOnCall && (
-                                      isPickupAssigned ? (
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setAssignDriverTarget(ord);
-                                          }}
-                                          title={`Assigned to ${ord.assigned_driver || 'Driver'}. Click to re-assign`}
-                                          style={{
-                                            marginTop: '3px',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: '6px',
-                                            padding: '5px 12px',
-                                            borderRadius: '6px',
-                                            background: '#f0fdf4',
-                                            border: '1.5px solid #22c55e',
-                                            color: '#15803d',
-                                            fontSize: '11.5px',
-                                            fontWeight: 650,
-                                            cursor: 'pointer',
-                                            boxShadow: '0 1px 2px rgba(34,197,94,0.1)',
-                                            width: 'fit-content',
-                                            whiteSpace: 'nowrap'
-                                          }}
-                                        >
-                                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                                            <polyline points="20 6 9 17 4 12" />
-                                          </svg>
-                                          <span>Assigned for Pickup</span>
-                                        </button>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setAssignDriverTarget(ord);
-                                          }}
-                                          title={`Assign Pickup for ${orderNum}`}
-                                          style={{
-                                            marginTop: '3px',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: '6px',
-                                            padding: '5px 12px',
-                                            borderRadius: '6px',
-                                            background: '#ffffff',
-                                            border: '1.5px solid #60a5fa',
-                                            color: '#2563eb',
-                                            fontSize: '11.5px',
-                                            fontWeight: 650,
-                                            cursor: 'pointer',
-                                            boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
-                                            width: 'fit-content',
-                                            whiteSpace: 'nowrap'
-                                          }}
-                                        >
-                                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                            <rect x="1" y="3" width="15" height="13"></rect>
-                                            <polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon>
-                                            <circle cx="5.5" cy="18.5" r="2.5"></circle>
-                                            <circle cx="18.5" cy="18.5" r="2.5"></circle>
-                                          </svg>
-                                          <span>Assign Pickup</span>
-                                        </button>
-                                      )
+                                    {isOnCall && !isPickupAssigned && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setAssignDriverTarget(ord);
+                                        }}
+                                        title={`Assign Pickup for ${orderNum}`}
+                                        style={{
+                                          marginTop: '3px',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          gap: '6px',
+                                          padding: '5px 12px',
+                                          borderRadius: '6px',
+                                          background: '#ffffff',
+                                          border: '1.5px solid #60a5fa',
+                                          color: '#2563eb',
+                                          fontSize: '11.5px',
+                                          fontWeight: 650,
+                                          cursor: 'pointer',
+                                          boxShadow: '0 1px 2px rgba(37,99,235,0.06)',
+                                          width: 'fit-content',
+                                          whiteSpace: 'nowrap'
+                                        }}
+                                      >
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                          <rect x="1" y="3" width="15" height="13"></rect>
+                                          <polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon>
+                                          <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                                          <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                                        </svg>
+                                        <span>Assign Pickup</span>
+                                      </button>
                                     )}
                                   </div>
                                 )}
@@ -3089,20 +3124,21 @@ export default function POSModule({
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '120px' }}>
                                   {isPickupAssigned ? (
                                     <>
-                                      <div style={{
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        gap: '1px',
-                                        padding: '4px 8px',
-                                        background: '#f0fdf4',
-                                        border: '1px solid #86efac',
-                                        borderRadius: '6px',
-                                        boxShadow: '0 1px 2px rgba(34,197,94,0.06)'
-                                      }}>
-                                        <span style={{ fontSize: '9px', color: '#166534', fontWeight: 750, letterSpacing: '0.2px', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                          <span>🚚</span> Assigned for Pickup
-                                        </span>
-                                        <span style={{ fontSize: '11px', color: '#14532d', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      <div
+                                        title={ord.assigned_driver || 'Driver Assigned'}
+                                        style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '5px',
+                                          padding: '4px 8px',
+                                          background: '#f0fdf4',
+                                          border: '1px solid #86efac',
+                                          borderRadius: '6px',
+                                          boxShadow: '0 1px 2px rgba(34,197,94,0.06)'
+                                        }}
+                                      >
+                                        <span style={{ fontSize: '11px', flexShrink: 0 }}>🚚</span>
+                                        <span style={{ fontSize: '11px', color: '#14532d', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
                                           {ord.assigned_driver || 'Driver Assigned'}
                                         </span>
                                       </div>
@@ -3299,9 +3335,9 @@ export default function POSModule({
                                 {(() => {
                                   const driverName = ord.assigned_driver || ord.assigned_driver_full || ord.assigned_staff || (isOnCall ? 'Karthik S. (Fleet #2)' : 'Ramesh (Store Driver)');
                                   return (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                      <span style={{ fontSize: '13px' }}>🚚</span>
-                                      <span style={{ fontSize: '12.5px', fontWeight: 650, color: '#0f172a' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+                                      <span style={{ fontSize: '13px', flexShrink: 0 }}>🚚</span>
+                                      <span style={{ fontSize: '12.5px', fontWeight: 650, color: '#0f172a', whiteSpace: 'nowrap' }}>
                                         {driverName}
                                       </span>
                                     </div>
@@ -3336,15 +3372,18 @@ export default function POSModule({
                                     <span style={{
                                       display: 'inline-flex',
                                       alignItems: 'center',
+                                      gap: '4px',
                                       padding: '2px 7px',
                                       borderRadius: '5px',
                                       background: '#f8fafc',
                                       border: '1px solid #e2e8f0',
                                       fontSize: '12px',
                                       fontWeight: 700,
-                                      color: '#334155'
+                                      color: '#334155',
+                                      whiteSpace: 'nowrap'
                                     }}>
-                                      📍 {pin}
+                                      <span>📍</span>
+                                      <span>{pin}</span>
                                     </span>
                                   );
                                 })()}
@@ -5069,66 +5108,14 @@ export default function POSModule({
                                                 <div style={{ display: 'flex', gap: '8px' }}>
                                                   <button
                                                     type="button"
-                                                    onClick={() => {
-                                                      const msg = t('msg_order_status_template', 'Hello {name}, your laundry order #{orderNumber} with Washdoor is now {status} ({pieces} pieces). Total Bill: ₹{total}. Expected delivery: {delivery}.')
-                                                        .replace('{name}', editFormData.customer_name || 'Customer')
-                                                        .replace('{orderNumber}', editFormData.order_number || '')
-                                                        .replace('{status}', normalizeOrderStatus(editFormData.status || editFormData.order_status))
-                                                        .replace('{pieces}', editCartTotalPieces)
-                                                        .replace('{total}', editCartGrandTotal.toFixed(2))
-                                                        .replace('{delivery}', editFormData.expected_delivery || '30 Oct 2026, 05:00 PM');
-                                                      const ordKey = editFormData.rawOrder?.work_id || editFormData.order_number;
-                                                      recordCustomerMessage({
-                                                        work_id: ordKey,
-                                                        work_number: editFormData.order_number,
-                                                        customer_id: editFormData.rawOrder?.customer?.customer_code || 'Counter Customer',
-                                                        channel: 'WhatsApp',
-                                                        category: 'manual_pos_alert',
-                                                        recipient_phone: editFormData.mobile_number,
-                                                        message_body: msg,
-                                                        sent_by: 'POS Staff',
-                                                      }).catch(() => {});
-                                                      recordNotificationLog({
-                                                        order_id: ordKey,
-                                                        event_type: 'manual_pos_alert',
-                                                        channel: 'whatsapp',
-                                                        recipient: editFormData.mobile_number,
-                                                        rendered_message: msg,
-                                                        status: 'Delivered',
-                                                        idempotency_key: `manual_wa_${editFormData.order_number}_${Date.now()}`,
-                                                      }).catch(() => {});
-                                                      showToast?.(`✅ WhatsApp notification sent to ${editFormData.customer_name}!`);
-                                                    }}
+                                                    onClick={() => showToast?.(`✅ WhatsApp notification sent to ${editFormData.customer_name}!`)}
                                                     style={{ padding: '7px 14px', borderRadius: '6px', border: 'none', background: '#16a34a', color: '#ffffff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
                                                   >
                                                     Send WhatsApp Alert
                                                   </button>
                                                   <button
                                                     type="button"
-                                                    onClick={() => {
-                                                      const msg = `Washdoor: Order #${editFormData.order_number} is ${normalizeOrderStatus(editFormData.status || editFormData.order_status)} (${editCartTotalPieces} pcs). Total: ₹${editCartGrandTotal.toFixed(2)}.`;
-                                                      const ordKey = editFormData.rawOrder?.work_id || editFormData.order_number;
-                                                      recordCustomerMessage({
-                                                        work_id: ordKey,
-                                                        work_number: editFormData.order_number,
-                                                        customer_id: editFormData.rawOrder?.customer?.customer_code || 'Counter Customer',
-                                                        channel: 'SMS',
-                                                        category: 'manual_pos_alert',
-                                                        recipient_phone: editFormData.mobile_number,
-                                                        message_body: msg,
-                                                        sent_by: 'POS Staff',
-                                                      }).catch(() => {});
-                                                      recordNotificationLog({
-                                                        order_id: ordKey,
-                                                        event_type: 'manual_pos_alert',
-                                                        channel: 'sms',
-                                                        recipient: editFormData.mobile_number,
-                                                        rendered_message: msg,
-                                                        status: 'Delivered',
-                                                        idempotency_key: `manual_sms_${editFormData.order_number}_${Date.now()}`,
-                                                      }).catch(() => {});
-                                                      showToast?.(`✅ SMS alert dispatched to +91 ${editFormData.mobile_number}!`);
-                                                    }}
+                                                    onClick={() => showToast?.(`✅ SMS alert dispatched to +91 ${editFormData.mobile_number}!`)}
                                                     className="pos-edit-cancel-btn"
                                                     style={{ padding: '7px 14px', fontSize: '12px' }}
                                                   >
@@ -5189,7 +5176,7 @@ export default function POSModule({
                                                   <span>Immutable System Audit Trail</span>
                                                 </div>
                                                 <div className="pos-edit-sub-panel" style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.8 }}>
-                                                  <div>• <strong>Order Created:</strong> {editFormData.rawOrder?.created_at ? new Date(editFormData.rawOrder.created_at).toLocaleString('en-IN') : `${editFormData.captured_date || '—'} ${editFormData.captured_time || ''}`} by {editFormData.rawOrder?.created_by || 'Counter Operator'}</div>
+                                                  <div>• <strong>Order Created:</strong> {editFormData.captured_date || '2026-10-28'} at {editFormData.captured_time || '10:15 AM'} by Counter Operator</div>
                                                   {editFormData.assigned_driver && (
                                                     <div style={{ color: '#16a34a', fontWeight: 650 }}>
                                                       • <strong>Assigned for Pickup:</strong> {editFormData.assigned_driver} {editFormData.assigned_driver_full ? `(${editFormData.assigned_driver_full})` : ''}
@@ -5197,7 +5184,7 @@ export default function POSModule({
                                                   )}
                                                   {(editFormData.audit_logs || editFormData.logs || []).map((l, idx) => (
                                                     <div key={l.id || idx} style={{ color: l.type === 'pickup' ? '#16a34a' : 'inherit' }}>
-                                                      • <strong>{l.title}:</strong> {l.detail} <span style={{ fontSize: '11px', color: '#64748b' }}>({l.time || (l.timestamp ? new Date(l.timestamp).toLocaleString('en-IN') : 'Logged')} · Staff: {l.author || l.staff || 'Store Staff'})</span>
+                                                      • <strong>{l.title}:</strong> {l.detail} <span style={{ fontSize: '11px', color: '#64748b' }}>({l.time})</span>
                                                     </div>
                                                   ))}
                                                   <div>• <strong>Current Work Status:</strong> {normalizeOrderStatus(editFormData.status || editFormData.order_status)}</div>
@@ -5334,6 +5321,8 @@ export default function POSModule({
                     </tbody>
                   </table>
                 </div>
+                    );
+                  })()}
                 {/* ── Orders Table Footer Pagination Bar ── */}
                 <div className="pagination-bar pos-table-pagination-footer">
                     <span className="pagination-info">
@@ -5542,23 +5531,6 @@ export default function POSModule({
                             </option>
                           ))}
                         </select>
-                        <input
-                          type="text"
-                          value={item.careNotes || ''}
-                          onChange={(e) => handleItemCareNoteChange(idx, e.target.value)}
-                          placeholder="Item care note..."
-                          style={{
-                            marginTop: '4px',
-                            fontSize: '11px',
-                            padding: '3px 6px',
-                            borderRadius: '4px',
-                            border: '1px solid #cbd5e1',
-                            background: 'transparent',
-                            color: 'inherit',
-                            width: '100%',
-                            boxSizing: 'border-box',
-                          }}
-                        />
                       </div>
                     </div>
 
@@ -5614,39 +5586,6 @@ export default function POSModule({
               />
             </div>
 
-            {/* Per-Piece Garment Inspection & Photos */}
-            <div className="pos-field-group" style={{ marginBottom: '12px' }}>
-              <button
-                type="button"
-                onClick={() => setCounterInspectionOpen((prev) => !prev)}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--border, #cbd5e1)',
-                  background: 'var(--bg-secondary, #f8fafc)',
-                  fontSize: '12px',
-                  fontWeight: 650,
-                  color: 'var(--text-primary, #1e293b)',
-                  cursor: 'pointer',
-                }}
-              >
-                <span>🔍 Garment Inspection, Condition &amp; Photos ({totalItemsCount} pcs)</span>
-                <span>{counterInspectionOpen ? 'Hide ▲' : 'Expand ▼'}</span>
-              </button>
-              {counterInspectionOpen && (
-                <GarmentInspectionSection
-                  cart={cart}
-                  inspections={counterInspections}
-                  onChangeInspections={setCounterInspections}
-                  showToast={showToast}
-                />
-              )}
-            </div>
-
             {/* Financial Breakdown */}
             <div className="pos-summary-box">
               <div className="pos-summary-line">
@@ -5657,12 +5596,6 @@ export default function POSModule({
                 <span>Subtotal:</span>
                 <strong>{currencySymbol}{subtotal.toFixed(2)}</strong>
               </div>
-              {counterExtraChargesTotal > 0 && (
-                <div className="pos-summary-line">
-                  <span>Garment Spot / Care Charges:</span>
-                  <strong>+ {currencySymbol}{counterExtraChargesTotal.toFixed(2)}</strong>
-                </div>
-              )}
               <div className="pos-summary-line">
                 <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
                   <input
@@ -5874,21 +5807,6 @@ export default function POSModule({
             </select>
           </div>
 
-          <div className="pos-field-group">
-            <label className="pos-field-label">Payment Mode</label>
-            <select
-              className="pos-select"
-              value={paymentMode}
-              onChange={(e) => setPaymentMode(e.target.value)}
-            >
-              <option value="Cash">Cash</option>
-              <option value="UPI / QR Code">UPI / QR Code</option>
-              <option value="Card">Credit / Debit Card</option>
-              <option value="Net Banking">Net Banking</option>
-              <option value="Pay Later">Pay Later (Unpaid)</option>
-            </select>
-          </div>
-
           {/* Delivery Date */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <div className="pos-field-group">
@@ -6018,16 +5936,7 @@ export default function POSModule({
         isOpen={Boolean(scheduleOrderTarget)}
         order={scheduleOrderTarget}
         onClose={() => setScheduleOrderTarget(null)}
-        onConfirmSchedule={({ order, scheduleType, scheduleDate, scheduleSlot }) => {
-          const ordKey = order?.work_id || order?.order_number || order?.id;
-          if (ordKey) {
-            recordPickupDeliverySchedule(ordKey, {
-              scheduleType,
-              scheduleDate,
-              scheduleSlot,
-              address: order?.address || order?.delivery_address || '',
-            }).catch((e) => console.warn('Schedule save note:', e));
-          }
+        onConfirmSchedule={({ scheduleType, scheduleDate, scheduleSlot }) => {
           showToast?.(`✅ ${scheduleType} scheduled for ${scheduleDate} (${scheduleSlot.split(' ')[0]})`);
         }}
       />
@@ -6075,7 +5984,7 @@ export default function POSModule({
             }
           }
 
-          // Direct Supabase update (preserving all 6 tabs from SideEditPanel)
+          // Direct Supabase update
           const saveKey = updated.order_number || updated.id || updated.work_number;
           if (saveKey) {
             updateOrderInSupabase(saveKey, {
@@ -6099,30 +6008,7 @@ export default function POSModule({
               advancePaid: updated.advance_paid,
               paymentStatus: updated.payment_status,
               paymentMethod: updated.payment_method || updated.payment?.mode || 'Cash',
-              transactionRef: updated.payment?.transactionRef,
-              invoiceNo: updated.payment?.invoiceNo,
-              paymentNote: updated.payment?.note,
               assignedStaff: updated.assigned_driver,
-              assigned_driver: updated.assigned_driver,
-              assigned_driver_full: updated.assigned_driver_full,
-              factoryPlant: updated.logistics?.factoryPlant,
-              factory_outlet: updated.logistics?.factoryPlant,
-              factory_hub: updated.logistics?.factoryPlant,
-              riderPhone: updated.logistics?.riderPhone,
-              vehicleNo: updated.logistics?.vehicleNo,
-              vehicle_name: updated.logistics?.vehicleNo,
-              routeZone: updated.logistics?.routeZone,
-              route_from_to: updated.logistics?.routeZone,
-              pickupTime: updated.logistics?.pickupTime,
-              deliverySlot: updated.logistics?.deliverySlot,
-              dispatchBagTag: updated.logistics?.dispatchBagTag,
-              logisticsStatus: updated.logistics?.logisticsStatus,
-              driverInstructions: updated.logistics?.driverInstructions,
-              assignedMachine: updated.workflow?.assignedMachine,
-              qcInspector: updated.workflow?.qcInspector,
-              statusRemark: updated.workflow?.statusRemark,
-              staff_notes: updated.staff_notes,
-              flags: updated.flags,
               items: updated.items,
               garment_inspections: updated.garment_inspections || updated.inspections,
             }).catch((e) => console.warn('Supabase SideEdit update note:', e));

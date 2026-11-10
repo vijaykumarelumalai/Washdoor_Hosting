@@ -2843,7 +2843,7 @@ body.light-theme .pos-top-result-item:hover,
   background: #081527;
 }
 
-/* ── Order ID Column: NOT sticky (removed sticky pinning) ── */
+/* ── Order ID Column: NOT sticky horizontally, keep vertical sticky header ── */
 .pos-orders-table th:first-child,
 .pos-orders-table td:first-child {
   position: static;
@@ -2853,7 +2853,99 @@ body.light-theme .pos-top-result-item:hover,
 }
 
 .pos-orders-table thead th:first-child {
+  position: sticky;
+  top: 0;
+  left: auto;
+  z-index: 5;
   background: #0b1a2f;
+}
+
+/* ── Resizable Table Columns ── */
+.pos-orders-table thead th {
+  position: sticky;
+  top: 0;
+  overflow: visible;
+}
+
+.pos-th-label {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.pos-col-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pos-col-resizer::after {
+  content: '';
+  width: 2px;
+  height: 54%;
+  border-radius: 2px;
+  background: rgba(148, 163, 184, 0.35);
+  transition: background-color 0.15s ease, width 0.15s ease, height 0.15s ease;
+}
+
+.pos-col-resizer:hover::after,
+.pos-col-resizer.is-resizing::after {
+  width: 3px;
+  height: 76%;
+  background: #38bdf8;
+}
+
+body.light-theme .pos-col-resizer::after,
+[data-theme="light"] .pos-col-resizer::after {
+  background: rgba(100, 116, 139, 0.25);
+}
+
+body.light-theme .pos-col-resizer:hover::after,
+[data-theme="light"] .pos-col-resizer:hover::after,
+body.light-theme .pos-col-resizer.is-resizing::after,
+[data-theme="light"] .pos-col-resizer.is-resizing::after {
+  background: #2563eb;
+}
+
+body.rtl-layout .pos-col-resizer,
+[dir="rtl"] .pos-col-resizer {
+  right: auto;
+  left: 0;
+}
+
+.pos-orders-table-scroll.is-col-resizing,
+.pos-orders-table-scroll.is-col-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+.pos-orders-table.is-resized {
+  table-layout: fixed !important;
+  min-width: 100% !important;
+}
+
+.pos-orders-table.is-resized th,
+.pos-orders-table.is-resized td {
+  min-width: 0 !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+.pos-orders-table.is-resized thead th {
+  padding-right: 18px !important;
+  text-overflow: ellipsis !important;
 }
 
 .pos-orders-table tbody tr.pos-order-row {
@@ -2875,9 +2967,8 @@ body.light-theme .pos-top-result-item:hover,
 /* ── Exact Column Dimensions for Clean Alignment ── */
 .pos-orders-table th:nth-child(1),
 .pos-orders-table td:nth-child(1) {
-  width: 135px;
-  min-width: 135px;
-  max-width: 140px;
+  width: 185px;
+  min-width: 185px;
 }
 
 .pos-orders-table th:nth-child(2),
@@ -5929,10 +6020,13 @@ body.light-theme .pos-status-pill.active,
 
 /* Table Dimensions & Layout */
 .pos-orders-table {
-  min-width: 980px !important;
-  width: 100% !important;
   border-collapse: separate !important;
   border-spacing: 0 !important;
+}
+
+.pos-orders-table:not(.is-resized) {
+  min-width: 980px !important;
+  width: 100% !important;
 }
 
 body.light-theme .pos-orders-table thead th,
@@ -5943,6 +6037,11 @@ body.light-theme .pos-orders-table thead th,
   font-weight: 700 !important;
   border-bottom: 1px solid #e2e8f0 !important;
   padding: 12px 14px !important;
+}
+
+body.light-theme .pos-orders-table.is-resized thead th,
+[data-theme="light"] .pos-orders-table.is-resized thead th {
+  padding-right: 18px !important;
 }
 
 body.light-theme .pos-orders-table tbody td,
