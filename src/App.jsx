@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import CustomerManagement from './components/CustomerManagement';
+import CustomerMUI from './components/CustomerMUI';
 import POSModule from './components/POSModule';
 import DashboardModule from './components/DashboardModule';
 import CreateOrderModal from './components/CreateOrderModal';
@@ -72,6 +73,18 @@ const NAV_ITEMS = [
         <circle cx="9" cy="7" r="4"></circle>
         <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
         <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+      </svg>
+    ),
+  },
+  {
+    id: 'customer_mui',
+    label: 'Customer MUI',
+    title: 'Customer MUI Directory',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="3"></rect>
+        <path d="M3 9h18"></path>
+        <path d="M9 21V9"></path>
       </svg>
     ),
   },
@@ -191,6 +204,7 @@ export default function App() {
     let resolved = tab;
     if (tab === 'pos' || tab === 'orders' || tab === 'order') resolved = 'order';
     else if (tab === 'customers' || tab === 'customer') resolved = 'customer';
+    else if (tab === 'customer_mui' || tab === 'customer-mui' || tab === 'customer2') resolved = 'customer_mui';
     else if (tab === 'reports' || tab === 'report') resolved = 'report';
     else if (tab === 'audit_log' || tab === 'auditlog' || tab === 'audit') resolved = 'audit';
     else if (tab === 'account' || tab === 'settings') resolved = 'account';
@@ -246,6 +260,17 @@ export default function App() {
 
   // Topbar dropdown states
   const [activeDropdown, setActiveDropdown] = useState(null); // 'currency' | 'language' | 'admin' | null
+  const [settingsSubTab, setSettingsSubTab] = useState(null);
+  const [settingsSubTabKey, setSettingsSubTabKey] = useState(0);
+  const openSettingsSection = (subTabId) => {
+    try {
+      localStorage.setItem('washdoor_settings_subtab', subTabId);
+    } catch {}
+    setSettingsSubTab(subTabId);
+    setSettingsSubTabKey((k) => k + 1);
+    setActiveTab('account');
+    setActiveDropdown(null);
+  };
   const [currentCurrency, setCurrentCurrency] = useState(SAMPLE_CURRENCIES[0] || { symbol: '₹', code: 'IN', label: 'INR ₹' });
   // Language context
   const { language: currentLanguage, setLanguage: setCurrentLanguage, SAMPLE_LANGUAGES, t } = useLanguage();
@@ -360,13 +385,7 @@ export default function App() {
         totalAmount: updatedOrder.total_amount,
         advancePaid: updatedOrder.advance_paid,
         paymentStatus: updatedOrder.payment_status,
-        paymentMethod: updatedOrder.payment_method || updatedOrder.payment?.mode,
-        assignedStaff: updatedOrder.assigned_driver || updatedOrder.assigned_staff,
-        assigned_driver: updatedOrder.assigned_driver,
-        assigned_driver_full: updatedOrder.assigned_driver_full,
-        staff_notes: updatedOrder.staff_notes,
-        flags: updatedOrder.flags,
-        garment_inspections: updatedOrder.garment_inspections || updatedOrder.inspections,
+        paymentMethod: updatedOrder.payment_method,
         items: updatedOrder.items,
       }).catch((err) => console.warn('Background Supabase order update note:', err));
     }
@@ -885,52 +904,79 @@ export default function App() {
             <div
               className="top-pill-menu top-admin-dropdown"
               data-testid="top-admin-dropdown"
-              style={{ minWidth: '240px', right: 0, left: 'auto' }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="top-pill-menu-title">{t('admin_account')}</div>
               <div className="top-admin-details">
                 <div className="top-admin-user-row">
-                  <div className="top-admin-avatar-small">
-                    A
-                  </div>
+                  <div className="top-admin-avatar-small">A</div>
                   <div className="top-admin-user-info">
-                    <div className="top-admin-user-name">{t('store_admin')}</div>
+                    <div className="top-admin-user-name">{t('store_admin', 'Store Administrator')}</div>
                     <div className="top-admin-user-email">admin@washdoor.in</div>
                   </div>
                 </div>
-                <div className="top-admin-branch">{t('branch_ranipet')}</div>
                 <div className="top-admin-status">
                   <span className="top-admin-status-dot"></span>
-                  {t('session_active')}
+                  <span>{t('session_active', 'Session Active')}</span>
                 </div>
-                <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid var(--border, #e2e8f0)' }}>
-                  <button
-                    type="button"
-                    style={{
-                      width: '100%',
-                      padding: '7px 10px',
-                      borderRadius: '6px',
-                      border: '1px solid #2563eb',
-                      background: '#eff6ff',
-                      color: '#2563eb',
-                      fontSize: '12px',
-                      fontWeight: 650,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px'
-                    }}
-                    onClick={() => {
-                      setActiveTab('account');
-                      setActiveDropdown(null);
-                    }}
-                  >
-                    <span>⚙️</span>
-                    <span>Store Settings &amp; Profile</span>
-                  </button>
-                </div>
+              </div>
+
+              <div className="top-admin-menu-list">
+                <button
+                  type="button"
+                  className="top-admin-menu-item is-featured"
+                  onClick={() => openSettingsSection('business_profile')}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                  <span>Store Settings &amp; Profile</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="top-admin-menu-item"
+                  onClick={() => openSettingsSection('operations_receipts')}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <line x1="7" y1="9" x2="17" y2="9" />
+                    <line x1="7" y1="13" x2="13" y2="13" />
+                  </svg>
+                  <span>My Preferences</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="top-admin-menu-item"
+                  onClick={() => openSettingsSection('account_details')}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    <circle cx="12" cy="11" r="2" />
+                  </svg>
+                  <span>Change Password</span>
+                </button>
+
+                <div className="top-admin-menu-divider" />
+
+                <button
+                  type="button"
+                  className="top-admin-menu-item is-logout"
+                  onClick={() => {
+                    showToast(t('signed_out_session', 'Signed out of session'));
+                    setActiveTab('dashboard');
+                    setActiveDropdown(null);
+                    setSidebarOpen(false);
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                  </svg>
+                  <span>{t('btn_logout', 'Logout')}</span>
+                </button>
               </div>
             </div>
           )}
@@ -1073,7 +1119,7 @@ export default function App() {
           })}
         </div>
 
-        {/* ── Sidebar Bottom: Store Status Card & Sign Out Button ── */}
+        {/* ── Sidebar Bottom: Store Status Card ── */}
         <div className="sidebar-bottom">
           <div className="sidebar-store-card" title="Ranipet Store #1 • Live Counter Active">
             <div className="sidebar-store-icon">
@@ -1094,34 +1140,6 @@ export default function App() {
               </div>
             )}
           </div>
-
-          <button
-            type="button"
-            className="sidebar-signout-btn nav-signout"
-            onClick={() => {
-              showToast(t('signed_out_session', 'Signed out of session'));
-              setActiveTab('dashboard');
-              setSidebarOpen(false);
-            }}
-            title={t('btn_sign_out', 'Sign Out')}
-            aria-label={t('btn_sign_out', 'Sign Out')}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-              <polyline points="16 17 21 12 16 7"></polyline>
-              <line x1="21" y1="12" x2="9" y2="12"></line>
-            </svg>
-            {showFullSidebarContent && <span>{t('btn_sign_out', 'Sign Out')}</span>}
-          </button>
         </div>
       </aside>
 
@@ -1163,6 +1181,12 @@ export default function App() {
             searchQuery={globalSearchQuery}
             onSearchChange={setGlobalSearchQuery}
           />
+        ) : activeTab === 'customer_mui' ? (
+          <CustomerMUI
+            showToast={showToast}
+            searchQuery={globalSearchQuery}
+            onSearchChange={setGlobalSearchQuery}
+          />
         ) : (activeTab === 'report' || activeTab === 'reports') ? (
           <ReportsModule
             orders={orders}
@@ -1182,7 +1206,8 @@ export default function App() {
         ) : (activeTab === 'account' || activeTab === 'settings' || activeTab === 'apps' || activeTab === 'templates' || activeTab === 'template') ? (
           <SettingsModule
             showToast={showToast}
-            initialTab={activeTab === 'apps' ? 'apps' : (activeTab === 'templates' || activeTab === 'template') ? 'templates' : 'business_profile'}
+            initialTab={activeTab === 'apps' ? 'apps' : (activeTab === 'templates' || activeTab === 'template') ? 'templates' : (settingsSubTab || 'business_profile')}
+            initialTabKey={settingsSubTabKey}
             orders={orders}
             onSignOut={() => {
               showToast('Signed out of counter session');

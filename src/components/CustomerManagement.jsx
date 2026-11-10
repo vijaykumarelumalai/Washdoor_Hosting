@@ -448,175 +448,35 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                   <stop offset="40%" stopColor="#dbeafe" />
                   <stop offset="100%" stopColor="#bfdbfe" />
                 </linearGradient>
-
-                {/* Back Envelope Gradient */}
-                <linearGradient id="emptyEnvGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#3b82f6" />
-                  <stop offset="100%" stopColor="#1d4ed8" />
-                </linearGradient>
-
-                {/* Magnifier Rim Gradient */}
-                <linearGradient id="emptyMagRim" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#38bdf8" />
-                  <stop offset="50%" stopColor="#0284c7" />
-                  <stop offset="100%" stopColor="#0369a1" />
-                </linearGradient>
-
-                {/* Magnifier Glass Dark Gradient */}
                 <linearGradient id="emptyMagGlass" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#0c2340" />
-                  <stop offset="100%" stopColor="#051224" />
+                  <stop offset="0%" stopColor="#e0f2fe" stopOpacity="0.85" />
+                  <stop offset="100%" stopColor="#bae6fd" stopOpacity="0.55" />
                 </linearGradient>
-
-                {/* Card Drop Shadow */}
+                <linearGradient id="emptyMagRim" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#0ea5e9" />
+                  <stop offset="100%" stopColor="#2563eb" />
+                </linearGradient>
                 <filter id="emptyShadow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feDropShadow dx="0" dy="8" stdDeviation="10" floodColor="#000000" floodOpacity="0.4" />
+                  <feDropShadow dx="0" dy="6" stdDeviation="6" floodColor="#0f172a" floodOpacity="0.14" />
                 </filter>
               </defs>
-
-              {/* Background Glow */}
-              <ellipse cx="120" cy="80" rx="85" ry="60" fill="url(#emptyGlow)" />
-
-              {/* Floating Twinkling Stars (Left Side) */}
-              <g className="empty-star-a">
-                <path
-                  d="M 36 26 Q 36 32 42 32 Q 36 32 36 38 Q 36 32 30 32 Q 36 32 36 26 Z"
-                  fill="#ffffff"
-                  opacity="0.9"
-                />
-              </g>
-              <g className="empty-star-b">
-                <path
-                  d="M 22 61 Q 22 66 27 66 Q 22 66 22 71 Q 22 66 17 66 Q 22 66 22 61 Z"
-                  fill="#67e8f9"
-                  opacity="0.85"
-                />
-              </g>
-              <g className="empty-star-a">
-                <path
-                  d="M 32 88 Q 32 92 36 92 Q 32 92 32 96 Q 32 92 28 92 Q 32 92 32 88 Z"
-                  fill="#93c5fd"
-                  opacity="0.75"
-                />
-              </g>
-
-              {/* Floating Twinkling Stars (Right Side) */}
-              <g className="empty-star-b">
-                <path
-                  d="M 186 24 Q 186 30 192 30 Q 186 30 186 36 Q 186 30 180 30 Q 186 30 186 24 Z"
-                  fill="#ffffff"
-                  opacity="0.95"
-                />
-              </g>
-              <g className="empty-star-a">
-                <path
-                  d="M 206 57 Q 206 62 211 62 Q 206 62 206 67 Q 206 62 201 62 Q 206 62 206 57 Z"
-                  fill="#38bdf8"
-                  opacity="0.8"
-                />
-              </g>
-              <g className="empty-star-b">
-                <path
-                  d="M 196 84 Q 196 88 200 88 Q 196 88 196 92 Q 196 88 192 88 Q 196 88 196 84 Z"
-                  fill="#93c5fd"
-                  opacity="0.75"
-                />
-              </g>
-
-              {/* Back Blue Card / Envelope (Tilted Left) */}
-              <g transform="rotate(-12 55 90)">
-                <rect
-                  x="42"
-                  y="62"
-                  width="54"
-                  height="42"
-                  rx="9"
-                  fill="url(#emptyEnvGrad)"
-                  stroke="#60a5fa"
-                  strokeWidth="1.2"
-                  filter="url(#emptyShadow)"
-                />
-                <path
-                  d="M 43 65 L 69 82 L 95 65"
-                  stroke="#93c5fd"
-                  strokeWidth="1.5"
-                  fill="none"
-                  opacity="0.65"
-                  strokeLinecap="round"
-                />
-              </g>
-
-              {/* Main Profile / ID Document Card */}
+              <ellipse cx="120" cy="90" rx="96" ry="64" fill="url(#emptyGlow)" />
               <g filter="url(#emptyShadow)">
-                <rect
-                  x="78"
-                  y="24"
-                  width="88"
-                  height="116"
-                  rx="16"
-                  fill="url(#emptyCardGrad)"
-                  stroke="#ffffff"
-                  strokeWidth="1.8"
-                />
-
-                {/* Avatar Badge Circle */}
-                <circle cx="122" cy="56" r="18.5" fill="#1e3a8a" />
-
-                {/* Avatar Silhouette User Icon */}
-                <circle cx="122" cy="51" r="5.6" fill="#f8fafc" />
-                <path
-                  d="M 111 67.5 C 111 62 115 59.8 122 59.8 C 129 59.8 133 62 133 67.5 Z"
-                  fill="#f8fafc"
-                />
-
-                {/* Profile Placeholder Lines */}
-                <rect x="94" y="85" width="56" height="5.5" rx="2.75" fill="#60a5fa" />
-                <rect x="99" y="96" width="46" height="4.5" rx="2.25" fill="#93c5fd" />
-                <rect x="103" y="106" width="38" height="4.5" rx="2.25" fill="#bfdbfe" />
+                <rect x="48" y="30" width="136" height="92" rx="14" fill="url(#emptyCardGrad)" stroke="#93c5fd" strokeWidth="1.8" />
+                <circle cx="78" cy="64" r="14" fill="#60a5fa" opacity="0.85" />
+                <rect x="102" y="52" width="62" height="8" rx="4" fill="#3b82f6" opacity="0.6" />
+                <rect x="102" y="67" width="46" height="7" rx="3.5" fill="#60a5fa" opacity="0.55" />
+                <rect x="64" y="92" width="104" height="7" rx="3.5" fill="#93c5fd" opacity="0.75" />
+                <rect x="64" y="105" width="76" height="7" rx="3.5" fill="#bfdbfe" opacity="0.85" />
               </g>
-
-              {/* Alert Bubble (Top-Right) */}
-              <g className="empty-alert-bubble">
-                <circle
-                  cx="174"
-                  cy="38"
-                  r="13.5"
-                  fill="#061830"
-                  stroke="#0284c7"
-                  strokeWidth="2.4"
-                  filter="url(#emptyShadow)"
-                />
-                <circle cx="174" cy="38" r="10.5" fill="#082245" />
-                <line
-                  x1="174"
-                  y1="31"
-                  x2="174"
-                  y2="39"
-                  stroke="#38bdf8"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                />
-                <circle cx="174" cy="44.2" r="1.4" fill="#38bdf8" />
-              </g>
-
-              {/* Magnifying Glass with Not-Found Mark (Foreground Bottom-Right) */}
-              <g className="empty-magnifier">
-                <line
-                  x1="172"
-                  y1="118"
-                  x2="194"
-                  y2="140"
-                  stroke="#0284c7"
-                  strokeWidth="7"
-                  strokeLinecap="round"
-                />
+              <g>
                 <line
                   x1="174"
                   y1="120"
-                  x2="190"
-                  y2="136"
-                  stroke="#38bdf8"
-                  strokeWidth="2"
+                  x2="194"
+                  y2="140"
+                  stroke="url(#emptyMagRim)"
+                  strokeWidth="7"
                   strokeLinecap="round"
                   opacity="0.8"
                 />

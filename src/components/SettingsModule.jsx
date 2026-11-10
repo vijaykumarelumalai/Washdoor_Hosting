@@ -10,7 +10,7 @@ import { validateBusinessProfile } from '../utils/validation';
 import TemplateManagementSection from './TemplateManagementSection';
 import '../styles/Settings.css';
 
-export default function SettingsModule({ showToast, onSignOut, initialTab = 'business_profile', orders = [] }) {
+export default function SettingsModule({ showToast, onSignOut, initialTab = 'business_profile', initialTabKey = 0, orders = [] }) {
   const { t, language, setLanguage, SAMPLE_LANGUAGES } = useLanguage();
   const [activeTab, setActiveTab] = useState(() => {
     try {
@@ -66,7 +66,7 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
     if (initialTab) {
       setActiveTab(initialTab);
     }
-  }, [initialTab]);
+  }, [initialTab, initialTabKey]);
 
   // Handle generic form changes with strict length and numeric enforcement
   const handleInputChange = (field, value) => {

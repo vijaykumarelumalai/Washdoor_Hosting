@@ -13,6 +13,11 @@
     "test": "node --test src/__tests__/*.node.test.js"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^9.5.0",
+    "@mui/material": "^9.5.0",
+    "@mui/x-data-grid": "^9.17.0",
     "@supabase/supabase-js": "^2.118.0",
     "jspdf": "^4.2.1",
     "react": "^18.3.1",
