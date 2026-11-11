@@ -18,6 +18,7 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  Drawer,
   FormControl,
   FormControlLabel,
   FormGroup,
@@ -26,6 +27,9 @@ import {
   InputAdornment,
   InputLabel,
   LinearProgress,
+  ListItemIcon,
+  ListItemText,
+  Menu,
   MenuItem,
   Pagination,
   Paper,
@@ -67,6 +71,14 @@ import ViewColumnOutlinedIcon from '@mui/icons-material/ViewColumnOutlined';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import StarBorderOutlinedIcon from '@mui/icons-material/StarBorderOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
+import WorkspacePremiumOutlinedIcon from '@mui/icons-material/WorkspacePremiumOutlined';
+import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
+import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
+import CallOutlinedIcon from '@mui/icons-material/CallOutlined';
+import MailOutlinedIcon from '@mui/icons-material/MailOutlined';
+import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
 
 import {
   getAllCustomers,
@@ -80,23 +92,26 @@ import CustomerDetailDrawer, {
   formatCleanStaffNotes,
   formatRegisteredDate,
 } from './CustomerDetailDrawer';
+import Customer360Panel, { getPastelAvatarColors } from './Customer360Panel';
 import {
   friendlySupabaseError,
   formatPhoneDisplay,
   isMobileNumberQuery,
+  normalizeMobileNumber,
 } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
 
-const COLUMN_VISIBILITY_STORAGE_KEY = 'washdoor_customer_mui_columns_v1';
+const COLUMN_VISIBILITY_STORAGE_KEY = 'washdoor_customer_mui_columns_v2';
 
 const DEFAULT_COLUMN_VISIBILITY = {
   customer_id: true,
   customer_name: true,
   mobile_number: true,
-  address: true,
   customer_classification: true,
-  company_name: true,
+  address: true,
+  orders_count: true,
   customer_status: true,
+  company_name: false,
   created_at: false,
   internal_comments: false,
   actions: true,
@@ -106,10 +121,11 @@ const CUSTOMIZABLE_COLUMNS = [
   { field: 'customer_id', label: 'Customer ID', locked: true },
   { field: 'customer_name', label: 'Customer Name', locked: true },
   { field: 'mobile_number', label: 'Contact' },
-  { field: 'address', label: 'Location' },
-  { field: 'customer_classification', label: 'Segment & Price List' },
-  { field: 'company_name', label: 'Company / GST' },
+  { field: 'customer_classification', label: 'Classification' },
+  { field: 'address', label: 'Location / Zone' },
+  { field: 'orders_count', label: 'Orders' },
   { field: 'customer_status', label: 'Status' },
+  { field: 'company_name', label: 'Company / GST' },
   { field: 'created_at', label: 'Joined Date' },
   { field: 'internal_comments', label: 'Staff Notes' },
   { field: 'actions', label: 'Actions', locked: true },
@@ -312,7 +328,30 @@ function buildMuiTheme(mode) {
   });
 }
 
-function KpiHeaderCard({ title, value, subtitle, icon, accentColor, active = false, onClick }) {
+function getZoneChipColors(zoneText) {
+  const z = String(zoneText || '').toLowerCase();
+  if (z.includes('3')) return { bg: '#dcfce7', color: '#15803d' };
+  if (z.includes('2')) return { bg: '#e0f2fe', color: '#0369a1' };
+  return { bg: '#dbeafe', color: '#1d4ed8' };
+}
+
+function getCustomerOrderKey(c) {
+  const id = String(c?.customerId || c?.customer_code || c?.customer_id || '').trim().toUpperCase();
+  const phone = normalizeMobileNumber(c?.mobile_number || c?.mobileNumber || '');
+  return { id, phone };
+}
+
+function KpiHeaderCard({
+  title,
+  value,
+  subtitle,
+  subtitleColor = 'text.secondary',
+  icon,
+  accentColor,
+  tintColor,
+  active = false,
+  onClick,
+}) {
   return (
     <Card
       variant="outlined"
@@ -320,11 +359,14 @@ function KpiHeaderCard({ title, value, subtitle, icon, accentColor, active = fal
       sx={{
         width: '100%',
         height: '100%',
-        borderRadius: 2,
-        bgcolor: 'background.paper',
+        borderRadius: 2.5,
+        bgcolor: (theme) =>
+          theme.palette.mode === 'dark'
+            ? alpha(accentColor, active ? 0.18 : 0.1)
+            : (tintColor || alpha(accentColor, 0.08)),
         cursor: onClick ? 'pointer' : 'default',
         borderWidth: active ? 2 : 1,
-        borderColor: active ? accentColor : 'divider',
+        borderColor: active ? accentColor : alpha(accentColor, 0.22),
         boxShadow: active ? `0 0 0 1px ${alpha(accentColor, 0.2)}` : 'none',
         transition: 'transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease',
         '&:hover': onClick
@@ -336,69 +378,59 @@ function KpiHeaderCard({ title, value, subtitle, icon, accentColor, active = fal
           : undefined,
       }}
     >
-      <CardContent sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', '&:last-child': { pb: 2 } }}>
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1.5 }}>
-          <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
-              <Typography
-                color="text.secondary"
-                sx={{
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  letterSpacing: 0.5,
-                  textTransform: 'uppercase',
-                  lineHeight: 1.3,
-                }}
-              >
-                {title}
-              </Typography>
-              {active && (
-                <Chip
-                  size="small"
-                  label="Active"
-                  sx={{
-                    height: 18,
-                    fontSize: '0.68rem',
-                    bgcolor: alpha(accentColor, 0.14),
-                    color: accentColor,
-                    borderRadius: '4px',
-                  }}
-                />
-              )}
-            </Box>
-            <Typography sx={{ mt: 0.75, lineHeight: 1.1, fontSize: '1.875rem', fontWeight: 800, color: 'text.primary' }}>
-              {value}
-            </Typography>
-          </Box>
-
-          <Avatar
-            variant="rounded"
-            sx={{
-              width: 40,
-              height: 40,
-              flexShrink: 0,
-              borderRadius: '6px',
-              bgcolor: alpha(accentColor, 0.12),
-              color: accentColor,
-            }}
-          >
-            {icon}
-          </Avatar>
-        </Box>
-
-        <Typography
-          color="text.secondary"
-          sx={{ mt: 1, fontSize: '0.78rem', lineHeight: 1.3 }}
-          noWrap
+      <CardContent sx={{ p: 1.75, height: '100%', display: 'flex', alignItems: 'flex-start', gap: 1.5, '&:last-child': { pb: 1.75 } }}>
+        <Avatar
+          variant="rounded"
+          sx={{
+            width: 38,
+            height: 38,
+            flexShrink: 0,
+            borderRadius: '10px',
+            bgcolor: (theme) =>
+              theme.palette.mode === 'dark' ? alpha(accentColor, 0.24) : '#ffffff',
+            color: accentColor,
+            border: '1px solid',
+            borderColor: alpha(accentColor, 0.22),
+            boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)',
+          }}
         >
-          {subtitle}
-        </Typography>
+          {icon}
+        </Avatar>
+
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography
+            color="text.secondary"
+            sx={{
+              fontSize: '0.74rem',
+              fontWeight: 600,
+              lineHeight: 1.25,
+            }}
+            noWrap
+          >
+            {title}
+          </Typography>
+          <Typography sx={{ mt: 0.35, lineHeight: 1.15, fontSize: '1.55rem', fontWeight: 800, color: 'text.primary' }} noWrap>
+            {value}
+          </Typography>
+          <Typography
+            sx={{ mt: 0.35, fontSize: '0.73rem', fontWeight: 600, lineHeight: 1.25, color: subtitleColor }}
+            noWrap
+          >
+            {subtitle}
+          </Typography>
+        </Box>
       </CardContent>
     </Card>
   );
 }
 
-export default function CustomerMUI({ showToast, searchQuery = '', onSearchChange }) {
+export default function CustomerMUI({
+  showToast,
+  orders = [],
+  currencySymbol = '₹',
+  searchQuery = '',
+  onSearchChange,
+}) {
   const { t } = useLanguage();
   const themeMode = useWashdoorThemeMode();
   const muiTheme = useMemo(() => buildMuiTheme(themeMode), [themeMode]);
@@ -421,9 +453,10 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'active' | 'inactive'
   const [vipFilter, setVipFilter] = useState('all'); // 'all' | 'vip_only' | 'regular_only'
   const [gstFilter, setGstFilter] = useState('all'); // 'all' | 'gst_only' | 'individual_only'
+  const [duesFilter, setDuesFilter] = useState('all'); // 'all' | 'dues_only'
 
-  // DataGrid Controlled Pagination
-  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
+  // DataGrid Controlled Pagination (default 5 rows per page matching mockup)
+  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 5 });
 
   // Customized Columns State & Event Tracking
   const [columnVisibilityModel, setColumnVisibilityModel] = useState(() => {
@@ -440,7 +473,10 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
   });
   const [columnsAnchorEl, setColumnsAnchorEl] = useState(null);
 
-  // Drawer, Modal & Card Expand State
+  // Selected Customer for Top-to-Bottom Customer 360° Side Panel + Legacy Drawer/Modals
+  const [selectedCustomerKey, setSelectedCustomerKey] = useState(null);
+  const [is360Open, setIs360Open] = useState(false);
+  const [rowMenuState, setRowMenuState] = useState({ anchorEl: null, row: null });
   const [drawerCustomer, setDrawerCustomer] = useState(null);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [isRegisteringNew, setIsRegisteringNew] = useState(false);
@@ -503,7 +539,7 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
   useEffect(() => {
     setPaginationModel((prev) => ({ ...prev, page: 0 }));
     setCardsPage(1);
-  }, [query, statusFilter, vipFilter, gstFilter, cardsPageSize]);
+  }, [query, statusFilter, vipFilter, gstFilter, duesFilter, cardsPageSize]);
 
   const handleCopyCustomer = useCallback((c) => {
     const name = c.customer_name || c.customerName || 'Customer';
@@ -568,17 +604,22 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
 
   const handleDelete = async (id) => {
     setIsDeleting(true);
-    const { error } = await deleteCustomer(id);
-    setIsDeleting(false);
-    setDeleteConfirmTarget(null);
-    setDrawerCustomer(null);
+    try {
+      const { error } = await deleteCustomer(id);
+      setDeleteConfirmTarget(null);
+      setDrawerCustomer(null);
 
-    if (error) {
-      showToast?.(`⚠️ ${friendlySupabaseError(error)}`);
-      return;
+      if (error) {
+        showToast?.(`⚠️ ${friendlySupabaseError(error)}`);
+        return;
+      }
+      showToast?.(`✅ ${t('customer_deleted_success')}`);
+      loadData();
+    } catch (err) {
+      showToast?.(`⚠️ ${friendlySupabaseError(err)}`);
+    } finally {
+      setIsDeleting(false);
     }
-    showToast?.(`✅ ${t('customer_deleted_success')}`);
-    loadData();
   };
 
   const toggleExpandCustomer = (id) => {
@@ -597,6 +638,7 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
     setStatusFilter('all');
     setVipFilter('all');
     setGstFilter('all');
+    setDuesFilter('all');
   }, [onSearchChange]);
 
   const handleColumnVisibilityChange = useCallback((nextModel, sourceLabel = 'Columns updated') => {
@@ -618,6 +660,69 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
     handleColumnVisibilityChange(next, `${verb}: ${colLabel}`);
   };
 
+  // Index live orders by customer_id and mobile_number for Customer 360° & KPI stats
+  const ordersIndex = useMemo(() => {
+    const byId = new Map();
+    const byPhone = new Map();
+
+    const sortedOrders = [...(Array.isArray(orders) ? orders : [])].sort((a, b) => {
+      const ta = new Date(a?.created_at || a?.intake_date || 0).getTime() || 0;
+      const tb = new Date(b?.created_at || b?.intake_date || 0).getTime() || 0;
+      return tb - ta;
+    });
+
+    sortedOrders.forEach((ord) => {
+      const cid = String(ord?.customer_id || ord?.customer?.customer_id || ord?.customer?.customer_code || '').trim().toUpperCase();
+      const phone = normalizeMobileNumber(ord?.mobile_number || ord?.customer?.mobile_number || '');
+      if (cid) {
+        if (!byId.has(cid)) byId.set(cid, []);
+        byId.get(cid).push(ord);
+      }
+      if (phone) {
+        if (!byPhone.has(phone)) byPhone.set(phone, []);
+        byPhone.get(phone).push(ord);
+      }
+    });
+
+    return { byId, byPhone };
+  }, [orders]);
+
+  const getCustomerOrdersAndStats = useCallback((c) => {
+    const { id, phone } = getCustomerOrderKey(c);
+    const idMatches = id ? (ordersIndex.byId.get(id) || []) : [];
+    const phoneMatches = phone ? (ordersIndex.byPhone.get(phone) || []) : [];
+
+    const seen = new Set();
+    const list = [];
+    [...idMatches, ...phoneMatches].forEach((ord, idx) => {
+      const key = ord?.work_id || ord?.order_id || ord?.order_number || ord?.id || `ord-${idx}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        list.push(ord);
+      }
+    });
+
+    let lifetimeSpend = 0;
+    let outstandingDue = 0;
+    list.forEach((ord) => {
+      const total = Number(ord?.total_amount || 0);
+      const adv = Number(ord?.advance_paid || 0);
+      const payStatus = String(ord?.payment_status || '').toLowerCase();
+      const due = payStatus === 'paid'
+        ? 0
+        : Math.max(0, Number(ord?.balance_due ?? (total - adv)));
+      lifetimeSpend += total;
+      outstandingDue += due;
+    });
+
+    return {
+      ordersList: list,
+      orderCount: list.length,
+      lifetimeSpend,
+      outstandingDue,
+    };
+  }, [ordersIndex]);
+
   const filteredCustomers = useMemo(() => {
     const qLower = query.trim().toLowerCase();
     return customers.filter((c) => {
@@ -635,6 +740,11 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
 
       if (gstFilter === 'gst_only' && !isGst) return false;
       if (gstFilter === 'individual_only' && isGst) return false;
+
+      if (duesFilter === 'dues_only') {
+        const stats = getCustomerOrdersAndStats(c);
+        if (stats.outstandingDue <= 0) return false;
+      }
 
       if (qLower) {
         const haystack = [
@@ -668,7 +778,7 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
 
       return true;
     });
-  }, [customers, query, statusFilter, vipFilter, gstFilter]);
+  }, [customers, query, statusFilter, vipFilter, gstFilter, duesFilter, getCustomerOrdersAndStats]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -676,64 +786,99 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
     if (statusFilter !== 'all') count += 1;
     if (vipFilter !== 'all') count += 1;
     if (gstFilter !== 'all') count += 1;
+    if (duesFilter !== 'all') count += 1;
     return count;
-  }, [query, statusFilter, vipFilter, gstFilter]);
+  }, [query, statusFilter, vipFilter, gstFilter, duesFilter]);
 
   const kpiStats = useMemo(() => {
+    const now = new Date();
+    const curMonth = now.getMonth();
+    const curYear = now.getFullYear();
     let activeCount = 0;
     let b2bCount = 0;
     let vipOrMemberCount = 0;
+    let addedThisMonth = 0;
+    let vipThisMonth = 0;
+    let totalOutstandingDues = 0;
+    let duesCustomersCount = 0;
 
     customers.forEach((c) => {
       const status = String(c.customerStatus || c.customer_status || 'Active').toLowerCase();
+      const isVip = isVipCustomer(c);
       if (status !== 'inactive') activeCount += 1;
       if (isGstB2BCustomer(c)) b2bCount += 1;
-      if (isVipCustomer(c)) vipOrMemberCount += 1;
+      if (isVip) vipOrMemberCount += 1;
+
+      const createdRaw = c.created_at || c.registered_at;
+      if (createdRaw) {
+        const d = new Date(createdRaw);
+        if (!Number.isNaN(d.getTime()) && d.getMonth() === curMonth && d.getFullYear() === curYear) {
+          addedThisMonth += 1;
+          if (isVip) vipThisMonth += 1;
+        }
+      }
+
+      const stats = getCustomerOrdersAndStats(c);
+      if (stats.outstandingDue > 0) {
+        totalOutstandingDues += stats.outstandingDue;
+        duesCustomersCount += 1;
+      }
     });
+
+    const activePct = customers.length > 0 ? Math.round((activeCount / customers.length) * 100) : 0;
 
     return {
       total: customers.length,
       active: activeCount,
+      activePct,
       inactive: Math.max(0, customers.length - activeCount),
       b2b: b2bCount,
       vipOrMember: vipOrMemberCount,
+      addedThisMonth,
+      vipThisMonth,
+      totalOutstandingDues,
+      duesCustomersCount,
     };
-  }, [customers]);
+  }, [customers, getCustomerOrdersAndStats]);
 
   const gridRows = useMemo(() => {
     return filteredCustomers.map((c, idx) => ({
       ...c,
       _gridId: c.id || c.customer_id || c.customerId || c.mobile_number || `cust-row-${idx}`,
+      _orderStats: getCustomerOrdersAndStats(c),
     }));
-  }, [filteredCustomers]);
+  }, [filteredCustomers, getCustomerOrdersAndStats]);
+
+  // Resolve currently selected row for Customer 360° Side Panel
+  const selectedRow = useMemo(() => {
+    if (!selectedCustomerKey || gridRows.length === 0) return null;
+    return gridRows.find((r) => r._gridId === selectedCustomerKey) || null;
+  }, [gridRows, selectedCustomerKey]);
+
+  const activeSelectedKey = selectedRow?._gridId || null;
 
   const gridColumns = useMemo(() => [
     {
       field: 'customer_id',
       headerName: 'Customer ID',
-      width: 122,
+      width: 126,
       valueGetter: (_, row) => row.customerId || row.customer_code || row.customer_id || row.id || '',
       renderCell: (params) => {
         const custId = params.value || '—';
         return (
-          <Box
+          <Chip
+            size="small"
+            label={custId}
             sx={{
-              px: 1,
-              py: 0.4,
-              borderRadius: '5px',
-              border: '1px solid',
-              borderColor: 'primary.main',
-              bgcolor: alpha(muiTheme.palette.primary.main, 0.08),
+              height: 24,
+              borderRadius: '6px',
+              bgcolor: alpha(muiTheme.palette.primary.main, 0.1),
               color: 'primary.main',
               fontWeight: 700,
-              fontSize: '0.82rem',
+              fontSize: '0.75rem',
               fontFamily: "'Inter', sans-serif",
-              letterSpacing: 0.2,
-              whiteSpace: 'nowrap',
             }}
-          >
-            {custId}
-          </Box>
+          />
         );
       },
     },
@@ -741,45 +886,31 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
       field: 'customer_name',
       headerName: 'Customer Name',
       flex: 1.05,
-      minWidth: 175,
+      minWidth: 165,
       valueGetter: (_, row) => row.customer_name || row.customerName || 'Customer',
       renderCell: (params) => {
-        const c = params.row;
         const name = params.value || 'Customer';
-        const memberId = c.membershipId || c.membership_id;
+        const palette = getPastelAvatarColors(name);
         return (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, width: '100%', minWidth: 0 }}>
             <Avatar
-              variant="rounded"
               sx={{
-                width: 36,
-                height: 36,
-                borderRadius: '6px',
-                fontSize: '0.82rem',
+                width: 34,
+                height: 34,
+                fontSize: '0.78rem',
                 fontWeight: 700,
-                background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-                color: '#fff',
+                bgcolor: palette.bg,
+                color: palette.color,
                 flexShrink: 0,
               }}
             >
               {name.slice(0, 2).toUpperCase()}
             </Avatar>
-            <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Tooltip title={name} placement="top-start">
-                <Typography sx={{ fontSize: '0.875rem', fontWeight: 700, lineHeight: 1.35 }} noWrap>
-                  {name}
-                </Typography>
-              </Tooltip>
-              {memberId && (
-                <Chip
-                  label={`Member: ${memberId}`}
-                  size="small"
-                  color="secondary"
-                  variant="outlined"
-                  sx={{ height: 20, mt: 0.25, fontSize: '0.72rem', borderRadius: '4px' }}
-                />
-              )}
-            </Box>
+            <Tooltip title={name} placement="top-start">
+              <Typography sx={{ fontSize: '0.84rem', fontWeight: 700, lineHeight: 1.3 }} noWrap>
+                {name}
+              </Typography>
+            </Tooltip>
           </Box>
         );
       },
@@ -787,85 +918,142 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
     {
       field: 'mobile_number',
       headerName: 'Contact',
-      flex: 1.0,
-      minWidth: 165,
+      flex: 1.1,
+      minWidth: 185,
       valueGetter: (_, row) => row.mobile_number || row.mobileNumber || '',
       renderCell: (params) => {
         const c = params.row;
         const mobile = formatPhoneDisplay(c.mobile_number || c.mobileNumber);
         const email = c.email || c.contactDetails?.email;
-        const secondary = email || (c.alternate_phone ? `Alt: ${formatPhoneDisplay(c.alternate_phone)}` : 'No email');
+        const secondary = email || (c.alternate_phone ? formatPhoneDisplay(c.alternate_phone) : 'No email');
         return (
           <Stack spacing={0.25} sx={{ width: '100%', minWidth: 0, justifyContent: 'center' }}>
-            <Typography sx={{ fontSize: '0.875rem', fontWeight: 600, lineHeight: 1.35 }} noWrap>
-              {mobile || '—'}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, minWidth: 0 }}>
+              <CallOutlinedIcon sx={{ fontSize: 13.5, color: 'text.secondary', flexShrink: 0 }} />
+              <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, lineHeight: 1.25 }} noWrap>
+                {mobile || '—'}
+              </Typography>
+            </Box>
             <Tooltip title={secondary} placement="top-start">
-              <Typography color="text.secondary" noWrap sx={{ fontSize: '0.8rem', lineHeight: 1.3, display: 'block' }}>
-                {secondary}
-              </Typography>
-            </Tooltip>
-          </Stack>
-        );
-      },
-    },
-    {
-      field: 'address',
-      headerName: 'Location',
-      flex: 1.25,
-      minWidth: 185,
-      valueGetter: (_, row) => [row.address || row.streetArea, row.city, row.pincode].filter(Boolean).join(', '),
-      renderCell: (params) => {
-        const c = params.row;
-        const loc = [c.address || c.streetArea || c.street_area, c.city, c.pincode].filter(Boolean).join(', ');
-        const extraAddrs = Array.isArray(c.additional_addresses) ? c.additional_addresses.length : 0;
-        return (
-          <Stack spacing={0.35} sx={{ width: '100%', minWidth: 0, justifyContent: 'center' }}>
-            <Tooltip title={loc || 'No address saved'} placement="top-start">
-              <Typography noWrap sx={{ fontSize: '0.875rem', lineHeight: 1.35 }}>
-                {loc || 'No address saved'}
-              </Typography>
-            </Tooltip>
-            {extraAddrs > 0 && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Chip
-                  label={`+${extraAddrs} addr`}
-                  size="small"
-                  color="info"
-                  variant="outlined"
-                  sx={{ height: 21, fontSize: '0.73rem', borderRadius: '4px' }}
-                />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, minWidth: 0 }}>
+                <MailOutlinedIcon sx={{ fontSize: 13.5, color: 'text.secondary', flexShrink: 0 }} />
+                <Typography color="text.secondary" noWrap sx={{ fontSize: '0.75rem', lineHeight: 1.25 }}>
+                  {secondary}
+                </Typography>
               </Box>
-            )}
+            </Tooltip>
           </Stack>
         );
       },
     },
     {
       field: 'customer_classification',
-      headerName: 'Segment & Price List',
-      flex: 0.9,
-      minWidth: 155,
+      headerName: 'Classification',
+      width: 130,
       valueGetter: (_, row) => normalizeSegmentLabel(row.customer_classification || row.customerClassification),
       renderCell: (params) => {
-        const c = params.row;
-        const cls = params.value || 'Regular Customer';
-        const priceList = c.price_list || 'Standard';
-        const discount = Number(c.default_discount || c.default_discount_pct || 0);
-        const isVip = isVipCustomer(c);
+        const raw = String(params.value || '').toLowerCase();
+        const isVip = raw.includes('vip') || raw.includes('elite');
+        const isCorp = raw.includes('corp') || raw.includes('b2b');
+        const label = isVip ? 'VIP' : isCorp ? 'Corporate' : 'Regular';
         return (
-          <Stack spacing={0.35} sx={{ width: '100%', minWidth: 0, alignItems: 'flex-start', justifyContent: 'center' }}>
-            <Chip
-              label={cls}
-              size="small"
-              color={isVip ? 'secondary' : 'default'}
-              variant={isVip ? 'filled' : 'outlined'}
-              sx={{ height: 23, fontSize: '0.75rem', fontWeight: 700, borderRadius: '4px' }}
-            />
-            <Typography color="text.secondary" noWrap sx={{ fontSize: '0.8rem', lineHeight: 1.3, display: 'block' }}>
-              {priceList}{discount > 0 ? ` • ${discount}% OFF` : ''}
-            </Typography>
-          </Stack>
+          <Chip
+            size="small"
+            icon={
+              isVip ? (
+                <WorkspacePremiumOutlinedIcon sx={{ fontSize: '14px !important' }} />
+              ) : isCorp ? (
+                <BusinessOutlinedIcon sx={{ fontSize: '14px !important' }} />
+              ) : (
+                <PersonOutlinedIcon sx={{ fontSize: '14px !important' }} />
+              )
+            }
+            label={label}
+            sx={{
+              height: 24,
+              fontSize: '0.74rem',
+              fontWeight: 700,
+              borderRadius: '6px',
+              bgcolor: isVip ? '#f3e8ff' : isCorp ? '#dbeafe' : '#f1f5f9',
+              color: isVip ? '#7e22ce' : isCorp ? '#1d4ed8' : '#334155',
+              '& .MuiChip-icon': { color: 'inherit', ml: 0.5 },
+            }}
+          />
+        );
+      },
+    },
+    {
+      field: 'address',
+      headerName: 'Location / Zone',
+      flex: 1.25,
+      minWidth: 195,
+      valueGetter: (_, row) => [row.address || row.streetArea, row.city, row.pincode].filter(Boolean).join(', '),
+      renderCell: (params) => {
+        const c = params.row;
+        const loc = [c.address || c.streetArea || c.street_area, c.city].filter(Boolean).join(', ');
+        const zone = String(c.service_zone || c.area_service_zone || c.areaServiceZone || 'Zone 1').trim();
+        const zoneColors = getZoneChipColors(zone);
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.65, width: '100%', minWidth: 0 }}>
+            <LocationOnOutlinedIcon sx={{ fontSize: 15, color: 'primary.main', mt: 0.2, flexShrink: 0 }} />
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Tooltip title={loc || 'No address saved'} placement="top-start">
+                <Typography sx={{ fontSize: '0.79rem', lineHeight: 1.3 }} noWrap>
+                  {loc || 'No address saved'}
+                </Typography>
+              </Tooltip>
+              <Chip
+                size="small"
+                label={zone}
+                sx={{
+                  mt: 0.3,
+                  height: 18,
+                  fontSize: '0.67rem',
+                  fontWeight: 700,
+                  borderRadius: '4px',
+                  bgcolor: zoneColors.bg,
+                  color: zoneColors.color,
+                }}
+              />
+            </Box>
+          </Box>
+        );
+      },
+    },
+    {
+      field: 'orders_count',
+      headerName: 'Orders',
+      width: 78,
+      align: 'center',
+      headerAlign: 'center',
+      valueGetter: (_, row) => row._orderStats?.orderCount ?? 0,
+      renderCell: (params) => (
+        <Typography sx={{ fontSize: '0.84rem', fontWeight: 700, color: 'text.primary' }}>
+          {params.value}
+        </Typography>
+      ),
+    },
+    {
+      field: 'customer_status',
+      headerName: 'Status',
+      width: 94,
+      valueGetter: (_, row) => row.customerStatus || row.customer_status || 'Active',
+      renderCell: (params) => {
+        const raw = String(params.value || 'Active');
+        const inactive = raw.toLowerCase() === 'inactive';
+        return (
+          <Chip
+            size="small"
+            label={inactive ? t('badge_inactive') : t('badge_active')}
+            sx={{
+              height: 23,
+              fontWeight: 700,
+              fontSize: '0.74rem',
+              borderRadius: '6px',
+              bgcolor: inactive ? alpha(muiTheme.palette.text.secondary, 0.12) : '#dcfce7',
+              color: inactive ? 'text.secondary' : '#15803d',
+            }}
+          />
         );
       },
     },
@@ -881,21 +1069,10 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
         const gst = c.gst_number || c.gstNumber;
         return (
           <Stack spacing={0.25} sx={{ width: '100%', minWidth: 0, justifyContent: 'center' }}>
-            <Tooltip title={company || 'Individual Account'} placement="top-start">
-              <Typography
-                fontWeight={company ? 700 : 400}
-                color={company ? 'text.primary' : 'text.secondary'}
-                noWrap
-                sx={{ fontSize: '0.875rem', lineHeight: 1.35 }}
-              >
-                {company || 'Individual'}
-              </Typography>
-            </Tooltip>
-            <Typography
-              color={gst ? 'primary.main' : 'text.secondary'}
-              noWrap
-              sx={{ fontSize: '0.8rem', fontWeight: gst ? 600 : 400, lineHeight: 1.3, display: 'block' }}
-            >
+            <Typography fontWeight={company ? 700 : 400} color={company ? 'text.primary' : 'text.secondary'} noWrap sx={{ fontSize: '0.82rem' }}>
+              {company || 'Individual'}
+            </Typography>
+            <Typography color={gst ? 'primary.main' : 'text.secondary'} noWrap sx={{ fontSize: '0.74rem' }}>
               {gst ? `GST: ${gst}` : 'No GSTIN'}
             </Typography>
           </Stack>
@@ -903,31 +1080,12 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
       },
     },
     {
-      field: 'customer_status',
-      headerName: 'Status',
-      width: 96,
-      valueGetter: (_, row) => row.customerStatus || row.customer_status || 'Active',
-      renderCell: (params) => {
-        const raw = String(params.value || 'Active');
-        const inactive = raw.toLowerCase() === 'inactive';
-        return (
-          <Chip
-            size="small"
-            label={inactive ? t('badge_inactive') : t('badge_active')}
-            color={inactive ? 'default' : 'success'}
-            variant="outlined"
-            sx={{ fontWeight: 700, fontSize: '0.78rem', borderRadius: '4px', height: 24 }}
-          />
-        );
-      },
-    },
-    {
       field: 'created_at',
       headerName: 'Joined Date',
-      width: 140,
+      width: 130,
       valueGetter: (_, row) => formatRegisteredDate(row.created_at || row.registered_at) || '—',
       renderCell: (params) => (
-        <Typography sx={{ fontSize: '0.84rem' }} color="text.secondary" noWrap>
+        <Typography sx={{ fontSize: '0.8rem' }} color="text.secondary" noWrap>
           {params.value}
         </Typography>
       ),
@@ -936,11 +1094,11 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
       field: 'internal_comments',
       headerName: 'Staff Notes',
       flex: 0.9,
-      minWidth: 165,
+      minWidth: 155,
       valueGetter: (_, row) => formatCleanStaffNotes(row.internal_comments) || formatCleanStaffNotes(row.notes) || '—',
       renderCell: (params) => (
         <Tooltip title={params.value} placement="top-start">
-          <Typography sx={{ fontSize: '0.84rem' }} color="text.secondary" noWrap>
+          <Typography sx={{ fontSize: '0.8rem' }} color="text.secondary" noWrap>
             {params.value}
           </Typography>
         </Tooltip>
@@ -949,7 +1107,7 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 160,
+      width: 152,
       sortable: false,
       filterable: false,
       disableExport: true,
@@ -957,19 +1115,20 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
       headerAlign: 'center',
       renderCell: (params) => {
         const c = params.row;
+        const cleanMob = normalizeMobileNumber(c.mobile_number || c.mobileNumber);
         return (
           <Box
-            sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75 }}
+            sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.6 }}
             onClick={(e) => e.stopPropagation()}
           >
-            <Tooltip title={t('view_profile_title') || 'View profile'}>
+            <Tooltip title={t('view_profile_title') || 'View Customer Profile'}>
               <IconButton
                 size="small"
                 color="primary"
                 sx={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: '6px',
+                  width: 28,
+                  height: 28,
+                  borderRadius: '50%',
                   border: '1px solid',
                   borderColor: alpha(muiTheme.palette.primary.main, 0.35),
                   bgcolor: alpha(muiTheme.palette.primary.main, 0.08),
@@ -978,39 +1137,22 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
                     borderColor: 'primary.main',
                   },
                 }}
-                onClick={() => setDrawerCustomer(c)}
-              >
-                <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Copy customer details">
-              <IconButton
-                size="small"
-                sx={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: '6px',
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  bgcolor: 'background.paper',
-                  color: 'text.secondary',
-                  '&:hover': {
-                    bgcolor: 'action.hover',
-                    color: 'text.primary',
-                  },
+                onClick={() => {
+                  setSelectedCustomerKey(c._gridId);
+                  setIs360Open(true);
                 }}
-                onClick={() => handleCopyCustomer(c)}
+                aria-label="View customer 360"
               >
-                <ContentCopyOutlinedIcon sx={{ fontSize: 17 }} />
+                <VisibilityOutlinedIcon sx={{ fontSize: 15 }} />
               </IconButton>
             </Tooltip>
-            <Tooltip title={t('btn_edit') || 'Edit'}>
+            <Tooltip title={t('btn_edit') || 'Edit Customer'}>
               <IconButton
                 size="small"
                 sx={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: '6px',
+                  width: 28,
+                  height: 28,
+                  borderRadius: '50%',
                   border: '1px solid',
                   borderColor: 'divider',
                   bgcolor: 'background.paper',
@@ -1022,36 +1164,56 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
                   },
                 }}
                 onClick={() => setEditingCustomer(c)}
+                aria-label="Edit customer"
               >
-                <EditOutlinedIcon sx={{ fontSize: 17 }} />
+                <EditOutlinedIcon sx={{ fontSize: 15 }} />
               </IconButton>
             </Tooltip>
-            <Tooltip title={t('btn_delete') || 'Delete'}>
+            {cleanMob && (
+              <Tooltip title="WhatsApp">
+                <IconButton
+                  size="small"
+                  component="a"
+                  href={`https://wa.me/91${cleanMob}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  sx={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: '50%',
+                    border: '1px solid',
+                    borderColor: alpha('#16a34a', 0.35),
+                    bgcolor: alpha('#16a34a', 0.08),
+                    color: '#16a34a',
+                  }}
+                >
+                  <WhatsAppIcon sx={{ fontSize: 15 }} />
+                </IconButton>
+              </Tooltip>
+            )}
+            <Tooltip title="More Actions">
               <IconButton
                 size="small"
-                color="error"
                 sx={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: '6px',
+                  width: 28,
+                  height: 28,
+                  borderRadius: '50%',
                   border: '1px solid',
-                  borderColor: alpha(muiTheme.palette.error.main, 0.35),
-                  bgcolor: alpha(muiTheme.palette.error.main, 0.08),
-                  '&:hover': {
-                    bgcolor: alpha(muiTheme.palette.error.main, 0.16),
-                    borderColor: 'error.main',
-                  },
+                  borderColor: 'divider',
+                  bgcolor: 'background.paper',
+                  color: 'text.secondary',
                 }}
-                onClick={() => setDeleteConfirmTarget(c)}
+                onClick={(e) => setRowMenuState({ anchorEl: e.currentTarget, row: c })}
+                aria-label="Customer row actions"
               >
-                <DeleteOutlinedIcon sx={{ fontSize: 18 }} />
+                <MoreVertIcon sx={{ fontSize: 16 }} />
               </IconButton>
             </Tooltip>
           </Box>
         );
       },
     },
-  ], [handleCopyCustomer, muiTheme.palette.error.main, muiTheme.palette.primary.main, t]);
+  ], [muiTheme.palette.primary.main, muiTheme.palette.text.secondary, t]);
 
   const hasActiveFilters = activeFilterCount > 0;
 
@@ -1077,17 +1239,10 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
           },
         }}
       >
-        {/* ── 1. Compact Header Card (72-80px desktop height, balanced left/right) ── */}
-        <Paper
-          variant="outlined"
+        {/* ── 1. Clean Top Header Bar (Matching Mockup) ── */}
+        <Box
           sx={{
-            px: { xs: 2, sm: 2.5 },
-            py: 1.5,
-            minHeight: { md: 76 },
             mb: 2,
-            borderRadius: 2,
-            borderLeft: '4px solid',
-            borderLeftColor: 'primary.main',
             display: 'flex',
             flexDirection: { xs: 'column', md: 'row' },
             alignItems: { xs: 'flex-start', md: 'center' },
@@ -1095,9 +1250,12 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
             gap: 1.5,
           }}
         >
-          <Box sx={{ minWidth: 0, width: { xs: '100%', md: 'auto' } }}>
-            <Typography variant="h5" sx={{ fontSize: { xs: '1.25rem', sm: '1.4375rem' }, fontWeight: 700, lineHeight: 1.2 }}>
-              Customer Master Record
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="h5" sx={{ fontSize: { xs: '1.35rem', sm: '1.5rem' }, fontWeight: 700, lineHeight: 1.2 }}>
+              Customer Master Records
+            </Typography>
+            <Typography color="text.secondary" sx={{ mt: 0.35, fontSize: '0.84rem' }}>
+              Manage customer profiles, contact details, pricing and service history
             </Typography>
           </Box>
 
@@ -1120,6 +1278,7 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
                 if (next) setViewMode(next);
               }}
               aria-label="Customer layout mode"
+              sx={{ bgcolor: 'background.paper' }}
             >
               <ToggleButton value="table" aria-label="Data Grid View" sx={{ px: { xs: 1.25, sm: 1.5 } }}>
                 <TableRowsOutlinedIcon fontSize="small" sx={{ mr: 0.5 }} />
@@ -1134,6 +1293,7 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
             <Button
               variant="outlined"
               disabled={loading}
+              sx={{ bgcolor: 'background.paper' }}
               startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
               onClick={() => {
                 loadData();
@@ -1152,215 +1312,187 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
               {t('register_customer')}
             </Button>
           </Box>
-        </Paper>
+        </Box>
 
-        {/* ── 2. KPI Summary Header Cards (4 equal cards, clean white surfaces, top-right icons) ── */}
-        <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mb: 2 }}>
-          <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
-            <KpiHeaderCard
-              title="Total Customers"
-              value={kpiStats.total}
-              subtitle={hasActiveFilters ? `${filteredCustomers.length} matching records` : 'Matching records'}
-              icon={<PeopleAltOutlinedIcon />}
-              accentColor={themeMode === 'dark' ? '#818cf8' : '#2563eb'}
-              active={false}
-              onClick={resetAllFilters}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
-            <KpiHeaderCard
-              title="Active Accounts"
-              value={kpiStats.active}
-              subtitle={`${kpiStats.inactive} inactive • Active profiles`}
-              icon={<VerifiedUserOutlinedIcon />}
-              accentColor="#10b981"
-              active={statusFilter === 'active'}
-              onClick={() => setStatusFilter((prev) => (prev === 'active' ? 'all' : 'active'))}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
-            <KpiHeaderCard
-              title="B2B / GST"
-              value={kpiStats.b2b}
-              subtitle="Registered accounts"
-              icon={<BusinessOutlinedIcon />}
-              accentColor="#6366f1"
-              active={gstFilter === 'gst_only'}
-              onClick={() => setGstFilter((prev) => (prev === 'gst_only' ? 'all' : 'gst_only'))}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
-            <KpiHeaderCard
-              title="VIP Memberships"
-              value={kpiStats.vipOrMember}
-              subtitle="VIP customers"
-              icon={<CardMembershipOutlinedIcon />}
-              accentColor="#f59e0b"
-              active={vipFilter === 'vip_only'}
-              onClick={() => setVipFilter((prev) => (prev === 'vip_only' ? 'all' : 'vip_only'))}
-            />
-          </Grid>
-        </Grid>
-
-        {/* ── 3. Two-Row Search & Advanced Filters Section ── */}
-        <Paper
-          variant="outlined"
+        {/* ── 2. 5 Color-Tinted KPI Cards Row ── */}
+        <Box
           sx={{
-            p: 2,
             mb: 2,
-            borderRadius: 2,
-            position: 'relative',
-            overflow: 'hidden',
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'repeat(2, minmax(0, 1fr))',
+              md: 'repeat(3, minmax(0, 1fr))',
+              lg: 'repeat(5, minmax(0, 1fr))',
+            },
+            gap: 1.5,
           }}
         >
-          {/* Row 1: Search & Quick Actions */}
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: { xs: 'column', lg: 'row' },
-              alignItems: { xs: 'stretch', lg: 'center' },
-              justifyContent: 'space-between',
-              gap: 1.5,
-            }}
-          >
-            <Box
+          <KpiHeaderCard
+            title="Total Customers"
+            value={kpiStats.total}
+            subtitle={hasActiveFilters ? `${filteredCustomers.length} matching` : `+${kpiStats.addedThisMonth} this month`}
+            subtitleColor={hasActiveFilters ? 'primary.main' : '#16a34a'}
+            icon={<PeopleAltOutlinedIcon />}
+            accentColor="#2563eb"
+            tintColor="#eff6ff"
+            active={false}
+            onClick={resetAllFilters}
+          />
+          <KpiHeaderCard
+            title="Active Customers"
+            value={kpiStats.active}
+            subtitle={`${kpiStats.activePct}% of total`}
+            icon={<VerifiedUserOutlinedIcon />}
+            accentColor="#16a34a"
+            tintColor="#f0fdf4"
+            active={statusFilter === 'active'}
+            onClick={() => setStatusFilter((prev) => (prev === 'active' ? 'all' : 'active'))}
+          />
+          <KpiHeaderCard
+            title="VIP Customers"
+            value={kpiStats.vipOrMember}
+            subtitle={kpiStats.vipThisMonth > 0 ? `+${kpiStats.vipThisMonth} new` : 'VIP & Elite'}
+            subtitleColor="#16a34a"
+            icon={<WorkspacePremiumOutlinedIcon />}
+            accentColor="#7c3aed"
+            tintColor="#faf5ff"
+            active={vipFilter === 'vip_only'}
+            onClick={() => setVipFilter((prev) => (prev === 'vip_only' ? 'all' : 'vip_only'))}
+          />
+          <KpiHeaderCard
+            title="B2B / GST"
+            value={kpiStats.b2b}
+            subtitle="Corporate & GST"
+            icon={<StorefrontOutlinedIcon />}
+            accentColor="#d97706"
+            tintColor="#fffbeb"
+            active={gstFilter === 'gst_only'}
+            onClick={() => setGstFilter((prev) => (prev === 'gst_only' ? 'all' : 'gst_only'))}
+          />
+          <KpiHeaderCard
+            title="Outstanding Dues"
+            value={`${currencySymbol} ${Math.round(kpiStats.totalOutstandingDues).toLocaleString('en-IN')}`}
+            subtitle={`${kpiStats.duesCustomersCount} ${kpiStats.duesCustomersCount === 1 ? 'customer' : 'customers'}`}
+            icon={<AccountBalanceWalletOutlinedIcon />}
+            accentColor="#e11d48"
+            tintColor="#fef2f2"
+            active={duesFilter === 'dues_only'}
+            onClick={() => setDuesFilter((prev) => (prev === 'dues_only' ? 'all' : 'dues_only'))}
+          />
+        </Box>
+
+        {/* ── 3. Main Split Workspace: Left Directory + Right Customer 360° Panel ── */}
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', lg: 'row' },
+            alignItems: 'stretch',
+            gap: 2,
+          }}
+        >
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            {/* Compact Search & Filter Toolbar */}
+            <Paper
+              variant="outlined"
               sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-                flex: 1,
-                flexWrap: 'wrap',
+                p: 1.5,
+                mb: 1.75,
+                borderRadius: 2.5,
+                position: 'relative',
+                overflow: 'hidden',
               }}
             >
-              <TextField
-                size="small"
-                placeholder={t('search_cust_placeholder')}
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  onSearchChange?.(e.target.value);
-                }}
-                sx={{ width: { xs: '100%', sm: 'auto' }, flex: { sm: 1 }, minWidth: { sm: 240, md: 300 }, maxWidth: { lg: 440 } }}
-                slotProps={{
-                  input: {
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon fontSize="small" color="action" />
-                      </InputAdornment>
-                    ),
-                    endAdornment: query ? (
-                      <InputAdornment position="end">
-                        <IconButton
-                          size="small"
-                          sx={{ borderRadius: '4px' }}
-                          aria-label={t('clear_search')}
-                          onClick={() => {
-                            setQuery('');
-                            onSearchChange?.('');
-                          }}
-                        >
-                          <ClearIcon fontSize="small" />
-                        </IconButton>
-                      </InputAdornment>
-                    ) : null,
-                  },
-                }}
-              />
-
-              <Button
-                variant={vipFilter === 'vip_only' ? 'contained' : 'outlined'}
-                color={vipFilter === 'vip_only' ? 'secondary' : 'inherit'}
-                startIcon={<StarBorderOutlinedIcon fontSize="small" />}
-                onClick={() => setVipFilter((prev) => (prev === 'vip_only' ? 'all' : 'vip_only'))}
-              >
-                VIP Customers ({kpiStats.vipOrMember})
-              </Button>
-
-              <Button
-                variant={gstFilter === 'gst_only' ? 'contained' : 'outlined'}
-                color={gstFilter === 'gst_only' ? 'primary' : 'inherit'}
-                startIcon={<ReceiptLongOutlinedIcon fontSize="small" />}
-                onClick={() => setGstFilter((prev) => (prev === 'gst_only' ? 'all' : 'gst_only'))}
-              >
-                GST Accounts ({kpiStats.b2b})
-              </Button>
-
-              {viewMode === 'table' && (
-                <Button
-                  variant="outlined"
-                  startIcon={<ViewColumnOutlinedIcon fontSize="small" />}
-                  onClick={(e) => setColumnsAnchorEl(e.currentTarget)}
-                >
-                  Customize Columns ({visibleColumnsCount}/{CUSTOMIZABLE_COLUMNS.length})
-                </Button>
-              )}
-            </Box>
-
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: { xs: 'space-between', lg: 'flex-end' },
-                gap: 1,
-                flexShrink: 0,
-              }}
-            >
-              {Boolean(isMobileNumberQuery(query) && filteredCustomers.length === 0 && !loading) && (
-                <Button
-                  variant="contained"
-                  startIcon={<PersonAddAlt1OutlinedIcon />}
-                  onClick={() => handleOpenRegisterWithNumber(query.trim())}
-                >
-                  {t('register_customer')}
-                </Button>
-              )}
-
-              {hasActiveFilters && (
-                <Button
-                  variant="outlined"
-                  color="warning"
-                  startIcon={<RestartAltIcon fontSize="small" />}
-                  onClick={resetAllFilters}
-                >
-                  Clear All ({activeFilterCount})
-                </Button>
-              )}
-
               <Box
                 sx={{
-                  height: 40,
-                  px: 1.75,
                   display: 'flex',
-                  alignItems: 'center',
-                  borderRadius: '6px',
-                  border: '1px solid',
-                  borderColor: 'primary.main',
-                  bgcolor: alpha(muiTheme.palette.primary.main, 0.08),
-                  color: 'primary.main',
-                  fontWeight: 700,
-                  fontSize: '0.8125rem',
-                  whiteSpace: 'nowrap',
+                  flexDirection: { xs: 'column', md: 'row' },
+                  alignItems: { xs: 'stretch', md: 'center' },
+                  justifyContent: 'space-between',
+                  gap: 1,
                 }}
               >
-                {filteredCustomers.length === 1
-                  ? t('cust_records_loaded', { count: filteredCustomers.length })
-                  : t('cust_records_loaded_plural', { count: filteredCustomers.length })}
-              </Box>
-            </Box>
-          </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, flexWrap: 'wrap' }}>
+                  <TextField
+                    size="small"
+                    placeholder={t('search_cust_placeholder')}
+                    value={query}
+                    onChange={(e) => {
+                      setQuery(e.target.value);
+                      onSearchChange?.(e.target.value);
+                    }}
+                    sx={{ width: { xs: '100%', sm: 'auto' }, flex: { sm: 1 }, minWidth: { sm: 220 } }}
+                    slotProps={{
+                      input: {
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon fontSize="small" color="action" />
+                          </InputAdornment>
+                        ),
+                        endAdornment: query ? (
+                          <InputAdornment position="end">
+                            <IconButton
+                              size="small"
+                              sx={{ borderRadius: '4px' }}
+                              aria-label={t('clear_search')}
+                              onClick={() => {
+                                setQuery('');
+                                onSearchChange?.('');
+                              }}
+                            >
+                              <ClearIcon fontSize="small" />
+                            </IconButton>
+                          </InputAdornment>
+                        ) : null,
+                      },
+                    }}
+                  />
 
-          {loading && (
-            <LinearProgress
-              sx={{
-                position: 'absolute',
-                left: 0,
-                right: 0,
-                bottom: 0,
-                height: 3,
-              }}
-            />
-          )}
-        </Paper>
+                  {viewMode === 'table' && (
+                    <Button
+                      variant="outlined"
+                      startIcon={<ViewColumnOutlinedIcon fontSize="small" />}
+                      onClick={(e) => setColumnsAnchorEl(e.currentTarget)}
+                    >
+                      Columns ({visibleColumnsCount}/{CUSTOMIZABLE_COLUMNS.length})
+                    </Button>
+                  )}
+
+                  {Boolean(isMobileNumberQuery(query) && filteredCustomers.length === 0 && !loading) && (
+                    <Button
+                      variant="contained"
+                      startIcon={<PersonAddAlt1OutlinedIcon />}
+                      onClick={() => handleOpenRegisterWithNumber(query.trim())}
+                    >
+                      {t('register_customer')}
+                    </Button>
+                  )}
+
+                  {hasActiveFilters && (
+                    <Button
+                      variant="outlined"
+                      color="warning"
+                      startIcon={<RestartAltIcon fontSize="small" />}
+                      onClick={resetAllFilters}
+                    >
+                      Clear ({activeFilterCount})
+                    </Button>
+                  )}
+                </Box>
+              </Box>
+
+              {loading && (
+                <LinearProgress
+                  sx={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: 3,
+                  }}
+                />
+              )}
+            </Paper>
 
         {/* ── Customize Columns Popover ── */}
         <Popover
@@ -1425,7 +1557,7 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
 
         {/* ── 4. Customer Directory Content Area ── */}
         {loading && customers.length === 0 ? (
-          <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+          <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2.5 }}>
             <Stack spacing={1.5}>
               {[1, 2, 3, 4, 5].map((row) => (
                 <Skeleton key={row} variant="rounded" height={58} />
@@ -1437,7 +1569,7 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
             variant="outlined"
             sx={{
               p: { xs: 4, sm: 6 },
-              borderRadius: 2,
+              borderRadius: 2.5,
               textAlign: 'center',
             }}
           >
@@ -1486,11 +1618,17 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
               )}
             </Box>
           </Paper>
-        ) : viewMode === 'table' ? (
+        ) : viewMode === 'table' ? (() => {
+          const totalGridPages = Math.max(1, Math.ceil(gridRows.length / paginationModel.pageSize));
+          const safeGridPage = Math.min(paginationModel.page, totalGridPages - 1);
+          const startItem = gridRows.length === 0 ? 0 : safeGridPage * paginationModel.pageSize + 1;
+          const endItem = Math.min((safeGridPage + 1) * paginationModel.pageSize, gridRows.length);
+
+          return (
           <Paper
             variant="outlined"
             sx={{
-              borderRadius: 2,
+              borderRadius: 2.5,
               overflow: 'hidden',
               width: '100%',
               borderColor: 'divider',
@@ -1500,51 +1638,36 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
               rows={gridRows}
               columns={gridColumns}
               getRowId={(row) => row._gridId}
+              getRowClassName={(params) => (params.id === activeSelectedKey ? 'washdoor-selected-row' : '')}
               columnVisibilityModel={columnVisibilityModel}
               onColumnVisibilityModelChange={(newModel) =>
                 handleColumnVisibilityChange(newModel, 'Columns updated')
               }
               loading={loading && customers.length === 0}
-              rowHeight={76}
-              columnHeaderHeight={50}
-              showToolbar
+              rowHeight={68}
+              columnHeaderHeight={46}
+              checkboxSelection
               disableRowSelectionOnClick
+              hideFooter
               pagination
-              paginationModel={paginationModel}
+              paginationModel={{ ...paginationModel, page: safeGridPage }}
               onPaginationModelChange={setPaginationModel}
               pageSizeOptions={[5, 10, 20, 50]}
-              onRowClick={(params) => setDrawerCustomer(params.row)}
+              onRowClick={(params) => {
+                setSelectedCustomerKey(params.row._gridId);
+                setIs360Open(true);
+              }}
               sx={{
                 border: 0,
                 width: '100%',
-                height: { xs: 480, sm: 540, md: 610 },
-                fontSize: '0.875rem',
-                '& .MuiDataGrid-toolbar': {
+                minHeight: 380,
+                fontSize: '0.84rem',
+                '& .MuiDataGrid-columnHeaders': {
+                  bgcolor: themeMode === 'dark' ? '#1c2436' : '#f8fafc',
                   borderBottom: '1px solid',
                   borderColor: 'divider',
-                  px: { xs: 1, sm: 1.5 },
-                  py: 0.75,
-                  bgcolor: 'background.paper',
-                  flexWrap: 'wrap',
-                  gap: 0.5,
-                  '& .MuiIconButton-root': {
-                    width: 34,
-                    height: 34,
-                    borderRadius: '6px',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    ml: 0.5,
-                  },
-                },
-                '& .MuiDataGrid-columnHeaders': {
-                  bgcolor: themeMode === 'dark' ? '#1c2436' : '#f1f5f9',
-                  borderBottom: '2px solid',
-                  borderColor: 'divider',
-                  fontSize: '0.85rem',
+                  fontSize: '0.78rem',
                   fontWeight: 700,
-                  position: 'sticky',
-                  top: 0,
-                  zIndex: 3,
                 },
                 '& .MuiDataGrid-columnSeparator': {
                   opacity: 0,
@@ -1555,46 +1678,82 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
                 },
                 '& .MuiDataGrid-columnHeaderTitle': {
                   fontWeight: 700,
-                  fontSize: '0.85rem',
+                  fontSize: '0.78rem',
                 },
                 '& .MuiDataGrid-row': {
                   cursor: 'pointer',
-                  '&:nth-of-type(even)': {
-                    bgcolor: themeMode === 'dark' ? 'rgba(255,255,255,0.015)' : '#fafbfd',
-                  },
                   '&:hover': {
-                    bgcolor: alpha(muiTheme.palette.primary.main, 0.06),
+                    bgcolor: alpha(muiTheme.palette.primary.main, 0.05),
                   },
+                },
+                '& .washdoor-selected-row': {
+                  bgcolor: `${alpha(muiTheme.palette.primary.main, themeMode === 'dark' ? 0.18 : 0.08)} !important`,
                 },
                 '& .MuiDataGrid-cell': {
                   display: 'flex',
                   alignItems: 'center',
-                  lineHeight: '1.4 !important',
+                  lineHeight: '1.35 !important',
                   py: 0.5,
-                  px: 1.5,
+                  px: 1.25,
                   borderBottom: '1px solid',
                   borderColor: 'divider',
-                },
-                '& .MuiDataGrid-footerContainer': {
-                  borderTop: '1px solid',
-                  borderColor: 'divider',
-                  bgcolor: themeMode === 'dark' ? '#131926' : '#f8fafc',
-                  minHeight: 52,
-                  px: { xs: 0.5, sm: 1.5 },
-                  '& .MuiTablePagination-toolbar': {
-                    flexWrap: 'wrap',
-                    justifyContent: { xs: 'center', sm: 'flex-end' },
-                    gap: 0.5,
-                    px: { xs: 0.5, sm: 1 },
-                  },
                 },
                 '& .MuiDataGrid-cell:focus, & .MuiDataGrid-columnHeader:focus': {
                   outline: 'none',
                 },
               }}
             />
+
+            {/* Custom Pagination Footer matching Mockup */}
+            <Box
+              sx={{
+                px: 2,
+                py: 1.25,
+                borderTop: '1px solid',
+                borderColor: 'divider',
+                bgcolor: 'background.paper',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 1.5,
+              }}
+            >
+              <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary', fontWeight: 500 }}>
+                Showing {startItem}–{endItem} of {gridRows.length} customers
+              </Typography>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
+                    Rows per page:
+                  </Typography>
+                  <Select
+                    size="small"
+                    value={paginationModel.pageSize}
+                    onChange={(e) => setPaginationModel({ page: 0, pageSize: Number(e.target.value) })}
+                    sx={{ height: 32, minWidth: 64, fontSize: '0.8rem' }}
+                  >
+                    <MenuItem value={5}>5</MenuItem>
+                    <MenuItem value={10}>10</MenuItem>
+                    <MenuItem value={20}>20</MenuItem>
+                    <MenuItem value={50}>50</MenuItem>
+                  </Select>
+                </Box>
+
+                <Pagination
+                  count={totalGridPages}
+                  page={safeGridPage + 1}
+                  onChange={(_, p) => setPaginationModel((prev) => ({ ...prev, page: p - 1 }))}
+                  color="primary"
+                  size="small"
+                  shape="rounded"
+                />
+              </Box>
+            </Box>
           </Paper>
-        ) : (
+          );
+        })() : (
           <Box>
             <Grid container spacing={2}>
               {paginatedCards.map((c, idx) => {
@@ -1713,9 +1872,13 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
                               variant="outlined"
                               sx={{ height: 34 }}
                               startIcon={<VisibilityOutlinedIcon fontSize="small" />}
-                              onClick={() => setDrawerCustomer(c)}
+                              onClick={() => {
+                                const matchRow = gridRows.find((r) => (r.customerId || r.customer_code || r.customer_id || r.id) === custId) || { ...c, _gridId: cardKey, _orderStats: getCustomerOrdersAndStats(c) };
+                                setSelectedCustomerKey(matchRow._gridId);
+                                setIs360Open(true);
+                              }}
                             >
-                              Profile
+                              View 360°
                             </Button>
                             <Button
                               size="small"
@@ -1849,6 +2012,120 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
             </Paper>
           </Box>
         )}
+          </Box>
+        </Box>
+
+        {/* Top-to-Bottom Side Panel Drawer for Customer 360° (Opens when View button is pressed) */}
+        <Drawer
+          anchor="right"
+          open={is360Open && Boolean(selectedRow)}
+          onClose={() => setIs360Open(false)}
+          slotProps={{
+            paper: {
+              sx: {
+                width: { xs: '100%', sm: 440, md: 460 },
+                height: '100vh',
+                maxHeight: '100vh',
+                borderRadius: 0,
+                p: 0,
+                boxShadow: '-8px 0 32px rgba(15, 23, 42, 0.16)',
+              },
+            },
+          }}
+        >
+          {selectedRow && (
+            <Customer360Panel
+              inDrawer
+              customer={selectedRow}
+              customerOrders={selectedRow._orderStats?.ordersList || []}
+              orderStats={selectedRow._orderStats || { orderCount: 0, lifetimeSpend: 0, outstandingDue: 0 }}
+              currencySymbol={currencySymbol}
+              onClose={() => setIs360Open(false)}
+              onEdit={(c) => {
+                setIs360Open(false);
+                setEditingCustomer(c);
+              }}
+              onDelete={(c) => setDeleteConfirmTarget(c)}
+              onCopy={handleCopyCustomer}
+              t={t}
+            />
+          )}
+        </Drawer>
+
+        {/* Row Actions Menu */}
+        <Menu
+          anchorEl={rowMenuState.anchorEl}
+          open={Boolean(rowMenuState.anchorEl)}
+          onClose={() => setRowMenuState({ anchorEl: null, row: null })}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        >
+          <MenuItem
+            onClick={() => {
+              const target = rowMenuState.row;
+              setRowMenuState({ anchorEl: null, row: null });
+              if (target) {
+                setSelectedCustomerKey(target._gridId);
+                setIs360Open(true);
+              }
+            }}
+          >
+            <ListItemIcon>
+              <VisibilityOutlinedIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Open Customer 360°</ListItemText>
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              const target = rowMenuState.row;
+              setRowMenuState({ anchorEl: null, row: null });
+              if (target) setDrawerCustomer(target);
+            }}
+          >
+            <ListItemIcon>
+              <PersonSearchOutlinedIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Full Profile Details</ListItemText>
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              const target = rowMenuState.row;
+              setRowMenuState({ anchorEl: null, row: null });
+              if (target) setEditingCustomer(target);
+            }}
+          >
+            <ListItemIcon>
+              <EditOutlinedIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>{t('btn_edit') || 'Edit Customer'}</ListItemText>
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              const target = rowMenuState.row;
+              setRowMenuState({ anchorEl: null, row: null });
+              if (target) handleCopyCustomer(target);
+            }}
+          >
+            <ListItemIcon>
+              <ContentCopyOutlinedIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Copy Details</ListItemText>
+          </MenuItem>
+          <Divider />
+          <MenuItem
+            sx={{ color: 'error.main' }}
+            onClick={() => {
+              const target = rowMenuState.row;
+              setRowMenuState({ anchorEl: null, row: null });
+              if (target) setDeleteConfirmTarget(target);
+            }}
+          >
+            <ListItemIcon sx={{ color: 'error.main' }}>
+              <DeleteOutlinedIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>{t('btn_delete') || 'Delete'}</ListItemText>
+          </MenuItem>
+        </Menu>
 
         {/* ── Slide-Over Customer Detail Drawer ── */}
         <CustomerDetailDrawer

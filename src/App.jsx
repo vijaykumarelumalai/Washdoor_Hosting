@@ -1254,6 +1254,8 @@ export default function App() {
         ) : activeTab === 'customer_mui' ? (
           <CustomerMUI
             showToast={showToast}
+            orders={orders}
+            currencySymbol={currentCurrency?.symbol || '₹'}
             searchQuery={globalSearchQuery}
             onSearchChange={setGlobalSearchQuery}
           />
