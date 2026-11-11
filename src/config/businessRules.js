@@ -17,6 +17,12 @@ export const DEFAULT_SETTINGS = {
   pinCode: '632401',
   gstNumber: '33AABCT1332L1Z8',
   shopLogo: '',
+  previousShopName: '',
+  previousShopLogo: '',
+  shopNameUpdatedAt: null,
+  logoUpdatedAt: null,
+  updatedAt: null,
+  updatedBy: 'Store Administrator',
   latitude: 12.9249,
   longitude: 79.3338,
 
@@ -130,6 +136,7 @@ export function saveStoredSettings(newSettings) {
     
     // Update runtime BUSINESS_CONFIG
     BUSINESS_CONFIG.BRAND_NAME = merged.shopName || BUSINESS_CONFIG.BRAND_NAME;
+    BUSINESS_CONFIG.SHOP_LOGO = merged.shopLogo !== undefined ? (merged.shopLogo || '') : BUSINESS_CONFIG.SHOP_LOGO;
     BUSINESS_CONFIG.BRAND_TAGLINE = merged.shopTagline || BUSINESS_CONFIG.BRAND_TAGLINE;
     BUSINESS_CONFIG.STORE_BRANCH = merged.storeBranch || BUSINESS_CONFIG.STORE_BRANCH;
     BUSINESS_CONFIG.STORE_PHONE = merged.phone || BUSINESS_CONFIG.STORE_PHONE;
@@ -138,6 +145,10 @@ export function saveStoredSettings(newSettings) {
     BUSINESS_CONFIG.CURRENCY_SYMBOL = merged.currencySymbol || BUSINESS_CONFIG.CURRENCY_SYMBOL;
     BUSINESS_CONFIG.DEFAULT_GST_RATE = Number(merged.taxRate) || BUSINESS_CONFIG.DEFAULT_GST_RATE;
     BUSINESS_CONFIG.DEFAULT_GST_LABEL = merged.taxLabel || BUSINESS_CONFIG.DEFAULT_GST_LABEL;
+
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('washdoor_settings_updated', { detail: merged }));
+    }
     
     return merged;
   } catch (err) {
@@ -151,6 +162,7 @@ const initialStored = typeof window !== 'undefined' ? getStoredSettings() : DEFA
 
 export const BUSINESS_CONFIG = {
   BRAND_NAME: initialStored.shopName || 'Washdoor',
+  SHOP_LOGO: initialStored.shopLogo || '',
   BRAND_TAGLINE: initialStored.shopTagline || 'Professional Laundry & Dry Cleaning',
   STORE_BRANCH: initialStored.storeBranch || 'Ranipet Store #1',
   STORE_PHONE: initialStored.phone || '+91 7338851369',

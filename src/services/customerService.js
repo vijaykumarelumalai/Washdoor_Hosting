@@ -1766,50 +1766,48 @@ export async function searchCustomers(query) {
   try {
     const merger = createCustomerMerger();
 
-    // 1. Search customers master table first (authoritative full profile metadata)
-    try {
-      const { data: cData } = await supabase
+    // Search all three tables in parallel while preserving master merge priority
+    const [custResult, worksResult, masterResult] = await Promise.all([
+      supabase
         .from('customers')
         .select('*')
         .or(`customer_name.ilike.%${q}%,mobile_number.ilike.%${q}%,address.ilike.%${q}%,customer_code.ilike.%${q}%`)
         .order('created_at', { ascending: false })
-        .limit(30);
-
-      if (cData && cData.length > 0) {
-        cData.forEach((r) => merger.add(mapMasterCustomerRow(r)));
-      }
-    } catch {}
-
-    // 2. Search and merge from primary customer_works table
-    try {
-      const { data: worksData, error: worksError } = await supabase
+        .limit(30)
+        .then((res) => res)
+        .catch(() => ({ data: null })),
+      supabase
         .from('customer_works')
         .select('*')
         .or(`customer_name.ilike.%${q}%,mobile_number.ilike.%${q}%,delivery_address.ilike.%${q}%,customer_id.ilike.%${q}%`)
         .order('created_at', { ascending: false })
-        .limit(30);
-
-      if (!worksError && worksData) {
-        worksData.forEach((r) => merger.add(mapCustomerWorkRow(r)));
-      }
-    } catch (wErr) {
-      console.warn('customer_works search note:', wErr);
-    }
-
-    // 3. Also search and merge washdoor_orders_master for backwards compatibility
-    try {
-      const { data: masterData, error: masterError } = await supabase
+        .limit(30)
+        .then((res) => res)
+        .catch((wErr) => {
+          console.warn('customer_works search note:', wErr);
+          return { data: null };
+        }),
+      supabase
         .from('washdoor_orders_master')
         .select('*')
         .or(`customer_name.ilike.%${q}%,mobile_number.ilike.%${q}%,street_area.ilike.%${q}%,city.ilike.%${q}%,customer_id.ilike.%${q}%`)
         .order('created_at', { ascending: false })
-        .limit(30);
+        .limit(30)
+        .then((res) => res)
+        .catch((mErr) => {
+          console.warn('washdoor_orders_master search note:', mErr);
+          return { data: null };
+        }),
+    ]);
 
-      if (!masterError && masterData) {
-        masterData.forEach((r) => merger.add(mapMasterRowToOrder(r).customer));
-      }
-    } catch (mErr) {
-      console.warn('washdoor_orders_master search note:', mErr);
+    if (custResult?.data && custResult.data.length > 0) {
+      custResult.data.forEach((r) => merger.add(mapMasterCustomerRow(r)));
+    }
+    if (!worksResult?.error && worksResult?.data) {
+      worksResult.data.forEach((r) => merger.add(mapCustomerWorkRow(r)));
+    }
+    if (!masterResult?.error && masterResult?.data) {
+      masterResult.data.forEach((r) => merger.add(mapMasterRowToOrder(r).customer));
     }
 
     return { data: merger.toList(), error: null };
@@ -2316,46 +2314,45 @@ export async function getAllCustomers() {
   try {
     const merger = createCustomerMerger();
 
-    // 1. Fetch from primary normalized customers table (authoritative full profile metadata)
-    try {
-      const { data: custData, error: custErr } = await supabase
+    // Fetch all three tables in parallel while preserving master merge priority
+    const [custResult, worksResult, masterResult] = await Promise.all([
+      supabase
         .from('customers')
         .select('*')
-        .order('created_at', { ascending: false });
-
-      if (!custErr && custData) {
-        custData.forEach((r) => merger.add(mapMasterCustomerRow(r)));
-      }
-    } catch (cErr) {
-      console.warn('customers getAll notice:', cErr);
-    }
-
-    // 2. Enrich and merge additional customer records / profiles from customer_works
-    try {
-      const { data: worksData, error: worksError } = await supabase
+        .order('created_at', { ascending: false })
+        .then((res) => res)
+        .catch((cErr) => {
+          console.warn('customers getAll notice:', cErr);
+          return { data: null, error: cErr };
+        }),
+      supabase
         .from('customer_works')
         .select('*')
-        .order('created_at', { ascending: false });
-
-      if (!worksError && worksData) {
-        worksData.forEach((r) => merger.add(mapCustomerWorkRow(r)));
-      }
-    } catch (wErr) {
-      console.warn('customer_works getAll notice:', wErr);
-    }
-
-    // 3. Enrich and merge from washdoor_orders_master for backwards compatibility
-    try {
-      const { data: masterData, error: masterError } = await supabase
+        .order('created_at', { ascending: false })
+        .then((res) => res)
+        .catch((wErr) => {
+          console.warn('customer_works getAll notice:', wErr);
+          return { data: null, error: wErr };
+        }),
+      supabase
         .from('washdoor_orders_master')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .then((res) => res)
+        .catch((mErr) => {
+          console.warn('washdoor_orders_master getAll notice:', mErr);
+          return { data: null, error: mErr };
+        }),
+    ]);
 
-      if (!masterError && masterData) {
-        masterData.forEach((r) => merger.add(mapMasterRowToOrder(r).customer));
-      }
-    } catch (mErr) {
-      console.warn('washdoor_orders_master getAll notice:', mErr);
+    if (!custResult?.error && custResult?.data) {
+      custResult.data.forEach((r) => merger.add(mapMasterCustomerRow(r)));
+    }
+    if (!worksResult?.error && worksResult?.data) {
+      worksResult.data.forEach((r) => merger.add(mapCustomerWorkRow(r)));
+    }
+    if (!masterResult?.error && masterResult?.data) {
+      masterResult.data.forEach((r) => merger.add(mapMasterRowToOrder(r).customer));
     }
 
     return { data: merger.toList(), error: null };

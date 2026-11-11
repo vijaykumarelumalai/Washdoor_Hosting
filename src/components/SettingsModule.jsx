@@ -5,10 +5,35 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { getStoredSettings, saveStoredSettings, DEFAULT_SETTINGS } from '../config/businessRules';
+import {
+  fetchStoreSettingsFromDB,
+  saveStoreSettingsToDB,
+  fetchBrandHistoryFromDB,
+  getLocalBrandHistory,
+} from '../services/storeSettingsService';
 import { useLanguage } from '../context/LanguageContext';
 import { validateBusinessProfile } from '../utils/validation';
 import TemplateManagementSection from './TemplateManagementSection';
 import '../styles/Settings.css';
+
+function formatBrandTimestamp(value) {
+  if (!value) return 'Not updated yet';
+  try {
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return '—';
+    return dt.toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return String(value);
+  }
+}
 
 export default function SettingsModule({ showToast, onSignOut, initialTab = 'business_profile', initialTabKey = 0, orders = [] }) {
   const { t, language, setLanguage, SAMPLE_LANGUAGES } = useLanguage();
@@ -23,12 +48,40 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
   const [settings, setSettings] = useState(getStoredSettings());
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [logoPreview, setLogoPreview] = useState(settings.shopLogo || '');
+  const [savedSnapshot, setSavedSnapshot] = useState(() => getStoredSettings());
+  const [brandHistory, setBrandHistory] = useState(() => getLocalBrandHistory());
+  const [isSaving, setIsSaving] = useState(false);
+  const [dbSyncSource, setDbSyncSource] = useState('local');
   const [mapType, setMapType] = useState('roadmap'); // 'roadmap' | 'satellite'
   const [mapZoom, setMapZoom] = useState(14);
   const [isSignoutModalOpen, setIsSignoutModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [faqSearchQuery, setFaqSearchQuery] = useState('');
   const fileInputRef = useRef(null);
+
+  // Sync latest store settings & branding history from Supabase on mount
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const [settingsRes, historyRes] = await Promise.all([
+        fetchStoreSettingsFromDB(),
+        fetchBrandHistoryFromDB(),
+      ]);
+      if (!mounted) return;
+      if (settingsRes?.data) {
+        setSettings(settingsRes.data);
+        setLogoPreview(settingsRes.data.shopLogo || '');
+        setSavedSnapshot(settingsRes.data);
+        setDbSyncSource(settingsRes.source || 'local');
+      }
+      if (Array.isArray(historyRes?.data)) {
+        setBrandHistory(historyRes.data);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // ── Template & App Configuration States ──
   const [templateChannel, setTemplateChannel] = useState('whatsapp'); // 'whatsapp' | 'sms'
@@ -191,8 +244,8 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
       .replace(/\{tracking_link\}/g, 'washdoor.in/track/ORD00020');
   };
 
-  // Save changes to localStorage & runtime config
-  const handleSaveChanges = () => {
+  // Save changes to localStorage, runtime config & Supabase DB (with brand history tracking)
+  const handleSaveChanges = async () => {
     // Validate Business Profile if saving on business profile tab or generally
     if (activeTab === 'business_profile') {
       const valErrors = validateBusinessProfile(settings);
@@ -217,16 +270,36 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
       ...settings,
       shopLogo: logoPreview,
     };
-    saveStoredSettings(toSave);
-    setSettings(toSave);
-    setFieldErrors({});
-    setHasUnsavedChanges(false);
-    showToast?.('✓ Store settings saved successfully!');
+
+    setIsSaving(true);
+    try {
+      const result = await saveStoreSettingsToDB(toSave, savedSnapshot);
+      const savedData = result?.data || toSave;
+      setSettings(savedData);
+      setLogoPreview(savedData.shopLogo || '');
+      setSavedSnapshot(savedData);
+      if (Array.isArray(result?.history)) {
+        setBrandHistory(result.history);
+      }
+      setDbSyncSource(result?.source || 'local');
+      setFieldErrors({});
+      setHasUnsavedChanges(false);
+
+      if (result?.source === 'supabase') {
+        showToast?.('✓ Store settings & branding saved to Supabase!');
+      } else if (result?.error) {
+        showToast?.('✓ Saved locally (run store_settings.sql in Supabase to enable DB sync)');
+      } else {
+        showToast?.('✓ Store settings saved successfully!');
+      }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Discard changes
   const handleDiscardChanges = () => {
-    const stored = getStoredSettings();
+    const stored = savedSnapshot || getStoredSettings();
     setSettings(stored);
     setLogoPreview(stored.shopLogo || '');
     setFieldErrors({});
@@ -236,16 +309,24 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
   };
 
   // Proper refresh event handler with full sync and reload
-  const handleRefresh = (e) => {
+  const handleRefresh = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     setIsRefreshing(true);
-    showToast?.('Refreshing settings & workspace...');
+    showToast?.('Refreshing settings & syncing from database...');
 
     try {
-      // 1. Sync & reset local stored settings
-      const stored = getStoredSettings();
-      setSettings(stored);
-      setLogoPreview(stored.shopLogo || '');
+      const [settingsRes, historyRes] = await Promise.all([
+        fetchStoreSettingsFromDB(),
+        fetchBrandHistoryFromDB(),
+      ]);
+      const synced = settingsRes?.data || getStoredSettings();
+      setSettings(synced);
+      setLogoPreview(synced.shopLogo || '');
+      setSavedSnapshot(synced);
+      setDbSyncSource(settingsRes?.source || 'local');
+      if (Array.isArray(historyRes?.data)) {
+        setBrandHistory(historyRes.data);
+      }
       setHasUnsavedChanges(false);
       setFieldErrors({});
       setTouchedFields({});
@@ -260,7 +341,7 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
     setTimeout(() => {
       setIsRefreshing(false);
       showToast?.('✓ Settings synced & up-to-date');
-    }, 500);
+    }, 400);
   };
 
   // Logo upload handler
@@ -277,10 +358,19 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
         setLogoPreview(base64);
         setSettings((prev) => ({ ...prev, shopLogo: base64 }));
         setHasUnsavedChanges(true);
-        showToast?.('Logo uploaded! Click "Save changes" to apply');
+        showToast?.('Logo ready! Click "Save changes" to update & save to DB');
       };
       reader.readAsDataURL(file);
     }
+    e.target.value = '';
+  };
+
+  // Remove custom shop logo (reverts to default icon on save)
+  const handleRemoveLogo = () => {
+    setLogoPreview('');
+    setSettings((prev) => ({ ...prev, shopLogo: '' }));
+    setHasUnsavedChanges(true);
+    showToast?.('Logo cleared! Click "Save changes" to apply');
   };
 
   const menuItems = [
@@ -450,7 +540,16 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
                   >
                     Upload logo
                   </button>
-                  <span className="shop-logo-hint">.JPG or PNG. Uploads instantly.</span>
+                  {logoPreview && (
+                    <button
+                      type="button"
+                      className="shop-logo-remove-btn"
+                      onClick={handleRemoveLogo}
+                    >
+                      Remove logo
+                    </button>
+                  )}
+                  <span className="shop-logo-hint">.JPG or PNG. Max 2MB.</span>
                 </div>
 
                 {/* Shop Information Form */}
@@ -696,6 +795,128 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Branding Snapshot & Change History (Previous Shop Name, Logo & Timestamps) */}
+              <div className="brand-history-panel">
+                <div className="brand-history-header">
+                  <div>
+                    <h3 className="brand-history-title">Shop Name &amp; Logo History</h3>
+                    <p className="brand-history-subtitle">
+                      Tracks current &amp; previous shop name, logo images, and exact update timestamps
+                    </p>
+                  </div>
+                  <span className={`brand-sync-badge ${dbSyncSource === 'supabase' ? 'is-db' : 'is-local'}`}>
+                    {dbSyncSource === 'supabase' ? '● Supabase DB Synced' : '● Local Mode'}
+                  </span>
+                </div>
+
+                {/* Current vs Previous Summary Grid */}
+                <div className="brand-snapshot-grid">
+                  <div className="brand-snapshot-card">
+                    <div className="brand-snapshot-label">Current Shop Name</div>
+                    <div className="brand-snapshot-value">{savedSnapshot?.shopName || 'Washdoor'}</div>
+                    <div className="brand-snapshot-time">
+                      Updated: {formatBrandTimestamp(savedSnapshot?.shopNameUpdatedAt || savedSnapshot?.updatedAt)}
+                    </div>
+                  </div>
+
+                  <div className="brand-snapshot-card">
+                    <div className="brand-snapshot-label">Previous Shop Name</div>
+                    <div className="brand-snapshot-value is-muted">
+                      {savedSnapshot?.previousShopName || 'None (Initial name)'}
+                    </div>
+                    <div className="brand-snapshot-time">
+                      Updated by: {savedSnapshot?.updatedBy || 'Store Administrator'}
+                    </div>
+                  </div>
+
+                  <div className="brand-snapshot-card">
+                    <div className="brand-snapshot-label">Current vs Previous Logo</div>
+                    <div className="brand-logo-compare-row">
+                      <div className="brand-logo-thumb-wrap">
+                        <span className="brand-thumb-tag">Previous</span>
+                        {savedSnapshot?.previousShopLogo ? (
+                          <img src={savedSnapshot.previousShopLogo} alt="Previous Logo" className="brand-thumb-img" />
+                        ) : (
+                          <span className="brand-thumb-empty">Default</span>
+                        )}
+                      </div>
+                      <span className="brand-arrow">→</span>
+                      <div className="brand-logo-thumb-wrap">
+                        <span className="brand-thumb-tag">Current</span>
+                        {savedSnapshot?.shopLogo ? (
+                          <img src={savedSnapshot.shopLogo} alt="Current Logo" className="brand-thumb-img" />
+                        ) : (
+                          <span className="brand-thumb-empty">Default</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="brand-snapshot-time">
+                      Logo updated: {formatBrandTimestamp(savedSnapshot?.logoUpdatedAt)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Chronological Change History Table */}
+                {brandHistory.length > 0 ? (
+                  <div className="brand-history-table-wrap">
+                    <table className="brand-history-table">
+                      <thead>
+                        <tr>
+                          <th>Timestamp</th>
+                          <th>Type</th>
+                          <th>Previous → New Shop Name</th>
+                          <th>Previous → New Logo</th>
+                          <th>Updated By</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {brandHistory.slice(0, 10).map((entry) => (
+                          <tr key={entry.id}>
+                            <td className="brand-hist-time">{formatBrandTimestamp(entry.changedAt)}</td>
+                            <td>
+                              <span className={`brand-type-pill type-${String(entry.changeType || 'BOTH').toLowerCase()}`}>
+                                {entry.changeType === 'BOTH'
+                                  ? 'Name & Logo'
+                                  : entry.changeType === 'SHOP_NAME'
+                                  ? 'Shop Name'
+                                  : entry.changeType === 'SHOP_LOGO'
+                                  ? 'Shop Logo'
+                                  : 'Initial'}
+                              </span>
+                            </td>
+                            <td className="brand-hist-names">
+                              <span className="brand-prev-text">{entry.previousShopName || '—'}</span>
+                              <span className="brand-arrow-inline">→</span>
+                              <strong className="brand-new-text">{entry.newShopName || '—'}</strong>
+                            </td>
+                            <td>
+                              <div className="brand-hist-logos">
+                                {entry.previousShopLogo ? (
+                                  <img src={entry.previousShopLogo} alt="Prev" className="brand-hist-thumb" />
+                                ) : (
+                                  <span className="brand-hist-none">Default</span>
+                                )}
+                                <span className="brand-arrow-inline">→</span>
+                                {entry.newShopLogo ? (
+                                  <img src={entry.newShopLogo} alt="New" className="brand-hist-thumb" />
+                                ) : (
+                                  <span className="brand-hist-none">Default</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="brand-hist-actor">{entry.changedBy || 'Store Administrator'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="brand-history-empty">
+                    No shop name or logo changes recorded yet. Update your shop name or upload a logo and click <strong>Save changes</strong>.
+                  </div>
+                )}
               </div>
 
               {/* Map Location Section */}
@@ -1950,8 +2171,9 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
                 type="button"
                 className="settings-save-btn"
                 onClick={handleSaveChanges}
+                disabled={isSaving}
               >
-                Save changes
+                {isSaving ? 'Saving...' : 'Save changes'}
               </button>
             </div>
           </div>

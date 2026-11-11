@@ -12,6 +12,8 @@ import AuditLogModule from './components/AuditLogModule';
 import SettingsModule from './components/SettingsModule';
 import ReportsModule from './components/ReportsModule';
 import { getOrders, updateOrderInSupabase, deleteOrderFromSupabase } from './services/customerService';
+import { getStoredSettings } from './config/businessRules';
+import { fetchStoreSettingsFromDB } from './services/storeSettingsService';
 import { isSupabaseConfigured } from './lib/supabaseClient';
 import { useLanguage } from './context/LanguageContext';
 
@@ -78,8 +80,8 @@ const NAV_ITEMS = [
   },
   {
     id: 'customer_mui',
-    label: 'Customer MUI',
-    title: 'Customer MUI Directory',
+    label: 'Customer Master Record',
+    title: 'Customer Master Record',
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="18" height="18" rx="3"></rect>
@@ -257,6 +259,56 @@ export default function App() {
 
   const [toastMessage, setToastMessage] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
+
+  // Dynamic Store Branding (Shop Name & Logo) synced with Settings + Supabase DB
+  const [storeBrand, setStoreBrand] = useState(() => {
+    const stored = getStoredSettings();
+    return {
+      shopName: stored.shopName || 'Washdoor',
+      shopLogo: stored.shopLogo || '',
+      storeBranch: stored.storeBranch || 'Ranipet Store #1',
+    };
+  });
+
+  useEffect(() => {
+    const syncBrandFromSettings = (detail) => {
+      const latest = detail || getStoredSettings();
+      setStoreBrand({
+        shopName: latest.shopName || 'Washdoor',
+        shopLogo: latest.shopLogo || '',
+        storeBranch: latest.storeBranch || 'Ranipet Store #1',
+      });
+    };
+
+    const handleSettingsUpdated = (e) => {
+      syncBrandFromSettings(e?.detail);
+    };
+
+    const handleStorage = (e) => {
+      if (e.key === 'washdoor_settings_config') {
+        syncBrandFromSettings();
+      }
+    };
+
+    window.addEventListener('washdoor_settings_updated', handleSettingsUpdated);
+    window.addEventListener('storage', handleStorage);
+
+    // Fetch latest store branding from Supabase on startup
+    fetchStoreSettingsFromDB().then(({ data }) => {
+      if (data) syncBrandFromSettings(data);
+    });
+
+    return () => {
+      window.removeEventListener('washdoor_settings_updated', handleSettingsUpdated);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.title = `${storeBrand.shopName || 'Washdoor'} • Laundry & Dry Clean POS`;
+    }
+  }, [storeBrand.shopName]);
 
   // Topbar dropdown states
   const [activeDropdown, setActiveDropdown] = useState(null); // 'currency' | 'language' | 'admin' | null
@@ -505,14 +557,22 @@ export default function App() {
                 <line x1="4" y1="17" x2="20" y2="17"></line>
               </svg>
             </button>
-            <div className="topbar-mobile-brand" onClick={() => setSidebarOpen(true)} style={{ cursor: 'pointer' }} title="Washdoor POS">
-              <div className="topbar-mobile-logo">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z" />
-                </svg>
+            <div className="topbar-mobile-brand" onClick={() => setSidebarOpen(true)} style={{ cursor: 'pointer' }} title={`${storeBrand.shopName || 'Washdoor'} POS`}>
+              <div className={`topbar-mobile-logo ${storeBrand.shopLogo ? 'has-custom-logo' : ''}`}>
+                {storeBrand.shopLogo ? (
+                  <img
+                    src={storeBrand.shopLogo}
+                    alt={storeBrand.shopName || 'Washdoor'}
+                    className="topbar-mobile-logo-img"
+                  />
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z" />
+                  </svg>
+                )}
               </div>
               <div className="topbar-mobile-titles">
-                <span className="topbar-mobile-name">Washdoor</span>
+                <span className="topbar-mobile-name">{storeBrand.shopName || 'Washdoor'}</span>
                 <span className="topbar-mobile-sub">Ranipet</span>
               </div>
             </div>
@@ -1002,8 +1062,8 @@ export default function App() {
         {/* Sidebar Brand Header */}
         <div className="sidebar-brand-header">
           <div
-            className="sidebar-brand-logo"
-            title={!isMobile && isNavCollapsed ? 'Washdoor - Click to expand navigation menu' : 'Washdoor'}
+            className={`sidebar-brand-logo ${storeBrand.shopLogo ? 'has-custom-logo' : ''}`}
+            title={!isMobile && isNavCollapsed ? `${storeBrand.shopName || 'Washdoor'} - Click to expand navigation menu` : (storeBrand.shopName || 'Washdoor')}
             onClick={!isMobile && isNavCollapsed ? toggleNavCollapse : undefined}
             style={{ cursor: !isMobile && isNavCollapsed ? 'pointer' : 'default' }}
             role={!isMobile && isNavCollapsed ? 'button' : undefined}
@@ -1014,14 +1074,24 @@ export default function App() {
               }
             }}
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z" />
-            </svg>
+            {storeBrand.shopLogo ? (
+              <img
+                src={storeBrand.shopLogo}
+                alt={storeBrand.shopName || 'Washdoor'}
+                className="sidebar-brand-logo-img"
+              />
+            ) : (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z" />
+              </svg>
+            )}
           </div>
           {showFullSidebarContent && (
             <>
               <div className="sidebar-brand-info">
-                <span className="sidebar-brand-name">{t('brand_name', 'Washdoor')}</span>
+                <span className="sidebar-brand-name" title={storeBrand.shopName || 'Washdoor'}>
+                  {storeBrand.shopName || t('brand_name', 'Washdoor')}
+                </span>
                 <span className="sidebar-brand-sub" title="Laundry &amp; Dry Clean POS">{t('brand_subtitle', 'Ranipet')}</span>
               </div>
               {/* Hamburger Menu Sidebar Collapse/Expand Toggle / Close Button */}

@@ -122,6 +122,20 @@ export default function ThermalReceiptModal({ order, isOpen, onClose }: ThermalR
           >
             {/* Header */}
             <div style={{ textAlign: 'center', marginBottom: '12px' }}>
+              {BUSINESS_CONFIG.SHOP_LOGO && (
+                <img
+                  src={BUSINESS_CONFIG.SHOP_LOGO}
+                  alt={BUSINESS_CONFIG.BRAND_NAME}
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    objectFit: 'cover',
+                    borderRadius: '8px',
+                    margin: '0 auto 6px',
+                    display: 'block',
+                  }}
+                />
+              )}
               <div style={{ fontSize: receiptSize === '80mm' ? '18px' : '15px', fontWeight: 900, letterSpacing: '1px' }}>
                 {BUSINESS_CONFIG.BRAND_NAME.toUpperCase()}
               </div>

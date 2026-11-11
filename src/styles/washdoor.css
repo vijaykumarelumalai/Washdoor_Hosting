@@ -5464,21 +5464,21 @@ body.light-theme .field label {
 }
 
 /* Standardized Field Sizing & Radius: 10px radius, 40px height, 1.5px border (Excludes search toolbar inputs) */
-[data-theme="light"] .field input:not([type="checkbox"]):not([type="radio"]):not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search):not(.MuiInputBase-input):not(.MuiSelect-nativeInput),
+[data-theme="light"] .field input:not([type="checkbox"]):not([type="radio"]):not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search),
 [data-theme="light"] .field select,
-[data-theme="light"] input[type="text"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search):not(.MuiInputBase-input):not(.MuiSelect-nativeInput),
-[data-theme="light"] input[type="tel"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search):not(.MuiInputBase-input):not(.MuiSelect-nativeInput),
-[data-theme="light"] input[type="email"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search):not(.MuiInputBase-input):not(.MuiSelect-nativeInput),
-[data-theme="light"] input[type="number"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search):not(.MuiInputBase-input):not(.MuiSelect-nativeInput),
-[data-theme="light"] input[type="date"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search):not(.MuiInputBase-input):not(.MuiSelect-nativeInput),
+[data-theme="light"] input[type="text"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search),
+[data-theme="light"] input[type="tel"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search),
+[data-theme="light"] input[type="email"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search),
+[data-theme="light"] input[type="number"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search),
+[data-theme="light"] input[type="date"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search),
 [data-theme="light"] select,
-body.light-theme .field input:not([type="checkbox"]):not([type="radio"]):not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search):not(.MuiInputBase-input):not(.MuiSelect-nativeInput),
+body.light-theme .field input:not([type="checkbox"]):not([type="radio"]):not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search),
 body.light-theme .field select,
-body.light-theme input[type="text"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search):not(.MuiInputBase-input):not(.MuiSelect-nativeInput),
-body.light-theme input[type="tel"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search):not(.MuiInputBase-input):not(.MuiSelect-nativeInput),
-body.light-theme input[type="email"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search):not(.MuiInputBase-input):not(.MuiSelect-nativeInput),
-body.light-theme input[type="number"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search):not(.MuiInputBase-input):not(.MuiSelect-nativeInput),
-body.light-theme input[type="date"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search):not(.MuiInputBase-input):not(.MuiSelect-nativeInput),
+body.light-theme input[type="text"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search),
+body.light-theme input[type="tel"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search),
+body.light-theme input[type="email"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search),
+body.light-theme input[type="number"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search),
+body.light-theme input[type="date"]:not(.addr-input):not(.toolbar-search-input):not(.pos-search-input):not(.topbar-search-input):not(.search),
 body.light-theme select {
   height: 40px !important;
   min-height: 40px !important;
@@ -5508,35 +5508,35 @@ body.light-theme textarea {
 }
 
 /* Hover State: Mild Blue highlight */
-[data-theme="light"] .field input:not(.toolbar-search-input):not(.pos-search-input):not(.MuiInputBase-input):not(.MuiSelect-nativeInput):hover,
+[data-theme="light"] .field input:not(.toolbar-search-input):not(.pos-search-input):hover,
 [data-theme="light"] .field select:hover,
 [data-theme="light"] .field textarea:hover,
-[data-theme="light"] input:not(.toolbar-search-input):not(.pos-search-input):not(.MuiInputBase-input):not(.MuiSelect-nativeInput):hover,
+[data-theme="light"] input:not(.toolbar-search-input):not(.pos-search-input):hover,
 [data-theme="light"] select:hover,
-[data-theme="light"] textarea:not(.MuiInputBase-input):hover,
-body.light-theme .field input:not(.toolbar-search-input):not(.pos-search-input):not(.MuiInputBase-input):not(.MuiSelect-nativeInput):hover,
+[data-theme="light"] textarea:hover,
+body.light-theme .field input:not(.toolbar-search-input):not(.pos-search-input):hover,
 body.light-theme .field select:hover,
 body.light-theme .field textarea:hover,
-body.light-theme input:not(.toolbar-search-input):not(.pos-search-input):not(.MuiInputBase-input):not(.MuiSelect-nativeInput):hover,
+body.light-theme input:not(.toolbar-search-input):not(.pos-search-input):hover,
 body.light-theme select:hover,
-body.light-theme textarea:not(.MuiInputBase-input):hover {
+body.light-theme textarea:hover {
   border-color: #93c5fd !important;
   background-color: #f8fbff !important;
 }
 
 /* Focus State: Mild Blue ring matching exact box radius & size */
-[data-theme="light"] .field input:not(.toolbar-search-input):not(.pos-search-input):not(.MuiInputBase-input):not(.MuiSelect-nativeInput):focus,
+[data-theme="light"] .field input:not(.toolbar-search-input):not(.pos-search-input):focus,
 [data-theme="light"] .field select:focus,
 [data-theme="light"] .field textarea:focus,
-[data-theme="light"] input:not(.toolbar-search-input):not(.pos-search-input):not(.MuiInputBase-input):not(.MuiSelect-nativeInput):focus,
+[data-theme="light"] input:not(.toolbar-search-input):not(.pos-search-input):focus,
 [data-theme="light"] select:focus,
-[data-theme="light"] textarea:not(.MuiInputBase-input):focus,
-body.light-theme .field input:not(.toolbar-search-input):not(.pos-search-input):not(.MuiInputBase-input):not(.MuiSelect-nativeInput):focus,
+[data-theme="light"] textarea:focus,
+body.light-theme .field input:not(.toolbar-search-input):not(.pos-search-input):focus,
 body.light-theme .field select:focus,
 body.light-theme .field textarea:focus,
-body.light-theme input:not(.toolbar-search-input):not(.pos-search-input):not(.MuiInputBase-input):not(.MuiSelect-nativeInput):focus,
+body.light-theme input:not(.toolbar-search-input):not(.pos-search-input):focus,
 body.light-theme select:focus,
-body.light-theme textarea:not(.MuiInputBase-input):focus {
+body.light-theme textarea:focus {
   border-color: #3b82f6 !important;
   background-color: #ffffff !important;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18) !important;
@@ -9816,4 +9816,32 @@ body.dark-theme .topbar-desktop-toggle-btn:hover,
     position: relative !important;
     z-index: 35 !important;
   }
+}
+
+/* ── Dynamic Custom Shop Logo & Brand Name Overflow Handling ── */
+.sidebar-brand-logo.has-custom-logo,
+body.light-theme .sidebar-brand-logo.has-custom-logo,
+[data-theme="light"] .sidebar-brand-logo.has-custom-logo,
+.sidebar:not(.collapsed) .sidebar-brand-logo.has-custom-logo,
+.sidebar.collapsed .sidebar-brand-logo.has-custom-logo,
+.topbar-mobile-logo.has-custom-logo {
+  background: #ffffff !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border: 1.5px solid rgba(37, 99, 235, 0.28) !important;
+}
+
+.sidebar-brand-logo-img,
+.topbar-mobile-logo-img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: inherit !important;
+  display: block !important;
+}
+
+.sidebar-brand-name {
+  max-width: 145px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

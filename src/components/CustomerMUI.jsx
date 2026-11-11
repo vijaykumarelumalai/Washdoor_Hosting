@@ -1,7 +1,7 @@
 // src/components/CustomerMUI.jsx
 // Material UI (MUI) CRM Layout for the Washdoor Customer MUI Module
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Alert,
   Avatar,
@@ -70,7 +70,6 @@ import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 
 import {
   getAllCustomers,
-  searchCustomers,
   updateCustomer,
   deleteCustomer,
   createCustomer,
@@ -191,7 +190,7 @@ function buildMuiTheme(mode) {
       borderRadius: 6,
     },
     typography: {
-      fontFamily: "'Roboto', 'Inter', sans-serif",
+      fontFamily: "'Inter', sans-serif",
       fontSize: 14,
       h5: {
         fontSize: '1.4375rem', // 23px
@@ -455,37 +454,50 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
   const [cardsPageSize, setCardsPageSize] = useState(6);
   const [cardsPage, setCardsPage] = useState(1);
 
+  const isMountedRef = useRef(true);
+  const requestIdRef = useRef(0);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     if (searchQuery !== undefined) {
       setQuery(searchQuery);
     }
   }, [searchQuery]);
 
-  const loadData = useCallback(async (q = '') => {
+  const loadData = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
-    let res;
-    if (q.trim()) {
-      res = await searchCustomers(q);
-    } else {
-      res = await getAllCustomers();
-    }
-    setLoading(false);
+    try {
+      const res = await getAllCustomers();
+      if (!isMountedRef.current || requestId !== requestIdRef.current) return;
 
-    if (res.error) {
-      showToast?.(`⚠️ ${friendlySupabaseError(res.error)}`);
-    } else if (res.data && Array.isArray(res.data)) {
-      setCustomers(res.data);
-      if (!q.trim()) {
+      if (res?.error) {
+        showToast?.(`⚠️ ${friendlySupabaseError(res.error)}`);
+      } else if (res?.data && Array.isArray(res.data)) {
+        setCustomers(res.data);
         try {
           localStorage.setItem('washdoor_customers_cache', JSON.stringify(res.data));
         } catch {}
+      }
+    } catch (err) {
+      if (!isMountedRef.current || requestId !== requestIdRef.current) return;
+      showToast?.(`⚠️ ${friendlySupabaseError(err)}`);
+    } finally {
+      if (isMountedRef.current && requestId === requestIdRef.current) {
+        setLoading(false);
       }
     }
   }, [showToast]);
 
   useEffect(() => {
-    loadData(query);
-  }, [loadData, query]);
+    loadData();
+  }, [loadData]);
 
   // Reset pagination whenever filters or search change
   useEffect(() => {
@@ -551,7 +563,7 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
     showToast?.(`✅ Customer ${customerData.customer_name} updated successfully.`);
     setEditingCustomer(null);
     setDrawerCustomer(null);
-    loadData(query);
+    loadData();
   };
 
   const handleDelete = async (id) => {
@@ -566,7 +578,7 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
       return;
     }
     showToast?.(`✅ ${t('customer_deleted_success')}`);
-    loadData(query);
+    loadData();
   };
 
   const toggleExpandCustomer = (id) => {
@@ -715,7 +727,7 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
               color: 'primary.main',
               fontWeight: 700,
               fontSize: '0.82rem',
-              fontFamily: 'monospace',
+              fontFamily: "'Inter', sans-serif",
               letterSpacing: 0.2,
               whiteSpace: 'nowrap',
             }}
@@ -1059,9 +1071,9 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
       <Box
         sx={{
           width: '100%',
-          fontFamily: "'Roboto', 'Inter', sans-serif",
-          '& .MuiTypography-root, & .MuiButton-root, & .MuiChip-root, & .MuiInputBase-root, & .MuiSelect-select': {
-            fontFamily: "'Roboto', 'Inter', sans-serif",
+          fontFamily: "'Inter', sans-serif",
+          '& .MuiTypography-root, & .MuiButton-root, & .MuiChip-root, & .MuiInputBase-root, & .MuiSelect-select, & .MuiDataGrid-root, & .MuiDataGrid-columnHeaderTitle, & .MuiDataGrid-cell, & .MuiTablePagination-root': {
+            fontFamily: "'Inter', sans-serif",
           },
         }}
       >
@@ -1084,23 +1096,8 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
           }}
         >
           <Box sx={{ minWidth: 0, width: { xs: '100%', md: 'auto' } }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-              <Typography variant="h5" sx={{ fontSize: { xs: '1.25rem', sm: '1.4375rem' }, fontWeight: 700, lineHeight: 1.2 }}>
-                Customer MUI
-              </Typography>
-              <Chip
-                size="small"
-                label="CRM Directory"
-                color="primary"
-                variant="outlined"
-                sx={{ height: 22, borderRadius: '4px', fontSize: '0.73rem' }}
-              />
-            </Box>
-            <Typography
-              color="text.secondary"
-              sx={{ mt: 0.25, fontSize: { xs: '0.8rem', sm: '0.84rem' }, lineHeight: 1.35, whiteSpace: { xs: 'normal', md: 'nowrap' } }}
-            >
-              {t('cust_master_subtitle')}
+            <Typography variant="h5" sx={{ fontSize: { xs: '1.25rem', sm: '1.4375rem' }, fontWeight: 700, lineHeight: 1.2 }}>
+              Customer Master Record
             </Typography>
           </Box>
 
@@ -1139,7 +1136,7 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
               disabled={loading}
               startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
               onClick={() => {
-                loadData(query);
+                loadData();
                 showToast?.(t('syncing_toast'));
               }}
             >
@@ -1507,7 +1504,7 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
               onColumnVisibilityModelChange={(newModel) =>
                 handleColumnVisibilityChange(newModel, 'Columns updated')
               }
-              loading={loading}
+              loading={loading && customers.length === 0}
               rowHeight={76}
               columnHeaderHeight={50}
               showToolbar
@@ -2013,7 +2010,7 @@ export default function CustomerMUI({ showToast, searchQuery = '', onSearchChang
                 showToast?.(`✅ Customer ${customerData.customer_name} registered successfully with ID ${assignedId}!`);
                 setIsRegisteringNew(false);
                 setPrefillData(null);
-                await loadData(query);
+                await loadData();
               }}
             />
           </DialogContent>
