@@ -79,6 +79,7 @@ import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import CallOutlinedIcon from '@mui/icons-material/CallOutlined';
 import MailOutlinedIcon from '@mui/icons-material/MailOutlined';
 import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 
 import {
   getAllCustomers,
@@ -453,9 +454,16 @@ export default function CustomerMUI({
   // CRM Toolbar Filters & View State
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'cards'
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'active' | 'inactive'
+  const [typeFilter, setTypeFilter] = useState('all'); // 'all' | 'Regular Customer' | 'VIP Customer' | 'Corporate'
+  const [zoneFilter, setZoneFilter] = useState('all'); // 'all' | zone name
+  const [regDateFilter, setRegDateFilter] = useState('all'); // 'all' | '7d' | '30d' | 'month'
   const [vipFilter, setVipFilter] = useState('all'); // 'all' | 'vip_only' | 'regular_only'
   const [gstFilter, setGstFilter] = useState('all'); // 'all' | 'gst_only' | 'individual_only'
   const [duesFilter, setDuesFilter] = useState('all'); // 'all' | 'dues_only'
+  const [loadError, setLoadError] = useState('');
+  const [duplicateConflict, setDuplicateConflict] = useState(null);
+  const [hasFormChanges, setHasFormChanges] = useState(false);
+  const [unsavedConfirmAction, setUnsavedConfirmAction] = useState(null); // null | { type: 'edit' | 'register' }
 
   // DataGrid Controlled Pagination (default 5 rows per page matching mockup)
   const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 5 });
@@ -509,15 +517,24 @@ export default function CustomerMUI({
     }
   }, [searchQuery]);
 
+  useEffect(() => {
+    if (!editingCustomer && !isRegisteringNew) {
+      setHasFormChanges(false);
+    }
+  }, [editingCustomer, isRegisteringNew]);
+
   const loadData = useCallback(async () => {
     const requestId = ++requestIdRef.current;
     setLoading(true);
+    setLoadError('');
     try {
       const res = await getAllCustomers();
       if (!isMountedRef.current || requestId !== requestIdRef.current) return;
 
       if (res?.error) {
-        showToast?.(`⚠️ ${friendlySupabaseError(res.error)}`);
+        const msg = friendlySupabaseError(res.error);
+        setLoadError(msg);
+        showToast?.(`⚠️ ${msg}`);
       } else if (res?.data && Array.isArray(res.data)) {
         setCustomers(res.data);
         try {
@@ -526,7 +543,9 @@ export default function CustomerMUI({
       }
     } catch (err) {
       if (!isMountedRef.current || requestId !== requestIdRef.current) return;
-      showToast?.(`⚠️ ${friendlySupabaseError(err)}`);
+      const msg = friendlySupabaseError(err);
+      setLoadError(msg);
+      showToast?.(`⚠️ ${msg}`);
     } finally {
       if (isMountedRef.current && requestId === requestIdRef.current) {
         setLoading(false);
@@ -542,7 +561,7 @@ export default function CustomerMUI({
   useEffect(() => {
     setPaginationModel((prev) => ({ ...prev, page: 0 }));
     setCardsPage(1);
-  }, [query, statusFilter, vipFilter, gstFilter, duesFilter, cardsPageSize]);
+  }, [query, statusFilter, typeFilter, zoneFilter, regDateFilter, vipFilter, gstFilter, duesFilter, cardsPageSize]);
 
   const handleCopyCustomer = useCallback((c) => {
     const name = c.customer_name || c.customerName || 'Customer';
@@ -603,12 +622,32 @@ export default function CustomerMUI({
 
   const handleOpenRegister = async (presetData = null) => {
     setPrefillData(presetData);
+    setDuplicateConflict(null);
+    setHasFormChanges(false);
     try {
       const nextId = await getNextCustomerId();
       if (nextId) setNextCustId(nextId);
     } catch {}
     setIsRegisteringNew(true);
   };
+
+  const findDuplicateCustomer = useCallback(
+    (customerData) => {
+      const normMob = normalizeMobileNumber(customerData?.mobile_number || customerData?.mobileNumber || '');
+      const normEmail = String(customerData?.email || '').trim().toLowerCase();
+      if (!normMob && !normEmail) return null;
+      return (
+        customers.find((existing) => {
+          const existingMob = normalizeMobileNumber(existing.mobile_number || existing.mobileNumber || '');
+          const existingEmail = String(existing.email || existing.contactDetails?.email || '').trim().toLowerCase();
+          if (normMob && existingMob && normMob === existingMob) return true;
+          if (normEmail && existingEmail && normEmail === existingEmail) return true;
+          return false;
+        }) || null
+      );
+    },
+    [customers]
+  );
 
   const handleOpenRegisterWithNumber = (searchedTerm) => {
     const digitsOnly = String(searchedTerm || '').replace(/\D/g, '');
@@ -701,6 +740,9 @@ export default function CustomerMUI({
     setQuery('');
     onSearchChange?.('');
     setStatusFilter('all');
+    setTypeFilter('all');
+    setZoneFilter('all');
+    setRegDateFilter('all');
     setVipFilter('all');
     setGstFilter('all');
     setDuesFilter('all');
@@ -803,8 +845,21 @@ export default function CustomerMUI({
     };
   }, [ordersIndex]);
 
+  const availableZones = useMemo(() => {
+    const set = new Set();
+    customers.forEach((c) => {
+      const z = String(c.service_zone || c.area_service_zone || c.areaServiceZone || 'Zone 1').trim();
+      if (z) set.add(z);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [customers]);
+
   const filteredCustomers = useMemo(() => {
     const qLower = query.trim().toLowerCase();
+    const now = new Date();
+    const curMonth = now.getMonth();
+    const curYear = now.getFullYear();
+
     return customers.filter((c) => {
       const status = String(c.customerStatus || c.customer_status || 'Active').toLowerCase();
       const clsNormalized = normalizeSegmentLabel(c.customer_classification || c.customerClassification);
@@ -814,6 +869,19 @@ export default function CustomerMUI({
 
       if (statusFilter === 'active' && status === 'inactive') return false;
       if (statusFilter === 'inactive' && status !== 'inactive') return false;
+
+      if (typeFilter !== 'all' && clsNormalized !== typeFilter) return false;
+      if (zoneFilter !== 'all' && zone !== zoneFilter) return false;
+
+      if (regDateFilter !== 'all') {
+        const createdRaw = c.created_at || c.registered_at;
+        const d = createdRaw ? new Date(createdRaw) : null;
+        if (!d || Number.isNaN(d.getTime())) return false;
+        const diffDays = (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
+        if (regDateFilter === '7d' && diffDays > 7) return false;
+        if (regDateFilter === '30d' && diffDays > 30) return false;
+        if (regDateFilter === 'month' && (d.getMonth() !== curMonth || d.getFullYear() !== curYear)) return false;
+      }
 
       if (vipFilter === 'vip_only' && !isVip) return false;
       if (vipFilter === 'regular_only' && isVip) return false;
@@ -864,17 +932,20 @@ export default function CustomerMUI({
 
       return true;
     });
-  }, [customers, query, statusFilter, vipFilter, gstFilter, duesFilter, getCustomerOrdersAndStats]);
+  }, [customers, query, statusFilter, typeFilter, zoneFilter, regDateFilter, vipFilter, gstFilter, duesFilter, getCustomerOrdersAndStats]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (query.trim()) count += 1;
     if (statusFilter !== 'all') count += 1;
+    if (typeFilter !== 'all') count += 1;
+    if (zoneFilter !== 'all') count += 1;
+    if (regDateFilter !== 'all') count += 1;
     if (vipFilter !== 'all') count += 1;
     if (gstFilter !== 'all') count += 1;
     if (duesFilter !== 'all') count += 1;
     return count;
-  }, [query, statusFilter, vipFilter, gstFilter, duesFilter]);
+  }, [query, statusFilter, typeFilter, zoneFilter, regDateFilter, vipFilter, gstFilter, duesFilter]);
 
   const kpiStats = useMemo(() => {
     const now = new Date();
@@ -934,6 +1005,38 @@ export default function CustomerMUI({
       _orderStats: getCustomerOrdersAndStats(c),
     }));
   }, [filteredCustomers, getCustomerOrdersAndStats]);
+
+  const handleExportCsv = useCallback(() => {
+    if (!gridRows.length) {
+      showToast?.('⚠️ No customer records match the current filters to export.', 'info');
+      return;
+    }
+    const headers = ['Customer ID', 'Name', 'Mobile', 'Email', 'Customer Type', 'Zone', 'Status', 'Orders', 'Outstanding'];
+    const escapeCsv = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+    const rows = gridRows.map((c) => {
+      const custId = c.customerId || c.customer_code || c.customer_id || '';
+      const name = c.customer_name || c.customerName || '';
+      const mobile = formatPhoneDisplay(c.mobile_number || c.mobileNumber || '');
+      const email = c.email || c.contactDetails?.email || '';
+      const segment = normalizeSegmentLabel(c.customer_classification || c.customerClassification);
+      const zone = String(c.service_zone || c.area_service_zone || c.areaServiceZone || 'Zone 1').trim();
+      const status = String(c.customerStatus || c.customer_status || 'Active');
+      const orderCount = c._orderStats?.orderCount ?? 0;
+      const due = c._orderStats?.outstandingDue ?? 0;
+      return [custId, name, mobile, email, segment, zone, status, orderCount, due].map(escapeCsv).join(',');
+    });
+    const csv = '\uFEFF' + [headers.map(escapeCsv).join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `washdoor_customers_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast?.(`✅ Exported ${gridRows.length} customer records to CSV.`);
+  }, [gridRows, showToast]);
 
   // Resolve currently selected row for Customer 360° Side Panel
   const selectedRow = useMemo(() => {
@@ -1409,6 +1512,16 @@ export default function CustomerMUI({
 
             <Button
               variant="outlined"
+              sx={{ bgcolor: 'background.paper' }}
+              startIcon={<FileDownloadOutlinedIcon />}
+              onClick={handleExportCsv}
+              disabled={loading || gridRows.length === 0}
+            >
+              Export CSV
+            </Button>
+
+            <Button
+              variant="outlined"
               disabled={loading}
               sx={{ bgcolor: 'background.paper' }}
               startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
@@ -1565,7 +1678,7 @@ export default function CustomerMUI({
                     }}
                   />
 
-                  <FormControl size="small" sx={{ minWidth: 132 }}>
+                  <FormControl size="small" sx={{ minWidth: 126 }}>
                     <Select
                       value={statusFilter}
                       aria-label="Filter by customer status"
@@ -1575,6 +1688,50 @@ export default function CustomerMUI({
                       <MenuItem value="all">All Status</MenuItem>
                       <MenuItem value="active">Active Only</MenuItem>
                       <MenuItem value="inactive">Inactive Only</MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  <FormControl size="small" sx={{ minWidth: 132 }}>
+                    <Select
+                      value={typeFilter}
+                      aria-label="Filter by customer type"
+                      onChange={(e) => setTypeFilter(e.target.value)}
+                      sx={{ fontSize: '0.84rem' }}
+                    >
+                      <MenuItem value="all">All Types</MenuItem>
+                      <MenuItem value="Regular Customer">Regular</MenuItem>
+                      <MenuItem value="VIP Customer">VIP</MenuItem>
+                      <MenuItem value="Corporate">Corporate</MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  <FormControl size="small" sx={{ minWidth: 124 }}>
+                    <Select
+                      value={zoneFilter}
+                      aria-label="Filter by service zone"
+                      onChange={(e) => setZoneFilter(e.target.value)}
+                      sx={{ fontSize: '0.84rem' }}
+                    >
+                      <MenuItem value="all">All Zones</MenuItem>
+                      {availableZones.map((z) => (
+                        <MenuItem key={z} value={z}>
+                          {z}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+
+                  <FormControl size="small" sx={{ minWidth: 132 }}>
+                    <Select
+                      value={regDateFilter}
+                      aria-label="Filter by registration date"
+                      onChange={(e) => setRegDateFilter(e.target.value)}
+                      sx={{ fontSize: '0.84rem' }}
+                    >
+                      <MenuItem value="all">All Dates</MenuItem>
+                      <MenuItem value="7d">Last 7 Days</MenuItem>
+                      <MenuItem value="30d">Last 30 Days</MenuItem>
+                      <MenuItem value="month">This Month</MenuItem>
                     </Select>
                   </FormControl>
 
@@ -1623,6 +1780,20 @@ export default function CustomerMUI({
                 />
               )}
             </Paper>
+
+            {loadError && (
+              <Alert
+                severity="error"
+                sx={{ mb: 1.75, borderRadius: 2 }}
+                action={
+                  <Button color="inherit" size="small" onClick={loadData}>
+                    Retry
+                  </Button>
+                }
+              >
+                {loadError}
+              </Alert>
+            )}
 
         {/* ── Customize Columns Popover ── */}
         <Popover
@@ -2372,7 +2543,14 @@ export default function CustomerMUI({
         {/* ── Edit Customer MUI Dialog ── */}
         <Dialog
           open={Boolean(editingCustomer)}
-          onClose={() => !isSaving && setEditingCustomer(null)}
+          onClose={() => {
+            if (isSaving) return;
+            if (hasFormChanges) {
+              setUnsavedConfirmAction({ type: 'edit' });
+              return;
+            }
+            setEditingCustomer(null);
+          }}
           maxWidth="md"
           fullWidth
           scroll="paper"
@@ -2419,7 +2597,12 @@ export default function CustomerMUI({
                   </IconButton>
                 </Box>
               </DialogTitle>
-              <DialogContent dividers sx={{ p: { xs: 2, sm: 3 } }}>
+              <DialogContent
+                dividers
+                sx={{ p: { xs: 2, sm: 3 } }}
+                onInputCapture={() => setHasFormChanges(true)}
+                onChangeCapture={() => setHasFormChanges(true)}
+              >
                 <CustomerForm
                   initialCustomer={editingCustomer}
                   customerId={
@@ -2430,8 +2613,18 @@ export default function CustomerMUI({
                   isOrderFlow={false}
                   isSubmitting={isSaving}
                   submitLabel={isSaving ? 'Updating...' : 'Update Customer Record'}
-                  onBack={() => !isSaving && setEditingCustomer(null)}
-                  onSubmit={handleUpdate}
+                  onBack={() => {
+                    if (isSaving) return;
+                    if (hasFormChanges) {
+                      setUnsavedConfirmAction({ type: 'edit' });
+                      return;
+                    }
+                    setEditingCustomer(null);
+                  }}
+                  onSubmit={async (payload) => {
+                    setHasFormChanges(false);
+                    await handleUpdate(payload);
+                  }}
                 />
               </DialogContent>
             </>
@@ -2443,8 +2636,13 @@ export default function CustomerMUI({
           open={isRegisteringNew}
           onClose={() => {
             if (isSaving) return;
+            if (hasFormChanges) {
+              setUnsavedConfirmAction({ type: 'register' });
+              return;
+            }
             setIsRegisteringNew(false);
             setPrefillData(null);
+            setDuplicateConflict(null);
           }}
           maxWidth="md"
           fullWidth
@@ -2486,8 +2684,13 @@ export default function CustomerMUI({
               <IconButton
                 onClick={() => {
                   if (isSaving) return;
+                  if (hasFormChanges) {
+                    setUnsavedConfirmAction({ type: 'register' });
+                    return;
+                  }
                   setIsRegisteringNew(false);
                   setPrefillData(null);
+                  setDuplicateConflict(null);
                 }}
                 disabled={isSaving}
                 aria-label="Close"
@@ -2496,7 +2699,55 @@ export default function CustomerMUI({
               </IconButton>
             </Box>
           </DialogTitle>
-          <DialogContent dividers sx={{ p: { xs: 2, sm: 3 } }}>
+          <DialogContent
+            dividers
+            sx={{ p: { xs: 2, sm: 3 } }}
+            onInputCapture={() => setHasFormChanges(true)}
+            onChangeCapture={() => setHasFormChanges(true)}
+          >
+            {duplicateConflict && (
+              <Alert
+                severity="warning"
+                sx={{ mb: 2, borderRadius: 2 }}
+                action={
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="inherit"
+                      onClick={() => {
+                        const existing = duplicateConflict;
+                        setDuplicateConflict(null);
+                        setHasFormChanges(false);
+                        setIsRegisteringNew(false);
+                        setPrefillData(null);
+                        const matchKey =
+                          existing.id ||
+                          existing.customer_id ||
+                          existing.customerId ||
+                          existing.mobile_number;
+                        if (matchKey) {
+                          setSelectedCustomerKey(matchKey);
+                          setIs360Open(true);
+                        }
+                      }}
+                    >
+                      View Existing
+                    </Button>
+                    <Button size="small" color="inherit" onClick={() => setDuplicateConflict(null)}>
+                      Dismiss
+                    </Button>
+                  </Box>
+                }
+              >
+                A customer with this mobile number or email already exists:{' '}
+                <strong>
+                  {duplicateConflict.customer_name || duplicateConflict.customerName} (
+                  {duplicateConflict.customerId || duplicateConflict.customer_code || duplicateConflict.customer_id})
+                </strong>
+                .
+              </Alert>
+            )}
             <CustomerForm
               initialCustomer={prefillData}
               customerId={nextCustId}
@@ -2505,10 +2756,23 @@ export default function CustomerMUI({
               submitLabel={isSaving ? 'Registering...' : 'Register Customer'}
               onBack={() => {
                 if (isSaving) return;
+                if (hasFormChanges) {
+                  setUnsavedConfirmAction({ type: 'register' });
+                  return;
+                }
                 setIsRegisteringNew(false);
                 setPrefillData(null);
+                setDuplicateConflict(null);
               }}
               onSubmit={async ({ customerData }) => {
+                const dup = findDuplicateCustomer(customerData);
+                if (dup) {
+                  setDuplicateConflict(dup);
+                  showToast?.('⚠️ Duplicate mobile number or email detected.');
+                  return;
+                }
+                setDuplicateConflict(null);
+                setHasFormChanges(false);
                 setIsSaving(true);
                 try {
                   const res = await createCustomer({
@@ -2573,6 +2837,44 @@ export default function CustomerMUI({
               onClick={() => handleDelete(deleteConfirmTarget)}
             >
               {isDeleting ? t('btn_deleting') : t('btn_confirm_delete')}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* ── Unsaved Changes Confirmation Dialog ── */}
+        <Dialog
+          open={Boolean(unsavedConfirmAction)}
+          onClose={() => setUnsavedConfirmAction(null)}
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle sx={{ fontWeight: 700 }}>Discard Unsaved Changes?</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary">
+              You have unsaved modifications in this customer form. Are you sure you want to close without saving?
+            </Typography>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button variant="outlined" onClick={() => setUnsavedConfirmAction(null)}>
+              Keep Editing
+            </Button>
+            <Button
+              variant="contained"
+              color="warning"
+              onClick={() => {
+                const actionType = unsavedConfirmAction?.type;
+                setUnsavedConfirmAction(null);
+                setHasFormChanges(false);
+                if (actionType === 'edit') {
+                  setEditingCustomer(null);
+                } else if (actionType === 'register') {
+                  setIsRegisteringNew(false);
+                  setPrefillData(null);
+                  setDuplicateConflict(null);
+                }
+              }}
+            >
+              Discard Changes
             </Button>
           </DialogActions>
         </Dialog>

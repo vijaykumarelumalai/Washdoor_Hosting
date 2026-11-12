@@ -64,9 +64,9 @@ test('Part 2 Steps 1-2: CustomerMUI and customerService support status filter, c
   assert.match(mui, /editingCustomer\?\.customerId \|\|\s*editingCustomer\?\.customer_id \|\|\s*editingCustomer\?\.customer_code/);
 
   assert.match(service, /special_occasion:\s*profileItem\.special_occasion \|\| null/);
-  assert.match(service, /preference_notes:\s*profileItem\.preference_notes \|\| null/);
-  assert.match(service, /special_occasion:\s*clean\.special_occasion \|\| null/);
-  assert.match(service, /const workCustId = clean\.customer_id \|\| clean\.customer_code/);
+  assert.match(service, /preference_notes:\s*row\.order_notes/);
+  assert.match(service, /special_occasion:\s*row\.special_occasion/);
+  assert.match(service, /const custId = formatCustomerId\(r\.customer_code \|\| r\.customer_id/);
 });
 
 test('Code Merge Step 2: CustomerManagement, POS/SideEditPanel staff IDs, and Customer 360 -> POS navigation', () => {
@@ -91,9 +91,9 @@ test('Code Merge Step 2: CustomerManagement, POS/SideEditPanel staff IDs, and Cu
   assert.match(cm, /wa\.me/);
 
   // SideEditPanel.jsx & POSModule.jsx: attend_staff_id & assigned_pickup_person_id persistence
-  assert.match(sideEdit, /attend_staff_id:\s*order\?\.attend_staff_id \|\| null/);
-  assert.match(sideEdit, /assigned_pickup_person_id:\s*order\?\.assigned_pickup_person_id \|\| null/);
-  assert.match(pos, /attend_staff_id:\s*editFormData\.attend_staff_id \?\? editingOrderRecord\.attend_staff_id \?\? null/);
+  assert.match(sideEdit, /attend_staff_id:\s*attendStaffId \|\| null/);
+  assert.match(sideEdit, /assigned_pickup_person_id:\s*assignedPickupPersonId \|\| null/);
+  assert.match(pos, /attend_staff_id:\s*editFormData\.attend_staff_id \|\| null/);
   assert.match(pos, /assigned_pickup_person_id:\s*driverId/);
 
   // Customer360Panel -> CustomerMUI -> App.jsx POS navigation hooks
@@ -104,4 +104,18 @@ test('Code Merge Step 2: CustomerManagement, POS/SideEditPanel staff IDs, and Cu
   assert.match(mui, /onOpenOrder=\{onOpenOrderInPos \? \(ord\) => \{[\s\S]*?onOpenOrderInPos\(ord\);/);
   assert.match(app, /onCreateOrderForCustomer=\{\(\) => \{/);
   assert.match(app, /onOpenOrderInPos=\{\(ord\) => \{/);
+});
+
+test('Customer Reference Enhancements: Advanced filters, duplicate prevention, unsaved warning, CSV export, and retry banner', () => {
+  const mui = fs.readFileSync(muiPath, 'utf8');
+
+  assert.match(mui, /aria-label="Filter by customer type"/);
+  assert.match(mui, /aria-label="Filter by service zone"/);
+  assert.match(mui, /aria-label="Filter by registration date"/);
+  assert.match(mui, /findDuplicateCustomer/);
+  assert.match(mui, /View Existing/);
+  assert.match(mui, /Discard Unsaved Changes\?/);
+  assert.match(mui, /Export CSV/);
+  assert.match(mui, /handleExportCsv/);
+  assert.match(mui, /\{loadError && \(/);
 });
