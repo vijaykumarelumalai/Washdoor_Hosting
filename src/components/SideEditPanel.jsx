@@ -960,7 +960,7 @@ export default function SideEditPanel({
 
                       <div className="side-edit-field">
                         <label className="side-edit-label">
-                          Scheduled Delivery Date &amp; Time <span className="side-edit-req">*</span>
+                          Scheduled Delivery Date &amp; Time
                         </label>
                         <div className="oncall-datetime-pair">
                           <input

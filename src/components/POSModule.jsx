@@ -4523,7 +4523,7 @@ export default function POSModule({
 
                                               <div>
                                                 <label className="pos-edit-label">
-                                                  Scheduled Delivery Date &amp; Time <span className="required">*</span>
+                                                  Scheduled Delivery Date &amp; Time
                                                 </label>
                                                 <div className="oncall-datetime-pair">
                                                   <input
@@ -5272,7 +5272,7 @@ export default function POSModule({
                                                     </div>
                                                     <div>
                                                       <label className="pos-edit-label">
-                                                        Scheduled Delivery Date &amp; Time <span className="required">*</span>
+                                                        Scheduled Delivery Date &amp; Time
                                                       </label>
                                                       <div className="oncall-datetime-pair">
                                                         <input
