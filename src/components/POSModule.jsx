@@ -12,6 +12,8 @@ import ViewOrderModal from './ViewOrderModal';
 import ThermalReceiptModal from './ThermalReceiptModal';
 import ScheduleDeliveryModal from './ScheduleDeliveryModal';
 import DriverAssignModal from './DriverAssignModal';
+import ServiceTypeSelect from './ServiceTypeSelect';
+import { DEFAULT_SERVICE_TYPES, formatServiceBreakdown } from '../config/businessRules';
 import {
   getProducts,
   searchCustomers,
@@ -61,7 +63,7 @@ const DEFAULT_PRODUCTS = [
 ];
 
 const CATEGORIES = ['All Items', 'Men', 'Women', 'Kids', 'Home Linen', 'Accessories'];
-const SERVICE_OPTIONS = ['Wash & Steam Press', 'Wash & Fold', 'Dry Cleaning', 'Steam Press Only', 'Heavy Linens'];
+const SERVICE_OPTIONS = DEFAULT_SERVICE_TYPES;
 
 export function normalizeOrderStatus(raw) {
   const s = String(raw || '').trim().toLowerCase();
@@ -245,7 +247,7 @@ function ServicesPopoverPortal({ popoverData, onClose, popoverRef }) {
         </div>
 
         {/* Tab switcher: Hidden vs All */}
-        {services.length > 3 && (
+        {services.length > 1 && (
           <div className="pos-services-popover-tabs">
             <button
               type="button"
@@ -314,6 +316,543 @@ function ServicesPopoverPortal({ popoverData, onClose, popoverRef }) {
         </div>
       </div>
     </>,
+    document.body
+  );
+}
+
+function formatStatusTimestamp(value) {
+  if (!value) return { dateStr: '—', timeStr: '', dateTimeStr: '—' };
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return { dateStr: String(value), timeStr: '', dateTimeStr: String(value) };
+  }
+  const dateStr = parsed.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+  const timeStr = parsed.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).toUpperCase();
+  return {
+    dateStr,
+    timeStr,
+    dateTimeStr: `${dateStr}, ${timeStr}`,
+  };
+}
+
+function buildOrderActivityTimeline(ord, currencySymbol = '₹') {
+  if (!ord) return [];
+  const rawStored = Array.isArray(ord.activity_history) && ord.activity_history.length > 0
+    ? ord.activity_history
+    : (Array.isArray(ord.audit_logs) && ord.audit_logs.length > 0 ? ord.audit_logs : (Array.isArray(ord.logs) ? ord.logs : []));
+
+  const normalizedStored = rawStored.map((ev, idx) => ({
+    id: ev.id || `act_${idx}`,
+    type: ev.type || (String(ev.title || '').toLowerCase().includes('deliver') ? 'collection' : String(ev.title || '').toLowerCase().includes('pay') ? 'payment' : String(ev.title || '').toLowerCase().includes('service') ? 'service' : String(ev.title || '').toLowerCase().includes('receiv') && !String(ev.title || '').toLowerCase().includes('payment') ? 'received' : 'status'),
+    title: ev.title || 'Order Update',
+    detail: ev.detail || ev.remarks || '',
+    staff: ev.staff || ev.author || ord.attend_staff_name || ord.assigned_staff || 'Counter Staff',
+    timestamp: ev.timestamp || ev.time || ord.updated_at || ord.created_at,
+  }));
+
+  const staffName = ord.attend_staff_name || ord.status_updated_by || ord.assigned_staff || 'Counter Staff';
+  const workStatus = normalizeOrderStatus(ord.order_status || ord.status || 'Order Received');
+  const totalAmount = Number(ord.total_amount || ord.grand_total || 0);
+  const advancePaid = Number(ord.advance_paid || 0);
+  const payStatus = String(ord.payment_status || '');
+  const payMode = ord.payment_method || ord.payment?.mode || 'Cash';
+  const items = Array.isArray(ord.items) ? ord.items : [];
+  const servicesList = Array.isArray(ord.services_allocated) ? ord.services_allocated : [];
+  const hasType = (tp) => normalizedStored.some((e) => e.type === tp);
+
+  const synthesized = [...normalizedStored];
+
+  if (workStatus === 'Delivered' && !hasType('collection')) {
+    synthesized.push({
+      id: 'act_synth_delivered',
+      type: 'collection',
+      title: 'Order Delivered',
+      detail: `Garments delivered to ${ord.collected_by_person || ord.customer_name || 'customer'}`,
+      staff: ord.assigned_pickup_delivery_person || staffName,
+      timestamp: ord.collection_at || ord.delivered_at || ord.status_updated_at || ord.updated_at || ord.created_at,
+    });
+  }
+
+  if ((advancePaid > 0 || payStatus.toLowerCase() === 'paid') && !hasType('payment')) {
+    const paidAmt = advancePaid > 0 ? advancePaid : totalAmount;
+    synthesized.push({
+      id: 'act_synth_payment',
+      type: 'payment',
+      title: 'Payment Received',
+      detail: `${currencySymbol}${paidAmt.toFixed(2)} received via ${payMode}`,
+      staff: ord.payment_received_by || staffName,
+      timestamp: ord.payment_received_at || ord.updated_at || ord.created_at,
+    });
+  }
+
+  if ((items.length > 0 || servicesList.length > 0) && !hasType('service')) {
+    const activeList = items.length > 0 ? items : servicesList;
+    const breakdownText = formatServiceBreakdown(activeList, ord.service_category || ord.service_type || 'Laundry', true);
+    synthesized.push({
+      id: 'act_synth_service',
+      type: 'service',
+      title: 'Service Allocated',
+      detail: breakdownText || `${ord.service_category || 'Laundry'} (${activeList.length} item${activeList.length === 1 ? '' : 's'})`,
+      staff: staffName,
+      timestamp: ord.updated_at || ord.created_at,
+    });
+  }
+
+  if (workStatus !== 'Order Received' && workStatus !== 'Delivered' && !hasType('status')) {
+    synthesized.push({
+      id: 'act_synth_status',
+      type: 'status',
+      title: 'Status Updated',
+      detail: workStatus,
+      staff: staffName,
+      timestamp: ord.status_updated_at || ord.updated_at || ord.created_at,
+    });
+  }
+
+  if (!hasType('received')) {
+    synthesized.push({
+      id: 'act_synth_received',
+      type: 'received',
+      title: 'Order Received',
+      detail: 'New order placed',
+      staff: ord.attend_staff_name || ord.assigned_staff || 'Counter Staff',
+      timestamp: ord.intake_date || ord.created_at,
+    });
+  }
+
+  const sorted = synthesized.sort((a, b) => {
+    const ta = new Date(a.timestamp).getTime() || 0;
+    const tb = new Date(b.timestamp).getTime() || 0;
+    return tb - ta;
+  });
+
+  // Upgrade the latest stored service event if it was saved in legacy flat format (missing per-service "total = X pcs")
+  const activeList = items.length > 0 ? items : servicesList;
+  if (activeList.length > 0) {
+    const latestServiceIdx = sorted.findIndex((ev) => ev.type === 'service');
+    if (latestServiceIdx >= 0 && !String(sorted[latestServiceIdx].detail || '').includes('total =')) {
+      const upgradedDetail = formatServiceBreakdown(activeList, ord.service_category || ord.service_type || 'Laundry', true);
+      if (upgradedDetail) {
+        sorted[latestServiceIdx] = {
+          ...sorted[latestServiceIdx],
+          detail: upgradedDetail,
+        };
+      }
+    }
+  }
+
+  return sorted;
+}
+
+function OrderStatusSidePanel({
+  order,
+  isOpen,
+  activeTab,
+  onTabChange,
+  onClose,
+  currencySymbol = '₹',
+}) {
+  if (!isOpen || !order || typeof document === 'undefined') return null;
+
+  const orderNum = order.order_number || order.order_id || order.work_number || (order.id ? String(order.id) : '—');
+  const custName = order.customer_name || order.customer?.customer_name || 'Walk-in Customer';
+  const phone = order.formatted_mobile || formatPhoneDisplay(order.mobile_number || order.customer?.mobile_number) || '—';
+  const address = order.address || order.delivery_address || order.customer?.address || 'Counter Walk-In';
+  const workStatus = normalizeOrderStatus(order.order_status || order.status || 'Order Received');
+  const rawOrderType = String(order.order_type || order.intake_method || 'Walk-In').trim();
+  const rawOrderTypeLower = rawOrderType.toLowerCase();
+  const isOnCallOrder = rawOrderTypeLower.includes('call') || rawOrderTypeLower.includes('phone');
+  const isPickupDeliveryOrder = !isOnCallOrder && (rawOrderTypeLower.includes('pickup') || rawOrderTypeLower.includes('delivery'));
+  const orderTypeLabel = isOnCallOrder
+    ? 'On-Call (Pickup)'
+    : isPickupDeliveryOrder
+    ? 'Pickup & Delivery'
+    : 'Walk-In (Store Drop)';
+  const attendStaff = order.attend_staff_name || order.status_updated_by || order.assigned_staff || 'Counter Staff';
+  const pickupPerson = order.assigned_pickup_delivery_person || order.assigned_driver || 'Not assigned';
+  const statusUpdatedMeta = formatStatusTimestamp(order.status_updated_at || order.updated_at || order.created_at);
+  const orderCreatedMeta = formatStatusTimestamp(order.intake_date || order.created_at);
+
+  const items = Array.isArray(order.items) && order.items.length > 0
+    ? order.items
+    : (Array.isArray(order.services_allocated) ? order.services_allocated.map((s) => ({ name: s.name, qty: s.count || 1, serviceType: order.service_category || 'Laundry', icon: s.icon })) : []);
+  const garmentInspections = order.garment_inspections || order.inspections || {};
+  const inspectionList = Object.values(garmentInspections).filter(Boolean);
+
+  const totalAmount = Number(order.total_amount || order.grand_total || order.bill_amount || 0);
+  const advancePaid = Number(order.advance_paid || order.payment?.advancePaid || 0);
+  const balanceDue = Number(order.balance_due !== undefined ? order.balance_due : Math.max(0, totalAmount - advancePaid));
+  const payStatus = order.payment_status || order.payment?.status || (totalAmount > 0 && balanceDue <= 0 ? 'Paid' : advancePaid > 0 ? 'Partially Paid' : 'Unpaid');
+  const payMode = order.payment_method || order.payment?.mode || 'Cash';
+  const paymentMeta = formatStatusTimestamp(order.payment_received_at || (advancePaid > 0 || payStatus === 'Paid' ? (order.updated_at || order.created_at) : null));
+  const paymentStaff = order.payment_received_by || attendStaff;
+
+  const isDelivered = workStatus === 'Delivered';
+  const collectionMeta = formatStatusTimestamp(order.collection_at || order.delivered_at || (isDelivered ? (order.updated_at || order.created_at) : null));
+  const collectedBy = order.collected_by_person || (isDelivered ? (pickupPerson !== 'Not assigned' ? pickupPerson : custName) : 'Pending Collection');
+  const attendAndCollectedStaff = (() => {
+    const a = String(attendStaff || '').trim();
+    const c = String(collectedBy || '').trim();
+    if (!c || c === 'Pending Collection' || c.toLowerCase() === a.toLowerCase()) {
+      return a || c || 'Counter Staff';
+    }
+    if (!a) return c;
+    return `${a} • ${c}`;
+  })();
+
+  const timeline = buildOrderActivityTimeline(order, currencySymbol);
+
+  const statusTone =
+    workStatus === 'In Progress' ? { bg: '#fef3c7', color: '#b45309', dot: '#f59e0b', border: '#fde68a' } :
+    workStatus === 'Ready' ? { bg: '#dcfce7', color: '#15803d', dot: '#10b981', border: '#bbf7d0' } :
+    workStatus === 'Delivered' ? { bg: '#dcfce7', color: '#15803d', dot: '#16a34a', border: '#bbf7d0' } :
+    workStatus === 'Cancelled' ? { bg: '#fee2e2', color: '#b91c1c', dot: '#ef4444', border: '#fecaca' } :
+    { bg: '#eff6ff', color: '#1d4ed8', dot: '#2563eb', border: '#bfdbfe' };
+
+  const primaryServiceSummary = order.service_category || order.service_type || (items[0]?.serviceType || items[0]?.service || items[0]?.name) || 'Laundry';
+
+  return createPortal(
+    <div className="pos-status-drawer-backdrop" onClick={onClose}>
+      <aside
+        className="pos-status-drawer-panel"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Order ${orderNum} status and activity panel`}
+      >
+        {/* Header */}
+        <div className="pos-status-drawer-header">
+          <div className="pos-status-drawer-title-group">
+            <div className="pos-status-drawer-check-badge" style={{ background: statusTone.dot }}>
+              {workStatus === 'Cancelled' ? '✕' : workStatus === 'In Progress' ? '⏱' : '✓'}
+            </div>
+            <div>
+              <div className="pos-status-drawer-title-row">
+                <h2 className="pos-status-drawer-title">Order {orderNum}</h2>
+                <span
+                  className="pos-status-drawer-pill"
+                  style={{ background: statusTone.bg, color: statusTone.color, borderColor: statusTone.border }}
+                >
+                  <span className="pos-status-dot" style={{ background: statusTone.dot }} />
+                  {workStatus}
+                </span>
+              </div>
+              <div className="pos-status-drawer-sub">
+                Updated {statusUpdatedMeta.dateTimeStr} • By {attendStaff}
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="pos-status-drawer-close"
+            onClick={onClose}
+            aria-label="Close panel"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* 4 Tabs matching reference image */}
+        <div className="pos-status-drawer-tabs" role="tablist">
+          {[
+            { id: 'details', label: 'Order Details' },
+            { id: 'history', label: 'Activity History' },
+            { id: 'payment', label: 'Payment Info' },
+            { id: 'collection', label: 'Collection Info' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              className={`pos-status-drawer-tab ${activeTab === tab.id ? 'active' : ''}`}
+              onClick={() => onTabChange(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <div className="pos-status-drawer-body">
+          {/* TAB 1: ORDER DETAILS (Step 2) */}
+          {activeTab === 'details' && (
+            <div className="pos-status-tab-pane">
+              <div className="pos-status-card">
+                <h3 className="pos-status-card-title">Order Summary</h3>
+                <div className="pos-status-kv-list">
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Order ID</span>
+                    <strong className="pos-status-kv-val">{orderNum}</strong>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Order Type</span>
+                    <span
+                      className="pos-status-drawer-pill"
+                      style={
+                        isOnCallOrder
+                          ? { background: '#fef3c7', color: '#b45309', borderColor: '#fde68a' }
+                          : isPickupDeliveryOrder
+                          ? { background: '#dcfce7', color: '#15803d', borderColor: '#bbf7d0' }
+                          : { background: '#eff6ff', color: '#1d4ed8', borderColor: '#bfdbfe' }
+                      }
+                    >
+                      {isOnCallOrder ? '📞 ' : isPickupDeliveryOrder ? '🚚 ' : '🚶 '}
+                      {orderTypeLabel}
+                    </span>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Customer</span>
+                    <span className="pos-status-kv-val">{custName}</span>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Mobile</span>
+                    <span className="pos-status-kv-val">{phone}</span>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Address</span>
+                    <span className="pos-status-kv-val">{address}</span>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Order Date</span>
+                    <span className="pos-status-kv-val">{orderCreatedMeta.dateTimeStr}</span>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Current Status</span>
+                    <span
+                      className="pos-status-drawer-pill"
+                      style={{ background: statusTone.bg, color: statusTone.color, borderColor: statusTone.border }}
+                    >
+                      <span className="pos-status-dot" style={{ background: statusTone.dot }} />
+                      {workStatus}
+                    </span>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Attend Staff</span>
+                    <span className="pos-status-kv-val">{attendStaff}</span>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Assigned Pickup &amp; Delivery</span>
+                    <span className="pos-status-kv-val">{pickupPerson}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pos-status-card">
+                <h3 className="pos-status-card-title">Services &amp; Garment Details</h3>
+                {items.length === 0 ? (
+                  <div className="pos-status-empty-note">
+                    Primary Service: <strong>{primaryServiceSummary}</strong>
+                  </div>
+                ) : (
+                  <div className="pos-status-garment-list">
+                    {items.map((it, idx) => {
+                      const qty = Number(it.qty || it.quantity || it.count || 1);
+                      const rate = Number(it.rate || it.unit_price || it.price || 0);
+                      const svcLabel = it.serviceType || it.service || primaryServiceSummary;
+                      return (
+                        <div key={`${it.name || 'item'}-${idx}`} className="pos-status-garment-row">
+                          <div className="pos-status-garment-left">
+                            <span className="pos-status-garment-icon">{getServiceItemIcon(it)}</span>
+                            <div>
+                              <div className="pos-status-garment-name">{it.name || it.item_name || 'Garment'}</div>
+                              <div className="pos-status-garment-svc">{svcLabel}</div>
+                            </div>
+                          </div>
+                          <div className="pos-status-garment-right">
+                            <span className="pos-status-garment-qty">×{qty}</span>
+                            {rate > 0 && (
+                              <span className="pos-status-garment-amt">{currencySymbol}{(rate * qty).toFixed(2)}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {inspectionList.length > 0 && (
+                  <div className="pos-status-inspection-box">
+                    <div className="pos-status-inspection-head">Garment Inspection Notes</div>
+                    {inspectionList.map((insp, i) => (
+                      <div key={insp.id || i} className="pos-status-inspection-item">
+                        <strong>{insp.name || insp.garment || 'Garment'}:</strong>{' '}
+                        {[insp.color, insp.fabric, insp.brand, insp.stains, insp.notes].filter(Boolean).join(' • ') || 'Inspected'}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: ACTIVITY HISTORY (Step 3) */}
+          {activeTab === 'history' && (
+            <div className="pos-status-tab-pane">
+              <div className="pos-status-card">
+                <div className="pos-status-timeline">
+                  {timeline.map((ev, idx) => {
+                    const evMeta = formatStatusTimestamp(ev.timestamp);
+                    const dotColor =
+                      ev.type === 'collection' ? '#16a34a' :
+                      ev.type === 'payment' ? '#2563eb' :
+                      ev.type === 'service' ? '#f59e0b' :
+                      ev.type === 'status' ? '#0284c7' : '#2563eb';
+                    const iconEmoji =
+                      ev.type === 'collection' ? '🚚' :
+                      ev.type === 'payment' ? '💳' :
+                      ev.type === 'service' ? '🔄' :
+                      ev.type === 'status' ? '▶' : '✓';
+
+                    return (
+                      <div key={ev.id || idx} className="pos-status-timeline-item">
+                        <div className="pos-status-timeline-rail">
+                          <span className="pos-status-timeline-dot" style={{ background: dotColor }} />
+                          {idx < timeline.length - 1 && <span className="pos-status-timeline-line" />}
+                        </div>
+                        <div className="pos-status-timeline-content">
+                          <div className="pos-status-timeline-left">
+                            <span className="pos-status-timeline-icon" style={{ color: dotColor }}>{iconEmoji}</span>
+                            <div>
+                              <div className="pos-status-timeline-title">{ev.title}</div>
+                              {ev.detail && <div className="pos-status-timeline-detail">{ev.detail}</div>}
+                            </div>
+                          </div>
+                          <div className="pos-status-timeline-meta">
+                            <div className="pos-status-timeline-time">{evMeta.dateTimeStr}</div>
+                            <div className="pos-status-timeline-staff">By {ev.staff || attendStaff}</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Bottom Summary Cards */}
+              <div className="pos-status-summary-footer-grid">
+                <div className="pos-status-mini-card">
+                  <span className="pos-status-mini-icon">₹</span>
+                  <div>
+                    <div className="pos-status-mini-label">Payment Status</div>
+                    <div className="pos-status-mini-val" style={{ color: balanceDue <= 0 && totalAmount > 0 ? '#15803d' : '#b45309' }}>
+                      {payStatus} {currencySymbol}{totalAmount.toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+                <div className="pos-status-mini-card">
+                  <span className="pos-status-mini-icon">👤</span>
+                  <div>
+                    <div className="pos-status-mini-label">Collected By</div>
+                    <div className="pos-status-mini-val">{collectedBy}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: PAYMENT INFO (Step 4) */}
+          {activeTab === 'payment' && (
+            <div className="pos-status-tab-pane">
+              <div className="pos-status-card">
+                <h3 className="pos-status-card-title">Payment Details</h3>
+                <div className="pos-status-kv-list">
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Total Order Amount</span>
+                    <strong className="pos-status-kv-val">{currencySymbol}{totalAmount.toFixed(2)}</strong>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Payment Amount Received</span>
+                    <strong className="pos-status-kv-val" style={{ color: '#15803d' }}>
+                      {currencySymbol}{(advancePaid > 0 ? advancePaid : (payStatus === 'Paid' ? totalAmount : 0)).toFixed(2)}
+                    </strong>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Balance Due</span>
+                    <strong className="pos-status-kv-val" style={{ color: balanceDue > 0 ? '#dc2626' : '#15803d' }}>
+                      {currencySymbol}{balanceDue.toFixed(2)}
+                    </strong>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Payment Status</span>
+                    <span className="pos-status-kv-val">{payStatus}</span>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Payment Method</span>
+                    <span className="pos-status-kv-val">{payMode}</span>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Received Date</span>
+                    <span className="pos-status-kv-val">{paymentMeta.dateStr}</span>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Received Time</span>
+                    <span className="pos-status-kv-val">{paymentMeta.timeStr || 'Pending'}</span>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Responsible Staff Name</span>
+                    <strong className="pos-status-kv-val">{paymentStaff}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: COLLECTION INFO (Step 5) */}
+          {activeTab === 'collection' && (
+            <div className="pos-status-tab-pane">
+              <div className="pos-status-card">
+                <h3 className="pos-status-card-title">Garment Collection &amp; Delivery Details</h3>
+                <div className="pos-status-kv-list">
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Collection Status</span>
+                    <span
+                      className="pos-status-drawer-pill"
+                      style={{
+                        background: isDelivered ? '#dcfce7' : '#fef3c7',
+                        color: isDelivered ? '#15803d' : '#b45309',
+                        borderColor: isDelivered ? '#bbf7d0' : '#fde68a',
+                      }}
+                    >
+                      {isDelivered ? 'Collected / Delivered' : 'Pending Collection'}
+                    </span>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Garment Collection Date</span>
+                    <span className="pos-status-kv-val">{isDelivered ? collectionMeta.dateStr : 'Pending'}</span>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Garment Collection Time</span>
+                    <span className="pos-status-kv-val">{isDelivered ? (collectionMeta.timeStr || '—') : 'Pending'}</span>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Assigned Pickup &amp; Delivery Person</span>
+                    <span className="pos-status-kv-val">{pickupPerson}</span>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Attend Staff / Collected-By Person</span>
+                    <strong className="pos-status-kv-val">{attendAndCollectedStaff}</strong>
+                  </div>
+                  <div className="pos-status-kv-row">
+                    <span className="pos-status-kv-label">Delivery / Collection Address</span>
+                    <span className="pos-status-kv-val">{address}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </aside>
+    </div>,
     document.body
   );
 }
@@ -641,6 +1180,7 @@ export default function POSModule({
   // Inline Order Edit Modal State (List View Fields, Read-Only when Ready)
   const [editingOrderRecord, setEditingOrderRecord] = useState(null);
   const [editFormData, setEditFormData] = useState(null);
+  const [showEditQRModal, setShowEditQRModal] = useState(false);
 
   // Reset Table Scroll When Editing Starts
   useEffect(() => {
@@ -655,6 +1195,19 @@ export default function POSModule({
   // Quick View Order Modal Target Order
   const [viewOrderTarget, setViewOrderTarget] = useState(null);
 
+  // Status Column Click -> Status & Activity Side Panel State
+  const [statusPanelOrder, setStatusPanelOrder] = useState(null);
+  const [statusPanelTab, setStatusPanelTab] = useState('details'); // 'details' | 'history' | 'payment' | 'collection'
+
+  useEffect(() => {
+    if (!statusPanelOrder) return;
+    const onEsc = (e) => {
+      if (e.key === 'Escape') setStatusPanelOrder(null);
+    };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [statusPanelOrder]);
+
   // Thermal Receipt / Invoice Modal Target Order
   const [receiptOrderTarget, setReceiptOrderTarget] = useState(null);
 
@@ -662,7 +1215,7 @@ export default function POSModule({
   const [editCatalogCategory, setEditCatalogCategory] = useState('All');
   const [editCatalogSearch, setEditCatalogSearch] = useState('');
   const [editSelectedItem, setEditSelectedItem] = useState(EDIT_CATALOG_ITEMS[0]);
-  const [editSelectedService, setEditSelectedService] = useState('Laundry + Iron');
+  const [editSelectedService, setEditSelectedService] = useState('Laundry');
   const [editSelectedQty, setEditSelectedQty] = useState(1);
   const [editSelectedRate, setEditSelectedRate] = useState(15);
   const [editCart, setEditCart] = useState([]);
@@ -725,15 +1278,16 @@ export default function POSModule({
     return editCart.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
   }, [editCart]);
 
-  const handleAddEditItemToCart = () => {
-    if (!editSelectedItem) return;
-    const rateToUse = Number(editSelectedRate) || Number(editSelectedItem.price) || 20;
-    const qtyToUse = Math.max(1, Number(editSelectedQty) || 1);
-    const serviceToUse = editSelectedService || 'Laundry + Iron';
+  const handleAddEditItemToCart = (itemOverride = null, rateOverride = null) => {
+    const targetItem = itemOverride && itemOverride.id ? itemOverride : editSelectedItem;
+    if (!targetItem) return;
+    const rateToUse = Number(rateOverride !== null ? rateOverride : editSelectedRate) || Number(targetItem.price) || 20;
+    const qtyToUse = itemOverride && itemOverride.id ? 1 : Math.max(1, Number(editSelectedQty) || 1);
+    const serviceToUse = editSelectedService || 'Laundry';
 
     setEditCart((prev) => {
       const existingIdx = prev.findIndex(
-        (it) => it.id === editSelectedItem.id && it.serviceType === serviceToUse
+        (it) => it.id === targetItem.id && it.serviceType === serviceToUse
       );
       if (existingIdx >= 0) {
         const next = [...prev];
@@ -747,16 +1301,16 @@ export default function POSModule({
       return [
         ...prev,
         {
-          id: editSelectedItem.id,
-          name: editSelectedItem.name,
+          id: targetItem.id,
+          name: targetItem.name,
           qty: qtyToUse,
           rate: rateToUse,
           serviceType: serviceToUse,
-          icon: editSelectedItem.icon || '👕',
+          icon: targetItem.icon || '👕',
         },
       ];
     });
-    showToast?.(`Added ${qtyToUse}x ${editSelectedItem.name} to order cart`);
+    showToast?.(`Added ${qtyToUse}x ${targetItem.name} (${serviceToUse}) to order cart`);
   };
 
   const handleRemoveEditCartItem = (idx) => {
@@ -795,7 +1349,7 @@ export default function POSModule({
         name: it.name || it.item_name || 'Garment',
         qty: Number(it.qty || it.count || 1),
         rate: Number(it.rate || it.unit_price || it.price || 20),
-        serviceType: it.serviceType || it.service || 'Laundry + Iron',
+        serviceType: it.serviceType || it.service || 'Laundry',
         icon: it.icon || (it.name?.toLowerCase().includes('steam') ? '♨️' : it.name?.toLowerCase().includes('dry') ? '✨' : it.name?.toLowerCase().includes('starch') ? '👔' : it.name?.toLowerCase().includes('fabric') ? '🌸' : it.name?.toLowerCase().includes('hanger') ? '🏷' : '🧺'),
       }));
     } else if (ord.services_allocated && Array.isArray(ord.services_allocated) && ord.services_allocated.length > 0) {
@@ -804,21 +1358,22 @@ export default function POSModule({
         name: s.name,
         qty: Number(s.count || 1),
         rate: 20,
-        serviceType: 'Laundry + Iron',
+        serviceType: 'Laundry',
         icon: s.icon || (s.name?.toLowerCase().includes('steam') ? '♨️' : s.name?.toLowerCase().includes('dry') ? '✨' : s.name?.toLowerCase().includes('starch') ? '👔' : s.name?.toLowerCase().includes('fabric') ? '🌸' : s.name?.toLowerCase().includes('hanger') ? '🏷' : '🧺'),
       }));
     } else if (!ord.items && !ord.services_allocated) {
       // 6 standard lines matching the user's screenshot (total 9 pieces)
       initialCart = [
-        { id: 'normal_wash', name: 'Normal Wash', qty: 3, rate: 20, serviceType: 'Laundry + Iron', icon: '🧺' },
-        { id: 'steam_press', name: 'Steam Press', qty: 2, rate: 20, serviceType: 'Laundry + Iron', icon: '♨️' },
-        { id: 'dry_clean', name: 'Dry Clean', qty: 1, rate: 20, serviceType: 'Laundry + Iron', icon: '✨' },
-        { id: 'starch_finish', name: 'Starch Finish', qty: 1, rate: 20, serviceType: 'Laundry + Iron', icon: '👔' },
-        { id: 'fabric_softener', name: 'Fabric Softener', qty: 1, rate: 20, serviceType: 'Laundry + Iron', icon: '🌸' },
-        { id: 'hanger_packaging', name: 'Hanger Packaging', qty: 1, rate: 20, serviceType: 'Laundry + Iron', icon: '🏷' },
+        { id: 'normal_wash', name: 'Normal Wash', qty: 3, rate: 20, serviceType: 'Laundry', icon: '🧺' },
+        { id: 'steam_press', name: 'Steam Press', qty: 2, rate: 20, serviceType: 'Laundry', icon: '♨️' },
+        { id: 'dry_clean', name: 'Dry Clean', qty: 1, rate: 20, serviceType: 'Laundry', icon: '✨' },
+        { id: 'starch_finish', name: 'Starch Finish', qty: 1, rate: 20, serviceType: 'Laundry', icon: '👔' },
+        { id: 'fabric_softener', name: 'Fabric Softener', qty: 1, rate: 20, serviceType: 'Laundry', icon: '🌸' },
+        { id: 'hanger_packaging', name: 'Hanger Packaging', qty: 1, rate: 20, serviceType: 'Laundry', icon: '🏷' },
       ];
     }
     setEditCart(initialCart);
+    setEditSelectedService(initialCart[0]?.serviceType || 'Laundry');
     const initialPhotos = (ord.photos && ord.photos.length > 0)
       ? ord.photos
       : (ord.inspection?.photos && ord.inspection.photos.length > 0)
@@ -877,6 +1432,9 @@ export default function POSModule({
       payment_status: paymentStatus,
       assigned_driver: ord.assigned_driver || 'Ramesh Kumar (Route 4)',
       assigned_driver_full: ord.assigned_driver_full || '',
+      attend_staff_name: ord.attend_staff_name || ord.status_updated_by || ord.assigned_staff || '',
+      assigned_pickup_delivery_person: ord.assigned_pickup_delivery_person || ord.assigned_driver || '',
+      collected_by_person: ord.collected_by_person || '',
       factory_hub: ord.factory_hub || ord.factory_outlet || 'Factory Outlet Unit 1 (Main Processing Plant)',
       factory_outlet: ord.factory_outlet || ord.factory_hub || 'Factory Outlet Unit 1 (Main Processing Plant)',
       store_outlet: ord.store_outlet || 'Store Outlet #1 (Central Vellore Main)',
@@ -904,10 +1462,42 @@ export default function POSModule({
   const handleQuickStatusUpdate = (newStatus) => {
     if (!editingOrderRecord || !newStatus) return;
     const normalized = normalizeOrderStatus(newStatus);
+    const nowIso = new Date().toISOString();
+    const staffActor = (editFormData?.attend_staff_name || editingOrderRecord.attend_staff_name || editingOrderRecord.assigned_staff || 'Counter Staff').trim();
+    const pickupPerson = (editFormData?.assigned_pickup_delivery_person || editingOrderRecord.assigned_pickup_delivery_person || editingOrderRecord.assigned_driver || '').trim();
+    const prevHistory = Array.isArray(editingOrderRecord.activity_history) && editingOrderRecord.activity_history.length > 0
+      ? editingOrderRecord.activity_history
+      : (Array.isArray(editingOrderRecord.audit_logs) ? editingOrderRecord.audit_logs : []);
+    const statusEvent = {
+      id: `act_status_${Date.now()}`,
+      type: normalized === 'Delivered' ? 'collection' : 'status',
+      title: normalized === 'Delivered' ? 'Order Delivered' : 'Status Updated',
+      detail: normalized === 'Delivered'
+        ? `Garments delivered (${pickupPerson || editFormData?.customer_name || editingOrderRecord.customer_name || 'Customer'})`
+        : `${normalized}`,
+      staff: staffActor,
+      timestamp: nowIso,
+    };
+    const nextHistory = [statusEvent, ...prevHistory];
     const updatedOrder = {
       ...editingOrderRecord,
       status: normalized,
       order_status: normalized,
+      attend_staff_name: staffActor,
+      assigned_staff: staffActor,
+      assigned_pickup_delivery_person: pickupPerson,
+      assigned_driver: pickupPerson || editingOrderRecord.assigned_driver,
+      status_updated_at: nowIso,
+      status_updated_by: staffActor,
+      activity_history: nextHistory,
+      audit_logs: nextHistory,
+      logs: nextHistory,
+      updated_at: nowIso,
+      ...(normalized === 'Delivered' ? {
+        collection_at: editingOrderRecord.collection_at || nowIso,
+        delivered_at: editingOrderRecord.delivered_at || nowIso,
+        collected_by_person: editFormData?.collected_by_person || pickupPerson || editFormData?.customer_name || editingOrderRecord.customer_name || 'Customer',
+      } : {}),
       ...(editFormData ? {
         customer_name: editFormData.customer_name,
         mobile_number: editFormData.mobile_number,
@@ -918,7 +1508,7 @@ export default function POSModule({
       } : {}),
     };
 
-    setEditFormData((prev) => (prev ? { ...prev, status: normalized, order_status: normalized } : null));
+    setEditFormData((prev) => (prev ? { ...prev, status: normalized, order_status: normalized, activity_history: nextHistory } : null));
     setEditingOrderRecord(updatedOrder);
 
     if (onUpdateOrder) {
@@ -944,6 +1534,15 @@ export default function POSModule({
         mobileNumber: updatedOrder.mobile_number,
         address: updatedOrder.address,
         orderNotes: updatedOrder.comments,
+        attend_staff_name: staffActor,
+        assignedStaff: staffActor,
+        assigned_pickup_delivery_person: pickupPerson,
+        assigned_driver: pickupPerson || updatedOrder.assigned_driver,
+        status_updated_at: nowIso,
+        status_updated_by: staffActor,
+        activity_history: nextHistory,
+        collection_at: updatedOrder.collection_at,
+        collected_by_person: updatedOrder.collected_by_person,
       }).catch((e) => console.warn('Supabase status update note:', e));
     }
 
@@ -965,6 +1564,66 @@ export default function POSModule({
       return;
     }
 
+    const nowIso = new Date().toISOString();
+    const staffActor = (editFormData.attend_staff_name || editingOrderRecord.attend_staff_name || editingOrderRecord.assigned_staff || 'Counter Staff').trim();
+    const pickupPerson = (editFormData.assigned_pickup_delivery_person || editingOrderRecord.assigned_pickup_delivery_person || editFormData.assigned_driver || '').trim();
+    const prevHistory = Array.isArray(editFormData.activity_history) && editFormData.activity_history.length > 0
+      ? [...editFormData.activity_history]
+      : (Array.isArray(editingOrderRecord.activity_history) && editingOrderRecord.activity_history.length > 0
+        ? [...editingOrderRecord.activity_history]
+        : (Array.isArray(editingOrderRecord.audit_logs) ? [...editingOrderRecord.audit_logs] : []));
+    const addedEvents = [];
+
+    if (normalizeOrderStatus(editFormData.status) !== normalizeOrderStatus(editingOrderRecord.order_status || editingOrderRecord.status)) {
+      addedEvents.push({
+        id: `act_status_${Date.now()}`,
+        type: normalizeOrderStatus(editFormData.status) === 'Delivered' ? 'collection' : 'status',
+        title: normalizeOrderStatus(editFormData.status) === 'Delivered' ? 'Order Delivered' : 'Status Updated',
+        detail: normalizeOrderStatus(editFormData.status) === 'Delivered'
+          ? `Garments delivered (${pickupPerson || editFormData.customer_name || 'Customer'})`
+          : `${normalizeOrderStatus(editFormData.status)}`,
+        staff: staffActor,
+        timestamp: nowIso,
+      });
+    }
+
+    const prevCartSig = (editingOrderRecord.items || []).map((i) => `${i.name}:${i.qty}:${i.serviceType || i.service || ''}`).join('|');
+    const nextCartSig = editCart.map((i) => `${i.name}:${i.qty}:${i.serviceType || ''}`).join('|');
+    if (prevCartSig !== nextCartSig) {
+      const breakdownText = formatServiceBreakdown(editCart, editFormData.service_category || editingOrderRecord.service_category || 'Laundry', true);
+      addedEvents.push({
+        id: `act_svc_${Date.now() + 1}`,
+        type: 'service',
+        title: 'Service Updated',
+        detail: breakdownText || `Garments updated (${totalPieces} pcs)`,
+        staff: staffActor,
+        timestamp: nowIso,
+      });
+    }
+
+    if (advancePaidVal > 0 && (advancePaidVal !== Number(editingOrderRecord.advance_paid || 0) || editFormData.payment_status !== editingOrderRecord.payment_status)) {
+      addedEvents.push({
+        id: `act_pay_${Date.now() + 2}`,
+        type: 'payment',
+        title: 'Payment Received',
+        detail: `${currencySymbol}${advancePaidVal.toFixed(2)} received via ${editFormData.payment_method || editingOrderRecord.payment_method || 'Cash'}`,
+        staff: staffActor,
+        timestamp: nowIso,
+      });
+    }
+
+    const combinedHistory = [...addedEvents, ...prevHistory];
+    const resolvedPaymentAt = advancePaidVal > 0
+      ? (advancePaidVal !== Number(editingOrderRecord.advance_paid || 0) ? nowIso : (editingOrderRecord.payment_received_at || nowIso))
+      : editingOrderRecord.payment_received_at || null;
+    const isNowDelivered = normalizeOrderStatus(editFormData.status) === 'Delivered';
+    const resolvedCollectionAt = isNowDelivered
+      ? (editingOrderRecord.collection_at || nowIso)
+      : (editingOrderRecord.collection_at || null);
+    const resolvedCollectedBy = isNowDelivered
+      ? (editFormData.collected_by_person || pickupPerson || editFormData.customer_name || 'Customer')
+      : (editFormData.collected_by_person || editingOrderRecord.collected_by_person || '');
+
     const updatedOrder = {
       ...editingOrderRecord,
       customer_name: editFormData.customer_name,
@@ -973,6 +1632,17 @@ export default function POSModule({
       service_category: editFormData.service_category,
       status: editFormData.status,
       order_status: editFormData.status,
+      attend_staff_name: staffActor,
+      assigned_staff: staffActor,
+      assigned_pickup_delivery_person: pickupPerson,
+      status_updated_at: nowIso,
+      status_updated_by: staffActor,
+      activity_history: combinedHistory,
+      payment_received_at: resolvedPaymentAt,
+      payment_received_by: advancePaidVal > 0 ? staffActor : (editingOrderRecord.payment_received_by || ''),
+      collection_at: resolvedCollectionAt,
+      collected_by_person: resolvedCollectedBy,
+      updated_at: nowIso,
       captured_date: editFormData.captured_date,
       captured_time: editFormData.captured_time,
       order_type: editFormData.order_type,
@@ -988,6 +1658,8 @@ export default function POSModule({
       services_allocated: editCart.map((it) => ({
         name: it.name,
         count: it.qty,
+        serviceType: it.serviceType || it.service || 'Laundry',
+        service: it.serviceType || it.service || 'Laundry',
         icon: it.icon,
       })),
       item_count: totalPieces,
@@ -1012,12 +1684,12 @@ export default function POSModule({
         photos: Object.values(editInspections).flatMap((p) => p.photos || []),
         photosCount: Object.values(editInspections).flatMap((p) => p.photos || []).length,
       },
-      assigned_driver: editFormData.assigned_driver || editingOrderRecord.assigned_driver,
+      assigned_driver: pickupPerson || editFormData.assigned_driver || editingOrderRecord.assigned_driver,
       assigned_driver_full: editFormData.assigned_driver_full || editingOrderRecord.assigned_driver_full,
       pickup_status: editFormData.pickup_status || editingOrderRecord.pickup_status,
-      assigned_for_pickup: editFormData.assigned_for_pickup || editingOrderRecord.assigned_for_pickup,
-      audit_logs: editFormData.audit_logs || editingOrderRecord.audit_logs || [],
-      logs: editFormData.logs || editingOrderRecord.logs || [],
+      assigned_for_pickup: editFormData.assigned_for_pickup || Boolean(pickupPerson) || editingOrderRecord.assigned_for_pickup,
+      audit_logs: combinedHistory,
+      logs: combinedHistory,
     };
 
     if (onUpdateOrder) {
@@ -1053,8 +1725,18 @@ export default function POSModule({
         totalAmount: grandTotal,
         advancePaid: Number(editFormData.advance_paid || 0),
         paymentStatus: editFormData.payment_status,
-        paymentMethod: updatedOrder.payment_method || 'Cash',
-        assignedStaff: editFormData.collected_by_staff || updatedOrder.assigned_driver,
+        paymentMethod: editFormData.payment_method || updatedOrder.payment_method || 'Cash',
+        assignedStaff: staffActor,
+        attend_staff_name: staffActor,
+        assigned_pickup_delivery_person: pickupPerson,
+        assigned_driver: pickupPerson || updatedOrder.assigned_driver,
+        status_updated_at: nowIso,
+        status_updated_by: staffActor,
+        activity_history: combinedHistory,
+        payment_received_at: resolvedPaymentAt,
+        payment_received_by: advancePaidVal > 0 ? staffActor : (editingOrderRecord.payment_received_by || ''),
+        collection_at: resolvedCollectionAt,
+        collected_by_person: resolvedCollectedBy,
         items: updatedOrder.items,
         garment_inspections: editInspections,
         factory_hub: editFormData.factory_hub || editFormData.factory_outlet,
@@ -1191,7 +1873,7 @@ export default function POSModule({
   const [walkinAddress, setWalkinAddress] = useState('');
 
   // Service Details State
-  const [serviceCategory, setServiceCategory] = useState('Wash & Steam Press');
+  const [serviceCategory, setServiceCategory] = useState('Laundry');
   const [intakeType, setIntakeType] = useState('Walk-In');
   const [pickupDate, setPickupDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [deliveryDate, setDeliveryDate] = useState(() => {
@@ -1199,6 +1881,8 @@ export default function POSModule({
     d.setDate(d.getDate() + 2);
     return d.toISOString().slice(0, 10);
   });
+  const [intakeAttendStaff, setIntakeAttendStaff] = useState('');
+  const [intakePickupPerson, setIntakePickupPerson] = useState('');
 
   // System sequence & submission state
   const [nextOrderNum, setNextOrderNum] = useState('ORDER-00001');
@@ -1547,7 +2231,7 @@ export default function POSModule({
     setWalkinName(item.walkinName || '');
     setWalkinPhone(item.walkinPhone || '');
     setWalkinAddress(item.walkinAddress || '');
-    setServiceCategory(item.serviceCategory || 'Wash & Steam Press');
+    setServiceCategory(item.serviceCategory || 'Laundry');
     setIntakeType(item.intakeType || 'Walk-In');
     setSpecialNotes(item.specialNotes || '');
 
@@ -1574,6 +2258,8 @@ export default function POSModule({
     setSpecialNotes('');
     setDiscountPercent(0);
     setTaxExemption(false);
+    setIntakeAttendStaff('');
+    setIntakePickupPerson('');
     getNextOrderId().then((num) => num && setNextOrderNum(num));
     showToast?.('✨ POS register ready for next customer');
   };
@@ -1733,6 +2419,10 @@ export default function POSModule({
       payment_method: paymentMode,
       payment_status: paymentMode === 'Cash' || paymentMode === 'UPI / QR Code' ? 'Paid' : 'Unpaid',
       advance_paid: paymentMode === 'Cash' || paymentMode === 'UPI / QR Code' ? grandTotal : 0,
+      attend_staff_name: intakeAttendStaff.trim() || 'Counter Staff',
+      assigned_staff: intakeAttendStaff.trim() || 'Counter Staff',
+      assigned_pickup_delivery_person: intakePickupPerson.trim(),
+      assigned_driver: intakePickupPerson.trim(),
     };
 
     const existingCustId = selectedCustomer?.customer_id || selectedCustomer?.customerId || selectedCustomer?.id;
@@ -1768,7 +2458,15 @@ export default function POSModule({
       item_count: totalItemsCount,
       status: initialStatus,
       order_status: initialStatus,
+      order_type: intakeType,
+      intake_method: intakeType,
       created_at: data?.created_at || new Date().toISOString(),
+      attend_staff_name: customerPayload.attend_staff_name,
+      assigned_staff: customerPayload.assigned_staff,
+      assigned_pickup_delivery_person: customerPayload.assigned_pickup_delivery_person,
+      assigned_driver: customerPayload.assigned_driver,
+      status_updated_at: data?.created_at || new Date().toISOString(),
+      status_updated_by: customerPayload.attend_staff_name,
       items: cart,
       customer: {
         customer_name: customerName,
@@ -2620,13 +3318,26 @@ export default function POSModule({
 
                         // Services Allocated list: empty when no items or services allocated
                         const servicesAllocated = (Array.isArray(ord.services_allocated) && ord.services_allocated.length > 0)
-                          ? ord.services_allocated
+                          ? ord.services_allocated.map((s, sIdx) => {
+                              const matchedItem = Array.isArray(items) ? items[sIdx] : null;
+                              const resolvedSvc = s.serviceType || s.service || matchedItem?.serviceType || matchedItem?.service || '';
+                              return {
+                                ...s,
+                                serviceType: resolvedSvc,
+                                service: resolvedSvc,
+                              };
+                            })
                           : (Array.isArray(items) && items.length > 0
-                              ? items.map((it) => ({
-                                  name: it.service || it.name || it.item_name || srv,
-                                  count: Number(it.qty || it.quantity) || 1,
-                                  icon: '👕',
-                                }))
+                              ? items.map((it) => {
+                                  const resolvedSvc = it.serviceType || it.service || '';
+                                  return {
+                                    name: it.name || it.item_name || it.service || srv,
+                                    count: Number(it.qty || it.quantity) || 1,
+                                    serviceType: resolvedSvc,
+                                    service: resolvedSvc,
+                                    icon: it.icon || getServiceItemIcon(it),
+                                  };
+                                })
                               : []);
 
                         // Status colors & style (Only Received, In Progress, Ready, Delivered, Cancelled)
@@ -2835,18 +3546,18 @@ export default function POSModule({
 
                             {/* 3. Address (Red Map Pin & Text) */}
                             {isColVisible('address') && (
-                              <td className="col-address" style={{ maxWidth: '210px', verticalAlign: 'top', paddingTop: '14px' }}>
-                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', lineHeight: 1.35 }}>
+                              <td className="col-address" style={{ minWidth: '240px', maxWidth: '320px', verticalAlign: 'top', paddingTop: '14px' }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', lineHeight: 1.35, minWidth: '190px' }}>
                                   <svg width="16" height="16" viewBox="0 0 24 24" fill="#ef4444" stroke="#dc2626" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
                                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
                                     <circle cx="12" cy="10" r="3" fill="#ffffff"></circle>
                                   </svg>
-                                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                    <span style={{ fontWeight: 650, color: '#1e293b', fontSize: '13px' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                                    <span style={{ fontWeight: 650, color: '#1e293b', fontSize: '13px', wordBreak: 'normal', overflowWrap: 'break-word' }}>
                                       {custAddress.split(',')[0]?.trim() || custAddress}
                                     </span>
                                     {custAddress.includes(',') && (
-                                      <span style={{ fontSize: '11.5px', color: '#64748b', marginTop: '1px' }}>
+                                      <span style={{ fontSize: '11.5px', color: '#64748b', marginTop: '1px', wordBreak: 'normal', overflowWrap: 'break-word' }}>
                                         {custAddress.split(',').slice(1).join(',').trim()}
                                       </span>
                                     )}
@@ -2998,35 +3709,48 @@ export default function POSModule({
                               </td>
                             )}
 
-                            {/* 5. Status (Icon badge & processing subtext) */}
+                            {/* 5. Status (Clickable dot + label, update date/time, and staff name matching reference image) */}
                             {isColVisible('status') && (
-                              <td className="col-status" style={{ verticalAlign: 'top', paddingTop: '14px' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
-                                  <div style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '7px',
-                                    padding: '5px 12px',
-                                    borderRadius: '8px',
-                                    fontSize: '12.5px',
-                                    fontWeight: 650,
-                                    background: statusBg,
-                                    color: statusColor,
-                                    border: `1px solid ${statusBorder}`,
-                                    whiteSpace: 'nowrap'
-                                  }}>
-                                    <span style={{ fontSize: '13px', lineHeight: 1 }}>
-                                      {workStatus === 'In Progress' ? '⏱' : workStatus === 'Cancelled' ? '✕' : workStatus === 'Ready' ? '✓' : workStatus === 'Delivered' ? '✓' : '📥'}
-                                    </span>
-                                    <span>
-                                      {workStatus === 'In Progress' ? t('status_progress') :
-                                       workStatus === 'Ready' ? t('status_ready') :
-                                       workStatus === 'Delivered' ? t('status_delivered') :
-                                       workStatus === 'Cancelled' ? t('status_cancelled') :
-                                       t('status_received')}
-                                    </span>
-                                  </div>
-                                </div>
+                              <td className="col-status" style={{ verticalAlign: 'top', paddingTop: '12px' }}>
+                                {(() => {
+                                  const statusLabel =
+                                    workStatus === 'In Progress' ? t('status_progress', 'In Progress') :
+                                    workStatus === 'Ready' ? t('status_ready', 'Ready') :
+                                    workStatus === 'Delivered' ? t('status_delivered', 'Delivered') :
+                                    workStatus === 'Cancelled' ? t('status_cancelled', 'Cancelled') :
+                                    t('status_received', 'Order Received');
+                                  const statusMeta = formatStatusTimestamp(
+                                    ord.status_updated_at || ord.updated_at || ord.created_at
+                                  );
+                                  const statusDateTimeText = statusMeta.dateTimeStr !== '—'
+                                    ? statusMeta.dateTimeStr
+                                    : orderCapturedStr;
+                                  const statusStaffText =
+                                    ord.status_updated_by ||
+                                    ord.attend_staff_name ||
+                                    ord.assigned_staff ||
+                                    'Counter Staff';
+
+                                  return (
+                                    <button
+                                      type="button"
+                                      className="pos-status-cell-btn"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setStatusPanelOrder(ord);
+                                        setStatusPanelTab('details');
+                                      }}
+                                      title="Click status to view order details, activity history, payment & collection info"
+                                    >
+                                      <span className="pos-status-cell-top" style={{ color: statusColor }}>
+                                        <span className="pos-status-cell-dot" style={{ background: statusDotColor }} />
+                                        <span>{statusLabel}</span>
+                                      </span>
+                                      <span className="pos-status-cell-time">{statusDateTimeText}</span>
+                                      <span className="pos-status-cell-staff">By {statusStaffText}</span>
+                                    </button>
+                                  );
+                                })()}
                               </td>
                             )}
 
@@ -3348,13 +4072,13 @@ export default function POSModule({
 
                             {/* 11. Comments */}
                             {isColVisible('comments') && (
-                              <td className="col-comments" style={{ verticalAlign: 'top', paddingTop: '14px', maxWidth: '240px' }}>
+                              <td className="col-comments" style={{ verticalAlign: 'top', paddingTop: '14px', minWidth: '250px', maxWidth: '340px' }}>
                                 {(() => {
                                   const commentText = ord.internal_notes || ord.comments || ord.notes || ord.special_instructions || ord.preference_notes || (isOnCall ? 'Gate delivery; call before arrival' : 'Handle with care - steam press');
                                   return (
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '5px' }}>
-                                      <span style={{ fontSize: '12px', marginTop: '1px' }}>💬</span>
-                                      <span style={{ fontSize: '12px', color: '#475569', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={commentText}>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '5px', minWidth: '200px' }}>
+                                      <span style={{ fontSize: '12px', marginTop: '1px', flexShrink: 0 }}>💬</span>
+                                      <span style={{ fontSize: '12px', color: '#475569', lineHeight: 1.4, whiteSpace: 'normal', wordBreak: 'normal', overflowWrap: 'break-word' }} title={commentText}>
                                         {commentText}
                                       </span>
                                     </div>
@@ -3456,11 +4180,11 @@ export default function POSModule({
 
                             {/* 16. Date of Birth */}
                             {isColVisible('dob') && (
-                              <td className="col-dob" style={{ verticalAlign: 'top', paddingTop: '14px' }}>
+                              <td className="col-dob" style={{ verticalAlign: 'top', paddingTop: '14px', minWidth: '155px', whiteSpace: 'nowrap' }}>
                                 {(() => {
                                   const dobVal = ord.dob || ord.date_of_birth || ord.customer?.dob || '12 Oct 1994';
                                   return (
-                                    <span style={{ fontSize: '12px', color: '#475569', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <span style={{ fontSize: '12px', color: '#475569', display: 'inline-flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}>
                                       <span>🎂</span>
                                       <span>{dobVal}</span>
                                     </span>
@@ -3669,6 +4393,37 @@ export default function POSModule({
                                                 <line x1="3" y1="10" x2="21" y2="10" />
                                               </svg>
                                             </div>
+                                          </div>
+
+                                          {/* Attend Staff Name & Assigned Pickup / Delivery Person */}
+                                          <div>
+                                            <label className="pos-edit-label">
+                                              Attend Staff Name
+                                            </label>
+                                            <input
+                                              type="text"
+                                              className="pos-edit-field"
+                                              value={editFormData.attend_staff_name || ''}
+                                              onChange={(e) => setEditFormData({ ...editFormData, attend_staff_name: e.target.value })}
+                                              placeholder="e.g. Ravi Kumar"
+                                            />
+                                          </div>
+
+                                          <div>
+                                            <label className="pos-edit-label">
+                                              Assigned Pickup &amp; Delivery Person
+                                            </label>
+                                            <input
+                                              type="text"
+                                              className="pos-edit-field"
+                                              value={editFormData.assigned_pickup_delivery_person || ''}
+                                              onChange={(e) => setEditFormData({
+                                                ...editFormData,
+                                                assigned_pickup_delivery_person: e.target.value,
+                                                assigned_driver: e.target.value,
+                                              })}
+                                              placeholder="e.g. Ramesh Kumar / Self Pickup"
+                                            />
                                           </div>
 
                                           {/* Comments Textarea (Spans 2 columns) */}
@@ -3925,7 +4680,7 @@ export default function POSModule({
                                                         e.stopPropagation();
                                                         setEditSelectedItem(item);
                                                         setEditSelectedRate(item.price);
-                                                        handleAddEditItemToCart();
+                                                        handleAddEditItemToCart(item, item.price);
                                                       }}
                                                     >
                                                       + Add
@@ -3971,19 +4726,16 @@ export default function POSModule({
 
                                               {/* Service Type Dropdown */}
                                               <div style={{ marginBottom: '8px' }}>
-                                                <label className="pos-edit-label">{t('pos_service_type', 'Service Type')}</label>
-                                                <select
-                                                  className="pos-edit-field"
+                                                <ServiceTypeSelect
+                                                  label={t('pos_service_type', 'Service Type')}
+                                                  labelClassName="pos-edit-label"
+                                                  selectClassName="pos-edit-field"
                                                   value={editSelectedService}
-                                                  onChange={(e) => setEditSelectedService(e.target.value)}
-                                                >
-                                                  <option value="Laundry + Iron">Laundry + Iron</option>
-                                                  <option value="Normal Wash">Normal Wash</option>
-                                                  <option value="Dry Clean">Dry Clean</option>
-                                                  <option value="Steam Press">Steam Press</option>
-                                                  <option value="Wash &amp; Fold">Wash &amp; Fold</option>
-                                                  <option value="Shoe Spa / Leather Care">Shoe Spa / Leather Care</option>
-                                                </select>
+                                                  onChange={setEditSelectedService}
+                                                  onServiceAdded={(added, isNew) => {
+                                                    if (isNew) showToast?.(`✅ Added service type "${added}"`);
+                                                  }}
+                                                />
                                               </div>
 
                                               {/* Quantity & Rate Row */}
@@ -4031,7 +4783,7 @@ export default function POSModule({
                                                 type="button"
                                                 className="pos-edit-save-btn"
                                                 style={{ width: '100%', justifyContent: 'center' }}
-                                                onClick={handleAddEditItemToCart}
+                                                onClick={() => handleAddEditItemToCart()}
                                               >
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
                                                   <circle cx="9" cy="21" r="1"></circle>
@@ -5029,7 +5781,28 @@ export default function POSModule({
                                                   </div>
                                                 </div>
 
-                                                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '12px', flexWrap: 'wrap' }}>
+                                                  <div style={{ minWidth: '220px', flex: '0 1 280px' }}>
+                                                    <label className="pos-edit-label">UPI Instant Pay</label>
+                                                    <button
+                                                      type="button"
+                                                      className="btn-show-qr"
+                                                      onClick={() => setShowEditQRModal(true)}
+                                                      title="Display UPI QR code to scan and pay"
+                                                    >
+                                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <rect x="3" y="3" width="7" height="7"></rect>
+                                                        <rect x="14" y="3" width="7" height="7"></rect>
+                                                        <rect x="14" y="14" width="7" height="7"></rect>
+                                                        <rect x="3" y="14" width="7" height="7"></rect>
+                                                        <path d="M7 7h.01"></path>
+                                                        <path d="M17 7h.01"></path>
+                                                        <path d="M7 17h.01"></path>
+                                                      </svg>
+                                                      <span>SHOW QR</span>
+                                                    </button>
+                                                  </div>
+
                                                   <button
                                                     type="button"
                                                     onClick={() => {
@@ -5041,7 +5814,7 @@ export default function POSModule({
                                                       showToast?.('✅ Marked order as fully paid!');
                                                     }}
                                                     className="pos-edit-save-btn"
-                                                    style={{ height: '34px', fontSize: '12px', background: '#16a34a', borderColor: '#16a34a' }}
+                                                    style={{ height: '38px', fontSize: '12px', background: '#16a34a', borderColor: '#16a34a' }}
                                                   >
                                                     ✓ Mark as Fully Paid
                                                   </button>
@@ -5519,18 +6292,13 @@ export default function POSModule({
                       </div>
                       <div className="pos-cart-item-meta">
                         <div className="pos-cart-item-name">{item.name}</div>
-                        <select
-                          className="pos-cart-service-select"
+                        <ServiceTypeSelect
+                          selectClassName="pos-cart-service-select"
                           value={item.service}
-                          onChange={(e) => handleItemServiceChange(idx, e.target.value)}
+                          onChange={(val) => handleItemServiceChange(idx, val)}
                           title="Change service treatment"
-                        >
-                          {SERVICE_OPTIONS.map((srv) => (
-                            <option key={srv} value={srv}>
-                              {srv}
-                            </option>
-                          ))}
-                        </select>
+                          allowAdd={false}
+                        />
                       </div>
                     </div>
 
@@ -5780,18 +6548,16 @@ export default function POSModule({
 
           {/* Service Settings */}
           <div className="pos-field-group">
-            <label className="pos-field-label">Primary Intake Category</label>
-            <select
-              className="pos-select"
+            <ServiceTypeSelect
+              label="Primary Intake Category"
+              labelClassName="pos-field-label"
+              selectClassName="pos-select"
               value={serviceCategory}
-              onChange={(e) => setServiceCategory(e.target.value)}
-            >
-              {SERVICE_OPTIONS.map((srv) => (
-                <option key={srv} value={srv}>
-                  {srv}
-                </option>
-              ))}
-            </select>
+              onChange={setServiceCategory}
+              onServiceAdded={(added, isNew) => {
+                if (isNew) showToast?.(`✅ Added service type "${added}"`);
+              }}
+            />
           </div>
 
           <div className="pos-field-group">
@@ -5826,6 +6592,31 @@ export default function POSModule({
                 className="pos-input"
                 value={deliveryDate}
                 onChange={(e) => setDeliveryDate(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Attend Staff Name & Assigned Pickup / Delivery Person */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <div className="pos-field-group">
+              <label className="pos-field-label">Attend Staff Name</label>
+              <input
+                type="text"
+                className="pos-input"
+                placeholder="e.g. Ravi Kumar"
+                value={intakeAttendStaff}
+                onChange={(e) => setIntakeAttendStaff(e.target.value)}
+              />
+            </div>
+
+            <div className="pos-field-group">
+              <label className="pos-field-label">Assigned Pickup &amp; Delivery</label>
+              <input
+                type="text"
+                className="pos-input"
+                placeholder="e.g. Ramesh Kumar"
+                value={intakePickupPerson}
+                onChange={(e) => setIntakePickupPerson(e.target.value)}
               />
             </div>
           </div>
@@ -6008,12 +6799,32 @@ export default function POSModule({
               advancePaid: updated.advance_paid,
               paymentStatus: updated.payment_status,
               paymentMethod: updated.payment_method || updated.payment?.mode || 'Cash',
-              assignedStaff: updated.assigned_driver,
+              assignedStaff: updated.attend_staff_name || updated.assigned_staff || updated.assigned_driver,
+              attend_staff_name: updated.attend_staff_name,
+              assigned_pickup_delivery_person: updated.assigned_pickup_delivery_person,
+              assigned_driver: updated.assigned_driver,
+              status_updated_at: updated.status_updated_at,
+              status_updated_by: updated.status_updated_by,
+              activity_history: updated.activity_history,
+              payment_received_at: updated.payment_received_at,
+              payment_received_by: updated.payment_received_by,
+              collection_at: updated.collection_at,
+              collected_by_person: updated.collected_by_person,
               items: updated.items,
               garment_inspections: updated.garment_inspections || updated.inspections,
             }).catch((e) => console.warn('Supabase SideEdit update note:', e));
           }
         }}
+      />
+
+      {/* ── Status Column Click Side Panel (Order Details, Activity History, Payment Info, Collection Info) ── */}
+      <OrderStatusSidePanel
+        isOpen={Boolean(statusPanelOrder)}
+        order={statusPanelOrder}
+        activeTab={statusPanelTab}
+        onTabChange={setStatusPanelTab}
+        onClose={() => setStatusPanelOrder(null)}
+        currencySymbol={currencySymbol}
       />
 
       {/* ── Standalone Quick View Order Modal (without opening Edit) ── */}
@@ -6042,6 +6853,111 @@ export default function POSModule({
         popoverRef={servicesPopoverRef}
         onClose={() => setActiveServicesPopover(null)}
       />
+
+      {/* ── UPI Payment QR Code Modal in Inline Order Edit ── */}
+      {showEditQRModal && editFormData && typeof document !== 'undefined' && createPortal(
+        <div className="pos-held-modal-backdrop" style={{ zIndex: 11000 }} onClick={() => setShowEditQRModal(false)}>
+          <div
+            className="pos-dialog-modal pos-qr-dialog-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="pos-dialog-header">
+              <div className="pos-dialog-title">
+                <span style={{ fontSize: '18px' }}>📱</span>
+                <span>UPI Payment QR Code</span>
+              </div>
+              <button
+                type="button"
+                className="pos-dialog-close-btn"
+                onClick={() => setShowEditQRModal(false)}
+                title="Close QR"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="pos-qr-order-banner">
+              <div style={{ fontSize: '13px', fontWeight: 800, color: '#38bdf8' }}>
+                #{editingOrderRecord?.order_number || editingOrderRecord?.order_id || editingOrderRecord?.id || 'ORDER'}
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary, #94a3b8)', marginTop: '2px' }}>
+                {editFormData.customer_name || 'Customer'}
+              </div>
+              <div style={{ marginTop: '8px', fontSize: '24px', fontWeight: 800, color: '#10b981' }}>
+                {currencySymbol}{(() => {
+                  const due = Math.max(0, editCartGrandTotal - Number(editFormData.advance_paid || 0));
+                  return (due > 0 ? due : editCartGrandTotal).toFixed(2);
+                })()}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary, #94a3b8)', marginTop: '2px' }}>
+                Scan to Pay via any UPI App
+              </div>
+            </div>
+
+            <div className="pos-qr-image-wrapper">
+              <img
+                src="/sample-qr.png"
+                alt="UPI Payment QR Code"
+                className="pos-qr-image"
+              />
+            </div>
+
+            <div className="pos-qr-apps-badge">
+              <span>Google Pay</span>
+              <span>•</span>
+              <span>PhonePe</span>
+              <span>•</span>
+              <span>Paytm</span>
+              <span>•</span>
+              <span>BHIM UPI</span>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+              <button
+                type="button"
+                className="pos-btn-secondary"
+                style={{ flex: 1, padding: '9px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}
+                onClick={() => setShowEditQRModal(false)}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                style={{
+                  flex: 1.2,
+                  padding: '9px 14px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  background: '#10b981',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)'
+                }}
+                onClick={() => {
+                  setEditFormData({
+                    ...editFormData,
+                    payment_status: 'Paid',
+                    payment_method: 'UPI / QR Code',
+                    advance_paid: editCartGrandTotal,
+                  });
+                  setShowEditQRModal(false);
+                  showToast?.('✓ Payment received via QR & marked as Fully Paid!');
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Mark Paid via QR</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

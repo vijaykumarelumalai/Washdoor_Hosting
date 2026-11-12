@@ -80,10 +80,10 @@ const NAV_ITEMS = [
   },
   {
     id: 'customer_mui',
-    label: 'Customer Master Record',
-    title: 'Customer Master Record',
+    label: 'Customer Reference',
+    title: 'Customer Reference',
     icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
         <rect x="3" y="3" width="18" height="18" rx="3"></rect>
         <path d="M3 9h18"></path>
         <path d="M9 21V9"></path>
@@ -99,19 +99,6 @@ const NAV_ITEMS = [
         <line x1="12" y1="20" x2="12" y2="10"></line>
         <line x1="18" y1="20" x2="18" y2="4"></line>
         <line x1="6" y1="20" x2="6" y2="14"></line>
-      </svg>
-    ),
-  },
-  {
-    id: 'apps',
-    label: 'Apps',
-    title: 'Apps & Add-ons',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <rect width="7" height="7" x="3" y="3" rx="1.5"></rect>
-        <rect width="7" height="7" x="14" y="3" rx="1.5"></rect>
-        <rect width="7" height="7" x="14" y="14" rx="1.5"></rect>
-        <rect width="7" height="7" x="3" y="14" rx="1.5"></rect>
       </svg>
     ),
   },
@@ -438,6 +425,17 @@ export default function App() {
         advancePaid: updatedOrder.advance_paid,
         paymentStatus: updatedOrder.payment_status,
         paymentMethod: updatedOrder.payment_method,
+        assignedStaff: updatedOrder.attend_staff_name || updatedOrder.assigned_staff || updatedOrder.assigned_driver,
+        attend_staff_name: updatedOrder.attend_staff_name,
+        assigned_pickup_delivery_person: updatedOrder.assigned_pickup_delivery_person,
+        assigned_driver: updatedOrder.assigned_driver,
+        status_updated_at: updatedOrder.status_updated_at,
+        status_updated_by: updatedOrder.status_updated_by,
+        activity_history: updatedOrder.activity_history,
+        payment_received_at: updatedOrder.payment_received_at,
+        payment_received_by: updatedOrder.payment_received_by,
+        collection_at: updatedOrder.collection_at,
+        collected_by_person: updatedOrder.collected_by_person,
         items: updatedOrder.items,
       }).catch((err) => console.warn('Background Supabase order update note:', err));
     }

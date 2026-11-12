@@ -2040,9 +2040,19 @@ function mapCustomerWorkRowToOrder(row, factoryRow = null, scheduleRow = null, g
     target_delivery_date: row.target_delivery_date,
     delivery_date: formattedExpectedDelivery,
     expected_delivery: formattedExpectedDelivery,
-    assigned_staff: row.assigned_staff || factoryData.collected_by_staff || '',
-    assigned_driver: factoryData.assigned_driver || schedData.assigned_driver_name || row.assigned_staff || internalNotesObj.assigned_driver || '',
-    assigned_driver_full: schedData.assigned_driver_full || internalNotesObj.assigned_driver_full || row.assigned_staff || '',
+    assigned_staff: row.assigned_staff || internalNotesObj.attend_staff_name || factoryData.collected_by_staff || '',
+    attend_staff_name: internalNotesObj.attend_staff_name || row.assigned_staff || '',
+    assigned_pickup_delivery_person: internalNotesObj.assigned_pickup_delivery_person || factoryData.assigned_driver || schedData.assigned_driver_name || internalNotesObj.assigned_driver || '',
+    assigned_driver: internalNotesObj.assigned_pickup_delivery_person || factoryData.assigned_driver || schedData.assigned_driver_name || internalNotesObj.assigned_driver || row.assigned_staff || '',
+    assigned_driver_full: schedData.assigned_driver_full || internalNotesObj.assigned_driver_full || internalNotesObj.assigned_pickup_delivery_person || row.assigned_staff || '',
+    status_updated_at: internalNotesObj.status_updated_at || row.updated_at || row.created_at || null,
+    status_updated_by: internalNotesObj.status_updated_by || internalNotesObj.attend_staff_name || row.assigned_staff || 'Counter Staff',
+    activity_history: Array.isArray(internalNotesObj.activity_history) ? internalNotesObj.activity_history : [],
+    logs: Array.isArray(internalNotesObj.activity_history) ? internalNotesObj.activity_history : [],
+    payment_received_at: internalNotesObj.payment_received_at || (advancePaid > 0 ? (row.updated_at || row.created_at) : null),
+    payment_received_by: internalNotesObj.payment_received_by || internalNotesObj.attend_staff_name || row.assigned_staff || 'Counter Staff',
+    collection_at: internalNotesObj.collection_at || row.delivered_at || null,
+    collected_by_person: internalNotesObj.collected_by_person || internalNotesObj.collected_by_staff || factoryData.collected_by_staff || '',
     assigned_for_pickup: Boolean(internalNotesObj.assigned_for_pickup || internalNotesObj.pickup_status === 'Assigned for Pickup' || (row.intake_method === 'On-Call' && (row.assigned_staff || internalNotesObj.assigned_driver))),
     pickup_status: internalNotesObj.pickup_status || (row.assigned_staff || internalNotesObj.assigned_driver ? 'Assigned for Pickup' : ''),
     pickup_delivery: internalNotesObj.pickup_delivery || ((row.assigned_staff || internalNotesObj.assigned_driver) ? `Assigned: ${internalNotesObj.assigned_driver || row.assigned_staff}` : ''),
@@ -2966,6 +2976,28 @@ export async function createOrderWithCustomer({
         : cleanCust.product_weight ? Number(cleanCust.product_weight) : null;
       const rackLocation = cleanCust.rack_shelf_location || cleanCust.rackShelfLocation || null;
 
+      const attendStaffVal = cleanCust.attend_staff_name || cleanCust.assigned_staff || 'Counter Staff';
+      const pickupPersonVal = cleanCust.assigned_pickup_delivery_person || cleanCust.assigned_driver || '';
+      const nowCreatedIso = cleanCust.intake_date ? new Date(cleanCust.intake_date).toISOString() : new Date().toISOString();
+      const initialActivity = [
+        ...(advancePaidVal > 0 ? [{
+          id: `act_pay_${Date.now()}`,
+          type: 'payment',
+          title: 'Payment Received',
+          detail: `₹${advancePaidVal.toFixed(2)} received via ${cleanCust.payment_method || cleanCust.payment_mode || 'Cash'}`,
+          staff: attendStaffVal,
+          timestamp: nowCreatedIso,
+        }] : []),
+        {
+          id: `act_recv_${Date.now() + 1}`,
+          type: 'received',
+          title: 'Order Received',
+          detail: `New order placed (${normalizedIntake})${pickupPersonVal ? ` • Pickup/Delivery: ${pickupPersonVal}` : ''}`,
+          staff: attendStaffVal,
+          timestamp: nowCreatedIso,
+        },
+      ];
+
       // Structured internal notes for inspections and extra metadata
       const structuredInternalNotes = {
         factory_hub: cleanCust.factory_hub || 'Main Plant (Unit 1)',
@@ -2973,13 +3005,22 @@ export async function createOrderWithCustomer({
         mode_of_transport: cleanCust.mode_of_transport || 'Mini Van',
         route_from_to: cleanCust.route_from_to || 'Store Central (Vellore Main) ➔ Factory Plant Unit 1',
         route_return: cleanCust.route_return || 'Factory Plant Unit 1 ➔ Store Central (Vellore Main)',
-        collected_by_staff: cleanCust.collected_by_staff || cleanCust.assigned_staff || 'Murugan (Plant Supervisor)',
+        collected_by_staff: cleanCust.collected_by_staff || attendStaffVal,
         plant_transit_status: cleanCust.plant_transit_status || 'Washing in Progress',
         garment_inspections: cleanCust.garment_inspections || cleanCust.inspections || {},
         expected_delivery_display: rawDelivery || '',
         payment_method_display: cleanCust.payment_method || cleanCust.payment_mode || 'Cash',
-        assigned_driver: cleanCust.assigned_driver || cleanCust.assigned_staff || '',
-        assigned_driver_full: cleanCust.assigned_driver_full || '',
+        attend_staff_name: attendStaffVal,
+        assigned_pickup_delivery_person: pickupPersonVal,
+        assigned_driver: pickupPersonVal || attendStaffVal,
+        assigned_driver_full: cleanCust.assigned_driver_full || pickupPersonVal,
+        status_updated_at: cleanCust.status_updated_at || nowCreatedIso,
+        status_updated_by: cleanCust.status_updated_by || attendStaffVal,
+        activity_history: Array.isArray(cleanCust.activity_history) && cleanCust.activity_history.length > 0 ? cleanCust.activity_history : initialActivity,
+        payment_received_at: advancePaidVal > 0 ? nowCreatedIso : null,
+        payment_received_by: advancePaidVal > 0 ? attendStaffVal : '',
+        collection_at: null,
+        collected_by_person: cleanCust.collected_by_person || '',
         staff_notes: cleanCust.internal_comments || cleanCust.notes || '',
         flags: cleanCust.flags || {},
         order_status: cleanCust.order_status || 'order recived',
@@ -3026,12 +3067,12 @@ export async function createOrderWithCustomer({
         payment_method: calculatedPaymentMethod,
         intake_date: cleanCust.intake_date ? new Date(cleanCust.intake_date).toISOString() : new Date().toISOString(),
         target_delivery_date: targetDeliveryDateIso,
-        assigned_staff: cleanCust.assigned_staff || cleanCust.assigned_driver || null,
+        assigned_staff: cleanCust.attend_staff_name || cleanCust.assigned_staff || cleanCust.assigned_driver || null,
         special_instructions: orderPreferenceNotes || cleanCust.notes || cleanCust.special_instructions || null,
         staff_notes: cleanCust.internal_comments || cleanCust.staff_notes || null,
         handling_flags: cleanCust.flags || {},
-        created_by_name: cleanCust.created_by_name || cleanCust.assigned_staff || 'POS Counter',
-        updated_by_name: cleanCust.updated_by_name || cleanCust.assigned_staff || 'POS Counter',
+        created_by_name: cleanCust.created_by_name || attendStaffVal || 'POS Counter',
+        updated_by_name: cleanCust.updated_by_name || attendStaffVal || 'POS Counter',
         internal_notes: JSON.stringify(structuredInternalNotes),
       };
       Object.keys(workRow).forEach((k) => workRow[k] === undefined && delete workRow[k]);
@@ -3098,8 +3139,8 @@ export async function createOrderWithCustomer({
         mode_of_transport: cleanCust.mode_of_transport || 'Mini Van',
         route_from_to: cleanCust.route_from_to || 'Store Central (Vellore Main) ➔ Factory Plant Unit 1',
         route_return: cleanCust.route_return || 'Factory Plant Unit 1 ➔ Store Central (Vellore Main)',
-        collected_by_staff: cleanCust.collected_by_staff || cleanCust.assigned_staff || 'Counter Staff',
-        assigned_driver: cleanCust.assigned_driver || cleanCust.assigned_staff || null,
+        collected_by_staff: cleanCust.collected_by_staff || attendStaffVal,
+        assigned_driver: cleanCust.assigned_pickup_delivery_person || cleanCust.assigned_driver || cleanCust.assigned_staff || null,
         plant_transit_status: cleanCust.plant_transit_status || 'Order Intake Logged',
         rack_shelf_location: cleanCust.rack_shelf_location || cleanCust.rackShelfLocation || null,
         weight_kg: cleanCust.weight_kg ?? cleanCust.product_weight ?? null,
@@ -3112,7 +3153,7 @@ export async function createOrderWithCustomer({
       } catch {}
     }
 
-    const actorName = cleanCust.created_by_name || cleanCust.assigned_staff || getActiveStaffProfile().name;
+    const actorName = cleanCust.created_by_name || cleanCust.attend_staff_name || cleanCust.assigned_staff || getActiveStaffProfile().name;
     try {
       await recordAuditLogEntry({
         entity_name: 'customer_works',
@@ -3203,16 +3244,17 @@ export async function createOrderWithCustomer({
         });
       }
 
-      if (cleanCust.assigned_driver) {
+      const driverAssigned = cleanCust.assigned_pickup_delivery_person || cleanCust.assigned_driver;
+      if (driverAssigned) {
         await recordStatusHistory({
           work_id: insertedOrderId,
           work_number: insertedOrderNum,
           entity_type: 'Driver_Assignment',
           step_name: 'Pickup Rider Assigned',
           stage: 'Pickup',
-          new_status: cleanCust.assigned_driver,
+          new_status: driverAssigned,
           changed_by_name: actorName,
-          remarks: `Assigned driver ${cleanCust.assigned_driver} for pickup`,
+          remarks: `Assigned driver ${driverAssigned} for pickup`,
         });
       }
     } catch {}
@@ -3544,8 +3586,8 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       workUpdate.payment_method = normalizeDbPaymentMethod(rawMethod);
     }
 
-    if (updatePayload.assignedStaff || updatePayload.assigned_staff || updatePayload.assignedDriver || updatePayload.assigned_driver) {
-      workUpdate.assigned_staff = updatePayload.assignedStaff || updatePayload.assigned_staff || updatePayload.assignedDriver || updatePayload.assigned_driver;
+    if (updatePayload.attend_staff_name || updatePayload.assignedStaff || updatePayload.assigned_staff || updatePayload.assignedDriver || updatePayload.assigned_driver) {
+      workUpdate.assigned_staff = updatePayload.attend_staff_name || updatePayload.assignedStaff || updatePayload.assigned_staff || updatePayload.assignedDriver || updatePayload.assigned_driver;
     }
 
     if (updatePayload.rackShelfLocation || updatePayload.rack_shelf_location) {
@@ -3633,7 +3675,7 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
     if (updatePayload.flags !== undefined) {
       workUpdate.handling_flags = updatePayload.flags || {};
     }
-    workUpdate.updated_by_name = updatePayload.updated_by_name || updatePayload.assignedStaff || 'POS Counter';
+    workUpdate.updated_by_name = updatePayload.updated_by_name || updatePayload.attend_staff_name || updatePayload.status_updated_by || updatePayload.assignedStaff || 'POS Counter';
 
     if (updatePayload.items) {
       workUpdate.items = updatePayload.items;
@@ -3649,13 +3691,24 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
     const inspData = updatePayload.garment_inspections || updatePayload.inspections || prevNotesObj.garment_inspections || {};
     const targetStatus = updatePayload.status || updatePayload.order_status;
     const targetPropertyStatus = updatePayload.property_status || (updatePayload.priority === 'Yes' ? 'Yes' : prevNotesObj.property_status || 'No');
+    const nextAttendStaff = updatePayload.attend_staff_name ?? updatePayload.status_updated_by ?? updatePayload.assignedStaff ?? prevNotesObj.attend_staff_name ?? '';
+    const nextPickupPerson = updatePayload.assigned_pickup_delivery_person ?? updatePayload.assigned_driver ?? prevNotesObj.assigned_pickup_delivery_person ?? '';
     const notesPayload = {
       ...prevNotesObj,
       garment_inspections: inspData,
       expected_delivery_display: expectedDeliveryDisplay,
       payment_method_display: updatePayload.paymentMethod || updatePayload.payment_method || updatePayload.paymentMode || prevNotesObj.payment_method_display || '',
-      assigned_driver: updatePayload.assigned_driver ?? updatePayload.assignedStaff ?? prevNotesObj.assigned_driver ?? '',
-      assigned_driver_full: updatePayload.assigned_driver_full ?? prevNotesObj.assigned_driver_full ?? '',
+      assigned_driver: nextPickupPerson || updatePayload.assignedStaff || prevNotesObj.assigned_driver || '',
+      assigned_driver_full: updatePayload.assigned_driver_full ?? (nextPickupPerson || prevNotesObj.assigned_driver_full || ''),
+      attend_staff_name: nextAttendStaff,
+      assigned_pickup_delivery_person: nextPickupPerson,
+      status_updated_at: updatePayload.status_updated_at ?? (targetStatus ? new Date().toISOString() : prevNotesObj.status_updated_at) ?? new Date().toISOString(),
+      status_updated_by: updatePayload.status_updated_by ?? (nextAttendStaff || prevNotesObj.status_updated_by || ''),
+      activity_history: Array.isArray(updatePayload.activity_history) ? updatePayload.activity_history : (Array.isArray(updatePayload.audit_logs) ? updatePayload.audit_logs : (Array.isArray(prevNotesObj.activity_history) ? prevNotesObj.activity_history : [])),
+      payment_received_at: updatePayload.payment_received_at !== undefined ? updatePayload.payment_received_at : (prevNotesObj.payment_received_at ?? null),
+      payment_received_by: updatePayload.payment_received_by ?? (nextAttendStaff || prevNotesObj.payment_received_by || ''),
+      collection_at: updatePayload.collection_at !== undefined ? updatePayload.collection_at : ((targetStatus === 'Delivered' || workUpdate.work_status === 'Delivered') ? (prevNotesObj.collection_at || new Date().toISOString()) : (prevNotesObj.collection_at ?? null)),
+      collected_by_person: updatePayload.collected_by_person ?? prevNotesObj.collected_by_person ?? '',
       assigned_for_pickup: updatePayload.assigned_for_pickup ?? prevNotesObj.assigned_for_pickup ?? Boolean(updatePayload.pickupStatus === 'Assigned for Pickup'),
       pickup_status: updatePayload.pickupStatus ?? updatePayload.pickup_status ?? prevNotesObj.pickup_status ?? '',
       pickup_delivery: updatePayload.pickupDelivery ?? updatePayload.pickup_delivery ?? prevNotesObj.pickup_delivery ?? '',
@@ -3779,7 +3832,7 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
     }
 
     // 6. Record granular workflow steps & status transitions with timestamps & staff details
-    const staffName = updatePayload.updated_by_name || updatePayload.changed_by_name || getActiveStaffProfile().name;
+    const staffName = updatePayload.attend_staff_name || updatePayload.status_updated_by || updatePayload.updated_by_name || updatePayload.changed_by_name || getActiveStaffProfile().name;
     workUpdate.updated_by_name = staffName;
     try {
       if (workUpdate.work_status && workUpdate.work_status !== existingRow?.work_status) {
@@ -3809,7 +3862,7 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
         });
       }
 
-      const nextDriver = updatePayload.assigned_driver || updatePayload.assignedDriver;
+      const nextDriver = updatePayload.assigned_pickup_delivery_person || updatePayload.assigned_driver || updatePayload.assignedDriver;
       if (nextDriver && nextDriver !== (prevNotesObj.assigned_driver || existingRow?.assigned_staff)) {
         await recordStatusHistory({
           work_id: targetWorkKey,
@@ -3945,6 +3998,19 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
                 delivery_date: expectedDeliveryDisplay || o.delivery_date,
                 payment_status: updatePayload.paymentStatus || updatePayload.payment_status || o.payment_status,
                 payment_method: updatePayload.paymentMethod || updatePayload.payment_method || updatePayload.paymentMode || o.payment_method,
+                assigned_staff: workUpdate.assigned_staff || o.assigned_staff,
+                attend_staff_name: notesPayload.attend_staff_name || o.attend_staff_name,
+                assigned_pickup_delivery_person: notesPayload.assigned_pickup_delivery_person !== undefined ? notesPayload.assigned_pickup_delivery_person : o.assigned_pickup_delivery_person,
+                assigned_driver: notesPayload.assigned_driver || o.assigned_driver,
+                assigned_driver_full: notesPayload.assigned_driver_full || o.assigned_driver_full,
+                status_updated_at: notesPayload.status_updated_at || o.status_updated_at,
+                status_updated_by: notesPayload.status_updated_by || o.status_updated_by,
+                activity_history: notesPayload.activity_history && notesPayload.activity_history.length > 0 ? notesPayload.activity_history : o.activity_history,
+                payment_received_at: notesPayload.payment_received_at !== undefined ? notesPayload.payment_received_at : o.payment_received_at,
+                payment_received_by: notesPayload.payment_received_by || o.payment_received_by,
+                collection_at: notesPayload.collection_at !== undefined ? notesPayload.collection_at : o.collection_at,
+                collected_by_person: notesPayload.collected_by_person !== undefined ? notesPayload.collected_by_person : o.collected_by_person,
+                updated_at: workUpdate.updated_at,
                 items: updatePayload.items || o.items,
                 garment_inspections: inspData,
                 inspections: inspData,

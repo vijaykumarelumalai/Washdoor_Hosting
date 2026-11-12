@@ -66,7 +66,6 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
     orderPreference,
     orderPreferenceNotes,
     cartItems = [],
-    garmentInspections = {},
     totalAmount = 0.00,
     itemCount = 1,
     existingCustomerId,
@@ -77,7 +76,6 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
       existingCustomerId,
       customerData: {
         ...customerData,
-        garment_inspections: garmentInspections,
         item_count: itemCount,
         total_amount: totalAmount,
       },
@@ -119,8 +117,6 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
       total_amount: Number(totalAmount) || 0.00,
       item_count: itemCount,
       items: cartItems,
-      garment_inspections: garmentInspections,
-      inspections: garmentInspections,
       customer_history: {
         items: cartItems,
       },
@@ -133,6 +129,22 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
       },
       customer_name: customerData?.customer_name || 'Walk-In Customer',
       mobile_number: customerData?.mobile_number || '',
+      attend_staff_name: customerData?.attend_staff_name || 'Counter Staff',
+      assigned_staff: customerData?.attend_staff_name || 'Counter Staff',
+      assigned_pickup_delivery_person: customerData?.assigned_pickup_delivery_person || '',
+      assigned_driver: customerData?.assigned_pickup_delivery_person || '',
+      status_updated_at: new Date().toISOString(),
+      status_updated_by: customerData?.attend_staff_name || 'Counter Staff',
+      activity_history: [
+        {
+          id: `act_recv_${Date.now()}`,
+          type: 'received',
+          title: 'Order Received',
+          detail: `New order placed (${orderType || 'Walk-In'})${customerData?.assigned_pickup_delivery_person ? ` • Pickup/Delivery: ${customerData.assigned_pickup_delivery_person}` : ''}`,
+          staff: customerData?.attend_staff_name || 'Counter Staff',
+          timestamp: new Date().toISOString(),
+        },
+      ],
     };
 
     onOrderSuccess(createdOrderPayload);

@@ -1252,7 +1252,7 @@ export default function CustomerMUI({
         >
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="h5" sx={{ fontSize: { xs: '1.35rem', sm: '1.5rem' }, fontWeight: 700, lineHeight: 1.2 }}>
-              Customer Master Records
+              Customer Reference
             </Typography>
             <Typography color="text.secondary" sx={{ mt: 0.35, fontSize: '0.84rem' }}>
               Manage customer profiles, contact details, pricing and service history

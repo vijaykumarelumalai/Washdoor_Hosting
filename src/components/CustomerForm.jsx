@@ -4,15 +4,15 @@
 import React, { useState } from 'react';
 import { validateCustomer } from '../utils/validation';
 import ClothSelectionCart from './ClothSelectionCart';
-import GarmentInspectionSection from './GarmentInspectionSection';
+import { useServiceTypes } from './ServiceTypeSelect';
 
 const PRODUCT_SERVICES = [
   { id: 'laundry', name: 'Laundry', icon: '🧺' },
-  { id: 'dry_clean', name: 'Dry cleaning', icon: '🧥' },
-  { id: 'wash_kg', name: 'Washing by KG', icon: '⚖️' },
-  { id: 'shoe_clean', name: 'Shoe cleaning', icon: '👟' },
-  { id: 'ironing', name: 'Ironing only', icon: '👔' },
-  { id: 'custom_cat', name: 'Customer category', icon: '✨' },
+  { id: 'dry_clean', name: 'Dry Cleaning', icon: '🧥' },
+  { id: 'washing', name: 'Washing', icon: '⚖️' },
+  { id: 'shoe_clean', name: 'Shoe Cleaning', icon: '👟' },
+  { id: 'ironing', name: 'Ironing Only', icon: '👔' },
+  { id: 'custom_cat', name: 'Custom Category', icon: '✨' },
 ];
 
 function getAgeFromDOB(dobStr) {
@@ -46,6 +46,7 @@ export default function CustomerForm({
   isEditOrder = false,
   submitLabel = null,
 }) {
+  const serviceTypes = useServiceTypes();
   const isExistingCustomer = Boolean(
     (initialCustomer && (initialCustomer.id || initialCustomer.customer_id || initialCustomer.customerId)) ||
     isEditOrder
@@ -59,8 +60,14 @@ export default function CustomerForm({
 
   // Order preferences & Intake method
   const [intakeMethod, setIntakeMethod] = useState(initialOrderType || 'walk-in');
+  const [attendStaffName, setAttendStaffName] = useState(
+    initialCustomer?.attend_staff_name || initialCustomer?.assigned_staff || ''
+  );
+  const [assignedPickupPerson, setAssignedPickupPerson] = useState(
+    initialCustomer?.assigned_pickup_delivery_person || initialCustomer?.assigned_driver || ''
+  );
   const [orderPreference, setOrderPreference] = useState(
-    initialCustomer?.service_category || initialCustomer?.preference || 'Wash & Steam Press'
+    initialCustomer?.service_category || initialCustomer?.preference || 'Laundry'
   );
   const [orderPreferenceNotes, setOrderPreferenceNotes] = useState(
     initialCustomer?.preference_notes || initialCustomer?.order_notes || ''
@@ -68,7 +75,7 @@ export default function CustomerForm({
 
   // Product Card state (placed above Address Details & Contact)
   const [productService, setProductService] = useState(
-    initialCustomer?.service_category || initialCustomer?.preference || 'Wash & Steam Press'
+    initialCustomer?.service_category || initialCustomer?.preference || 'Laundry'
   );
   const [productGarmentType, setProductGarmentType] = useState(
     initialCustomer?.product_garment_type || 'Standard Daily Wear (Shirts, Tops, Trousers)'
@@ -92,10 +99,6 @@ export default function CustomerForm({
     totalItemCount: 1,
     careNotes: initialCustomer?.preference_notes || initialCustomer?.order_notes || '',
   });
-  const [garmentInspections, setGarmentInspections] = useState(
-    initialCustomer?.garment_inspections || initialCustomer?.inspections || {}
-  );
-  const [inspectionOpen, setInspectionOpen] = useState(false);
 
   // Expandable details state (always hidden/collapsed by default, expanded manually)
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -293,11 +296,7 @@ export default function CustomerForm({
     setErrors({});
 
     const cartItems = cartData?.cart || [];
-    const extraChargesTotal = Object.values(garmentInspections || {}).reduce(
-      (sum, insp) => sum + (Number(insp?.extraCharge) || 0),
-      0
-    );
-    const calculatedTotal = cartItems.length > 0 ? ((cartData?.grandTotal || 0) + extraChargesTotal) : 0;
+    const calculatedTotal = cartItems.length > 0 ? (cartData?.grandTotal || 0) : 0;
     const calculatedCount = cartItems.length > 0
       ? (cartData?.totalItemCount ?? cartItems.reduce((s, i) => s + (Number(i.qty) || 1), 0))
       : 0;
@@ -307,7 +306,7 @@ export default function CustomerForm({
       ? (cartItems[0].serviceType ? `${cartItems[0].serviceType}` : productService)
       : productService;
 
-    onSubmit({
+      onSubmit({
       customerData: {
         ...customerData,
         customer_id: customerId || initialCustomer?.id || null,
@@ -315,15 +314,17 @@ export default function CustomerForm({
         item_count: calculatedCount,
         product_weight: productWeight,
         product_garment_type: productGarmentType,
-        garment_inspections: garmentInspections,
         order_notes: finalCareNotes || internalComments,
         total_amount: calculatedTotal,
+        attend_staff_name: attendStaffName.trim() || 'Counter Staff',
+        assigned_staff: attendStaffName.trim() || 'Counter Staff',
+        assigned_pickup_delivery_person: assignedPickupPerson.trim(),
+        assigned_driver: assignedPickupPerson.trim(),
       },
       orderType: intakeMethod,
       orderPreference: primaryService,
       orderPreferenceNotes: finalCareNotes,
       cartItems: cartItems,
-      garmentInspections: garmentInspections,
       totalAmount: calculatedTotal,
       itemCount: calculatedCount,
       existingCustomerId: initialCustomer?.id || null,
@@ -495,7 +496,7 @@ export default function CustomerForm({
 
       {/* ── Intake & Property/Priority Options (only in Order flow) ── */}
       {isOrderFlow && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' , marginTop: '4px' }}>
           <div className="intake-options" role="group" aria-label="Order intake method" style={{ margin: 0 }}>
             <button
               type="button"
@@ -562,6 +563,33 @@ export default function CustomerForm({
               </button>
             </div>
           </div>
+
+          {/* Attend Staff Name & Assigned Pickup / Delivery Person */}
+          <div className="form-grid" style={{ marginTop: '4px', marginBottom: '2px' }}>
+            <div className="field">
+              <label htmlFor="attendStaffName">Attend Staff Name</label>
+              <input
+                id="attendStaffName"
+                type="text"
+                maxLength={100}
+                placeholder="e.g. Ravi Kumar (Counter Staff)"
+                value={attendStaffName}
+                onChange={(e) => setAttendStaffName(e.target.value)}
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="assignedPickupPerson">Assigned Pickup &amp; Delivery Person</label>
+              <input
+                id="assignedPickupPerson"
+                type="text"
+                maxLength={100}
+                placeholder="e.g. Ramesh Kumar / Self Pickup"
+                value={assignedPickupPerson}
+                onChange={(e) => setAssignedPickupPerson(e.target.value)}
+              />
+            </div>
+          </div>
         </div>
       )}
 
@@ -604,35 +632,6 @@ export default function CustomerForm({
                     isTaxExempt={Boolean(taxExemption)}
                     onChange={(cData) => setCartData(cData)}
                   />
-                  <div style={{ marginTop: '12px' }}>
-                    <button
-                      type="button"
-                      className="addr-card-toggle"
-                      style={{
-                        width: '100%',
-                        justifyContent: 'space-between',
-                        padding: '10px 14px',
-                        borderRadius: '10px',
-                        border: '1px solid #cbd5e1',
-                        background: '#f8fafc',
-                        display: 'flex',
-                        alignItems: 'center',
-                        fontWeight: 650,
-                        fontSize: '13px',
-                      }}
-                      onClick={() => setInspectionOpen((prev) => !prev)}
-                    >
-                      <span>🔍 Garment-by-Garment Inspection, Condition &amp; Photos ({cartData?.totalItemCount || 0} pcs)</span>
-                      <span>{inspectionOpen ? 'Hide ▲' : 'Expand ▼'}</span>
-                    </button>
-                    {inspectionOpen && (
-                      <GarmentInspectionSection
-                        cart={cartData?.cart || []}
-                        inspections={garmentInspections}
-                        onChangeInspections={setGarmentInspections}
-                      />
-                    )}
-                  </div>
                 </div>
               )}
 
@@ -1267,11 +1266,12 @@ export default function CustomerForm({
                     setProductService(e.target.value);
                   }}
                 >
-                  <option value="Wash & Steam Press">Wash &amp; Steam Press</option>
-                  <option value="Wash & Fold">Wash &amp; Fold</option>
-                  <option value="Dry Cleaning">Dry Cleaning</option>
-                  <option value="Heavy Linens & Quilts">Heavy Linens &amp; Quilts</option>
-                  <option value="Express 24H Service">Express 24H Service</option>
+                  {(serviceTypes.some((s) => s.toLowerCase() === String(orderPreference || '').toLowerCase())
+                    ? serviceTypes
+                    : [...serviceTypes, orderPreference].filter(Boolean)
+                  ).map((srv) => (
+                    <option key={srv} value={srv}>{srv}</option>
+                  ))}
                 </select>
               </div>
               <div className="field">

@@ -15,11 +15,12 @@ export type PropertyStatus = 'Yes' | 'No';
 
 export type ServiceCategory =
   | 'Laundry'
-  | 'Dry cleaning'
-  | 'Washing by KG'
-  | 'Shoe cleaning'
-  | 'Ironing only'
-  | 'Customer category';
+  | 'Dry Cleaning'
+  | 'Washing'
+  | 'Shoe Cleaning'
+  | 'Ironing Only'
+  | 'Custom Category'
+  | string;
 
 export interface OrderItem {
   id: string;

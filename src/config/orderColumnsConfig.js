@@ -26,7 +26,7 @@ export const ORDER_COLUMNS = [
     label: 'Address',
     default: true,
     purpose: 'Customer delivery address',
-    minWidth: '180px',
+    minWidth: '240px',
   },
   {
     id: 'services',
@@ -87,7 +87,7 @@ export const ORDER_COLUMNS = [
     label: 'Comments',
     default: false,
     purpose: 'Order-related comments',
-    minWidth: '170px',
+    minWidth: '250px',
   },
   {
     id: 'pincode',
@@ -122,7 +122,7 @@ export const ORDER_COLUMNS = [
     label: 'Date of Birth',
     default: false,
     purpose: 'Customer DOB',
-    minWidth: '120px',
+    minWidth: '155px',
   },
   {
     id: 'tax_exemption',

@@ -77,10 +77,49 @@
 .modal-body {
   flex: 1;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 13px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #e2e8f0;
+}
+
+.modal-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+  background: #e2e8f0;
+  border-radius: 999px;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 999px;
+  border: 2px solid #e2e8f0;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+body:not(.light-theme):not([data-theme="light"]) .modal-body {
+  scrollbar-color: #334155 #0f172a;
+}
+
+body:not(.light-theme):not([data-theme="light"]) .modal-body::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+body:not(.light-theme):not([data-theme="light"]) .modal-body::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-color: #0f172a;
+}
+
+body:not(.light-theme):not([data-theme="light"]) .modal-body::-webkit-scrollbar-thumb:hover {
+  background: #475569;
 }
 
 /* ── Footer ─────────────────────────────────────────────────── */

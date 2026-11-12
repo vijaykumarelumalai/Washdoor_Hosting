@@ -399,6 +399,10 @@
   grid-column: 1 / 2;
 }
 
+.cloth-ctrl-group.cloth-service-group:has(.wd-add-service-inline) {
+  grid-column: 1 / -1;
+}
+
 .cloth-ctrl-group.cloth-qty-group {
   grid-column: 2 / 3;
 }
@@ -528,7 +532,7 @@
 .cloth-cart-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
   max-height: 220px;
   overflow-y: auto;
   overflow-x: hidden !important;
@@ -561,13 +565,25 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #060e1b;
-  border: 1px solid #18283f;
-  border-radius: 10px;
-  padding: 8px 10px;
-  gap: 8px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #18283f;
+  border-radius: 0;
+  padding: 9px 2px;
+  gap: 10px;
   box-sizing: border-box;
   width: 100%;
+}
+
+.cloth-cart-row:last-child {
+  border-bottom: none;
+}
+
+.cloth-cart-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .cloth-cart-left {
@@ -677,12 +693,12 @@
 }
 
 .cloth-cart-amount {
-  font-size: 12.5px;
-  font-weight: 750;
+  font-size: 13px;
+  font-weight: 700;
   color: #ffffff;
-  min-width: 44px;
   text-align: right;
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .cloth-cart-del {
@@ -690,8 +706,11 @@
   background: transparent;
   color: #ef4444;
   cursor: pointer;
-  padding: 4px;
+  padding: 2px 4px;
   border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1056,8 +1075,15 @@ body.light-theme .cloth-cart-card,
 
 body.light-theme .cloth-cart-row,
 [data-theme="light"] .cloth-cart-row {
-  background: #f8fafc !important;
-  border: 1px solid #e2e8f0 !important;
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  border-radius: 0 !important;
+}
+
+body.light-theme .cloth-cart-row:last-child,
+[data-theme="light"] .cloth-cart-row:last-child {
+  border-bottom: none !important;
 }
 
 body.light-theme .cloth-cart-thumb,
@@ -1073,7 +1099,7 @@ body.light-theme .cloth-cart-name,
 
 body.light-theme .cloth-cart-srv,
 [data-theme="light"] .cloth-cart-srv {
-  color: #4f46e5 !important;
+  color: #64748b !important;
 }
 
 body.light-theme .cloth-cart-rate,

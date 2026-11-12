@@ -1,15 +1,15 @@
 // src/components/ClothSelectionCart.jsx
 // Embedded Cloth Selection & Cart Component matching media_1793092679712_894007e0.png & media_1793092697433_e3fa94c3.png
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import ClothIllustration from './ClothIllustration';
-import { getProducts, DEFAULT_PRODUCTS, resolveServicePrice } from '../services/customerService';
+import ServiceTypeSelect from './ServiceTypeSelect';
+import { getProducts, DEFAULT_PRODUCTS } from '../services/customerService';
 import '../styles/ClothSelectionCart.css';
 
 const CATALOG_ITEMS = DEFAULT_PRODUCTS;
 
 const CATEGORIES = ['All', 'Men', 'Women', 'Home Linen', 'Accessories'];
-const SERVICE_OPTIONS = ['Laundry', 'Dry cleaning', 'Washing by KG', 'Shoe cleaning', 'Ironing only', 'Customer category'];
 
 export default function ClothSelectionCart({
   initialCart = [],
@@ -82,9 +82,12 @@ export default function ClothSelectionCart({
   const gstAmount = isTaxExempt ? 0 : subtotal * 0.05;
   const grandTotal = subtotal + gstAmount;
 
-  // Emit changes to parent
+  // Emit changes to parent without re-triggering on unstable inline onChange callbacks
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
   useEffect(() => {
-    onChange?.({
+    onChangeRef.current?.({
       cart,
       subtotal,
       gstAmount,
@@ -92,7 +95,7 @@ export default function ClothSelectionCart({
       totalItemCount,
       careNotes,
     });
-  }, [cart, subtotal, gstAmount, grandTotal, totalItemCount, careNotes, onChange]);
+  }, [cart, subtotal, gstAmount, grandTotal, totalItemCount, careNotes]);
 
   // Click card or '+ Add' to select product
   const handleSelectProduct = (prod) => {
@@ -103,7 +106,7 @@ export default function ClothSelectionCart({
   // Add to cart from Selected Item Details
   const handleAddToCart = () => {
     if (!selectedProduct) return;
-    const rate = resolveServicePrice(selectedProduct, selectedService);
+    const rate = Number(selectedProduct.price ?? selectedProduct.base_price ?? 0);
     const qty = Math.max(1, selectedQty);
     const lineAmount = rate * qty;
 
@@ -143,7 +146,7 @@ export default function ClothSelectionCart({
   const handleQuickAdd = (e, prod) => {
     e.stopPropagation();
     setSelectedProduct(prod);
-    const rate = resolveServicePrice(prod, selectedService);
+    const rate = Number(prod.price ?? prod.base_price ?? 0);
     const qty = 1;
 
     setCart((prev) => {
@@ -257,11 +260,11 @@ export default function ClothSelectionCart({
           {/* Catalog grid */}
           <div className="cloth-grid-scroll">
             <div className="cloth-items-grid">
-              {filteredCatalog.map((prod) => {
+              {filteredCatalog.map((prod, idx) => {
                 const isSelected = selectedProduct?.id === prod.id;
                 return (
                   <div
-                    key={prod.id}
+                    key={`${prod.product_id || prod.item_code || prod.id}-${idx}`}
                     className={`cloth-grid-card ${isSelected ? 'selected' : ''}`}
                     onClick={() => handleSelectProduct(prod)}
                   >
@@ -315,7 +318,7 @@ export default function ClothSelectionCart({
                     <span className="cloth-preview-cat">{selectedProduct.category}</span>
                   </div>
                   <div className="cloth-preview-rate">
-                    {currencySymbol} {resolveServicePrice(selectedProduct, selectedService)} / {selectedProduct.unit}
+                    {currencySymbol} {Number(selectedProduct.price ?? selectedProduct.base_price ?? 0)} / {selectedProduct.unit}
                   </div>
                 </div>
               </div>
@@ -323,19 +326,14 @@ export default function ClothSelectionCart({
               {/* Service & Qty Controls */}
               <div className="cloth-controls-row">
                 <div className="cloth-ctrl-group cloth-service-group">
-                  <label className="cloth-ctrl-label" htmlFor="clothServiceSelect">Service Type</label>
-                  <select
-                    id="clothServiceSelect"
-                    className="cloth-ctrl-select"
+                  <ServiceTypeSelect
+                    label="Service Type"
+                    labelClassName="cloth-ctrl-label"
+                    selectId="clothServiceSelect"
+                    selectClassName="cloth-ctrl-select"
                     value={selectedService}
-                    onChange={(e) => setSelectedService(e.target.value)}
-                  >
-                    {SERVICE_OPTIONS.map((srv) => (
-                      <option key={srv} value={srv}>
-                        {srv}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setSelectedService}
+                  />
                 </div>
 
                 <div className="cloth-ctrl-group cloth-qty-group">
@@ -408,79 +406,42 @@ export default function ClothSelectionCart({
               </div>
             ) : (
               <div className="cloth-cart-list">
-                {cart.map((item, idx) => (
-                  <div key={`${item.id}-${item.serviceType}-${idx}`} className="cloth-cart-row">
-                    <div className="cloth-cart-left">
-                      <div className="cloth-cart-thumb">
-                        <ClothIllustration itemId={item.id} itemName={item.name} size={26} />
+                {cart.map((item, idx) => {
+                  const rowAmount = Number(
+                    item.amount ?? (Number(item.rate || 0) * Number(item.qty || 1))
+                  ).toFixed(2);
+                  return (
+                    <div key={`${item.id}-${item.serviceType}-${idx}`} className="cloth-cart-row">
+                      <div className="cloth-cart-left">
+                        <div className="cloth-cart-thumb">
+                          <ClothIllustration itemId={item.id} itemName={item.name} size={24} />
+                        </div>
+                        <div className="cloth-cart-info">
+                          <span className="cloth-cart-name">{item.name}</span>
+                          <span className="cloth-cart-srv">
+                            {item.serviceType} x {item.qty}
+                          </span>
+                        </div>
                       </div>
-                      <div className="cloth-cart-info">
-                        <span className="cloth-cart-name">{item.name}</span>
-                        <span className="cloth-cart-srv">{item.serviceType}</span>
-                        <input
-                          type="text"
-                          value={item.careNotes || ''}
-                          onChange={(e) => handleCartCareChange(idx, e.target.value)}
-                          placeholder="Item care note..."
-                          style={{
-                            marginTop: '4px',
-                            fontSize: '11px',
-                            padding: '3px 6px',
-                            borderRadius: '4px',
-                            border: '1px solid #cbd5e1',
-                            background: 'transparent',
-                            color: 'inherit',
-                            width: '100%',
-                            boxSizing: 'border-box',
-                          }}
-                        />
+
+                      <div className="cloth-cart-right">
+                        <span className="cloth-cart-amount">
+                          {currencySymbol}
+                          {rowAmount}
+                        </span>
+                        <button
+                          type="button"
+                          className="cloth-cart-del"
+                          onClick={() => handleRemoveCartItem(idx)}
+                          title="Remove item"
+                          aria-label="Remove item"
+                        >
+                          ✕
+                        </button>
                       </div>
                     </div>
-
-                    <div className="cloth-cart-rate">
-                      {currencySymbol} {item.rate}
-                    </div>
-
-                    <div className="cloth-stepper cloth-cart-stepper">
-                      <button
-                        type="button"
-                        className="cloth-step-btn"
-                        onClick={() => handleCartQtyChange(idx, -1)}
-                        aria-label="Decrease quantity"
-                      >
-                        −
-                      </button>
-                      <span className="cloth-step-val">
-                        {item.qty}
-                      </span>
-                      <button
-                        type="button"
-                        className="cloth-step-btn"
-                        onClick={() => handleCartQtyChange(idx, 1)}
-                        aria-label="Increase quantity"
-                      >
-                        +
-                      </button>
-                    </div>
-
-                    <div className="cloth-cart-amount">
-                      {currencySymbol} {item.amount}
-                    </div>
-
-                    <button
-                      type="button"
-                      className="cloth-cart-del"
-                      onClick={() => handleRemoveCartItem(idx)}
-                      title="Remove item"
-                      aria-label="Remove item"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                        <polyline points="3 6 5 6 21 6"></polyline>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                      </svg>
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

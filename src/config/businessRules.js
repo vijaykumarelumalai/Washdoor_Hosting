@@ -97,6 +97,9 @@ export const DEFAULT_SETTINGS = {
   language: 'en',
   dateFormat: 'DD/MM/YYYY',
   timeFormat: '12h',
+
+  // Custom Service Types added by store staff
+  customServiceTypes: [],
 };
 
 /**
@@ -118,6 +121,7 @@ export function getStoredSettings() {
           pickupDispatch: { ...DEFAULT_SETTINGS.messageTemplates.pickupDispatch, ...(parsed.messageTemplates?.pickupDispatch || {}) },
           paymentReceived: { ...DEFAULT_SETTINGS.messageTemplates.paymentReceived, ...(parsed.messageTemplates?.paymentReceived || {}) },
         },
+        customServiceTypes: Array.isArray(parsed.customServiceTypes) ? parsed.customServiceTypes : [],
       };
     }
   } catch (err) {
@@ -173,14 +177,120 @@ export const BUSINESS_CONFIG = {
   DEFAULT_GST_LABEL: initialStored.taxLabel || 'GST (5%)',
 };
 
-export const SERVICE_CATEGORIES = [
+export const CUSTOM_SERVICE_TYPES_STORAGE_KEY = 'washdoor_custom_service_types_v1';
+
+export const DEFAULT_SERVICE_TYPES = [
   'Laundry',
-  'Dry cleaning',
-  'Washing by KG',
-  'Shoe cleaning',
-  'Ironing only',
-  'Customer category',
+  'Dry Cleaning',
+  'Washing',
+  'Shoe Cleaning',
+  'Ironing Only',
+  'Custom Category',
 ];
+
+export const SERVICE_CATEGORIES = DEFAULT_SERVICE_TYPES;
+
+function dedupeServiceTypes(list = []) {
+  const seen = new Set();
+  const result = [];
+  list.forEach((raw) => {
+    const clean = String(raw || '').trim();
+    if (!clean || clean === '__add_new_service__') return;
+    const key = clean.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(clean);
+    }
+  });
+  return result;
+}
+
+/**
+ * Returns user-added custom service types persisted in localStorage / settings.
+ */
+export function getCustomServiceTypes() {
+  const fromStorage = [];
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(CUSTOM_SERVICE_TYPES_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) fromStorage.push(...parsed);
+      }
+      const settingsRaw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (settingsRaw) {
+        const settingsParsed = JSON.parse(settingsRaw);
+        if (Array.isArray(settingsParsed?.customServiceTypes)) {
+          fromStorage.push(...settingsParsed.customServiceTypes);
+        }
+      }
+    }
+  } catch {}
+  const defaultLower = new Set(DEFAULT_SERVICE_TYPES.map((s) => s.toLowerCase()));
+  return dedupeServiceTypes(fromStorage).filter((s) => !defaultLower.has(s.toLowerCase()));
+}
+
+/**
+ * Returns the unified ordered list of default + custom Service Types.
+ */
+export function getServiceTypes() {
+  return dedupeServiceTypes([...DEFAULT_SERVICE_TYPES, ...getCustomServiceTypes()]);
+}
+
+/**
+ * Persists a new custom Service Type and broadcasts an update event so all dropdowns sync immediately.
+ */
+export function addCustomServiceType(name) {
+  const trimmed = String(name || '').trim();
+  const current = getServiceTypes();
+  if (!trimmed || trimmed === '__add_new_service__') {
+    return { list: current, added: '', isNew: false };
+  }
+  const existing = current.find((s) => s.toLowerCase() === trimmed.toLowerCase());
+  if (existing) {
+    return { list: current, added: existing, isNew: false };
+  }
+
+  const nextCustom = [...getCustomServiceTypes(), trimmed];
+  const nextList = dedupeServiceTypes([...DEFAULT_SERVICE_TYPES, ...nextCustom]);
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(CUSTOM_SERVICE_TYPES_STORAGE_KEY, JSON.stringify(nextCustom));
+    }
+    saveStoredSettings({ customServiceTypes: nextCustom });
+  } catch {}
+
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(new CustomEvent('washdoor_service_types_updated', { detail: nextList }));
+  }
+
+  return { list: nextList, added: trimmed, isNew: true };
+}
+
+/**
+ * Aggregates piece counts grouped by service type from an order's item list.
+ */
+export function getServiceBreakdownList(items = [], fallbackService = 'Laundry') {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  const counts = new Map();
+  items.forEach((it) => {
+    const svc = String(it?.serviceType || it?.service || it?.service_type || fallbackService || 'Laundry').trim() || 'Laundry';
+    const qty = Math.max(1, Number(it?.qty || it?.quantity || it?.count || 1) || 1);
+    counts.set(svc, (counts.get(svc) || 0) + qty);
+  });
+  return Array.from(counts.entries()).map(([service, qty]) => ({ service, qty }));
+}
+
+/**
+ * Formats per-service piece breakdown, e.g. "Laundry (2 pcs), Ironing Only (1 pcs) total = 3 pcs".
+ */
+export function formatServiceBreakdown(items = [], fallbackService = 'Laundry', includeTotal = true) {
+  const breakdown = getServiceBreakdownList(items, fallbackService);
+  if (breakdown.length === 0) return '';
+  const totalPcs = breakdown.reduce((sum, entry) => sum + entry.qty, 0);
+  const parts = breakdown.map((entry) => `${entry.service} (${entry.qty} pcs)`).join(', ');
+  return includeTotal ? `${parts} total = ${totalPcs} pcs` : parts;
+}
 
 export const PAYMENT_MODES = [
   'Cash',

@@ -5,6 +5,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import ClothIllustration from './ClothIllustration';
 import GarmentInspectionSection from './GarmentInspectionSection';
+import ServiceTypeSelect from './ServiceTypeSelect';
+import { formatServiceBreakdown } from '../config/businessRules';
 import { updateOrderInSupabase } from '../services/customerService';
 import '../styles/SideEditPanel.css';
 
@@ -94,13 +96,19 @@ export default function SideEditPanel({
   const [status, setStatus] = useState(initialStatus);
   const [orderType, setOrderType] = useState(initialOrderType);
   const [expectedDelivery, setExpectedDelivery] = useState(initialExpectedDelivery);
+  const [attendStaffName, setAttendStaffName] = useState(
+    order?.attend_staff_name || order?.status_updated_by || order?.assigned_staff || ''
+  );
+  const [assignedPickupPerson, setAssignedPickupPerson] = useState(
+    order?.assigned_pickup_delivery_person || order?.assigned_driver || ''
+  );
   const [comments, setComments] = useState(initialComments);
 
   // 2. Catalog & Item Selection State
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(CATALOG_ITEMS[2]); // Formal Pant
-  const [selectedServiceType, setSelectedServiceType] = useState('Normal Wash');
+  const [selectedServiceType, setSelectedServiceType] = useState('Laundry');
   const [quantity, setQuantity] = useState(1);
   const [ratePerPiece, setRatePerPiece] = useState(20.00);
 
@@ -111,7 +119,7 @@ export default function SideEditPanel({
           id: it.id || idx + 1,
           itemId: it.itemId || it.item_id || getClothId(it),
           name: it.name || it.item_name || 'Garment',
-          service: it.service || it.service_type || 'Laundry',
+          service: it.service || it.serviceType || it.service_type || 'Laundry',
           rate: Number(it.rate || it.price || 20),
           qty: Number(it.qty || it.quantity || 1),
           icon: it.icon || '🧺',
@@ -419,6 +427,65 @@ export default function SideEditPanel({
     }
 
     const totalPieces = cartItems.reduce((sum, c) => sum + Number(c.qty || 0), 0);
+    const nowIso = new Date().toISOString();
+    const staffActor = attendStaffName.trim() || order?.attend_staff_name || order?.assigned_staff || 'Counter Staff';
+    const pickupPerson = assignedPickupPerson.trim() || assignedRider || '';
+    const existingHistory = Array.isArray(order?.activity_history) && order.activity_history.length > 0
+      ? [...order.activity_history]
+      : (Array.isArray(auditLogs) ? [...auditLogs] : []);
+    const newEntries = [];
+
+    if (status !== (order?.order_status || order?.status)) {
+      newEntries.push({
+        id: `act_status_${Date.now()}`,
+        type: status === 'Delivered' ? 'collection' : 'status',
+        title: status === 'Delivered' ? 'Order Delivered' : 'Status Updated',
+        detail: status === 'Delivered'
+          ? `Garments delivered (${pickupPerson || customerName})`
+          : `Status changed to ${status}`,
+        staff: staffActor,
+        timestamp: nowIso,
+      });
+    }
+
+    const prevItemCount = Array.isArray(order?.items) ? order.items.length : 0;
+    const prevCartSig = (order?.items || []).map((i) => `${i.name}:${i.qty}:${i.service || i.serviceType || ''}`).join('|');
+    const nextCartSig = cartItems.map((i) => `${i.name}:${i.qty}:${i.service || ''}`).join('|');
+    if (prevCartSig !== nextCartSig || prevItemCount !== cartItems.length) {
+      const breakdownText = formatServiceBreakdown(cartItems, order?.service_category || 'Laundry', true);
+      newEntries.push({
+        id: `act_svc_${Date.now() + 1}`,
+        type: 'service',
+        title: 'Service Updated',
+        detail: breakdownText || `Order items updated (${totalPieces} pcs)`,
+        staff: staffActor,
+        timestamp: nowIso,
+      });
+    }
+
+    const prevAdv = Number(order?.advance_paid || 0);
+    const nextAdv = Number(advancePaid || 0);
+    if (nextAdv > 0 && (nextAdv !== prevAdv || paymentStatus !== order?.payment_status)) {
+      newEntries.push({
+        id: `act_pay_${Date.now() + 2}`,
+        type: 'payment',
+        title: 'Payment Received',
+        detail: `${currencySymbol}${nextAdv.toFixed(2)} received via ${paymentMode}`,
+        staff: staffActor,
+        timestamp: nowIso,
+      });
+    }
+
+    const combinedHistory = [...newEntries, ...existingHistory];
+    const resolvedPaymentReceivedAt = nextAdv > 0
+      ? (nextAdv !== prevAdv ? nowIso : (order?.payment_received_at || nowIso))
+      : order?.payment_received_at || null;
+    const resolvedCollectionAt = status === 'Delivered'
+      ? (order?.collection_at || nowIso)
+      : (order?.collection_at || null);
+    const resolvedCollectedBy = status === 'Delivered'
+      ? (order?.collected_by_person || pickupPerson || customerName || 'Customer')
+      : (order?.collected_by_person || '');
 
     const updatedOrder = {
       ...(order || {}),
@@ -445,15 +512,15 @@ export default function SideEditPanel({
         rate: c.rate,
         qty: c.qty,
         quantity: c.qty,
-        amount: c.rate * c.qty,
         total: c.rate * c.qty,
-        careNotes: c.careNotes || c.care_instructions || '',
         icon: c.icon || '👕',
         inspections: Object.values(inspections).filter((p) => p.cartItemId === c.id),
       })),
       services_allocated: cartItems.map((c) => ({
         name: c.name,
         count: c.qty,
+        serviceType: c.service || c.serviceType || 'Laundry',
+        service: c.service || c.serviceType || 'Laundry',
         icon: c.icon || '👕',
       })),
       item_count: totalPieces,
@@ -508,13 +575,23 @@ export default function SideEditPanel({
       payment_status: paymentStatus,
       staff_notes: staffNote,
       flags: flags,
-      assigned_driver: assignedRider,
-      assigned_driver_full: `${assignedRider} (${vehicleNo})`,
+      attend_staff_name: staffActor,
+      assigned_staff: staffActor,
+      assigned_pickup_delivery_person: pickupPerson,
+      assigned_driver: pickupPerson || assignedRider,
+      assigned_driver_full: pickupPerson ? `${pickupPerson} (${vehicleNo})` : `${assignedRider} (${vehicleNo})`,
+      status_updated_at: nowIso,
+      status_updated_by: staffActor,
+      activity_history: combinedHistory,
+      payment_received_at: resolvedPaymentReceivedAt,
+      payment_received_by: nextAdv > 0 ? staffActor : (order?.payment_received_by || ''),
+      collection_at: resolvedCollectionAt,
+      collected_by_person: resolvedCollectedBy,
       pickup_status: logisticsStatus,
-      assigned_for_pickup: Boolean(assignedRider || logisticsStatus === 'Assigned for Pickup'),
-      audit_logs: auditLogs,
-      logs: auditLogs,
-      updated_at: new Date().toISOString(),
+      assigned_for_pickup: Boolean(pickupPerson || assignedRider || logisticsStatus === 'Assigned for Pickup'),
+      audit_logs: combinedHistory,
+      logs: combinedHistory,
+      updated_at: nowIso,
     };
 
     if (onUpdateOrder) {
@@ -546,8 +623,18 @@ export default function SideEditPanel({
         advancePaid: Number(advancePaid || 0),
         paymentStatus: paymentStatus,
         paymentMethod: paymentMode,
-        assignedStaff: assignedRider,
-        assigned_driver_full: `${assignedRider} (${vehicleNo})`,
+        assignedStaff: staffActor,
+        attend_staff_name: staffActor,
+        assigned_pickup_delivery_person: pickupPerson,
+        assigned_driver: pickupPerson || assignedRider,
+        assigned_driver_full: pickupPerson ? `${pickupPerson} (${vehicleNo})` : `${assignedRider} (${vehicleNo})`,
+        status_updated_at: nowIso,
+        status_updated_by: staffActor,
+        activity_history: combinedHistory,
+        payment_received_at: resolvedPaymentReceivedAt,
+        payment_received_by: nextAdv > 0 ? staffActor : (order?.payment_received_by || ''),
+        collection_at: resolvedCollectionAt,
+        collected_by_person: resolvedCollectedBy,
         staff_notes: staffNote,
         flags: flags,
         items: updatedOrder.items,
@@ -746,6 +833,33 @@ export default function SideEditPanel({
                     </div>
                   </div>
 
+                  <div className="side-edit-row-2col">
+                    <div className="side-edit-field">
+                      <label className="side-edit-label">Attend Staff Name</label>
+                      <input
+                        type="text"
+                        className="side-edit-input"
+                        value={attendStaffName}
+                        onChange={(e) => setAttendStaffName(e.target.value)}
+                        placeholder="e.g. Ravi Kumar"
+                      />
+                    </div>
+
+                    <div className="side-edit-field">
+                      <label className="side-edit-label">Assigned Pickup &amp; Delivery Person</label>
+                      <input
+                        type="text"
+                        className="side-edit-input"
+                        value={assignedPickupPerson}
+                        onChange={(e) => {
+                          setAssignedPickupPerson(e.target.value);
+                          setAssignedRider(e.target.value);
+                        }}
+                        placeholder="e.g. Ramesh Kumar / Self Pickup"
+                      />
+                    </div>
+                  </div>
+
                   <div className="side-edit-field">
                     <label className="side-edit-label">Comments / Special Notes</label>
                     <textarea
@@ -863,19 +977,16 @@ export default function SideEditPanel({
                       ) : null}
 
                       <div className="side-edit-field">
-                        <label className="side-edit-label">Service Type</label>
-                        <select
-                          className="side-edit-select"
+                        <ServiceTypeSelect
+                          label="Service Type"
+                          labelClassName="side-edit-label"
+                          selectClassName="side-edit-select"
                           value={selectedServiceType}
-                          onChange={(e) => setSelectedServiceType(e.target.value)}
-                        >
-                          <option value="Laundry + Iron">Laundry + Iron</option>
-                          <option value="Normal Wash">Normal Wash</option>
-                          <option value="Steam Press">Steam Press</option>
-                          <option value="Dry Clean">Dry Clean</option>
-                          <option value="Wash & Fold">Wash &amp; Fold</option>
-                          <option value="Shoe Spa / Leather Care">Shoe Spa / Leather Care</option>
-                        </select>
+                          onChange={setSelectedServiceType}
+                          onServiceAdded={(added, isNew) => {
+                            if (isNew) showToast?.(`✅ Added service type "${added}"`);
+                          }}
+                        />
                       </div>
 
                       <div className="side-edit-row-2col">
@@ -1246,30 +1357,29 @@ export default function SideEditPanel({
               </div>
 
               <div className="side-edit-field" style={{ marginTop: '4px' }}>
-                <label className="side-edit-label">Stage Event &amp; Workflow History</label>
+                <label className="side-edit-label">Stage Event History</label>
                 <div className="side-edit-timeline-list">
-                  {(auditLogs && auditLogs.length > 0 ? auditLogs : [
-                    {
-                      id: 'init-1',
-                      title: 'Order Received at Intake Register',
-                      time: order?.created_at ? new Date(order.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Initial Intake',
-                      author: order?.created_by || 'Counter Staff',
-                      detail: `Current Stage: ${status}`,
-                    },
-                  ]).map((log, idx) => (
-                    <div key={log.id || idx} className="side-edit-timeline-item">
-                      <span
-                        className="side-edit-timeline-dot"
-                        style={log.type === 'pickup' ? { background: '#16a34a' } : idx === 0 ? { background: '#2563eb' } : undefined}
-                      ></span>
-                      <div className="side-edit-timeline-content">
-                        <span className="side-edit-timeline-title">{log.title}</span>
-                        <span className="side-edit-timeline-time">
-                          {log.time || (log.timestamp ? new Date(log.timestamp).toLocaleString('en-IN') : 'Logged')} · By {log.author || log.staff || 'Store Staff'}{log.role ? ` (${log.role})` : ''}{log.detail ? ` — ${log.detail}` : ''}
-                        </span>
-                      </div>
+                  <div className="side-edit-timeline-item">
+                    <span className="side-edit-timeline-dot"></span>
+                    <div className="side-edit-timeline-content">
+                      <span className="side-edit-timeline-title">Order Received at Intake Register</span>
+                      <span className="side-edit-timeline-time">28 Oct 2026, 10:15 AM · By Counter Lead</span>
                     </div>
-                  ))}
+                  </div>
+                  <div className="side-edit-timeline-item">
+                    <span className="side-edit-timeline-dot"></span>
+                    <div className="side-edit-timeline-content">
+                      <span className="side-edit-timeline-title">Garments Checked &amp; Tagged</span>
+                      <span className="side-edit-timeline-time">28 Oct 2026, 11:20 AM · Bag Tag: {dispatchBagTag}</span>
+                    </div>
+                  </div>
+                  <div className="side-edit-timeline-item">
+                    <span className="side-edit-timeline-dot" style={{ background: '#f59e0b' }}></span>
+                    <div className="side-edit-timeline-content">
+                      <span className="side-edit-timeline-title">Moved to Washing Cycle ({assignedMachine})</span>
+                      <span className="side-edit-timeline-time">28 Oct 2026, 02:40 PM · Active Washing Stage</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

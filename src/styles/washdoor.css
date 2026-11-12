@@ -800,6 +800,18 @@ button {
   white-space: nowrap;
 }
 
+.nav svg {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+
+.nav .nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .nav:hover {
   background: #101c30;
   color: #ffffff;

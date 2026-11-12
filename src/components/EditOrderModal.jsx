@@ -4,7 +4,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import ClothIllustration from './ClothIllustration';
 import GarmentInspectionSection from './GarmentInspectionSection';
-import { updateOrder, searchCustomers, getProducts, DEFAULT_PRODUCTS, resolveServicePrice } from '../services/customerService';
+import ServiceTypeSelect from './ServiceTypeSelect';
+import { updateOrder, searchCustomers, getProducts, DEFAULT_PRODUCTS } from '../services/customerService';
 import { normalizeMobileNumber, formatPhoneDisplay } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
 import '../styles/EditOrderModal.css';
@@ -57,7 +58,7 @@ export default function EditOrderModal({
   const [email, setEmail] = useState('');
 
   // Service Details state
-  const [serviceType, setServiceType] = useState('Wash & Steam Press');
+  const [serviceType, setServiceType] = useState('Laundry');
   const [pickupDate, setPickupDate] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -96,7 +97,7 @@ export default function EditOrderModal({
     setEmail(cust.email || order.email || '');
 
     // Service & Dates
-    setServiceType(order.preference || order.service_category || 'Wash & Steam Press');
+    setServiceType(order.preference || order.service_category || 'Laundry');
 
     const todayStr = new Date().toISOString().slice(0, 10);
     setPickupDate(todayStr);
@@ -153,7 +154,7 @@ export default function EditOrderModal({
 
   // Cart operations
   const handleAddToCart = (product) => {
-    const rate = resolveServicePrice(product, serviceType);
+    const rate = Number(product.price ?? product.base_price ?? 0);
     setCart((prev) => {
       const existing = prev.find((item) => item.id === product.id || item.name.toLowerCase() === product.name.toLowerCase());
       if (existing) {
@@ -790,21 +791,17 @@ export default function EditOrderModal({
               <div className="pos-panel-title">Service Details</div>
 
               <div className="pos-field-group">
-                <label className="pos-field-label">
-                  Service Type <span className="req">*</span>
-                </label>
-                <select
-                  className="pos-field-select"
+                <ServiceTypeSelect
+                  label="Service Type"
+                  labelClassName="pos-field-label"
+                  required
+                  selectClassName="pos-field-select"
                   value={serviceType}
-                  onChange={(e) => setServiceType(e.target.value)}
-                >
-                  <option value="Laundry">Laundry</option>
-                  <option value="Dry cleaning">Dry cleaning</option>
-                  <option value="Washing by KG">Washing by KG</option>
-                  <option value="Shoe cleaning">Shoe cleaning</option>
-                  <option value="Ironing only">Ironing only</option>
-                  <option value="Customer category">Customer category</option>
-                </select>
+                  onChange={setServiceType}
+                  onServiceAdded={(added, isNew) => {
+                    if (isNew) showToast?.(`✅ Added service type "${added}"`);
+                  }}
+                />
               </div>
 
               <div className="pos-field-group">
