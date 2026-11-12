@@ -119,14 +119,16 @@ export function validateOnCallSchedule({
       }
     }
 
-    if (!hasDeliveryDate || !hasDeliveryTime) {
-      errors.scheduled_delivery_at = 'Scheduled delivery date and time are required.';
-    } else {
-      deliveryIso = combineLocalDateAndTimeToIso(deliveryDate, deliveryTime);
-      if (!deliveryIso) {
-        errors.scheduled_delivery_at = 'Please enter a valid delivery date and time.';
-      } else if (pickupIso && new Date(deliveryIso).getTime() <= new Date(pickupIso).getTime()) {
-        errors.scheduled_delivery_at = 'Scheduled delivery must be later than scheduled pickup.';
+    if (hasAnyDelivery) {
+      if (!hasDeliveryDate || !hasDeliveryTime) {
+        errors.scheduled_delivery_at = 'Please enter both delivery date and time.';
+      } else {
+        deliveryIso = combineLocalDateAndTimeToIso(deliveryDate, deliveryTime);
+        if (!deliveryIso) {
+          errors.scheduled_delivery_at = 'Please enter a valid delivery date and time.';
+        } else if (pickupIso && new Date(deliveryIso).getTime() <= new Date(pickupIso).getTime()) {
+          errors.scheduled_delivery_at = 'Scheduled delivery must be later than scheduled pickup.';
+        }
       }
     }
   } else {

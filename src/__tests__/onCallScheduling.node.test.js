@@ -43,7 +43,7 @@ test('onCallScheduling.js helper functions and validation rules', async () => {
   // 4. New On-Call order validation
   const nowMs = new Date('2026-11-12T10:00:00.000Z').getTime();
 
-  // Missing both
+  // Missing pickup is rejected; missing optional delivery is allowed when pickup is valid
   const missingRes = validateOnCallSchedule({
     pickupDate: '',
     pickupTime: '',
@@ -54,7 +54,19 @@ test('onCallScheduling.js helper functions and validation rules', async () => {
   });
   assert.equal(missingRes.isValid, false);
   assert.ok(missingRes.errors.scheduled_pickup_at);
-  assert.ok(missingRes.errors.scheduled_delivery_at);
+  assert.equal(missingRes.errors.scheduled_delivery_at, undefined);
+
+  const pickupOnlyRes = validateOnCallSchedule({
+    pickupDate: '2026-11-13',
+    pickupTime: '10:30',
+    deliveryDate: '',
+    deliveryTime: '',
+    isNewOrder: true,
+    nowMs,
+  });
+  assert.equal(pickupOnlyRes.isValid, true);
+  assert.ok(pickupOnlyRes.scheduled_pickup_at);
+  assert.equal(pickupOnlyRes.scheduled_delivery_at, null);
 
   // Past pickup
   const pastRes = validateOnCallSchedule({
