@@ -14,6 +14,7 @@ import {
 import { useLanguage } from '../context/LanguageContext';
 import { validateBusinessProfile } from '../utils/validation';
 import TemplateManagementSection from './TemplateManagementSection';
+import StaffMasterManager from './StaffMasterManager';
 import '../styles/Settings.css';
 
 function formatBrandTimestamp(value) {
@@ -378,6 +379,7 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
     { id: 'tax_currency', label: t('tab_tax_currency', 'Tax & currency'), icon: '🪙', desc: 'GST rate, currency symbol & invoice calculations' },
     { id: 'bank_payments', label: t('tab_bank_payments', 'Bank & payments'), icon: '🏦', desc: 'Payment categories, bank account & counter UPI QR' },
     { id: 'operations_receipts', label: t('tab_operations_receipts', 'Operations & receipts'), icon: '🧾', desc: 'Thermal receipts, barcodes & disclaimer terms' },
+    { id: 'staff_master', label: t('tab_staff_master', 'Staff & Delivery Master'), icon: '👥', desc: 'Manage counter staff & pickup/delivery personnel' },
     { id: 'notifications', label: t('tab_notifications', 'Reminders & notifications'), icon: '🔔', desc: 'WhatsApp, SMS & email automated alerts' },
     { id: 'language', label: t('tab_language', 'Language'), icon: '🌐', desc: 'Multi-language and text direction' },
     { id: 'templates', label: t('tab_template', 'Template'), icon: '📑', desc: 'Predefined WhatsApp, SMS & Email notification templates', isSubItem: true },
@@ -1537,6 +1539,13 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
           )}
 
           {/* ══════════════════════════════════════════════════════════
+              4B. STAFF & PICKUP/DELIVERY MASTER
+             ══════════════════════════════════════════════════════════ */}
+          {activeTab === 'staff_master' && (
+            <StaffMasterManager showToast={showToast} />
+          )}
+
+          {/* ══════════════════════════════════════════════════════════
               5. REMINDERS & NOTIFICATIONS (WhatsApp & SMS Templates)
              ══════════════════════════════════════════════════════════ */}
           {activeTab === 'notifications' && (
@@ -2397,3 +2406,4 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
     </div>
   );
 }
+                        

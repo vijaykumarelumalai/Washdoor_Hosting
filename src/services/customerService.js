@@ -49,6 +49,242 @@ export function resolveServicePrice(product, serviceType = '') {
 }
 
 /**
+ * Fetches active staff records from Supabase 'washdoor_staff_master'.
+ * Returns normalized records: { id, uniqueId, name, zone, city, role, status }.
+ */
+export async function fetchActiveStaffMaster() {
+  if (!isSupabaseConfigured()) {
+    return { data: [], error: 'Supabase not configured' };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('washdoor_staff_master')
+      .select('id, staff_id, staff_name, zone, city, role, status')
+      .eq('status', 'Active')
+      .order('staff_id', { ascending: true });
+
+    if (error) {
+      return { data: [], error: error.message || 'Failed to load active staff records' };
+    }
+
+    const normalized = (data || []).map((row) => ({
+      id: row.id || row.staff_id,
+      uniqueId: row.staff_id,
+      name: row.staff_name,
+      zone: row.zone || '',
+      city: row.city || '',
+      role: row.role || 'Counter Staff',
+      status: row.status || 'Active',
+    }));
+
+    return { data: normalized, error: null };
+  } catch (err) {
+    return { data: [], error: err?.message || 'Failed to load active staff records' };
+  }
+}
+
+/**
+ * Fetches active pickup & delivery personnel from Supabase 'washdoor_pickup_delivery_master'.
+ * Returns normalized records: { id, uniqueId, name, zone, city, phone, vehicleInfo, status }.
+ */
+export async function fetchActivePickupDeliveryMaster() {
+  if (!isSupabaseConfigured()) {
+    return { data: [], error: 'Supabase not configured' };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('washdoor_pickup_delivery_master')
+      .select('id, employee_id, employee_name, zone, city, phone, vehicle_info, status')
+      .eq('status', 'Active')
+      .order('employee_id', { ascending: true });
+
+    if (error) {
+      return { data: [], error: error.message || 'Failed to load active pickup & delivery records' };
+    }
+
+    const normalized = (data || []).map((row) => ({
+      id: row.id || row.employee_id,
+      uniqueId: row.employee_id,
+      name: row.employee_name,
+      zone: row.zone || '',
+      city: row.city || '',
+      phone: row.phone || '',
+      vehicleInfo: row.vehicle_info || '',
+      status: row.status || 'Active',
+    }));
+
+    return { data: normalized, error: null };
+  } catch (err) {
+    return { data: [], error: err?.message || 'Failed to load active pickup & delivery records' };
+  }
+}
+
+/**
+ * Fetches all Staff Master records (Active & Inactive) for UI management.
+ */
+export async function fetchAllStaffMaster() {
+  if (!isSupabaseConfigured()) {
+    return { data: [], error: 'Supabase not configured' };
+  }
+  try {
+    const { data, error } = await supabase
+      .from('washdoor_staff_master')
+      .select('id, staff_id, staff_name, zone, city, phone, role, status, created_at')
+      .order('staff_id', { ascending: true });
+    if (error) return { data: [], error: error.message || 'Failed to load Staff Master' };
+    return {
+      data: (data || []).map((row) => ({
+        id: row.id,
+        uniqueId: row.staff_id,
+        name: row.staff_name,
+        zone: row.zone || '',
+        city: row.city || '',
+        phone: row.phone || '',
+        role: row.role || 'Counter Staff',
+        status: row.status || 'Active',
+        created_at: row.created_at,
+      })),
+      error: null,
+    };
+  } catch (err) {
+    return { data: [], error: err?.message || 'Failed to load Staff Master' };
+  }
+}
+
+/**
+ * Creates or updates a Staff Master record in Supabase 'washdoor_staff_master'.
+ */
+export async function saveStaffMasterRecord(payload = {}) {
+  if (!isSupabaseConfigured()) {
+    return { data: null, error: 'Supabase not configured' };
+  }
+  const staffId = String(payload.uniqueId || payload.staff_id || '').trim().toUpperCase();
+  const staffName = String(payload.name || payload.staff_name || '').trim();
+  const zone = String(payload.zone || '').trim();
+  const status = payload.status === 'Inactive' ? 'Inactive' : 'Active';
+
+  if (!staffId || !staffName || !zone) {
+    return { data: null, error: 'Staff ID, Staff Name, and Zone are required.' };
+  }
+
+  const row = {
+    staff_id: staffId,
+    staff_name: staffName,
+    zone,
+    city: String(payload.city || '').trim() || null,
+    phone: String(payload.phone || '').trim() || null,
+    role: String(payload.role || 'Counter Staff').trim() || 'Counter Staff',
+    status,
+  };
+
+  try {
+    const query = payload.id
+      ? supabase.from('washdoor_staff_master').update(row).eq('id', payload.id).select().single()
+      : supabase.from('washdoor_staff_master').insert([row]).select().single();
+    const { data, error } = await query;
+    if (error) return { data: null, error: error.message || 'Failed to save staff record' };
+    return { data, error: null };
+  } catch (err) {
+    return { data: null, error: err?.message || 'Failed to save staff record' };
+  }
+}
+
+/**
+ * Fetches all Pickup & Delivery Person Master records (Active & Inactive) for UI management.
+ */
+export async function fetchAllPickupDeliveryMaster() {
+  if (!isSupabaseConfigured()) {
+    return { data: [], error: 'Supabase not configured' };
+  }
+  try {
+    const { data, error } = await supabase
+      .from('washdoor_pickup_delivery_master')
+      .select('id, employee_id, employee_name, zone, city, phone, vehicle_info, status, created_at')
+      .order('employee_id', { ascending: true });
+    if (error) return { data: [], error: error.message || 'Failed to load Pickup & Delivery Master' };
+    return {
+      data: (data || []).map((row) => ({
+        id: row.id,
+        uniqueId: row.employee_id,
+        name: row.employee_name,
+        zone: row.zone || '',
+        city: row.city || '',
+        phone: row.phone || '',
+        vehicleInfo: row.vehicle_info || '',
+        status: row.status || 'Active',
+        created_at: row.created_at,
+      })),
+      error: null,
+    };
+  } catch (err) {
+    return { data: [], error: err?.message || 'Failed to load Pickup & Delivery Master' };
+  }
+}
+
+/**
+ * Creates or updates a Pickup & Delivery Person Master record in Supabase 'washdoor_pickup_delivery_master'.
+ */
+export async function savePickupDeliveryMasterRecord(payload = {}) {
+  if (!isSupabaseConfigured()) {
+    return { data: null, error: 'Supabase not configured' };
+  }
+  const employeeId = String(payload.uniqueId || payload.employee_id || '').trim().toUpperCase();
+  const employeeName = String(payload.name || payload.employee_name || '').trim();
+  const zone = String(payload.zone || '').trim();
+  const status = payload.status === 'Inactive' ? 'Inactive' : 'Active';
+
+  if (!employeeId || !employeeName || !zone) {
+    return { data: null, error: 'Employee ID, Name, and Zone are required.' };
+  }
+
+  const row = {
+    employee_id: employeeId,
+    employee_name: employeeName,
+    zone,
+    city: String(payload.city || '').trim() || null,
+    phone: String(payload.phone || '').trim() || null,
+    vehicle_info: String(payload.vehicleInfo || payload.vehicle_info || '').trim() || null,
+    status,
+  };
+
+  try {
+    const query = payload.id
+      ? supabase.from('washdoor_pickup_delivery_master').update(row).eq('id', payload.id).select().single()
+      : supabase.from('washdoor_pickup_delivery_master').insert([row]).select().single();
+    const { data, error } = await query;
+    if (error) return { data: null, error: error.message || 'Failed to save pickup/delivery record' };
+    return { data, error: null };
+  } catch (err) {
+    return { data: null, error: err?.message || 'Failed to save pickup/delivery record' };
+  }
+}
+
+/**
+ * Toggles Active/Inactive status for either Staff Master or Pickup & Delivery Master.
+ */
+export async function toggleMasterPersonStatus(tableType, id, currentStatus) {
+  if (!isSupabaseConfigured() || !id) {
+    return { data: null, error: 'Supabase not configured or invalid record ID' };
+  }
+  const tableName = tableType === 'pickup' ? 'washdoor_pickup_delivery_master' : 'washdoor_staff_master';
+  const nextStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+  try {
+    const { data, error } = await supabase
+      .from(tableName)
+      .update({ status: nextStatus })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) return { data: null, error: error.message || 'Failed to update status' };
+    return { data, error: null };
+  } catch (err) {
+    return { data: null, error: err?.message || 'Failed to update status' };
+  }
+}
+
+/**
  * Fetches all products from Supabase 'washdoor_products'.
  * Falls back to DEFAULT_PRODUCTS if offline or empty.
  */
@@ -2041,8 +2277,10 @@ function mapCustomerWorkRowToOrder(row, factoryRow = null, scheduleRow = null, g
     delivery_date: formattedExpectedDelivery,
     expected_delivery: formattedExpectedDelivery,
     assigned_staff: row.assigned_staff || internalNotesObj.attend_staff_name || factoryData.collected_by_staff || '',
-    attend_staff_name: internalNotesObj.attend_staff_name || row.assigned_staff || '',
-    assigned_pickup_delivery_person: internalNotesObj.assigned_pickup_delivery_person || factoryData.assigned_driver || schedData.assigned_driver_name || internalNotesObj.assigned_driver || '',
+    attend_staff_id: row.attend_staff_id || internalNotesObj.attend_staff_id || null,
+    attend_staff_name: row.attend_staff_name || internalNotesObj.attend_staff_name || row.assigned_staff || '',
+    assigned_pickup_person_id: row.assigned_pickup_person_id || internalNotesObj.assigned_pickup_person_id || null,
+    assigned_pickup_delivery_person: row.assigned_pickup_delivery_person || internalNotesObj.assigned_pickup_delivery_person || factoryData.assigned_driver || schedData.assigned_driver_name || internalNotesObj.assigned_driver || '',
     assigned_driver: internalNotesObj.assigned_pickup_delivery_person || factoryData.assigned_driver || schedData.assigned_driver_name || internalNotesObj.assigned_driver || row.assigned_staff || '',
     assigned_driver_full: schedData.assigned_driver_full || internalNotesObj.assigned_driver_full || internalNotesObj.assigned_pickup_delivery_person || row.assigned_staff || '',
     status_updated_at: internalNotesObj.status_updated_at || row.updated_at || row.created_at || null,
@@ -2976,6 +3214,8 @@ export async function createOrderWithCustomer({
         : cleanCust.product_weight ? Number(cleanCust.product_weight) : null;
       const rackLocation = cleanCust.rack_shelf_location || cleanCust.rackShelfLocation || null;
 
+      const attendStaffIdVal = cleanCust.attend_staff_id || null;
+      const pickupPersonIdVal = cleanCust.assigned_pickup_person_id || null;
       const attendStaffVal = cleanCust.attend_staff_name || cleanCust.assigned_staff || 'Counter Staff';
       const pickupPersonVal = cleanCust.assigned_pickup_delivery_person || cleanCust.assigned_driver || '';
       const nowCreatedIso = cleanCust.intake_date ? new Date(cleanCust.intake_date).toISOString() : new Date().toISOString();
@@ -3010,7 +3250,9 @@ export async function createOrderWithCustomer({
         garment_inspections: cleanCust.garment_inspections || cleanCust.inspections || {},
         expected_delivery_display: rawDelivery || '',
         payment_method_display: cleanCust.payment_method || cleanCust.payment_mode || 'Cash',
+        attend_staff_id: attendStaffIdVal,
         attend_staff_name: attendStaffVal,
+        assigned_pickup_person_id: pickupPersonIdVal,
         assigned_pickup_delivery_person: pickupPersonVal,
         assigned_driver: pickupPersonVal || attendStaffVal,
         assigned_driver_full: cleanCust.assigned_driver_full || pickupPersonVal,
@@ -3067,7 +3309,11 @@ export async function createOrderWithCustomer({
         payment_method: calculatedPaymentMethod,
         intake_date: cleanCust.intake_date ? new Date(cleanCust.intake_date).toISOString() : new Date().toISOString(),
         target_delivery_date: targetDeliveryDateIso,
+        attend_staff_id: attendStaffIdVal,
+        attend_staff_name: cleanCust.attend_staff_name || null,
         assigned_staff: cleanCust.attend_staff_name || cleanCust.assigned_staff || cleanCust.assigned_driver || null,
+        assigned_pickup_person_id: pickupPersonIdVal,
+        assigned_pickup_delivery_person: cleanCust.assigned_pickup_delivery_person || null,
         special_instructions: orderPreferenceNotes || cleanCust.notes || cleanCust.special_instructions || null,
         staff_notes: cleanCust.internal_comments || cleanCust.staff_notes || null,
         handling_flags: cleanCust.flags || {},
@@ -3083,6 +3329,7 @@ export async function createOrderWithCustomer({
         const {
           discount_pct, taxable_amount, gst_percentage, cgst_amount, sgst_amount, igst_amount,
           tax_exemption, staff_notes, handling_flags, created_by_name, updated_by_name,
+          attend_staff_id, attend_staff_name, assigned_pickup_person_id, assigned_pickup_delivery_person,
           ...baseWorkRow
         } = workRow;
         const baseRes = await supabase.from('customer_works').insert([baseWorkRow]).select().single();
@@ -3104,6 +3351,7 @@ export async function createOrderWithCustomer({
         const {
           discount_pct, taxable_amount, gst_percentage, cgst_amount, sgst_amount, igst_amount,
           tax_exemption, staff_notes, handling_flags, created_by_name, updated_by_name,
+          attend_staff_id, attend_staff_name, assigned_pickup_person_id, assigned_pickup_delivery_person,
           ...baseWorkRow
         } = workRow;
         const fallbackRow = { ...baseWorkRow, work_number: retryOrderNum };
@@ -3122,9 +3370,19 @@ export async function createOrderWithCustomer({
 
     // 2. Also try washdoor_orders_master if exists
     try {
-      await supabase
+      const masterWithStaff = {
+        ...masterInsert,
+        attend_staff_id: cleanCust.attend_staff_id || null,
+        attend_staff_name: cleanCust.attend_staff_name || null,
+        assigned_pickup_person_id: cleanCust.assigned_pickup_person_id || null,
+        assigned_pickup_delivery_person: cleanCust.assigned_pickup_delivery_person || null,
+      };
+      const { error: mErr } = await supabase
         .from('washdoor_orders_master')
-        .insert([masterInsert]);
+        .insert([masterWithStaff]);
+      if (mErr && (mErr.code === 'PGRST204' || String(mErr.message).includes('column'))) {
+        await supabase.from('washdoor_orders_master').insert([masterInsert]);
+      }
     } catch {}
 
     // 3. Synchronize dedicated washdoor_factory_orders and washdoor_customer_addresses

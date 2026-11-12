@@ -1,10 +1,12 @@
 // src/components/CustomerForm.jsx
 // Form matching washdoor_create_order_updated.html
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { validateCustomer } from '../utils/validation';
 import ClothSelectionCart from './ClothSelectionCart';
 import { useServiceTypes } from './ServiceTypeSelect';
+import StaffSearchDropdown from './StaffSearchDropdown';
+import { fetchActiveStaffMaster, fetchActivePickupDeliveryMaster } from '../services/customerService';
 
 const PRODUCT_SERVICES = [
   { id: 'laundry', name: 'Laundry', icon: '🧺' },
@@ -60,12 +62,59 @@ export default function CustomerForm({
 
   // Order preferences & Intake method
   const [intakeMethod, setIntakeMethod] = useState(initialOrderType || 'walk-in');
+  const [attendStaffId, setAttendStaffId] = useState(
+    initialCustomer?.attend_staff_id || ''
+  );
   const [attendStaffName, setAttendStaffName] = useState(
     initialCustomer?.attend_staff_name || initialCustomer?.assigned_staff || ''
+  );
+  const [assignedPickupPersonId, setAssignedPickupPersonId] = useState(
+    initialCustomer?.assigned_pickup_person_id || ''
   );
   const [assignedPickupPerson, setAssignedPickupPerson] = useState(
     initialCustomer?.assigned_pickup_delivery_person || initialCustomer?.assigned_driver || ''
   );
+
+  // Database-driven Staff Master & Pickup/Delivery Master lists
+  const [staffList, setStaffList] = useState([]);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [staffError, setStaffError] = useState(null);
+
+  const [pickupList, setPickupList] = useState([]);
+  const [pickupLoading, setPickupLoading] = useState(false);
+  const [pickupError, setPickupError] = useState(null);
+
+  const loadStaffMaster = useCallback(async () => {
+    setStaffLoading(true);
+    setStaffError(null);
+    const { data, error } = await fetchActiveStaffMaster();
+    setStaffLoading(false);
+    if (error) {
+      setStaffError(error);
+      setStaffList([]);
+      return;
+    }
+    setStaffList(data || []);
+  }, []);
+
+  const loadPickupMaster = useCallback(async () => {
+    setPickupLoading(true);
+    setPickupError(null);
+    const { data, error } = await fetchActivePickupDeliveryMaster();
+    setPickupLoading(false);
+    if (error) {
+      setPickupError(error);
+      setPickupList([]);
+      return;
+    }
+    setPickupList(data || []);
+  }, []);
+
+  useEffect(() => {
+    if (!isOrderFlow) return;
+    loadStaffMaster();
+    loadPickupMaster();
+  }, [isOrderFlow, loadStaffMaster, loadPickupMaster]);
   const [orderPreference, setOrderPreference] = useState(
     initialCustomer?.service_category || initialCustomer?.preference || 'Laundry'
   );
@@ -316,8 +365,10 @@ export default function CustomerForm({
         product_garment_type: productGarmentType,
         order_notes: finalCareNotes || internalComments,
         total_amount: calculatedTotal,
+        attend_staff_id: attendStaffId || null,
         attend_staff_name: attendStaffName.trim() || 'Counter Staff',
         assigned_staff: attendStaffName.trim() || 'Counter Staff',
+        assigned_pickup_person_id: assignedPickupPersonId || null,
         assigned_pickup_delivery_person: assignedPickupPerson.trim(),
         assigned_driver: assignedPickupPerson.trim(),
       },
@@ -568,25 +619,51 @@ export default function CustomerForm({
           <div className="form-grid" style={{ marginTop: '4px', marginBottom: '2px' }}>
             <div className="field">
               <label htmlFor="attendStaffName">Attend Staff Name</label>
-              <input
+              <StaffSearchDropdown
                 id="attendStaffName"
-                type="text"
-                maxLength={100}
-                placeholder="e.g. Ravi Kumar (Counter Staff)"
-                value={attendStaffName}
-                onChange={(e) => setAttendStaffName(e.target.value)}
+                variant="staff"
+                options={staffList}
+                value={attendStaffId}
+                fallbackName={attendStaffName}
+                loading={staffLoading}
+                error={staffError}
+                onRetry={loadStaffMaster}
+                placeholder="Search by staff name or ID..."
+                emptyMessage="No active staff found in Staff Master."
+                onChange={(selected) => {
+                  if (selected) {
+                    setAttendStaffId(selected.uniqueId || '');
+                    setAttendStaffName(selected.name || '');
+                  } else {
+                    setAttendStaffId('');
+                    setAttendStaffName('');
+                  }
+                }}
               />
             </div>
 
             <div className="field">
               <label htmlFor="assignedPickupPerson">Assigned Pickup &amp; Delivery Person</label>
-              <input
+              <StaffSearchDropdown
                 id="assignedPickupPerson"
-                type="text"
-                maxLength={100}
-                placeholder="e.g. Ramesh Kumar / Self Pickup"
-                value={assignedPickupPerson}
-                onChange={(e) => setAssignedPickupPerson(e.target.value)}
+                variant="pickup"
+                options={pickupList}
+                value={assignedPickupPersonId}
+                fallbackName={assignedPickupPerson}
+                loading={pickupLoading}
+                error={pickupError}
+                onRetry={loadPickupMaster}
+                placeholder="Search by name or employee ID..."
+                emptyMessage="No active pickup/delivery staff found."
+                onChange={(selected) => {
+                  if (selected) {
+                    setAssignedPickupPersonId(selected.uniqueId || '');
+                    setAssignedPickupPerson(selected.name || '');
+                  } else {
+                    setAssignedPickupPersonId('');
+                    setAssignedPickupPerson('');
+                  }
+                }}
               />
             </div>
           </div>
