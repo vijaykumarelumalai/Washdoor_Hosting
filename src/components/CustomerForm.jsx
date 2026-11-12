@@ -7,6 +7,7 @@ import ClothSelectionCart from './ClothSelectionCart';
 import { useServiceTypes } from './ServiceTypeSelect';
 import StaffSearchDropdown from './StaffSearchDropdown';
 import { fetchActiveStaffMaster, fetchActivePickupDeliveryMaster } from '../services/customerService';
+import { validateOnCallSchedule } from '../utils/onCallScheduling';
 
 const PRODUCT_SERVICES = [
   { id: 'laundry', name: 'Laundry', icon: '🧺' },
@@ -62,6 +63,10 @@ export default function CustomerForm({
 
   // Order preferences & Intake method
   const [intakeMethod, setIntakeMethod] = useState(initialOrderType || 'walk-in');
+  const [scheduledPickupDate, setScheduledPickupDate] = useState('');
+  const [scheduledPickupTime, setScheduledPickupTime] = useState('');
+  const [scheduledDeliveryDate, setScheduledDeliveryDate] = useState('');
+  const [scheduledDeliveryTime, setScheduledDeliveryTime] = useState('');
   const [attendStaffId, setAttendStaffId] = useState(
     initialCustomer?.attend_staff_id || ''
   );
@@ -297,6 +302,29 @@ export default function CustomerForm({
       return;
     }
 
+    // Conditional On-Call Scheduling Validation
+    let onCallSchedulePayload = {
+      scheduled_pickup_at: null,
+      scheduled_delivery_at: null,
+    };
+    if (isOrderFlow && intakeMethod === 'on-call') {
+      const schedResult = validateOnCallSchedule({
+        pickupDate: scheduledPickupDate,
+        pickupTime: scheduledPickupTime,
+        deliveryDate: scheduledDeliveryDate,
+        deliveryTime: scheduledDeliveryTime,
+        isNewOrder: true,
+      });
+      if (!schedResult.isValid) {
+        setErrors((prev) => ({ ...prev, ...schedResult.errors }));
+        return;
+      }
+      onCallSchedulePayload = {
+        scheduled_pickup_at: schedResult.scheduled_pickup_at,
+        scheduled_delivery_at: schedResult.scheduled_delivery_at,
+      };
+    }
+
     const customerData = {
       customer_id: initialCustomer?.customerId || initialCustomer?.customer_id || initialCustomer?.id,
       customer_name: customerName,
@@ -371,6 +399,8 @@ export default function CustomerForm({
         assigned_pickup_person_id: assignedPickupPersonId || null,
         assigned_pickup_delivery_person: assignedPickupPerson.trim(),
         assigned_driver: assignedPickupPerson.trim(),
+        scheduled_pickup_at: onCallSchedulePayload.scheduled_pickup_at,
+        scheduled_delivery_at: onCallSchedulePayload.scheduled_delivery_at,
       },
       orderType: intakeMethod,
       orderPreference: primaryService,
@@ -552,7 +582,15 @@ export default function CustomerForm({
             <button
               type="button"
               className={`intake-option ${intakeMethod === 'walk-in' ? 'active' : ''}`}
-              onClick={() => setIntakeMethod('walk-in')}
+              onClick={() => {
+                setIntakeMethod('walk-in');
+                setErrors((prev) => {
+                  const next = { ...prev };
+                  delete next.scheduled_pickup_at;
+                  delete next.scheduled_delivery_at;
+                  return next;
+                });
+              }}
             >
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
                 <circle cx="12" cy="5" r="3"></circle>
@@ -573,6 +611,82 @@ export default function CustomerForm({
               On-Call (Pickup)
             </button>
           </div>
+
+          {/* On-Call Pickup & Delivery Scheduling Fields (On-Call ONLY) */}
+          {intakeMethod === 'on-call' && (
+            <div className="oncall-schedule-grid">
+              <div className="field">
+                <label htmlFor="scheduledPickupDate">
+                  Scheduled Pickup Date &amp; Time <span className="req">*</span>
+                </label>
+                <div className="oncall-datetime-pair">
+                  <input
+                    id="scheduledPickupDate"
+                    type="date"
+                    value={scheduledPickupDate}
+                    onChange={(e) => {
+                      setScheduledPickupDate(e.target.value);
+                      if (errors.scheduled_pickup_at) {
+                        setErrors((prev) => ({ ...prev, scheduled_pickup_at: '' }));
+                      }
+                    }}
+                    aria-label="Scheduled Pickup Date"
+                  />
+                  <input
+                    id="scheduledPickupTime"
+                    type="time"
+                    value={scheduledPickupTime}
+                    onChange={(e) => {
+                      setScheduledPickupTime(e.target.value);
+                      if (errors.scheduled_pickup_at) {
+                        setErrors((prev) => ({ ...prev, scheduled_pickup_at: '' }));
+                      }
+                    }}
+                    aria-label="Scheduled Pickup Time"
+                  />
+                </div>
+                {errors.scheduled_pickup_at && (
+                  <div className="oncall-field-error">{errors.scheduled_pickup_at}</div>
+                )}
+              </div>
+
+              <div className="field">
+                <label htmlFor="scheduledDeliveryDate">
+                  Scheduled Delivery Date &amp; Time <span className="req">*</span>
+                </label>
+                <div className="oncall-datetime-pair">
+                  <input
+                    id="scheduledDeliveryDate"
+                    type="date"
+                    value={scheduledDeliveryDate}
+                    min={scheduledPickupDate || undefined}
+                    onChange={(e) => {
+                      setScheduledDeliveryDate(e.target.value);
+                      if (errors.scheduled_delivery_at) {
+                        setErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
+                      }
+                    }}
+                    aria-label="Scheduled Delivery Date"
+                  />
+                  <input
+                    id="scheduledDeliveryTime"
+                    type="time"
+                    value={scheduledDeliveryTime}
+                    onChange={(e) => {
+                      setScheduledDeliveryTime(e.target.value);
+                      if (errors.scheduled_delivery_at) {
+                        setErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
+                      }
+                    }}
+                    aria-label="Scheduled Delivery Time"
+                  />
+                </div>
+                {errors.scheduled_delivery_at && (
+                  <div className="oncall-field-error">{errors.scheduled_delivery_at}</div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Property / Priority Status Toggle */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255, 255, 255, 0.04)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>

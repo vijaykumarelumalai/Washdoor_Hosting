@@ -2284,6 +2284,8 @@ function mapCustomerWorkRowToOrder(row, factoryRow = null, scheduleRow = null, g
     created_by: row.created_by || row.created_by_name || 'POS Counter',
     updated_by: row.updated_by || row.updated_by_name || 'POS Counter',
     target_delivery_date: row.target_delivery_date,
+    scheduled_pickup_at: row.scheduled_pickup_at || internalNotesObj.scheduled_pickup_at || null,
+    scheduled_delivery_at: row.scheduled_delivery_at || internalNotesObj.scheduled_delivery_at || null,
     delivery_date: formattedExpectedDelivery,
     expected_delivery: formattedExpectedDelivery,
     assigned_staff: row.assigned_staff || internalNotesObj.attend_staff_name || factoryData.collected_by_staff || '',
@@ -3218,6 +3220,20 @@ export async function createOrderWithCustomer({
         }
       }
 
+      // Parse On-Call scheduling timestamps (On-Call orders only; Walk-In remains null)
+      const isOnCallIntake = normalizedIntake === 'On-Call';
+      const parseIsoOrNull = (val) => {
+        if (!val) return null;
+        const d = new Date(val);
+        return !isNaN(d.getTime()) ? d.toISOString() : null;
+      };
+      const scheduledPickupAtIso = isOnCallIntake
+        ? parseIsoOrNull(cleanCust.scheduled_pickup_at || cleanCust.scheduledPickupAt)
+        : null;
+      const scheduledDeliveryAtIso = isOnCallIntake
+        ? parseIsoOrNull(cleanCust.scheduled_delivery_at || cleanCust.scheduledDeliveryAt)
+        : null;
+
       // Weight & shelf location
       const weightVal = cleanCust.weight_kg !== undefined && cleanCust.weight_kg !== null
         ? Number(cleanCust.weight_kg)
@@ -3259,6 +3275,8 @@ export async function createOrderWithCustomer({
         plant_transit_status: cleanCust.plant_transit_status || 'Washing in Progress',
         garment_inspections: cleanCust.garment_inspections || cleanCust.inspections || {},
         expected_delivery_display: rawDelivery || '',
+        scheduled_pickup_at: scheduledPickupAtIso,
+        scheduled_delivery_at: scheduledDeliveryAtIso,
         payment_method_display: cleanCust.payment_method || cleanCust.payment_mode || 'Cash',
         attend_staff_id: attendStaffIdVal,
         attend_staff_name: attendStaffVal,
@@ -3319,6 +3337,8 @@ export async function createOrderWithCustomer({
         payment_method: calculatedPaymentMethod,
         intake_date: cleanCust.intake_date ? new Date(cleanCust.intake_date).toISOString() : new Date().toISOString(),
         target_delivery_date: targetDeliveryDateIso,
+        scheduled_pickup_at: scheduledPickupAtIso,
+        scheduled_delivery_at: scheduledDeliveryAtIso,
         attend_staff_id: attendStaffIdVal,
         attend_staff_name: cleanCust.attend_staff_name || null,
         assigned_staff: cleanCust.attend_staff_name || cleanCust.assigned_staff || cleanCust.assigned_driver || null,
@@ -3340,6 +3360,7 @@ export async function createOrderWithCustomer({
           discount_pct, taxable_amount, gst_percentage, cgst_amount, sgst_amount, igst_amount,
           tax_exemption, staff_notes, handling_flags, created_by_name, updated_by_name,
           attend_staff_id, attend_staff_name, assigned_pickup_person_id, assigned_pickup_delivery_person,
+          scheduled_pickup_at, scheduled_delivery_at,
           ...baseWorkRow
         } = workRow;
         const baseRes = await supabase.from('customer_works').insert([baseWorkRow]).select().single();
@@ -3362,6 +3383,7 @@ export async function createOrderWithCustomer({
           discount_pct, taxable_amount, gst_percentage, cgst_amount, sgst_amount, igst_amount,
           tax_exemption, staff_notes, handling_flags, created_by_name, updated_by_name,
           attend_staff_id, attend_staff_name, assigned_pickup_person_id, assigned_pickup_delivery_person,
+          scheduled_pickup_at, scheduled_delivery_at,
           ...baseWorkRow
         } = workRow;
         const fallbackRow = { ...baseWorkRow, work_number: retryOrderNum };
@@ -3386,6 +3408,8 @@ export async function createOrderWithCustomer({
         attend_staff_name: cleanCust.attend_staff_name || null,
         assigned_pickup_person_id: cleanCust.assigned_pickup_person_id || null,
         assigned_pickup_delivery_person: cleanCust.assigned_pickup_delivery_person || null,
+        scheduled_pickup_at: cleanCust.order_type === 'on-call' || orderType === 'on-call' ? (cleanCust.scheduled_pickup_at || null) : null,
+        scheduled_delivery_at: cleanCust.order_type === 'on-call' || orderType === 'on-call' ? (cleanCust.scheduled_delivery_at || null) : null,
       };
       const { error: mErr } = await supabase
         .from('washdoor_orders_master')
@@ -3933,6 +3957,43 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       }
     }
 
+    // On-Call Pickup & Delivery scheduling timestamps
+    const hasScheduledPickup = updatePayload.scheduled_pickup_at !== undefined || updatePayload.scheduledPickupAt !== undefined;
+    const rawScheduledPickup = updatePayload.scheduled_pickup_at !== undefined ? updatePayload.scheduled_pickup_at : updatePayload.scheduledPickupAt;
+    let nextScheduledPickupAt = prevNotesObj.scheduled_pickup_at ?? existingRow?.scheduled_pickup_at ?? null;
+    if (hasScheduledPickup) {
+      if (!rawScheduledPickup) {
+        nextScheduledPickupAt = null;
+        workUpdate.scheduled_pickup_at = null;
+        updateObj.scheduled_pickup_at = null;
+      } else {
+        const dPickup = new Date(rawScheduledPickup);
+        if (!isNaN(dPickup.getTime())) {
+          nextScheduledPickupAt = dPickup.toISOString();
+          workUpdate.scheduled_pickup_at = nextScheduledPickupAt;
+          updateObj.scheduled_pickup_at = nextScheduledPickupAt;
+        }
+      }
+    }
+
+    const hasScheduledDelivery = updatePayload.scheduled_delivery_at !== undefined || updatePayload.scheduledDeliveryAt !== undefined;
+    const rawScheduledDelivery = updatePayload.scheduled_delivery_at !== undefined ? updatePayload.scheduled_delivery_at : updatePayload.scheduledDeliveryAt;
+    let nextScheduledDeliveryAt = prevNotesObj.scheduled_delivery_at ?? existingRow?.scheduled_delivery_at ?? null;
+    if (hasScheduledDelivery) {
+      if (!rawScheduledDelivery) {
+        nextScheduledDeliveryAt = null;
+        workUpdate.scheduled_delivery_at = null;
+        updateObj.scheduled_delivery_at = null;
+      } else {
+        const dDeliv = new Date(rawScheduledDelivery);
+        if (!isNaN(dDeliv.getTime())) {
+          nextScheduledDeliveryAt = dDeliv.toISOString();
+          workUpdate.scheduled_delivery_at = nextScheduledDeliveryAt;
+          updateObj.scheduled_delivery_at = nextScheduledDeliveryAt;
+        }
+      }
+    }
+
     // GST & Tax Exemption breakdown
     const hasTaxExemptFlag = updatePayload.taxExemption !== undefined || updatePayload.tax_exemption !== undefined;
     const isTaxExempt = hasTaxExemptFlag ? Boolean(updatePayload.taxExemption ?? updatePayload.tax_exemption) : Boolean(existingRow?.tax_exemption);
@@ -3977,6 +4038,8 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       ...prevNotesObj,
       garment_inspections: inspData,
       expected_delivery_display: expectedDeliveryDisplay,
+      scheduled_pickup_at: nextScheduledPickupAt,
+      scheduled_delivery_at: nextScheduledDeliveryAt,
       payment_method_display: updatePayload.paymentMethod || updatePayload.payment_method || updatePayload.paymentMode || prevNotesObj.payment_method_display || '',
       assigned_driver: nextPickupPerson || updatePayload.assignedStaff || prevNotesObj.assigned_driver || '',
       assigned_driver_full: updatePayload.assigned_driver_full ?? (nextPickupPerson || prevNotesObj.assigned_driver_full || ''),
@@ -4031,6 +4094,7 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
           tax_exemption, taxable_amount, gst_percentage, cgst_amount, sgst_amount, igst_amount,
           staff_notes, handling_flags, updated_by_name,
           attend_staff_id, attend_staff_name, assigned_pickup_person_id, assigned_pickup_delivery_person,
+          scheduled_pickup_at, scheduled_delivery_at,
           ...baseWorkUpdate
         } = workUpdate;
         await supabase.from('customer_works').update(baseWorkUpdate).or(orFilter);
@@ -4279,6 +4343,8 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
                 intake_method: updatePayload.orderType || updatePayload.order_type || o.intake_method,
                 expected_delivery: expectedDeliveryDisplay || o.expected_delivery,
                 delivery_date: expectedDeliveryDisplay || o.delivery_date,
+                scheduled_pickup_at: hasScheduledPickup ? nextScheduledPickupAt : o.scheduled_pickup_at,
+                scheduled_delivery_at: hasScheduledDelivery ? nextScheduledDeliveryAt : o.scheduled_delivery_at,
                 payment_status: updatePayload.paymentStatus || updatePayload.payment_status || o.payment_status,
                 payment_method: updatePayload.paymentMethod || updatePayload.payment_method || updatePayload.paymentMode || o.payment_method,
                 assigned_staff: workUpdate.assigned_staff || o.assigned_staff,

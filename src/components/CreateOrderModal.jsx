@@ -135,6 +135,8 @@ export default function CreateOrderModal({ isOpen, onClose, onOrderSuccess, show
       assigned_pickup_person_id: customerData?.assigned_pickup_person_id || null,
       assigned_pickup_delivery_person: customerData?.assigned_pickup_delivery_person || '',
       assigned_driver: customerData?.assigned_pickup_delivery_person || '',
+      scheduled_pickup_at: orderType === 'on-call' ? (customerData?.scheduled_pickup_at || null) : null,
+      scheduled_delivery_at: orderType === 'on-call' ? (customerData?.scheduled_delivery_at || null) : null,
       status_updated_at: new Date().toISOString(),
       status_updated_by: customerData?.attend_staff_name || 'Counter Staff',
       activity_history: [

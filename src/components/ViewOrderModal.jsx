@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ORDER_STATUS_CONFIG, normalizeOrderStatus } from '../config/businessRules';
+import { isOnCallOrderType, formatScheduledDateTime } from '../utils/onCallScheduling';
 import '../styles/ViewOrderModal.css';
 
 export default function ViewOrderModal({
@@ -331,6 +332,25 @@ export default function ViewOrderModal({
                     <div className="view-order-delivery-val">{expectedDelivery}</div>
                   </div>
                 </div>
+
+                {isOnCallOrderType(intakeMethod) && (
+                  <>
+                    <div className="view-order-detail-row">
+                      <span style={{ width: '16px' }}>📅</span>
+                      <div>
+                        <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Scheduled Pickup</span>
+                        <strong>{formatScheduledDateTime(order.scheduled_pickup_at, 'Not scheduled')}</strong>
+                      </div>
+                    </div>
+                    <div className="view-order-detail-row">
+                      <span style={{ width: '16px' }}>🗓️</span>
+                      <div>
+                        <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Scheduled Delivery</span>
+                        <strong>{formatScheduledDateTime(order.scheduled_delivery_at, 'Not scheduled')}</strong>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <div className="view-order-detail-row">
                   <span style={{ width: '16px' }}>🛵</span>

@@ -44,6 +44,12 @@ import {
   loadColumnPreferences,
   saveColumnPreferences,
 } from '../services/columnPreferenceService';
+import {
+  isOnCallOrderType,
+  splitIsoToLocalDateAndTime,
+  formatScheduledDateTime,
+  validateOnCallSchedule,
+} from '../utils/onCallScheduling';
 import '../styles/POSModule.css';
 
 const DEFAULT_PRODUCTS = [
@@ -613,6 +619,22 @@ function OrderStatusSidePanel({
                       {orderTypeLabel}
                     </span>
                   </div>
+                  {isOnCallOrder && (
+                    <>
+                      <div className="pos-status-kv-row">
+                        <span className="pos-status-kv-label">Scheduled Pickup</span>
+                        <span className="pos-status-kv-val">
+                          {formatScheduledDateTime(order.scheduled_pickup_at, 'Not scheduled')}
+                        </span>
+                      </div>
+                      <div className="pos-status-kv-row">
+                        <span className="pos-status-kv-label">Scheduled Delivery</span>
+                        <span className="pos-status-kv-val">
+                          {formatScheduledDateTime(order.scheduled_delivery_at, 'Not scheduled')}
+                        </span>
+                      </div>
+                    </>
+                  )}
                   <div className="pos-status-kv-row">
                     <span className="pos-status-kv-label">Customer</span>
                     <span className="pos-status-kv-val">{custName}</span>
@@ -1183,6 +1205,7 @@ export default function POSModule({
   // Inline Order Edit Modal State (List View Fields, Read-Only when Ready)
   const [editingOrderRecord, setEditingOrderRecord] = useState(null);
   const [editFormData, setEditFormData] = useState(null);
+  const [editScheduleErrors, setEditScheduleErrors] = useState({});
   const [showEditQRModal, setShowEditQRModal] = useState(false);
 
   // Live Active Staff & Pickup/Delivery Master lists for inline Edit Order dropdowns
@@ -1453,6 +1476,9 @@ export default function POSModule({
 
     setEditActiveTab('details');
 
+    const pickupSplit = splitIsoToLocalDateAndTime(ord.scheduled_pickup_at);
+    const deliverySplit = splitIsoToLocalDateAndTime(ord.scheduled_delivery_at);
+    setEditScheduleErrors({});
     setEditingOrderRecord(ord);
     setEditFormData({
       id: ord.id || ord.order_number,
@@ -1467,6 +1493,13 @@ export default function POSModule({
       captured_time: capturedTimeStr,
       order_type: orderTypeStr,
       expected_delivery: expectedDeliveryStr,
+      scheduled_pickup_at: ord.scheduled_pickup_at || null,
+      scheduled_delivery_at: ord.scheduled_delivery_at || null,
+      scheduled_pickup_date: pickupSplit.date,
+      scheduled_pickup_time: pickupSplit.time,
+      scheduled_delivery_date: deliverySplit.date,
+      scheduled_delivery_time: deliverySplit.time,
+      initial_scheduled_pickup_at: ord.scheduled_pickup_at || null,
       pickup_delivery: pickupDeliveryStr,
       comments: commentsStr,
       total_amount: totalAmount,
@@ -1609,6 +1642,27 @@ export default function POSModule({
       return;
     }
 
+    let resolvedScheduledPickupAt = editFormData.scheduled_pickup_at || null;
+    let resolvedScheduledDeliveryAt = editFormData.scheduled_delivery_at || null;
+    if (isOnCallOrderType(editFormData.order_type)) {
+      const schedResult = validateOnCallSchedule({
+        pickupDate: editFormData.scheduled_pickup_date,
+        pickupTime: editFormData.scheduled_pickup_time,
+        deliveryDate: editFormData.scheduled_delivery_date,
+        deliveryTime: editFormData.scheduled_delivery_time,
+        isNewOrder: false,
+        initialPickupIso: editFormData.initial_scheduled_pickup_at || null,
+      });
+      if (!schedResult.isValid) {
+        setEditScheduleErrors(schedResult.errors);
+        showToast?.(`⚠️ ${Object.values(schedResult.errors)[0]}`);
+        return;
+      }
+      setEditScheduleErrors({});
+      resolvedScheduledPickupAt = schedResult.scheduled_pickup_at;
+      resolvedScheduledDeliveryAt = schedResult.scheduled_delivery_at;
+    }
+
     const nowIso = new Date().toISOString();
     const staffActor = (editFormData.attend_staff_name || editingOrderRecord.attend_staff_name || editingOrderRecord.assigned_staff || 'Counter Staff').trim();
     const pickupPerson = (editFormData.assigned_pickup_delivery_person || editingOrderRecord.assigned_pickup_delivery_person || editFormData.assigned_driver || '').trim();
@@ -1694,6 +1748,8 @@ export default function POSModule({
       captured_time: editFormData.captured_time,
       order_type: editFormData.order_type,
       expected_delivery: editFormData.expected_delivery,
+      scheduled_pickup_at: isOnCallOrderType(editFormData.order_type) ? resolvedScheduledPickupAt : editingOrderRecord.scheduled_pickup_at || null,
+      scheduled_delivery_at: isOnCallOrderType(editFormData.order_type) ? resolvedScheduledDeliveryAt : editingOrderRecord.scheduled_delivery_at || null,
       pickup_delivery: editFormData.pickup_delivery,
       comments: editFormData.comments,
       special_instructions: editFormData.comments,
@@ -1765,6 +1821,12 @@ export default function POSModule({
         orderType: updatedOrder.order_type,
         expectedDelivery: updatedOrder.expected_delivery,
         deliveryDate: updatedOrder.expected_delivery,
+        ...(isOnCallOrderType(updatedOrder.order_type)
+          ? {
+              scheduled_pickup_at: updatedOrder.scheduled_pickup_at,
+              scheduled_delivery_at: updatedOrder.scheduled_delivery_at,
+            }
+          : {}),
         serviceCategory: updatedOrder.service_category,
         orderNotes: updatedOrder.comments,
         subtotal: subtotal,
@@ -4408,14 +4470,94 @@ export default function POSModule({
                                             </label>
                                             <select
                                               className="pos-edit-field"
-                                              value={editFormData.order_type || 'Walk-in'}
-                                              onChange={(e) => setEditFormData({ ...editFormData, order_type: e.target.value })}
+                                              value={isOnCallOrderType(editFormData.order_type) ? 'On-Call' : (editFormData.order_type || 'Walk-in')}
+                                              onChange={(e) => {
+                                                setEditFormData({ ...editFormData, order_type: e.target.value });
+                                                setEditScheduleErrors({});
+                                              }}
                                             >
                                               <option value="Walk-in">Walk-in</option>
+                                              <option value="On-Call">On-Call (Pickup)</option>
                                               <option value="Home Delivery">Home Delivery</option>
                                               <option value="Express 24H">Express 24H</option>
                                             </select>
                                           </div>
+
+                                          {/* On-Call Scheduling Fields (On-Call Orders Only) */}
+                                          {isOnCallOrderType(editFormData.order_type) && (
+                                            <div className="oncall-schedule-grid oncall-schedule-grid--stacked" style={{ gridColumn: '1 / -1' }}>
+                                              <div>
+                                                <label className="pos-edit-label">
+                                                  Scheduled Pickup Date &amp; Time <span className="required">*</span>
+                                                </label>
+                                                <div className="oncall-datetime-pair">
+                                                  <input
+                                                    type="date"
+                                                    className="pos-edit-field"
+                                                    value={editFormData.scheduled_pickup_date || ''}
+                                                    onChange={(e) => {
+                                                      setEditFormData({ ...editFormData, scheduled_pickup_date: e.target.value });
+                                                      if (editScheduleErrors.scheduled_pickup_at) {
+                                                        setEditScheduleErrors((prev) => ({ ...prev, scheduled_pickup_at: '' }));
+                                                      }
+                                                    }}
+                                                    aria-label="Scheduled Pickup Date"
+                                                  />
+                                                  <input
+                                                    type="time"
+                                                    className="pos-edit-field"
+                                                    value={editFormData.scheduled_pickup_time || ''}
+                                                    onChange={(e) => {
+                                                      setEditFormData({ ...editFormData, scheduled_pickup_time: e.target.value });
+                                                      if (editScheduleErrors.scheduled_pickup_at) {
+                                                        setEditScheduleErrors((prev) => ({ ...prev, scheduled_pickup_at: '' }));
+                                                      }
+                                                    }}
+                                                    aria-label="Scheduled Pickup Time"
+                                                  />
+                                                </div>
+                                                {editScheduleErrors.scheduled_pickup_at && (
+                                                  <div className="oncall-field-error">{editScheduleErrors.scheduled_pickup_at}</div>
+                                                )}
+                                              </div>
+
+                                              <div>
+                                                <label className="pos-edit-label">
+                                                  Scheduled Delivery Date &amp; Time <span className="required">*</span>
+                                                </label>
+                                                <div className="oncall-datetime-pair">
+                                                  <input
+                                                    type="date"
+                                                    className="pos-edit-field"
+                                                    value={editFormData.scheduled_delivery_date || ''}
+                                                    min={editFormData.scheduled_pickup_date || undefined}
+                                                    onChange={(e) => {
+                                                      setEditFormData({ ...editFormData, scheduled_delivery_date: e.target.value });
+                                                      if (editScheduleErrors.scheduled_delivery_at) {
+                                                        setEditScheduleErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
+                                                      }
+                                                    }}
+                                                    aria-label="Scheduled Delivery Date"
+                                                  />
+                                                  <input
+                                                    type="time"
+                                                    className="pos-edit-field"
+                                                    value={editFormData.scheduled_delivery_time || ''}
+                                                    onChange={(e) => {
+                                                      setEditFormData({ ...editFormData, scheduled_delivery_time: e.target.value });
+                                                      if (editScheduleErrors.scheduled_delivery_at) {
+                                                        setEditScheduleErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
+                                                      }
+                                                    }}
+                                                    aria-label="Scheduled Delivery Time"
+                                                  />
+                                                </div>
+                                                {editScheduleErrors.scheduled_delivery_at && (
+                                                  <div className="oncall-field-error">{editScheduleErrors.scheduled_delivery_at}</div>
+                                                )}
+                                              </div>
+                                            </div>
+                                          )}
 
                                           {/* Expected Delivery (Spans 2 columns) */}
                                           <div style={{ gridColumn: '1 / -1' }}>
@@ -4432,20 +4574,7 @@ export default function POSModule({
                                                 placeholder="e.g. 30 Oct 2026, 05:00 PM"
                                                 required
                                               />
-                                              <svg
-                                                width="14"
-                                                height="14"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth="2.2"
-                                                style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', opacity: 0.6, pointerEvents: 'none' }}
-                                              >
-                                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                                                <line x1="16" y1="2" x2="16" y2="6" />
-                                                <line x1="8" y1="2" x2="8" y2="6" />
-                                                <line x1="3" y1="10" x2="21" y2="10" />
-                                              </svg>
+                                              
                                             </div>
                                           </div>
 
@@ -5079,8 +5208,11 @@ export default function POSModule({
                                                     </label>
                                                     <select
                                                       className="pos-edit-field"
-                                                      value={editFormData.order_type || 'Walk-in'}
-                                                      onChange={(e) => setEditFormData({ ...editFormData, order_type: e.target.value })}
+                                                      value={isOnCallOrderType(editFormData.order_type) ? 'On-Call' : (editFormData.order_type || 'Walk-in')}
+                                                      onChange={(e) => {
+                                                        setEditFormData({ ...editFormData, order_type: e.target.value });
+                                                        setEditScheduleErrors({});
+                                                      }}
                                                     >
                                                       <option value="Walk-in">Walk-in</option>
                                                       <option value="Pickup &amp; Delivery">Pickup &amp; Delivery</option>
@@ -5102,6 +5234,79 @@ export default function POSModule({
                                                     />
                                                   </div>
                                                 </div>
+                                                {isOnCallOrderType(editFormData.order_type) && (
+                                                  <div className="oncall-schedule-grid" style={{ marginTop: '10px' }}>
+                                                    <div>
+                                                      <label className="pos-edit-label">
+                                                        Scheduled Pickup Date &amp; Time <span className="required">*</span>
+                                                      </label>
+                                                      <div className="oncall-datetime-pair">
+                                                        <input
+                                                          type="date"
+                                                          className="pos-edit-field"
+                                                          value={editFormData.scheduled_pickup_date || ''}
+                                                          onChange={(e) => {
+                                                            setEditFormData({ ...editFormData, scheduled_pickup_date: e.target.value });
+                                                            if (editScheduleErrors.scheduled_pickup_at) {
+                                                              setEditScheduleErrors((prev) => ({ ...prev, scheduled_pickup_at: '' }));
+                                                            }
+                                                          }}
+                                                          aria-label="Scheduled Pickup Date"
+                                                        />
+                                                        <input
+                                                          type="time"
+                                                          className="pos-edit-field"
+                                                          value={editFormData.scheduled_pickup_time || ''}
+                                                          onChange={(e) => {
+                                                            setEditFormData({ ...editFormData, scheduled_pickup_time: e.target.value });
+                                                            if (editScheduleErrors.scheduled_pickup_at) {
+                                                              setEditScheduleErrors((prev) => ({ ...prev, scheduled_pickup_at: '' }));
+                                                            }
+                                                          }}
+                                                          aria-label="Scheduled Pickup Time"
+                                                        />
+                                                      </div>
+                                                      {editScheduleErrors.scheduled_pickup_at && (
+                                                        <div className="oncall-field-error">{editScheduleErrors.scheduled_pickup_at}</div>
+                                                      )}
+                                                    </div>
+                                                    <div>
+                                                      <label className="pos-edit-label">
+                                                        Scheduled Delivery Date &amp; Time <span className="required">*</span>
+                                                      </label>
+                                                      <div className="oncall-datetime-pair">
+                                                        <input
+                                                          type="date"
+                                                          className="pos-edit-field"
+                                                          value={editFormData.scheduled_delivery_date || ''}
+                                                          min={editFormData.scheduled_pickup_date || undefined}
+                                                          onChange={(e) => {
+                                                            setEditFormData({ ...editFormData, scheduled_delivery_date: e.target.value });
+                                                            if (editScheduleErrors.scheduled_delivery_at) {
+                                                              setEditScheduleErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
+                                                            }
+                                                          }}
+                                                          aria-label="Scheduled Delivery Date"
+                                                        />
+                                                        <input
+                                                          type="time"
+                                                          className="pos-edit-field"
+                                                          value={editFormData.scheduled_delivery_time || ''}
+                                                          onChange={(e) => {
+                                                            setEditFormData({ ...editFormData, scheduled_delivery_time: e.target.value });
+                                                            if (editScheduleErrors.scheduled_delivery_at) {
+                                                              setEditScheduleErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
+                                                            }
+                                                          }}
+                                                          aria-label="Scheduled Delivery Time"
+                                                        />
+                                                      </div>
+                                                      {editScheduleErrors.scheduled_delivery_at && (
+                                                        <div className="oncall-field-error">{editScheduleErrors.scheduled_delivery_at}</div>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                )}
                                               </div>
 
                                               {/* Subcard B: Customer Information Snapshot */}
@@ -6837,6 +7042,20 @@ export default function POSModule({
           // Bidirectional sync: If inline edit is open for this order, synchronize its state
           if (editingOrderRecord && (editingOrderRecord.id === updated.id || editingOrderRecord.order_number === updated.order_number)) {
             setEditingOrderRecord(updated);
+            const syncPickup = splitIsoToLocalDateAndTime(updated.scheduled_pickup_at);
+            const syncDelivery = splitIsoToLocalDateAndTime(updated.scheduled_delivery_at);
+            setEditFormData((prev) => prev ? {
+              ...prev,
+              order_type: updated.order_type,
+              expected_delivery: updated.expected_delivery,
+              scheduled_pickup_at: updated.scheduled_pickup_at || null,
+              scheduled_delivery_at: updated.scheduled_delivery_at || null,
+              scheduled_pickup_date: syncPickup.date,
+              scheduled_pickup_time: syncPickup.time,
+              scheduled_delivery_date: syncDelivery.date,
+              scheduled_delivery_time: syncDelivery.time,
+              initial_scheduled_pickup_at: updated.scheduled_pickup_at || null,
+            } : prev);
             if (updated.items && Array.isArray(updated.items)) {
               setEditCart(updated.items);
             }
@@ -6860,6 +7079,12 @@ export default function POSModule({
               orderType: updated.order_type,
               expectedDelivery: updated.expected_delivery,
               deliveryDate: updated.expected_delivery,
+              ...(isOnCallOrderType(updated.order_type)
+                ? {
+                    scheduled_pickup_at: updated.scheduled_pickup_at,
+                    scheduled_delivery_at: updated.scheduled_delivery_at,
+                  }
+                : {}),
               priority: updated.priority || 'Normal',
               orderNotes: updated.comments,
               subtotal: updated.subtotal || updated.payment?.subtotal,

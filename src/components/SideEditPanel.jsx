@@ -13,6 +13,11 @@ import {
   fetchActiveStaffMaster,
   fetchActivePickupDeliveryMaster,
 } from '../services/customerService';
+import {
+  isOnCallOrderType,
+  splitIsoToLocalDateAndTime,
+  validateOnCallSchedule,
+} from '../utils/onCallScheduling';
 import '../styles/SideEditPanel.css';
 
 // 16 Standard Catalog Items strictly matching reference mockup display order
@@ -101,6 +106,13 @@ export default function SideEditPanel({
   const [status, setStatus] = useState(initialStatus);
   const [orderType, setOrderType] = useState(initialOrderType);
   const [expectedDelivery, setExpectedDelivery] = useState(initialExpectedDelivery);
+  const initialPickupSplit = splitIsoToLocalDateAndTime(order?.scheduled_pickup_at);
+  const initialDeliverySplit = splitIsoToLocalDateAndTime(order?.scheduled_delivery_at);
+  const [scheduledPickupDate, setScheduledPickupDate] = useState(initialPickupSplit.date);
+  const [scheduledPickupTime, setScheduledPickupTime] = useState(initialPickupSplit.time);
+  const [scheduledDeliveryDate, setScheduledDeliveryDate] = useState(initialDeliverySplit.date);
+  const [scheduledDeliveryTime, setScheduledDeliveryTime] = useState(initialDeliverySplit.time);
+  const [scheduleErrors, setScheduleErrors] = useState({});
   const [attendStaffName, setAttendStaffName] = useState(
     order?.attend_staff_name || order?.status_updated_by || order?.assigned_staff || ''
   );
@@ -339,6 +351,13 @@ export default function SideEditPanel({
       setStatus(order.status || order.order_status || 'In Progress');
       setOrderType(order.order_type || 'Walk-in');
       setExpectedDelivery(order.expected_delivery || order.delivery_date || '');
+      const pSplit = splitIsoToLocalDateAndTime(order.scheduled_pickup_at);
+      const dSplit = splitIsoToLocalDateAndTime(order.scheduled_delivery_at);
+      setScheduledPickupDate(pSplit.date);
+      setScheduledPickupTime(pSplit.time);
+      setScheduledDeliveryDate(dSplit.date);
+      setScheduledDeliveryTime(dSplit.time);
+      setScheduleErrors({});
       setComments(order.comments || order.order_notes || order.special_instructions || '');
       if (order.items && Array.isArray(order.items)) {
         setCartItems(order.items.map((it, idx) => ({
@@ -474,6 +493,27 @@ export default function SideEditPanel({
       return;
     }
 
+    let resolvedScheduledPickupAt = order?.scheduled_pickup_at || null;
+    let resolvedScheduledDeliveryAt = order?.scheduled_delivery_at || null;
+    if (isOnCallOrderType(orderType)) {
+      const schedResult = validateOnCallSchedule({
+        pickupDate: scheduledPickupDate,
+        pickupTime: scheduledPickupTime,
+        deliveryDate: scheduledDeliveryDate,
+        deliveryTime: scheduledDeliveryTime,
+        isNewOrder: false,
+        initialPickupIso: order?.scheduled_pickup_at || null,
+      });
+      if (!schedResult.isValid) {
+        setScheduleErrors(schedResult.errors);
+        showToast?.(`⚠️ ${Object.values(schedResult.errors)[0]}`);
+        return;
+      }
+      setScheduleErrors({});
+      resolvedScheduledPickupAt = schedResult.scheduled_pickup_at;
+      resolvedScheduledDeliveryAt = schedResult.scheduled_delivery_at;
+    }
+
     const totalPieces = cartItems.reduce((sum, c) => sum + Number(c.qty || 0), 0);
     const nowIso = new Date().toISOString();
     const staffActor = attendStaffName.trim() || order?.attend_staff_name || order?.assigned_staff || 'Counter Staff';
@@ -549,6 +589,8 @@ export default function SideEditPanel({
       order_status: status,
       order_type: orderType,
       expected_delivery: expectedDelivery,
+      scheduled_pickup_at: isOnCallOrderType(orderType) ? resolvedScheduledPickupAt : (order?.scheduled_pickup_at || null),
+      scheduled_delivery_at: isOnCallOrderType(orderType) ? resolvedScheduledDeliveryAt : (order?.scheduled_delivery_at || null),
       comments: comments,
       special_instructions: comments,
       order_notes: comments,
@@ -663,6 +705,12 @@ export default function SideEditPanel({
         orderType: updatedOrder.order_type,
         expectedDelivery: updatedOrder.expected_delivery,
         deliveryDate: updatedOrder.expected_delivery,
+        ...(isOnCallOrderType(updatedOrder.order_type)
+          ? {
+              scheduled_pickup_at: updatedOrder.scheduled_pickup_at,
+              scheduled_delivery_at: updatedOrder.scheduled_delivery_at,
+            }
+          : {}),
         priority: updatedOrder.priority || 'Normal',
         orderNotes: updatedOrder.comments,
         subtotal: subtotal,
@@ -858,16 +906,95 @@ export default function SideEditPanel({
                       </label>
                       <select
                         className="side-edit-select"
-                        value={orderType}
-                        onChange={(e) => setOrderType(e.target.value)}
+                        value={isOnCallOrderType(orderType) ? 'On-Call' : orderType}
+                        onChange={(e) => {
+                          setOrderType(e.target.value);
+                          setScheduleErrors({});
+                        }}
                       >
                         <option value="Walk-in">Walk-in</option>
+                        <option value="On-Call">On-Call (Pickup)</option>
                         <option value="Home Delivery">Home Delivery</option>
                         <option value="Express">Express 24H</option>
                         <option value="Commercial">Commercial / B2B</option>
                       </select>
                     </div>
                   </div>
+
+                  {isOnCallOrderType(orderType) && (
+                    <div className="oncall-schedule-grid oncall-schedule-grid--stacked" style={{ marginBottom: '12px' }}>
+                      <div className="side-edit-field">
+                        <label className="side-edit-label">
+                          Scheduled Pickup Date &amp; Time <span className="side-edit-req">*</span>
+                        </label>
+                        <div className="oncall-datetime-pair">
+                          <input
+                            type="date"
+                            className="side-edit-input"
+                            value={scheduledPickupDate}
+                            onChange={(e) => {
+                              setScheduledPickupDate(e.target.value);
+                              if (scheduleErrors.scheduled_pickup_at) {
+                                setScheduleErrors((prev) => ({ ...prev, scheduled_pickup_at: '' }));
+                              }
+                            }}
+                            aria-label="Scheduled Pickup Date"
+                          />
+                          <input
+                            type="time"
+                            className="side-edit-input"
+                            value={scheduledPickupTime}
+                            onChange={(e) => {
+                              setScheduledPickupTime(e.target.value);
+                              if (scheduleErrors.scheduled_pickup_at) {
+                                setScheduleErrors((prev) => ({ ...prev, scheduled_pickup_at: '' }));
+                              }
+                            }}
+                            aria-label="Scheduled Pickup Time"
+                          />
+                        </div>
+                        {scheduleErrors.scheduled_pickup_at && (
+                          <div className="oncall-field-error">{scheduleErrors.scheduled_pickup_at}</div>
+                        )}
+                      </div>
+
+                      <div className="side-edit-field">
+                        <label className="side-edit-label">
+                          Scheduled Delivery Date &amp; Time <span className="side-edit-req">*</span>
+                        </label>
+                        <div className="oncall-datetime-pair">
+                          <input
+                            type="date"
+                            className="side-edit-input"
+                            value={scheduledDeliveryDate}
+                            min={scheduledPickupDate || undefined}
+                            onChange={(e) => {
+                              setScheduledDeliveryDate(e.target.value);
+                              if (scheduleErrors.scheduled_delivery_at) {
+                                setScheduleErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
+                              }
+                            }}
+                            aria-label="Scheduled Delivery Date"
+                          />
+                          <input
+                            type="time"
+                            className="side-edit-input"
+                            value={scheduledDeliveryTime}
+                            onChange={(e) => {
+                              setScheduledDeliveryTime(e.target.value);
+                              if (scheduleErrors.scheduled_delivery_at) {
+                                setScheduleErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
+                              }
+                            }}
+                            aria-label="Scheduled Delivery Time"
+                          />
+                        </div>
+                        {scheduleErrors.scheduled_delivery_at && (
+                          <div className="oncall-field-error">{scheduleErrors.scheduled_delivery_at}</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="side-edit-field">
                     <label className="side-edit-label">
