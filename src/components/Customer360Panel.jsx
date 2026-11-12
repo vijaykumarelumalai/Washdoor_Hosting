@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Avatar,
   Box,
+  Button,
   Chip,
   Divider,
   IconButton,
@@ -40,6 +41,8 @@ import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import BusinessOutlinedIcon from '@mui/icons-material/BusinessOutlined';
 import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
+import PersonSearchOutlinedIcon from '@mui/icons-material/PersonSearchOutlined';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import {
   formatDOB,
   formatPhoneDisplay,
@@ -93,6 +96,38 @@ function formatShortDate(iso) {
   }
 }
 
+function getOrderPiecesCount(ord) {
+  const explicit = Number(ord?.total_pieces || ord?.item_count || 0);
+  if (explicit > 0) return explicit;
+  if (Array.isArray(ord?.items) && ord.items.length > 0) {
+    const summed = ord.items.reduce((sum, it) => sum + Math.max(1, Number(it?.qty ?? it?.quantity ?? it?.count ?? 1)), 0);
+    if (summed > 0) return summed;
+  }
+  return 1;
+}
+
+function getOrderPaymentBreakdown(ord) {
+  const total = Number(ord?.total_amount || 0);
+  const adv = Number(ord?.advance_paid || 0);
+  const payStatus = String(ord?.payment_status || '').toLowerCase();
+  const isPaid = payStatus === 'paid';
+  const due = isPaid ? 0 : Math.max(0, Number(ord?.balance_due ?? (total - adv)));
+  const paid = isPaid ? Math.max(adv, total) : Math.max(0, adv);
+  const label = ord?.payment_status || (due <= 0 ? 'Paid' : paid > 0 ? 'Partially Paid' : 'Unpaid');
+  return { total, paid, due, isPaid, label };
+}
+
+function getOrderItemsPreview(ord) {
+  if (!Array.isArray(ord?.items) || ord.items.length === 0) return '';
+  const parts = ord.items
+    .filter((it) => it && it.type !== 'customer_registration' && (it.name || it.item_name || it.product_name))
+    .slice(0, 3)
+    .map((it) => `${it.name || it.item_name || it.product_name} × ${Number(it.qty ?? it.quantity ?? it.count ?? 1)}`);
+  if (parts.length === 0) return '';
+  const extra = ord.items.length > 3 ? ` +${ord.items.length - 3} more` : '';
+  return `${parts.join(', ')}${extra}`;
+}
+
 export default function Customer360Panel({
   customer,
   customerOrders = [],
@@ -103,6 +138,7 @@ export default function Customer360Panel({
   onEdit,
   onDelete,
   onCopy,
+  onViewFullProfile,
   t,
 }) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -120,7 +156,11 @@ export default function Customer360Panel({
   const isInactive = String(status).toLowerCase() === 'inactive';
   const cleanMobile = normalizeMobileNumber(customer.mobile_number || customer.mobileNumber);
   const formattedMobile = formatPhoneDisplay(customer.mobile_number || customer.mobileNumber) || '—';
+  const rawAltPhone = customer.alternate_phone || customer.alternatePhoneNumber || customer.contactDetails?.alternatePhoneNumber || '';
+  const formattedAltPhone = rawAltPhone ? formatPhoneDisplay(rawAltPhone) : '';
   const email = customer.email || customer.contactDetails?.email || 'No email';
+  const companyName = customer.company_name || customer.companyName || '';
+  const gstNumber = customer.gst_number || customer.gstNumber || '';
   const clsRaw = String(customer.customer_classification || customer.customerClassification || 'Regular').toLowerCase();
   const clsLabel = clsRaw.includes('vip') || clsRaw.includes('elite')
     ? 'VIP'
@@ -142,23 +182,41 @@ export default function Customer360Panel({
     customer.pincode,
   ].filter(Boolean);
   const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : 'No address saved';
+  const additionalAddresses = Array.isArray(customer.additional_addresses)
+    ? customer.additional_addresses
+    : Array.isArray(customer.additionalAddresses)
+    ? customer.additionalAddresses
+    : [];
+  const mapHref = customer.map_link || (addressParts.length > 0 ? `https://maps.google.com/?q=${encodeURIComponent(addressParts.join(', '))}` : '');
 
   const dobAge = getAgeFromDOB(customer.date_of_birth);
-  let occasionText = 'Not specified';
-  if (customer.special_occasion) {
-    occasionText = `${customer.special_occasion_date ? formatDOB(customer.special_occasion_date) : ''} (${customer.special_occasion})`.trim();
-  } else if (customer.anniversary_date) {
-    occasionText = `${formatDOB(customer.anniversary_date)} (Anniversary)`;
-  } else if (customer.date_of_birth) {
-    occasionText = `${formatDOB(customer.date_of_birth)}${dobAge ? ` (${dobAge} yrs • Birthday)` : ' (Birthday)'}`;
+  const dobText = customer.date_of_birth
+    ? `${formatDOB(customer.date_of_birth)}${dobAge ? ` (${dobAge} yrs)` : ''}`
+    : '';
+  const occasionParts = [];
+  if (customer.anniversary_date) {
+    occasionParts.push(`${formatDOB(customer.anniversary_date)} (Anniversary)`);
   }
+  if (customer.special_occasion) {
+    occasionParts.push(`${customer.special_occasion_date ? `${formatDOB(customer.special_occasion_date)} ` : ''}(${customer.special_occasion})`.trim());
+  }
+  const occasionDisplay = occasionParts.length > 0
+    ? occasionParts.join(' • ')
+    : (dobText ? '' : 'Not specified');
 
   const membershipSummary = [
     tier || (clsLabel === 'VIP' ? 'VIP Plan' : `${priceList} Plan`),
     membershipId ? `ID: ${membershipId}` : null,
   ].filter(Boolean).join(' • ');
 
-  const staffNotes = formatCleanStaffNotes(customer.internal_comments) || formatCleanStaffNotes(customer.notes);
+  const internalCommentsClean = formatCleanStaffNotes(customer.internal_comments);
+  const generalNotesClean = formatCleanStaffNotes(customer.notes);
+  const staffNotesList = [internalCommentsClean, generalNotesClean].filter(
+    (note, index, arr) => note && arr.indexOf(note) === index
+  );
+  const prefNotesClean = formatCleanStaffNotes(customer.preference_notes);
+  const servicePref = customer.service_category || customer.preference || '';
+  const joinedDateText = formatShortDate(customer.created_at || customer.registered_at);
   const avatarPalette = getPastelAvatarColors(name);
 
   const recentOrders = customerOrders.slice(0, 3);
@@ -316,6 +374,19 @@ export default function Customer360Panel({
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
           transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         >
+          {onViewFullProfile && (
+            <MenuItem
+              onClick={() => {
+                setMenuAnchorEl(null);
+                onViewFullProfile(customer);
+              }}
+            >
+              <ListItemIcon>
+                <PersonSearchOutlinedIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Full Profile Details</ListItemText>
+            </MenuItem>
+          )}
           <MenuItem
             onClick={() => {
               setMenuAnchorEl(null);
@@ -565,29 +636,96 @@ export default function Customer360Panel({
               </Typography>
               <Stack spacing={1.15}>
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-                  <LocationOnOutlinedIcon sx={{ fontSize: 17, color: 'text.secondary', mt: 0.2 }} />
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>Address</Typography>
+                  <LocationOnOutlinedIcon sx={{ fontSize: 17, color: 'text.secondary', mt: 0.2, flexShrink: 0 }} />
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                      <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>Address</Typography>
+                      {mapHref && (
+                        <Box
+                          component="a"
+                          href={mapHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          sx={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 0.3,
+                            fontSize: '0.7rem',
+                            fontWeight: 600,
+                            color: 'primary.main',
+                            textDecoration: 'none',
+                            '&:hover': { textDecoration: 'underline' },
+                          }}
+                        >
+                          Map <OpenInNewIcon sx={{ fontSize: 11 }} />
+                        </Box>
+                      )}
+                    </Box>
                     <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, lineHeight: 1.35 }}>
                       {fullAddress}
                     </Typography>
+                    {additionalAddresses.length > 0 && (
+                      <Typography sx={{ fontSize: '0.72rem', color: 'text.secondary', mt: 0.25 }}>
+                        +{additionalAddresses.length} saved {additionalAddresses.length === 1 ? 'address' : 'addresses'}
+                      </Typography>
+                    )}
                   </Box>
                 </Box>
 
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-                  <CakeOutlinedIcon sx={{ fontSize: 17, color: '#e11d48', mt: 0.2 }} />
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
-                      Anniversary / Special Occasion
-                    </Typography>
-                    <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, lineHeight: 1.35 }}>
-                      {occasionText}
-                    </Typography>
+                {formattedAltPhone && (
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                    <CallOutlinedIcon sx={{ fontSize: 17, color: 'text.secondary', mt: 0.2, flexShrink: 0 }} />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>Alternate Phone</Typography>
+                      <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, lineHeight: 1.35 }}>
+                        {formattedAltPhone}
+                      </Typography>
+                    </Box>
                   </Box>
-                </Box>
+                )}
+
+                {(companyName || gstNumber) && (
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                    <BusinessOutlinedIcon sx={{ fontSize: 17, color: 'primary.main', mt: 0.2, flexShrink: 0 }} />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>Company / GSTIN</Typography>
+                      <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, lineHeight: 1.35 }}>
+                        {companyName || 'Business Account'}{gstNumber ? ` • GST: ${gstNumber}` : ''}
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+
+                {dobText && (
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                    <CakeOutlinedIcon sx={{ fontSize: 17, color: '#e11d48', mt: 0.2, flexShrink: 0 }} />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
+                        Date of Birth
+                      </Typography>
+                      <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, lineHeight: 1.35 }}>
+                        {dobText}
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+
+                {occasionDisplay && (
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                    <CakeOutlinedIcon sx={{ fontSize: 17, color: '#e11d48', mt: 0.2, flexShrink: 0 }} />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
+                        Anniversary / Special Occasion
+                      </Typography>
+                      <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, lineHeight: 1.35 }}>
+                        {occasionDisplay}
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
 
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-                  <CardMembershipOutlinedIcon sx={{ fontSize: 17, color: '#d97706', mt: 0.2 }} />
+                  <CardMembershipOutlinedIcon sx={{ fontSize: 17, color: '#d97706', mt: 0.2, flexShrink: 0 }} />
                   <Box sx={{ minWidth: 0 }}>
                     <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>Membership</Typography>
                     <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, lineHeight: 1.35 }}>
@@ -639,7 +777,7 @@ export default function Customer360Panel({
                   {recentOrders.map((ord, idx) => {
                     const ordNum = ord.order_number || ord.work_number || ord.id || `ORD-${idx + 1}`;
                     const serviceName = ord.service_category || ord.service_type || ord.preference || 'Laundry';
-                    const pieces = Number(ord.total_pieces || ord.item_count || (Array.isArray(ord.items) ? ord.items.length : 1));
+                    const pieces = getOrderPiecesCount(ord);
                     const amt = Number(ord.total_amount || 0);
                     const dateStr = formatShortDate(ord.created_at || ord.intake_date);
                     const st = getOrderStatusStyle(ord.order_status || ord.status);
@@ -720,12 +858,14 @@ export default function Customer360Panel({
               customerOrders.map((ord, idx) => {
                 const ordNum = ord.order_number || ord.work_number || ord.id || `ORD-${idx + 1}`;
                 const serviceName = ord.service_category || ord.service_type || ord.preference || 'Laundry';
-                const pieces = Number(ord.total_pieces || ord.item_count || 1);
-                const amt = Number(ord.total_amount || 0);
+                const pieces = getOrderPiecesCount(ord);
+                const itemsPreview = getOrderItemsPreview(ord);
+                const payInfo = getOrderPaymentBreakdown(ord);
+                const deliveryDisplay = ord.delivery_date || (ord.target_delivery_date ? formatShortDate(ord.target_delivery_date) : '');
                 const st = getOrderStatusStyle(ord.order_status || ord.status);
                 return (
                   <Paper key={ordNum + idx} variant="outlined" sx={{ p: 1.25, borderRadius: 2 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                       <Chip
                         size="small"
                         label={ordNum}
@@ -737,17 +877,32 @@ export default function Customer360Panel({
                           color: 'primary.main',
                         }}
                       />
-                      <Chip size="small" label={st.label} sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700, bgcolor: st.bg, color: st.color }} />
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+                        <Chip
+                          size="small"
+                          label={payInfo.label}
+                          color={payInfo.due <= 0 ? 'success' : 'warning'}
+                          variant="outlined"
+                          sx={{ height: 20, fontSize: '0.67rem', fontWeight: 600 }}
+                        />
+                        <Chip size="small" label={st.label} sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700, bgcolor: st.bg, color: st.color }} />
+                      </Box>
                     </Box>
                     <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, mt: 0.75 }}>
                       {serviceName} • {pieces} {pieces === 1 ? 'item' : 'items'}
                     </Typography>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+                    {itemsPreview && (
+                      <Typography sx={{ fontSize: '0.72rem', color: 'text.secondary', mt: 0.25 }}>
+                        {itemsPreview}
+                      </Typography>
+                    )}
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.6, gap: 1 }}>
                       <Typography sx={{ fontSize: '0.72rem', color: 'text.secondary' }}>
                         {formatShortDate(ord.created_at || ord.intake_date)}
+                        {deliveryDisplay ? ` • Due: ${deliveryDisplay}` : ''}
                       </Typography>
-                      <Typography sx={{ fontSize: '0.8rem', fontWeight: 700 }}>
-                        {currencySymbol}{amt.toFixed(2)}
+                      <Typography sx={{ fontSize: '0.8rem', fontWeight: 700, flexShrink: 0 }}>
+                        {currencySymbol}{payInfo.total.toFixed(2)}
                       </Typography>
                     </Box>
                   </Paper>
@@ -780,29 +935,35 @@ export default function Customer360Panel({
               </Box>
             </Paper>
 
-            {customerOrders.map((ord, idx) => {
-              const ordNum = ord.order_number || ord.work_number || ord.id || `ORD-${idx + 1}`;
-              const total = Number(ord.total_amount || 0);
-              const adv = Number(ord.advance_paid || 0);
-              const bal = Math.max(0, Number(ord.balance_due ?? (total - adv)));
-              return (
-                <Paper key={ordNum + idx} variant="outlined" sx={{ p: 1.25, borderRadius: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography sx={{ fontSize: '0.78rem', fontWeight: 700 }}>{ordNum}</Typography>
-                    <Chip
-                      size="small"
-                      label={ord.payment_status || (bal <= 0 ? 'Paid' : 'Unpaid')}
-                      color={bal <= 0 ? 'success' : 'warning'}
-                      variant="outlined"
-                      sx={{ height: 20, fontSize: '0.68rem' }}
-                    />
-                  </Box>
-                  <Typography sx={{ fontSize: '0.72rem', color: 'text.secondary', mt: 0.35 }}>
-                    Mode: {ord.payment_method || 'Cash'} • Paid: {currencySymbol}{adv.toFixed(0)} • Due: {currencySymbol}{bal.toFixed(0)}
-                  </Typography>
-                </Paper>
-              );
-            })}
+            {customerOrders.length === 0 ? (
+              <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, textAlign: 'center' }}>
+                <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
+                  No payment transactions recorded for {name} yet.
+                </Typography>
+              </Paper>
+            ) : (
+              customerOrders.map((ord, idx) => {
+                const ordNum = ord.order_number || ord.work_number || ord.id || `ORD-${idx + 1}`;
+                const payInfo = getOrderPaymentBreakdown(ord);
+                return (
+                  <Paper key={ordNum + idx} variant="outlined" sx={{ p: 1.25, borderRadius: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography sx={{ fontSize: '0.78rem', fontWeight: 700 }}>{ordNum}</Typography>
+                      <Chip
+                        size="small"
+                        label={payInfo.label}
+                        color={payInfo.due <= 0 ? 'success' : 'warning'}
+                        variant="outlined"
+                        sx={{ height: 20, fontSize: '0.68rem' }}
+                      />
+                    </Box>
+                    <Typography sx={{ fontSize: '0.72rem', color: 'text.secondary', mt: 0.35 }}>
+                      Mode: {ord.payment_method || 'Cash'} • Total: {currencySymbol}{payInfo.total.toFixed(0)} • Paid: {currencySymbol}{payInfo.paid.toFixed(0)} • Due: {currencySymbol}{payInfo.due.toFixed(0)}
+                    </Typography>
+                  </Paper>
+                );
+              })
+            )}
           </Stack>
         )}
 
@@ -810,71 +971,124 @@ export default function Customer360Panel({
           <Stack spacing={1.25}>
             <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
               <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, mb: 0.5 }}>
-                Internal Staff Notes & Preferences
+                Internal Staff Notes
               </Typography>
-              <Typography sx={{ fontSize: '0.8rem', color: staffNotes ? 'text.primary' : 'text.secondary' }}>
-                {staffNotes || 'No internal staff notes or complaints logged for this customer.'}
-              </Typography>
+              {staffNotesList.length > 0 ? (
+                <Stack spacing={0.5}>
+                  {staffNotesList.map((note, idx) => (
+                    <Typography key={idx} sx={{ fontSize: '0.8rem', color: 'text.primary', whiteSpace: 'pre-wrap' }}>
+                      {note}
+                    </Typography>
+                  ))}
+                </Stack>
+              ) : (
+                <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
+                  No internal staff notes or complaints logged for this customer.
+                </Typography>
+              )}
             </Paper>
+
+            {(servicePref || prefNotesClean) && (
+              <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+                <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, mb: 0.5 }}>
+                  Service &amp; Fabric Care Preferences
+                </Typography>
+                {servicePref && (
+                  <Typography sx={{ fontSize: '0.78rem', color: 'text.primary' }}>
+                    Preferred Service: <strong>{servicePref}</strong>
+                  </Typography>
+                )}
+                {prefNotesClean && (
+                  <Typography sx={{ fontSize: '0.78rem', color: 'text.secondary', mt: servicePref ? 0.35 : 0 }}>
+                    {prefNotesClean}
+                  </Typography>
+                )}
+              </Paper>
+            )}
+
             <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
               <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, mb: 0.5 }}>
                 Communication Preferences
               </Typography>
               <Typography sx={{ fontSize: '0.78rem', color: 'text.secondary' }}>
-                Channel: <strong>{customer.communication_pref || 'WhatsApp'}</strong> • Language:{' '}
-                <strong>{customer.communication_lang || customer.preferred_language || 'English'}</strong> • DND:{' '}
+                Channel: <strong>{customer.communication_pref || customer.communicationPreference || 'WhatsApp'}</strong> • Language:{' '}
+                <strong>{customer.communication_lang || customer.preferred_language || customer.preferredCommunicationLanguage || 'English'}</strong> • DND:{' '}
                 <strong>{customer.dnd ? 'Enabled' : 'Allowed'}</strong>
               </Typography>
             </Paper>
+
+            {onEdit && (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<EditOutlinedIcon fontSize="small" />}
+                onClick={() => onEdit(customer)}
+                sx={{ alignSelf: 'flex-start', height: 34 }}
+              >
+                Edit Notes &amp; Preferences
+              </Button>
+            )}
           </Stack>
         )}
 
         {activeTab === 'membership' && (
           <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
             <Stack spacing={0.85}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5 }}>
                 <Typography sx={{ fontSize: '0.76rem', color: 'text.secondary' }}>Segment</Typography>
-                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700 }}>{clsLabel}</Typography>
+                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, textAlign: 'right' }}>{clsLabel}</Typography>
               </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5 }}>
                 <Typography sx={{ fontSize: '0.76rem', color: 'text.secondary' }}>Price List</Typography>
-                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700 }}>{priceListDisplay}</Typography>
+                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, textAlign: 'right' }}>{priceListDisplay}</Typography>
               </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5 }}>
+                <Typography sx={{ fontSize: '0.76rem', color: 'text.secondary' }}>Service Zone</Typography>
+                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, textAlign: 'right' }}>{serviceZone}</Typography>
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5 }}>
                 <Typography sx={{ fontSize: '0.76rem', color: 'text.secondary' }}>Membership ID</Typography>
-                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700 }}>{membershipId || '—'}</Typography>
+                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, textAlign: 'right' }}>{membershipId || '—'}</Typography>
               </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5 }}>
+                <Typography sx={{ fontSize: '0.76rem', color: 'text.secondary' }}>Default Discount</Typography>
+                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, textAlign: 'right' }}>{defaultDiscount > 0 ? `${defaultDiscount}%` : '0%'}</Typography>
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5 }}>
                 <Typography sx={{ fontSize: '0.76rem', color: 'text.secondary' }}>Wallet Balance</Typography>
-                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700 }}>
+                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, textAlign: 'right' }}>
                   {currencySymbol} {walletBalance.toLocaleString('en-IN')}
                 </Typography>
               </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5 }}>
                 <Typography sx={{ fontSize: '0.76rem', color: 'text.secondary' }}>Credit Limit</Typography>
-                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700 }}>
+                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, textAlign: 'right' }}>
                   {currencySymbol} {creditLimit.toLocaleString('en-IN')}
                 </Typography>
               </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5 }}>
                 <Typography sx={{ fontSize: '0.76rem', color: 'text.secondary' }}>Tax Exemption</Typography>
-                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700 }}>
+                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, textAlign: 'right' }}>
                   {customer.tax_exemption ? 'Tax Exempt' : 'Standard GST'}
                 </Typography>
               </Box>
-              {(customer.company_name || customer.gst_number) && (
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              {(companyName || gstNumber) && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5 }}>
                   <Typography sx={{ fontSize: '0.76rem', color: 'text.secondary' }}>Company / GSTIN</Typography>
-                  <Typography sx={{ fontSize: '0.78rem', fontWeight: 700 }}>
-                    {customer.company_name || '—'} {customer.gst_number ? `(${customer.gst_number})` : ''}
+                  <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, textAlign: 'right' }}>
+                    {companyName || '—'} {gstNumber ? `(${gstNumber})` : ''}
                   </Typography>
                 </Box>
               )}
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5 }}>
                 <Typography sx={{ fontSize: '0.76rem', color: 'text.secondary' }}>Marketing / Referral</Typography>
-                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700 }}>
+                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, textAlign: 'right' }}>
                   {customer.marketing_source || 'Walk-in'} {customer.referral_code ? `(${customer.referral_code})` : ''}
                 </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5 }}>
+                <Typography sx={{ fontSize: '0.76rem', color: 'text.secondary' }}>Joined Date</Typography>
+                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, textAlign: 'right' }}>{joinedDateText}</Typography>
               </Box>
             </Stack>
           </Paper>

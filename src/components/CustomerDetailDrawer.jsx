@@ -1,7 +1,7 @@
 // src/components/CustomerDetailDrawer.jsx
 // Material UI Customer Profile Slide-Over Drawer for structured CRM inspection
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Avatar,
   Box,
@@ -130,6 +130,10 @@ export default function CustomerDetailDrawer({
   t,
 }) {
   const [sectionTab, setSectionTab] = useState('all');
+
+  useEffect(() => {
+    setSectionTab('all');
+  }, [customer?.id, customer?.customer_id, customer?.customerId, open]);
 
   if (!customer) {
     return (

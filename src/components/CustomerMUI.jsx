@@ -485,6 +485,7 @@ export default function CustomerMUI({
   const [expandedCustIds, setExpandedCustIds] = useState(new Set());
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Cards Pagination
   const [cardsPageSize, setCardsPageSize] = useState(6);
@@ -562,10 +563,39 @@ export default function CustomerMUI({
       c.customer_status ? `Status: ${c.customer_status}` : null,
     ].filter(Boolean).join('\n');
 
+    const copyWithFallback = (text) => {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      let ok = false;
+      try {
+        ok = document.execCommand('copy');
+      } catch {
+        ok = false;
+      } finally {
+        document.body.removeChild(textarea);
+      }
+      return ok;
+    };
+
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(lines).then(() => {
         showToast?.(`Copied ${name}'s details to clipboard!`, 'info');
-      }).catch(() => {});
+      }).catch(() => {
+        if (copyWithFallback(lines)) {
+          showToast?.(`Copied ${name}'s details to clipboard!`, 'info');
+        } else {
+          showToast?.('⚠️ Unable to copy customer details to clipboard.', 'error');
+        }
+      });
+    } else if (copyWithFallback(lines)) {
+      showToast?.(`Copied ${name}'s details to clipboard!`, 'info');
+    } else {
+      showToast?.('⚠️ Clipboard is unavailable in this browser.', 'error');
     }
   }, [showToast]);
 
@@ -591,21 +621,45 @@ export default function CustomerMUI({
 
   const handleUpdate = async ({ customerData, existingCustomerId }) => {
     const targetId = existingCustomerId || editingCustomer?.customerId || editingCustomer?.customer_id || customerData?.customer_id;
-    const { error } = await updateCustomer(targetId, customerData);
-    if (error) {
-      showToast?.(`⚠️ ${friendlySupabaseError(error)}`);
-      return;
+    setIsSaving(true);
+    try {
+      const { error } = await updateCustomer(targetId, customerData);
+      if (error) {
+        showToast?.(`⚠️ ${friendlySupabaseError(error)}`);
+        return;
+      }
+      showToast?.(`✅ Customer ${customerData.customer_name} updated successfully.`);
+      setEditingCustomer(null);
+      setDrawerCustomer(null);
+      await loadData();
+    } finally {
+      setIsSaving(false);
     }
-    showToast?.(`✅ Customer ${customerData.customer_name} updated successfully.`);
-    setEditingCustomer(null);
-    setDrawerCustomer(null);
-    loadData();
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (target) => {
+    const targetObj = target && typeof target === 'object' ? target : null;
+    const idToDelete = targetObj
+      ? (targetObj.customer_id || targetObj.customerId || targetObj.customer_code || targetObj.id)
+      : target;
+    if (!idToDelete) {
+      setDeleteConfirmTarget(null);
+      return;
+    }
+
     setIsDeleting(true);
     try {
-      const { error } = await deleteCustomer(id);
+      const { error } = await deleteCustomer(idToDelete);
+      const deletedGridId = targetObj?._gridId;
+      const matchesOpen360 = Boolean(
+        selectedCustomerKey &&
+        (
+          (deletedGridId && deletedGridId === selectedCustomerKey) ||
+          String(selectedCustomerKey) === String(idToDelete) ||
+          (targetObj?.id !== undefined && String(selectedCustomerKey) === String(targetObj.id))
+        )
+      );
+
       setDeleteConfirmTarget(null);
       setDrawerCustomer(null);
 
@@ -613,8 +667,12 @@ export default function CustomerMUI({
         showToast?.(`⚠️ ${friendlySupabaseError(error)}`);
         return;
       }
+      if (matchesOpen360) {
+        setIs360Open(false);
+        setSelectedCustomerKey(null);
+      }
       showToast?.(`✅ ${t('customer_deleted_success')}`);
-      loadData();
+      await loadData();
     } catch (err) {
       showToast?.(`⚠️ ${friendlySupabaseError(err)}`);
     } finally {
@@ -672,8 +730,23 @@ export default function CustomerMUI({
     });
 
     sortedOrders.forEach((ord) => {
-      const cid = String(ord?.customer_id || ord?.customer?.customer_id || ord?.customer?.customer_code || '').trim().toUpperCase();
-      const phone = normalizeMobileNumber(ord?.mobile_number || ord?.customer?.mobile_number || '');
+      const cid = String(
+        ord?.customer_id ||
+        ord?.customerId ||
+        ord?.customer?.customer_id ||
+        ord?.customer?.customerId ||
+        ord?.customer?.customer_code ||
+        ord?.customer?.id ||
+        ''
+      ).trim().toUpperCase();
+      const phone = normalizeMobileNumber(
+        ord?.mobile_number ||
+        ord?.mobileNumber ||
+        ord?.customer_mobile ||
+        ord?.customer?.mobile_number ||
+        ord?.customer?.mobileNumber ||
+        ''
+      );
       if (cid) {
         if (!byId.has(cid)) byId.set(cid, []);
         byId.get(cid).push(ord);
@@ -1107,7 +1180,7 @@ export default function CustomerMUI({
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 152,
+      width: 164,
       sortable: false,
       filterable: false,
       disableExport: true,
@@ -1169,7 +1242,7 @@ export default function CustomerMUI({
                 <EditOutlinedIcon sx={{ fontSize: 15 }} />
               </IconButton>
             </Tooltip>
-            {cleanMob && (
+            {cleanMob ? (
               <Tooltip title="WhatsApp">
                 <IconButton
                   size="small"
@@ -1177,6 +1250,7 @@ export default function CustomerMUI({
                   href={`https://wa.me/91${cleanMob}`}
                   target="_blank"
                   rel="noopener noreferrer"
+                  aria-label="WhatsApp customer"
                   sx={{
                     width: 28,
                     height: 28,
@@ -1189,6 +1263,25 @@ export default function CustomerMUI({
                 >
                   <WhatsAppIcon sx={{ fontSize: 15 }} />
                 </IconButton>
+              </Tooltip>
+            ) : (
+              <Tooltip title="No valid mobile number for WhatsApp">
+                <span>
+                  <IconButton
+                    size="small"
+                    disabled
+                    aria-label="WhatsApp unavailable"
+                    sx={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: '50%',
+                      border: '1px solid',
+                      borderColor: 'divider',
+                    }}
+                  >
+                    <WhatsAppIcon sx={{ fontSize: 15 }} />
+                  </IconButton>
+                </span>
               </Tooltip>
             )}
             <Tooltip title="More Actions">
@@ -1221,9 +1314,9 @@ export default function CustomerMUI({
     (col) => columnVisibilityModel[col.field] !== false
   ).length;
 
-  const cardsTotalPages = Math.max(1, Math.ceil(filteredCustomers.length / cardsPageSize));
+  const cardsTotalPages = Math.max(1, Math.ceil(gridRows.length / cardsPageSize));
   const safeCardsPage = Math.min(cardsPage, cardsTotalPages);
-  const paginatedCards = filteredCustomers.slice(
+  const paginatedCards = gridRows.slice(
     (safeCardsPage - 1) * cardsPageSize,
     safeCardsPage * cardsPageSize
   );
@@ -1756,9 +1849,10 @@ export default function CustomerMUI({
         })() : (
           <Box>
             <Grid container spacing={2}>
-              {paginatedCards.map((c, idx) => {
+              {paginatedCards.map((c) => {
                 const custId = c.customerId || c.customer_code || c.customer_id || c.id || '';
-                const cardKey = custId || c.mobile_number || `card-${idx}`;
+                const cardKey = c._gridId;
+                const cleanMob = normalizeMobileNumber(c.mobile_number || c.mobileNumber);
                 const name = c.customer_name || c.customerName || 'Customer';
                 const status = c.customerStatus || c.customer_status || 'Active';
                 const isInactive = String(status).toLowerCase() === 'inactive';
@@ -1873,8 +1967,7 @@ export default function CustomerMUI({
                               sx={{ height: 34 }}
                               startIcon={<VisibilityOutlinedIcon fontSize="small" />}
                               onClick={() => {
-                                const matchRow = gridRows.find((r) => (r.customerId || r.customer_code || r.customer_id || r.id) === custId) || { ...c, _gridId: cardKey, _orderStats: getCustomerOrdersAndStats(c) };
-                                setSelectedCustomerKey(matchRow._gridId);
+                                setSelectedCustomerKey(c._gridId);
                                 setIs360Open(true);
                               }}
                             >
@@ -1900,6 +1993,48 @@ export default function CustomerMUI({
                           </Box>
 
                           <Box sx={{ display: 'flex', gap: 0.75 }}>
+                            {cleanMob ? (
+                              <Tooltip title="WhatsApp">
+                                <IconButton
+                                  size="small"
+                                  component="a"
+                                  href={`https://wa.me/91${cleanMob}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  aria-label="WhatsApp customer"
+                                  sx={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: '6px',
+                                    border: '1px solid',
+                                    borderColor: alpha('#16a34a', 0.35),
+                                    bgcolor: alpha('#16a34a', 0.08),
+                                    color: '#16a34a',
+                                  }}
+                                >
+                                  <WhatsAppIcon sx={{ fontSize: 17 }} />
+                                </IconButton>
+                              </Tooltip>
+                            ) : (
+                              <Tooltip title="No valid mobile number for WhatsApp">
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    disabled
+                                    aria-label="WhatsApp unavailable"
+                                    sx={{
+                                      width: 32,
+                                      height: 32,
+                                      borderRadius: '6px',
+                                      border: '1px solid',
+                                      borderColor: 'divider',
+                                    }}
+                                  >
+                                    <WhatsAppIcon sx={{ fontSize: 17 }} />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            )}
                             <Tooltip title="Copy details">
                               <IconButton
                                 size="small"
@@ -1912,6 +2047,7 @@ export default function CustomerMUI({
                                   bgcolor: 'background.paper',
                                 }}
                                 onClick={() => handleCopyCustomer(c)}
+                                aria-label="Copy customer details"
                               >
                                 <ContentCopyOutlinedIcon sx={{ fontSize: 17 }} />
                               </IconButton>
@@ -1929,6 +2065,7 @@ export default function CustomerMUI({
                                   bgcolor: alpha(muiTheme.palette.primary.main, 0.08),
                                 }}
                                 onClick={() => setEditingCustomer(c)}
+                                aria-label="Edit customer"
                               >
                                 <EditOutlinedIcon sx={{ fontSize: 17 }} />
                               </IconButton>
@@ -1946,8 +2083,27 @@ export default function CustomerMUI({
                                   bgcolor: alpha(muiTheme.palette.error.main, 0.08),
                                 }}
                                 onClick={() => setDeleteConfirmTarget(c)}
+                                aria-label="Delete customer"
                               >
                                 <DeleteOutlinedIcon sx={{ fontSize: 18 }} />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="More Actions">
+                              <IconButton
+                                size="small"
+                                sx={{
+                                  width: 32,
+                                  height: 32,
+                                  borderRadius: '6px',
+                                  border: '1px solid',
+                                  borderColor: 'divider',
+                                  bgcolor: 'background.paper',
+                                  color: 'text.secondary',
+                                }}
+                                onClick={(e) => setRowMenuState({ anchorEl: e.currentTarget, row: c })}
+                                aria-label="Customer card actions"
+                              >
+                                <MoreVertIcon sx={{ fontSize: 17 }} />
                               </IconButton>
                             </Tooltip>
                           </Box>
@@ -2045,6 +2201,10 @@ export default function CustomerMUI({
                 setIs360Open(false);
                 setEditingCustomer(c);
               }}
+              onViewFullProfile={(c) => {
+                setIs360Open(false);
+                setDrawerCustomer(c);
+              }}
               onDelete={(c) => setDeleteConfirmTarget(c)}
               onCopy={handleCopyCustomer}
               t={t}
@@ -2099,6 +2259,24 @@ export default function CustomerMUI({
             </ListItemIcon>
             <ListItemText>{t('btn_edit') || 'Edit Customer'}</ListItemText>
           </MenuItem>
+          {(() => {
+            const mob = normalizeMobileNumber(rowMenuState.row?.mobile_number || rowMenuState.row?.mobileNumber);
+            return (
+              <MenuItem
+                component={mob ? 'a' : 'li'}
+                href={mob ? `https://wa.me/91${mob}` : undefined}
+                target={mob ? '_blank' : undefined}
+                rel={mob ? 'noopener noreferrer' : undefined}
+                disabled={!mob}
+                onClick={() => setRowMenuState({ anchorEl: null, row: null })}
+              >
+                <ListItemIcon sx={{ color: mob ? '#16a34a' : undefined }}>
+                  <WhatsAppIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>WhatsApp Chat</ListItemText>
+              </MenuItem>
+            );
+          })()}
           <MenuItem
             onClick={() => {
               const target = rowMenuState.row;
@@ -2144,7 +2322,7 @@ export default function CustomerMUI({
         {/* ── Edit Customer MUI Dialog ── */}
         <Dialog
           open={Boolean(editingCustomer)}
-          onClose={() => setEditingCustomer(null)}
+          onClose={() => !isSaving && setEditingCustomer(null)}
           maxWidth="md"
           fullWidth
           scroll="paper"
@@ -2181,12 +2359,12 @@ export default function CustomerMUI({
                           sx={{ height: 22, fontSize: '0.75rem', fontWeight: 700, borderRadius: '4px' }}
                         />
                         <Typography variant="body2" color="text.secondary" noWrap>
-                          {editingCustomer.customer_name}
+                          {editingCustomer.customer_name || editingCustomer.customerName}
                         </Typography>
                       </Box>
                     </Box>
                   </Box>
-                  <IconButton onClick={() => setEditingCustomer(null)} aria-label="Close">
+                  <IconButton onClick={() => !isSaving && setEditingCustomer(null)} disabled={isSaving} aria-label="Close">
                     <CloseIcon />
                   </IconButton>
                 </Box>
@@ -2200,8 +2378,9 @@ export default function CustomerMUI({
                     `CUST-${String(editingCustomer.id).padStart(5, '0')}`
                   }
                   isOrderFlow={false}
-                  submitLabel="Update Customer Record"
-                  onBack={() => setEditingCustomer(null)}
+                  isSubmitting={isSaving}
+                  submitLabel={isSaving ? 'Updating...' : 'Update Customer Record'}
+                  onBack={() => !isSaving && setEditingCustomer(null)}
                   onSubmit={handleUpdate}
                 />
               </DialogContent>
@@ -2213,6 +2392,7 @@ export default function CustomerMUI({
         <Dialog
           open={isRegisteringNew}
           onClose={() => {
+            if (isSaving) return;
             setIsRegisteringNew(false);
             setPrefillData(null);
           }}
@@ -2255,9 +2435,11 @@ export default function CustomerMUI({
               </Box>
               <IconButton
                 onClick={() => {
+                  if (isSaving) return;
                   setIsRegisteringNew(false);
                   setPrefillData(null);
                 }}
+                disabled={isSaving}
                 aria-label="Close"
               >
                 <CloseIcon />
@@ -2269,25 +2451,32 @@ export default function CustomerMUI({
               initialCustomer={prefillData}
               customerId={nextCustId}
               isOrderFlow={false}
-              submitLabel="Register Customer"
+              isSubmitting={isSaving}
+              submitLabel={isSaving ? 'Registering...' : 'Register Customer'}
               onBack={() => {
+                if (isSaving) return;
                 setIsRegisteringNew(false);
                 setPrefillData(null);
               }}
               onSubmit={async ({ customerData }) => {
-                const res = await createCustomer({
-                  ...customerData,
-                  customer_id: nextCustId,
-                });
-                if (res.error) {
-                  showToast?.(`⚠️ ${friendlySupabaseError(res.error)}`);
-                  return;
+                setIsSaving(true);
+                try {
+                  const res = await createCustomer({
+                    ...customerData,
+                    customer_id: nextCustId,
+                  });
+                  if (res.error) {
+                    showToast?.(`⚠️ ${friendlySupabaseError(res.error)}`);
+                    return;
+                  }
+                  const assignedId = res.data?.id || res.data?.customerId || nextCustId;
+                  showToast?.(`✅ Customer ${customerData.customer_name} registered successfully with ID ${assignedId}!`);
+                  setIsRegisteringNew(false);
+                  setPrefillData(null);
+                  await loadData();
+                } finally {
+                  setIsSaving(false);
                 }
-                const assignedId = res.data?.id || res.data?.customerId || nextCustId;
-                showToast?.(`✅ Customer ${customerData.customer_name} registered successfully with ID ${assignedId}!`);
-                setIsRegisteringNew(false);
-                setPrefillData(null);
-                await loadData();
               }}
             />
           </DialogContent>
@@ -2311,8 +2500,8 @@ export default function CustomerMUI({
           <DialogContent>
             <Typography variant="body2" sx={{ mb: 2 }}>
               {t('delete_confirm_msg')}{' '}
-              <strong>{deleteConfirmTarget?.customer_name}</strong>{' '}
-              ({formatPhoneDisplay(deleteConfirmTarget?.mobile_number)})?
+              <strong>{deleteConfirmTarget?.customer_name || deleteConfirmTarget?.customerName}</strong>{' '}
+              ({formatPhoneDisplay(deleteConfirmTarget?.mobile_number || deleteConfirmTarget?.mobileNumber)})?
             </Typography>
             <Alert severity="warning" variant="outlined">
               {t('delete_confirm_warning')}
@@ -2331,7 +2520,7 @@ export default function CustomerMUI({
               color="error"
               disabled={isDeleting}
               startIcon={isDeleting ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlinedIcon />}
-              onClick={() => handleDelete(deleteConfirmTarget.id)}
+              onClick={() => handleDelete(deleteConfirmTarget)}
             >
               {isDeleting ? t('btn_deleting') : t('btn_confirm_delete')}
             </Button>
