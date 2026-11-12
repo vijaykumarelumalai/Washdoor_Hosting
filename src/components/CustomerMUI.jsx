@@ -620,7 +620,12 @@ export default function CustomerMUI({
   };
 
   const handleUpdate = async ({ customerData, existingCustomerId }) => {
-    const targetId = existingCustomerId || editingCustomer?.customerId || editingCustomer?.customer_id || customerData?.customer_id;
+    const targetId =
+      editingCustomer?.customerId ||
+      editingCustomer?.customer_id ||
+      editingCustomer?.customer_code ||
+      existingCustomerId ||
+      customerData?.customer_id;
     setIsSaving(true);
     try {
       const { error } = await updateCustomer(targetId, customerData);
@@ -829,9 +834,13 @@ export default function CustomerMUI({
           c.mobile_number,
           c.mobileNumber,
           c.alternate_phone,
+          c.alternatePhoneNumber,
+          c.contactDetails?.alternatePhoneNumber,
           c.email,
+          c.contactDetails?.email,
           c.address,
           c.streetArea,
+          c.street_area,
           c.city,
           c.pincode,
           c.company_name,
@@ -842,6 +851,8 @@ export default function CustomerMUI({
           c.membershipId,
           zone,
           clsNormalized,
+          formatCleanStaffNotes(c.internal_comments),
+          formatCleanStaffNotes(c.notes),
         ]
           .filter(Boolean)
           .join(' ')
@@ -1321,6 +1332,17 @@ export default function CustomerMUI({
     safeCardsPage * cardsPageSize
   );
 
+  // Clamp controlled page indices when row count shrinks (e.g. after deletion)
+  useEffect(() => {
+    const maxGridPage = Math.max(0, Math.ceil(gridRows.length / paginationModel.pageSize) - 1);
+    if (paginationModel.page > maxGridPage) {
+      setPaginationModel((prev) => ({ ...prev, page: maxGridPage }));
+    }
+    if (cardsPage > cardsTotalPages) {
+      setCardsPage(cardsTotalPages);
+    }
+  }, [gridRows.length, paginationModel.page, paginationModel.pageSize, cardsPage, cardsTotalPages]);
+
   return (
     <ThemeProvider theme={muiTheme}>
       <Box
@@ -1541,6 +1563,19 @@ export default function CustomerMUI({
                     }}
                   />
 
+                  <FormControl size="small" sx={{ minWidth: 132 }}>
+                    <Select
+                      value={statusFilter}
+                      aria-label="Filter by customer status"
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      sx={{ fontSize: '0.84rem' }}
+                    >
+                      <MenuItem value="all">All Status</MenuItem>
+                      <MenuItem value="active">Active Only</MenuItem>
+                      <MenuItem value="inactive">Inactive Only</MenuItem>
+                    </Select>
+                  </FormControl>
+
                   {viewMode === 'table' && (
                     <Button
                       variant="outlined"
@@ -1745,7 +1780,7 @@ export default function CustomerMUI({
               pagination
               paginationModel={{ ...paginationModel, page: safeGridPage }}
               onPaginationModelChange={setPaginationModel}
-              pageSizeOptions={[5, 10, 20, 50]}
+              pageSizeOptions={[5, 10, 20, 50, 100]}
               onRowClick={(params) => {
                 setSelectedCustomerKey(params.row._gridId);
                 setIs360Open(true);
@@ -1797,7 +1832,7 @@ export default function CustomerMUI({
               }}
             />
 
-            {/* Custom Pagination Footer matching Mockup */}
+            {/* Custom Pagination Footer */}
             <Box
               sx={{
                 px: 2,
@@ -1807,30 +1842,32 @@ export default function CustomerMUI({
                 bgcolor: 'background.paper',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
+                justifyContent: { xs: 'center', sm: 'space-between' },
                 flexWrap: 'wrap',
                 gap: 1.5,
               }}
             >
               <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary', fontWeight: 500 }}>
-                Showing {startItem}–{endItem} of {gridRows.length} customers
+                Showing {startItem}–{endItem} of {gridRows.length} customers • Page {safeGridPage + 1} of {totalGridPages}
               </Typography>
 
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, flexWrap: 'wrap' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
                     Rows per page:
                   </Typography>
                   <Select
                     size="small"
+                    aria-label="Grid rows per page"
                     value={paginationModel.pageSize}
                     onChange={(e) => setPaginationModel({ page: 0, pageSize: Number(e.target.value) })}
-                    sx={{ height: 32, minWidth: 64, fontSize: '0.8rem' }}
+                    sx={{ height: 32, minWidth: 68, fontSize: '0.8rem' }}
                   >
                     <MenuItem value={5}>5</MenuItem>
                     <MenuItem value={10}>10</MenuItem>
                     <MenuItem value={20}>20</MenuItem>
                     <MenuItem value={50}>50</MenuItem>
+                    <MenuItem value={100}>100</MenuItem>
                   </Select>
                 </Box>
 
@@ -1841,6 +1878,8 @@ export default function CustomerMUI({
                   color="primary"
                   size="small"
                   shape="rounded"
+                  showFirstButton
+                  showLastButton
                 />
               </Box>
             </Box>
@@ -2131,11 +2170,11 @@ export default function CustomerMUI({
               }}
             >
               <Typography sx={{ fontSize: '0.84rem' }} color="text.secondary" fontWeight={600}>
-                Showing {filteredCustomers.length === 0 ? 0 : (safeCardsPage - 1) * cardsPageSize + 1}–
-                {Math.min(safeCardsPage * cardsPageSize, filteredCustomers.length)} of {filteredCustomers.length} customers
+                Showing {gridRows.length === 0 ? 0 : (safeCardsPage - 1) * cardsPageSize + 1}–
+                {Math.min(safeCardsPage * cardsPageSize, gridRows.length)} of {gridRows.length} customers • Page {safeCardsPage} of {cardsTotalPages}
               </Typography>
 
-              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
                 <FormControl size="small" sx={{ minWidth: 96 }}>
                   <InputLabel id="cards-page-size-lbl">Show</InputLabel>
                   <Select
@@ -2151,6 +2190,7 @@ export default function CustomerMUI({
                     <MenuItem value={12}>12</MenuItem>
                     <MenuItem value={24}>24</MenuItem>
                     <MenuItem value={50}>50</MenuItem>
+                    <MenuItem value={100}>100</MenuItem>
                   </Select>
                 </FormControl>
 

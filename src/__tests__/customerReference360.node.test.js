@@ -51,3 +51,20 @@ test('Step 2: CustomerDetailDrawer resets sectionTab to all when customer change
 
   assert.match(drawer, /useEffect\(\(\) => \{\s*setSectionTab\('all'\);\s*\}, \[customer\?\.id, customer\?\.customer_id, customer\?\.customerId, open\]\)/);
 });
+
+test('Part 2 Steps 1-2: CustomerMUI and customerService support status filter, clamped pagination, and full profile field round-trip', () => {
+  const mui = fs.readFileSync(muiPath, 'utf8');
+  const servicePath = path.resolve(__dirname, '../services/customerService.js');
+  const service = fs.readFileSync(servicePath, 'utf8');
+
+  assert.match(mui, /aria-label="Filter by customer status"/);
+  assert.match(mui, /Inactive Only/);
+  assert.match(mui, /formatCleanStaffNotes\(c\.internal_comments\)/);
+  assert.match(mui, /if \(paginationModel\.page > maxGridPage\)/);
+  assert.match(mui, /editingCustomer\?\.customerId \|\|\s*editingCustomer\?\.customer_id \|\|\s*editingCustomer\?\.customer_code/);
+
+  assert.match(service, /special_occasion:\s*profileItem\.special_occasion \|\| null/);
+  assert.match(service, /preference_notes:\s*profileItem\.preference_notes \|\| null/);
+  assert.match(service, /special_occasion:\s*clean\.special_occasion \|\| null/);
+  assert.match(service, /const workCustId = clean\.customer_id \|\| clean\.customer_code/);
+});

@@ -1759,6 +1759,8 @@ export function mapCustomerWorkRow(row) {
     anniversary_date: profileItem.anniversary_date || null,
     special_occasion: profileItem.special_occasion || null,
     special_occasion_date: profileItem.special_occasion_date || null,
+    preference_notes: profileItem.preference_notes || null,
+    gender: profileItem.gender || null,
     map_link: profileItem.map_link || null,
     communication_pref: commPref || 'WhatsApp',
     communicationPreference: commPref || 'WhatsApp',
@@ -2632,6 +2634,10 @@ export async function createCustomer(payload) {
       area_service_zone: clean.service_zone ? (clean.service_zone.startsWith('zone-') ? `Zone ${clean.service_zone.replace('zone-', '')}` : clean.service_zone) : 'Zone 1',
       tax_exemption: Boolean(clean.tax_exemption),
       date_of_birth: clean.date_of_birth || null,
+      special_occasion: clean.special_occasion || null,
+      special_occasion_date: clean.special_occasion_date || null,
+      gender: clean.gender || null,
+      preference_notes: clean.preference_notes || null,
       map_link: clean.map_link || null,
       communication_pref: clean.communication_pref || 'WhatsApp',
       preferred_language: clean.communication_lang || 'English',
@@ -2639,6 +2645,7 @@ export async function createCustomer(payload) {
       order_preference: clean.service_category || clean.order_preference || clean.orderPreference || 'Wash & Steam Press',
       price_list: clean.price_list || 'Standard',
       customer_classification: clean.customer_classification || 'Regular Customer',
+      customer_status: clean.customer_status || 'Active',
       tier: clean.tier || 'SILVER',
       membership_id: clean.membership_id || null,
       default_discount: clean.default_discount !== undefined && clean.default_discount !== null ? Number(clean.default_discount) : 0,
@@ -2656,7 +2663,7 @@ export async function createCustomer(payload) {
       (clean.customer_status || '').toLowerCase() === 'archived' ? 'archived' : 'active';
     const dbCommPref = ['sms', 'whatsapp', 'email', 'phone', 'none'].includes(String(clean.communication_pref || '').toLowerCase())
       ? String(clean.communication_pref).toLowerCase()
-      : 'sms';
+      : 'whatsapp';
     const dbCommLang = ['en', 'ta', 'hi', 'te', 'kn', 'ml'].includes(String(clean.communication_lang || '').toLowerCase())
       ? String(clean.communication_lang).toLowerCase()
       : 'en';
@@ -2848,9 +2855,10 @@ export async function updateCustomer(id, payload) {
     };
     Object.keys(workUpdate).forEach((k) => workUpdate[k] === undefined && delete workUpdate[k]);
 
+    const workCustId = clean.customer_id || clean.customer_code || (targetCustId && /^(CUS|CUST-)/i.test(String(targetCustId)) ? targetCustId : null);
     let workQuery = supabase.from('customer_works').update(workUpdate);
-    if (targetCustId) {
-      workQuery = workQuery.eq('customer_id', targetCustId);
+    if (workCustId) {
+      workQuery = workQuery.eq('customer_id', workCustId);
     } else if (normMobile) {
       workQuery = workQuery.eq('mobile_number', normMobile);
     }
@@ -2872,13 +2880,18 @@ export async function updateCustomer(id, payload) {
             area_service_zone: custTableUpdate.service_zone || prevProfile.area_service_zone,
             tax_exemption: clean.tax_exemption !== undefined ? Boolean(clean.tax_exemption) : prevProfile.tax_exemption,
             date_of_birth: clean.date_of_birth !== undefined ? clean.date_of_birth : prevProfile.date_of_birth,
+            special_occasion: clean.special_occasion !== undefined ? clean.special_occasion : prevProfile.special_occasion,
+            special_occasion_date: clean.special_occasion_date !== undefined ? clean.special_occasion_date : prevProfile.special_occasion_date,
+            gender: clean.gender !== undefined ? clean.gender : prevProfile.gender,
+            preference_notes: clean.preference_notes !== undefined ? clean.preference_notes : prevProfile.preference_notes,
             map_link: clean.map_link !== undefined ? clean.map_link : prevProfile.map_link,
             communication_pref: clean.communication_pref || prevProfile.communication_pref,
             preferred_language: clean.communication_lang || prevProfile.preferred_language,
             internal_comments: clean.internal_comments !== undefined ? clean.internal_comments : prevProfile.internal_comments,
-            order_preference: clean.order_preference || clean.orderPreference || prevProfile.order_preference,
+            order_preference: clean.service_category || clean.order_preference || clean.orderPreference || prevProfile.order_preference,
             price_list: clean.price_list || prevProfile.price_list,
             customer_classification: clean.customer_classification || prevProfile.customer_classification,
+            customer_status: clean.customer_status || prevProfile.customer_status || 'Active',
             membership_id: clean.membership_id !== undefined ? clean.membership_id : prevProfile.membership_id,
             default_discount: clean.default_discount !== undefined && clean.default_discount !== null ? Number(clean.default_discount) : prevProfile.default_discount,
             credit_limit: clean.credit_limit !== undefined && clean.credit_limit !== null ? Number(clean.credit_limit) : prevProfile.credit_limit,

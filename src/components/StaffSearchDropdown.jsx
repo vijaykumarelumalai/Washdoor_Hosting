@@ -1,7 +1,8 @@
 // src/components/StaffSearchDropdown.jsx
 // Database-driven searchable dropdown for Staff Master & Pickup/Delivery Person Master
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
 const PICKUP_ACCENTS = ['accent-blue', 'accent-green', 'accent-amber'];
 
@@ -78,6 +79,34 @@ export default function StaffSearchDropdown({
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [menuStyle, setMenuStyle] = useState(null);
+
+  const updateMenuPosition = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const spaceBelow = Math.max(0, window.innerHeight - rect.bottom - 12);
+    const spaceAbove = Math.max(0, rect.top - 12);
+    const openUpward = spaceBelow < 180 && spaceAbove > spaceBelow;
+
+    setMenuStyle({
+      position: 'fixed',
+      left: rect.left,
+      width: rect.width,
+      right: 'auto',
+      zIndex: 9999,
+      ...(openUpward
+        ? {
+            bottom: window.innerHeight - rect.top + 5,
+            top: 'auto',
+            maxHeight: Math.min(220, Math.max(110, spaceAbove)),
+          }
+        : {
+            top: rect.bottom + 5,
+            bottom: 'auto',
+            maxHeight: Math.min(220, Math.max(120, spaceBelow)),
+          }),
+    });
+  }, []);
 
   const selectedOption = useMemo(() => {
     if (value) {
@@ -114,7 +143,9 @@ export default function StaffSearchDropdown({
   // Close dropdown on outside click and restore display state
   useEffect(() => {
     const handleOutsideClick = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
+      const inContainer = containerRef.current && containerRef.current.contains(event.target);
+      const inMenu = listRef.current && listRef.current.contains(event.target);
+      if (!inContainer && !inMenu) {
         setIsOpen(false);
         setIsSearching(false);
         setSearchQuery('');
@@ -124,6 +155,19 @@ export default function StaffSearchDropdown({
     document.addEventListener('mousedown', handleOutsideClick);
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
+
+  // Keep portaled menu anchored to input box on open, resize, or ancestor scroll
+  useEffect(() => {
+    if (!isOpen) return;
+    updateMenuPosition();
+    const handleReposition = () => updateMenuPosition();
+    window.addEventListener('resize', handleReposition);
+    window.addEventListener('scroll', handleReposition, true);
+    return () => {
+      window.removeEventListener('resize', handleReposition);
+      window.removeEventListener('scroll', handleReposition, true);
+    };
+  }, [isOpen, updateMenuPosition]);
 
   // Reset highlighted index when filtered options change
   useEffect(() => {
@@ -308,12 +352,13 @@ export default function StaffSearchDropdown({
         </button>
       </div>
 
-      {isOpen && (
+      {isOpen && createPortal(
         <div
           id={`${id}-listbox`}
           role="listbox"
           ref={listRef}
           className="staff-dropdown-menu"
+          style={menuStyle || undefined}
         >
           {loading ? (
             <div className="staff-dropdown-state">
@@ -391,7 +436,8 @@ export default function StaffSearchDropdown({
               );
             })
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

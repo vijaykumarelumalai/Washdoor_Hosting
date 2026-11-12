@@ -9891,10 +9891,23 @@ body.light-theme .sidebar-brand-logo.has-custom-logo,
 }
 
 .field .staff-dropdown-box .staff-dropdown-input,
+.field .staff-dropdown-box .staff-dropdown-input:hover,
+.field .staff-dropdown-box .staff-dropdown-input:focus,
 body.light-theme .field .staff-dropdown-box .staff-dropdown-input,
+body.light-theme .field .staff-dropdown-box .staff-dropdown-input:hover,
+body.light-theme .field .staff-dropdown-box .staff-dropdown-input:focus,
+body.light-theme .field .staff-dropdown-box input[type="text"].staff-dropdown-input,
+body.light-theme .field .staff-dropdown-box input[type="text"].staff-dropdown-input:hover,
+body.light-theme .field .staff-dropdown-box input[type="text"].staff-dropdown-input:focus,
 [data-theme="light"] .field .staff-dropdown-box .staff-dropdown-input,
+[data-theme="light"] .field .staff-dropdown-box .staff-dropdown-input:hover,
+[data-theme="light"] .field .staff-dropdown-box .staff-dropdown-input:focus,
 body.light-theme .staff-dropdown-box input[type="text"].staff-dropdown-input,
-[data-theme="light"] .staff-dropdown-box input[type="text"].staff-dropdown-input {
+body.light-theme .staff-dropdown-box input[type="text"].staff-dropdown-input:hover,
+body.light-theme .staff-dropdown-box input[type="text"].staff-dropdown-input:focus,
+[data-theme="light"] .staff-dropdown-box input[type="text"].staff-dropdown-input,
+[data-theme="light"] .staff-dropdown-box input[type="text"].staff-dropdown-input:hover,
+[data-theme="light"] .staff-dropdown-box input[type="text"].staff-dropdown-input:focus {
   flex: 1 1 auto !important;
   min-width: 0 !important;
   width: 100% !important;
