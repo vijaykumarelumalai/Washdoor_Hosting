@@ -2,7 +2,7 @@
 // Washdoor Orders & POS Counter Intake & Management Module
 // Matches the exact Orders & POS design with Orders List Table and Counter Intake Register
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import ClothIllustration from './ClothIllustration';
 import OrderReviewCard from './OrderReviewCard';
@@ -13,6 +13,7 @@ import ThermalReceiptModal from './ThermalReceiptModal';
 import ScheduleDeliveryModal from './ScheduleDeliveryModal';
 import DriverAssignModal from './DriverAssignModal';
 import ServiceTypeSelect from './ServiceTypeSelect';
+import StaffSearchDropdown from './StaffSearchDropdown';
 import { DEFAULT_SERVICE_TYPES, formatServiceBreakdown } from '../config/businessRules';
 import {
   getProducts,
@@ -20,6 +21,8 @@ import {
   createOrderWithCustomer,
   getNextOrderId,
   updateOrderInSupabase,
+  fetchActiveStaffMaster,
+  fetchActivePickupDeliveryMaster,
 } from '../services/customerService';
 import {
   normalizeMobileNumber,
@@ -1182,6 +1185,46 @@ export default function POSModule({
   const [editFormData, setEditFormData] = useState(null);
   const [showEditQRModal, setShowEditQRModal] = useState(false);
 
+  // Live Active Staff & Pickup/Delivery Master lists for inline Edit Order dropdowns
+  const [editStaffList, setEditStaffList] = useState([]);
+  const [editStaffLoading, setEditStaffLoading] = useState(false);
+  const [editStaffError, setEditStaffError] = useState(null);
+  const [editPickupList, setEditPickupList] = useState([]);
+  const [editPickupLoading, setEditPickupLoading] = useState(false);
+  const [editPickupError, setEditPickupError] = useState(null);
+
+  const loadEditStaffMaster = useCallback(async () => {
+    setEditStaffLoading(true);
+    setEditStaffError(null);
+    const { data, error } = await fetchActiveStaffMaster();
+    setEditStaffLoading(false);
+    if (error) {
+      setEditStaffError(error);
+      setEditStaffList([]);
+      return;
+    }
+    setEditStaffList(data || []);
+  }, []);
+
+  const loadEditPickupMaster = useCallback(async () => {
+    setEditPickupLoading(true);
+    setEditPickupError(null);
+    const { data, error } = await fetchActivePickupDeliveryMaster();
+    setEditPickupLoading(false);
+    if (error) {
+      setEditPickupError(error);
+      setEditPickupList([]);
+      return;
+    }
+    setEditPickupList(data || []);
+  }, []);
+
+  useEffect(() => {
+    if (!editingOrderRecord) return;
+    loadEditStaffMaster();
+    loadEditPickupMaster();
+  }, [editingOrderRecord, loadEditStaffMaster, loadEditPickupMaster]);
+
   // Reset Table Scroll When Editing Starts
   useEffect(() => {
     if (editingOrderRecord && tableScrollRef.current) {
@@ -1432,7 +1475,9 @@ export default function POSModule({
       payment_status: paymentStatus,
       assigned_driver: ord.assigned_driver || 'Ramesh Kumar (Route 4)',
       assigned_driver_full: ord.assigned_driver_full || '',
+      attend_staff_id: ord.attend_staff_id || '',
       attend_staff_name: ord.attend_staff_name || ord.status_updated_by || ord.assigned_staff || '',
+      assigned_pickup_person_id: ord.assigned_pickup_person_id || '',
       assigned_pickup_delivery_person: ord.assigned_pickup_delivery_person || ord.assigned_driver || '',
       collected_by_person: ord.collected_by_person || '',
       factory_hub: ord.factory_hub || ord.factory_outlet || 'Factory Outlet Unit 1 (Main Processing Plant)',
@@ -1632,10 +1677,10 @@ export default function POSModule({
       service_category: editFormData.service_category,
       status: editFormData.status,
       order_status: editFormData.status,
-      attend_staff_id: editFormData.attend_staff_id ?? editingOrderRecord.attend_staff_id ?? null,
+      attend_staff_id: editFormData.attend_staff_id || null,
       attend_staff_name: staffActor,
       assigned_staff: staffActor,
-      assigned_pickup_person_id: editFormData.assigned_pickup_person_id ?? editingOrderRecord.assigned_pickup_person_id ?? null,
+      assigned_pickup_person_id: editFormData.assigned_pickup_person_id || null,
       assigned_pickup_delivery_person: pickupPerson,
       status_updated_at: nowIso,
       status_updated_by: staffActor,
@@ -1729,9 +1774,9 @@ export default function POSModule({
         paymentStatus: editFormData.payment_status,
         paymentMethod: editFormData.payment_method || updatedOrder.payment_method || 'Cash',
         assignedStaff: staffActor,
-        attend_staff_id: updatedOrder.attend_staff_id || null,
+        attend_staff_id: editFormData.attend_staff_id || null,
         attend_staff_name: staffActor,
-        assigned_pickup_person_id: updatedOrder.assigned_pickup_person_id || null,
+        assigned_pickup_person_id: editFormData.assigned_pickup_person_id || null,
         assigned_pickup_delivery_person: pickupPerson,
         assigned_driver: pickupPerson || updatedOrder.assigned_driver,
         status_updated_at: nowIso,
@@ -1767,10 +1812,9 @@ export default function POSModule({
     setEditFormData(null);
   };
 
-  const handleAssignDriverSubmit = ({ order, selectedDriver }) => {
-    const driverName = selectedDriver.split(' (')[0] || selectedDriver;
-    const idMatch = String(selectedDriver || '').match(/\(([^)]+)\)/);
-    const driverId = idMatch ? idMatch[1].trim() : (order.assigned_pickup_person_id || null);
+  const handleAssignDriverSubmit = ({ order, selectedDriver, selectedDriverRecord }) => {
+    const driverName = selectedDriverRecord?.name || selectedDriver.split(' (')[0] || selectedDriver;
+    const driverId = selectedDriverRecord?.uniqueId || null;
     const nowFormatted = new Date().toLocaleDateString('en-IN', {
       day: '2-digit',
       month: 'short',
@@ -1827,6 +1871,8 @@ export default function POSModule({
       setEditingOrderRecord(updatedOrder);
       setEditFormData((prev) => prev ? {
         ...prev,
+        assigned_pickup_person_id: driverId,
+        assigned_pickup_delivery_person: driverName,
         assigned_driver: driverName,
         assigned_driver_full: selectedDriver,
         pickup_status: 'Assigned for Pickup',
@@ -4404,33 +4450,50 @@ export default function POSModule({
                                           </div>
 
                                           {/* Attend Staff Name & Assigned Pickup / Delivery Person */}
-                                          <div>
+                                          <div style={{ gridColumn: '1 / -1' }}>
                                             <label className="pos-edit-label">
                                               Attend Staff Name
                                             </label>
-                                            <input
-                                              type="text"
-                                              className="pos-edit-field"
-                                              value={editFormData.attend_staff_name || ''}
-                                              onChange={(e) => setEditFormData({ ...editFormData, attend_staff_name: e.target.value })}
-                                              placeholder="e.g. Ravi Kumar"
+                                            <StaffSearchDropdown
+                                              id="posEditAttendStaffName"
+                                              variant="staff"
+                                              options={editStaffList}
+                                              value={editFormData.attend_staff_id || ''}
+                                              fallbackName={editFormData.attend_staff_name || ''}
+                                              loading={editStaffLoading}
+                                              error={editStaffError}
+                                              onRetry={loadEditStaffMaster}
+                                              placeholder="Search by staff name or ID..."
+                                              emptyMessage="No active staff found in Staff Master."
+                                              onChange={(selected) => setEditFormData((prev) => ({
+                                                ...prev,
+                                                attend_staff_id: selected ? (selected.uniqueId || '') : '',
+                                                attend_staff_name: selected ? (selected.name || '') : '',
+                                              }))}
                                             />
                                           </div>
 
-                                          <div>
+                                          <div style={{ gridColumn: '1 / -1' }}>
                                             <label className="pos-edit-label">
                                               Assigned Pickup &amp; Delivery Person
                                             </label>
-                                            <input
-                                              type="text"
-                                              className="pos-edit-field"
-                                              value={editFormData.assigned_pickup_delivery_person || ''}
-                                              onChange={(e) => setEditFormData({
-                                                ...editFormData,
-                                                assigned_pickup_delivery_person: e.target.value,
-                                                assigned_driver: e.target.value,
-                                              })}
-                                              placeholder="e.g. Ramesh Kumar / Self Pickup"
+                                            <StaffSearchDropdown
+                                              id="posEditAssignedPickupPerson"
+                                              variant="pickup"
+                                              options={editPickupList}
+                                              value={editFormData.assigned_pickup_person_id || ''}
+                                              fallbackName={editFormData.assigned_pickup_delivery_person || ''}
+                                              loading={editPickupLoading}
+                                              error={editPickupError}
+                                              onRetry={loadEditPickupMaster}
+                                              placeholder="Search by name or employee ID..."
+                                              emptyMessage="No active pickup/delivery staff found."
+                                              onChange={(selected) => setEditFormData((prev) => ({
+                                                ...prev,
+                                                assigned_pickup_person_id: selected ? (selected.uniqueId || '') : '',
+                                                assigned_pickup_delivery_person: selected ? (selected.name || '') : '',
+                                                assigned_driver: selected ? (selected.name || '') : '',
+                                              }))}
                                             />
                                           </div>
 
@@ -4643,9 +4706,8 @@ export default function POSModule({
                                                 display: 'grid',
                                                 gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
                                                 gap: '10px',
-                                                flex: 1,
+                                                flex: '1 1 0',
                                                 minHeight: '260px',
-                                                maxHeight: '340px',
                                                 overflowY: 'auto',
                                                 overflowX: 'hidden',
                                                 paddingRight: '4px',
@@ -4803,13 +4865,13 @@ export default function POSModule({
                                             </div>
 
                                             {/* Cart Items List & Totals */}
-                                            <div className="pos-edit-section-card">
+                                            <div className="pos-edit-section-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                                               <div className="pos-edit-section-title" style={{ fontSize: '12.5px', marginBottom: '8px' }}>
                                                 <span style={{ color: '#2563eb' }}>◆</span>
                                                 <span>Cart Items ({editCart.length})</span>
                                               </div>
 
-                                              <div style={{ maxHeight: '145px', overflowY: 'auto', marginBottom: '10px', paddingRight: '2px' }}>
+                                              <div style={{ flex: '1 1 0', minHeight: '120px', overflowY: 'auto', marginBottom: '10px', paddingRight: '2px' }}>
                                                 {editCart.map((it, idx) => (
                                                   <div
                                                     key={`${it.id}_${it.serviceType}_${idx}`}

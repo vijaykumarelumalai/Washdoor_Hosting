@@ -382,7 +382,7 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
     { id: 'staff_master', label: t('tab_staff_master', 'Staff & Delivery Master'), icon: '👥', desc: 'Manage counter staff & pickup/delivery personnel' },
     { id: 'notifications', label: t('tab_notifications', 'Reminders & notifications'), icon: '🔔', desc: 'WhatsApp, SMS & email automated alerts' },
     { id: 'language', label: t('tab_language', 'Language'), icon: '🌐', desc: 'Multi-language and text direction' },
-    { id: 'templates', label: t('tab_template', 'Template'), icon: '📑', desc: 'Predefined WhatsApp, SMS & Email notification templates', isSubItem: true },
+    { id: 'templates', label: t('tab_template', 'Template'), icon: '📑', desc: 'Predefined WhatsApp, SMS & Email notification templates' },
     { id: 'apps', label: t('tab_apps', 'Apps'), icon: '📱', desc: 'Printers, WhatsApp API & accounting integrations' },
     { id: 'help_support', label: t('tab_help_support', 'Help & support'), icon: '❓', desc: 'Documentation, helpline & diagnostics' },
     { id: 'account_details', label: t('tab_account', 'Account'), icon: '👤', desc: 'Administrator credentials & security' },
@@ -2406,4 +2406,3 @@ export default function SettingsModule({ showToast, onSignOut, initialTab = 'bus
     </div>
   );
 }
-                        

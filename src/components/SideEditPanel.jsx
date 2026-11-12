@@ -2,12 +2,17 @@
 // Professional High-Fidelity Side Order Editing Panel for Washdoor POS & Intake
 // Fully responsive with comprehensive Order Details, Logistics, Status, Payments, Customer, Comments & Audit Trail
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import ClothIllustration from './ClothIllustration';
 import GarmentInspectionSection from './GarmentInspectionSection';
 import ServiceTypeSelect from './ServiceTypeSelect';
+import StaffSearchDropdown from './StaffSearchDropdown';
 import { formatServiceBreakdown } from '../config/businessRules';
-import { updateOrderInSupabase } from '../services/customerService';
+import {
+  updateOrderInSupabase,
+  fetchActiveStaffMaster,
+  fetchActivePickupDeliveryMaster,
+} from '../services/customerService';
 import '../styles/SideEditPanel.css';
 
 // 16 Standard Catalog Items strictly matching reference mockup display order
@@ -99,9 +104,52 @@ export default function SideEditPanel({
   const [attendStaffName, setAttendStaffName] = useState(
     order?.attend_staff_name || order?.status_updated_by || order?.assigned_staff || ''
   );
+  const [attendStaffId, setAttendStaffId] = useState(
+    order?.attend_staff_id || ''
+  );
   const [assignedPickupPerson, setAssignedPickupPerson] = useState(
     order?.assigned_pickup_delivery_person || order?.assigned_driver || ''
   );
+  const [assignedPickupPersonId, setAssignedPickupPersonId] = useState(
+    order?.assigned_pickup_person_id || ''
+  );
+  const [staffMasterList, setStaffMasterList] = useState([]);
+  const [staffMasterLoading, setStaffMasterLoading] = useState(false);
+  const [staffMasterError, setStaffMasterError] = useState('');
+  const [pickupMasterList, setPickupMasterList] = useState([]);
+  const [pickupMasterLoading, setPickupMasterLoading] = useState(false);
+  const [pickupMasterError, setPickupMasterError] = useState('');
+
+  const loadStaffAndPickupMasters = useCallback(async () => {
+    setStaffMasterLoading(true);
+    setPickupMasterLoading(true);
+    setStaffMasterError('');
+    setPickupMasterError('');
+
+    const [staffRes, pickupRes] = await Promise.all([
+      fetchActiveStaffMaster(),
+      fetchActivePickupDeliveryMaster(),
+    ]);
+
+    if (staffRes.error) {
+      setStaffMasterError(staffRes.error);
+    } else {
+      setStaffMasterList(staffRes.data || []);
+    }
+    setStaffMasterLoading(false);
+
+    if (pickupRes.error) {
+      setPickupMasterError(pickupRes.error);
+    } else {
+      setPickupMasterList(pickupRes.data || []);
+    }
+    setPickupMasterLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadStaffAndPickupMasters();
+  }, [loadStaffAndPickupMasters]);
+
   const [comments, setComments] = useState(initialComments);
 
   // 2. Catalog & Item Selection State
@@ -575,10 +623,10 @@ export default function SideEditPanel({
       payment_status: paymentStatus,
       staff_notes: staffNote,
       flags: flags,
-      attend_staff_id: order?.attend_staff_id || null,
+      attend_staff_id: attendStaffId || null,
       attend_staff_name: staffActor,
       assigned_staff: staffActor,
-      assigned_pickup_person_id: order?.assigned_pickup_person_id || null,
+      assigned_pickup_person_id: assignedPickupPersonId || null,
       assigned_pickup_delivery_person: pickupPerson,
       assigned_driver: pickupPerson || assignedRider,
       assigned_driver_full: pickupPerson ? `${pickupPerson} (${vehicleNo})` : `${assignedRider} (${vehicleNo})`,
@@ -626,9 +674,9 @@ export default function SideEditPanel({
         paymentStatus: paymentStatus,
         paymentMethod: paymentMode,
         assignedStaff: staffActor,
-        attend_staff_id: order?.attend_staff_id || null,
+        attend_staff_id: attendStaffId || null,
         attend_staff_name: staffActor,
-        assigned_pickup_person_id: order?.assigned_pickup_person_id || null,
+        assigned_pickup_person_id: assignedPickupPersonId || null,
         assigned_pickup_delivery_person: pickupPerson,
         assigned_driver: pickupPerson || assignedRider,
         assigned_driver_full: pickupPerson ? `${pickupPerson} (${vehicleNo})` : `${assignedRider} (${vehicleNo})`,
@@ -837,31 +885,46 @@ export default function SideEditPanel({
                     </div>
                   </div>
 
-                  <div className="side-edit-row-2col">
-                    <div className="side-edit-field">
-                      <label className="side-edit-label">Attend Staff Name</label>
-                      <input
-                        type="text"
-                        className="side-edit-input"
-                        value={attendStaffName}
-                        onChange={(e) => setAttendStaffName(e.target.value)}
-                        placeholder="e.g. Ravi Kumar"
-                      />
-                    </div>
+                  <div className="side-edit-field">
+                    <label className="side-edit-label">Attend Staff Name</label>
+                    <StaffSearchDropdown
+                      id="side-edit-attend-staff"
+                      variant="staff"
+                      options={staffMasterList}
+                      value={attendStaffId}
+                      fallbackName={attendStaffName}
+                      onChange={(selected) => {
+                        setAttendStaffId(selected ? selected.uniqueId : '');
+                        setAttendStaffName(selected ? selected.name : '');
+                      }}
+                      loading={staffMasterLoading}
+                      error={staffMasterError}
+                      onRetry={loadStaffAndPickupMasters}
+                      placeholder="Search by staff name or ID..."
+                      emptyMessage="No active staff found"
+                    />
+                  </div>
 
-                    <div className="side-edit-field">
-                      <label className="side-edit-label">Assigned Pickup &amp; Delivery Person</label>
-                      <input
-                        type="text"
-                        className="side-edit-input"
-                        value={assignedPickupPerson}
-                        onChange={(e) => {
-                          setAssignedPickupPerson(e.target.value);
-                          setAssignedRider(e.target.value);
-                        }}
-                        placeholder="e.g. Ramesh Kumar / Self Pickup"
-                      />
-                    </div>
+                  <div className="side-edit-field">
+                    <label className="side-edit-label">Assigned Pickup &amp; Delivery Person</label>
+                    <StaffSearchDropdown
+                      id="side-edit-pickup-person"
+                      variant="pickup"
+                      options={pickupMasterList}
+                      value={assignedPickupPersonId}
+                      fallbackName={assignedPickupPerson}
+                      onChange={(selected) => {
+                        const nextName = selected ? selected.name : '';
+                        setAssignedPickupPersonId(selected ? selected.uniqueId : '');
+                        setAssignedPickupPerson(nextName);
+                        setAssignedRider(nextName);
+                      }}
+                      loading={pickupMasterLoading}
+                      error={pickupMasterError}
+                      onRetry={loadStaffAndPickupMasters}
+                      placeholder="Search by name or employee ID..."
+                      emptyMessage="No active pickup/delivery person found"
+                    />
                   </div>
 
                   <div className="side-edit-field">

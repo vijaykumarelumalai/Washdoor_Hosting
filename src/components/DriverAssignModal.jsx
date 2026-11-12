@@ -1,32 +1,64 @@
 // src/components/DriverAssignModal.jsx
-// Modal Dialog for Assigning Driver & Route to Orders
+// Modal Dialog for Assigning Live Active Pickup & Delivery Person to Orders
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '../context/LanguageContext';
-
-const DEFAULT_FLEET = [
-  { name: 'Ramesh Kumar', vehicle: 'Van #1 • Zone 1', zone: 'Katpadi & Vellore North' },
-  { name: 'Vignesh S', vehicle: 'Bike #3 • Express', zone: 'Sathuvachari & City Central' },
-  { name: 'Murugan P', vehicle: 'Van #2 • Zone 2', zone: 'Ranipet & Arcot Road' },
-  { name: 'Suresh K', vehicle: 'Van #4 • Zone 3', zone: 'Officers Line & Gandhi Road' },
-];
+import { fetchActivePickupDeliveryMaster } from '../services/customerService';
 
 export default function DriverAssignModal({ order, isOpen, onClose, onAssignDriver }) {
   const { t } = useLanguage();
-  const [selectedDriver, setSelectedDriver] = useState(
-    order?.assigned_driver_full || `${DEFAULT_FLEET[0].name} (${DEFAULT_FLEET[0].vehicle})`
-  );
+  const [drivers, setDrivers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [selectedId, setSelectedId] = useState('');
+
+  const loadActiveDrivers = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const { data, error: fetchErr } = await fetchActivePickupDeliveryMaster();
+    setLoading(false);
+    if (fetchErr) {
+      setError(fetchErr);
+      setDrivers([]);
+      return;
+    }
+    const activeList = data || [];
+    setDrivers(activeList);
+
+    if (order) {
+      const existingId = order.assigned_pickup_person_id || '';
+      const existingName = String(order.assigned_pickup_delivery_person || order.assigned_driver || '').trim().toLowerCase();
+      const matched = activeList.find(
+        (d) =>
+          (existingId && String(d.uniqueId) === String(existingId)) ||
+          (existingName && String(d.name).toLowerCase() === existingName)
+      );
+      setSelectedId(matched ? matched.uniqueId : (activeList[0]?.uniqueId || ''));
+    }
+  }, [order]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadActiveDrivers();
+    }
+  }, [isOpen, loadActiveDrivers]);
 
   if (!isOpen || !order) return null;
 
   const orderNum = order.order_number || order.order_id || 'ORDER';
   const custName = order.customer_name || order.customer?.customer_name || 'Customer';
-  const address = order.address || order.delivery_address || 'Katpadi, Vellore';
+  const address = order.address || order.delivery_address || 'Counter Walk-In';
+
+  const selectedRecord = drivers.find((d) => String(d.uniqueId) === String(selectedId)) || null;
 
   const handleConfirm = () => {
+    if (!selectedRecord) return;
+    const metaParts = [selectedRecord.uniqueId, selectedRecord.zone, selectedRecord.vehicleInfo].filter(Boolean);
+    const formattedFull = `${selectedRecord.name} (${metaParts.join(' • ')})`;
     onAssignDriver?.({
       order,
-      selectedDriver,
+      selectedDriver: formattedFull,
+      selectedDriverRecord: selectedRecord,
     });
     onClose();
   };
@@ -67,27 +99,49 @@ export default function DriverAssignModal({ order, isOpen, onClose, onAssignDriv
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
             <label className="pos-dialog-label">
-              AVAILABLE DRIVERS &amp; FLEET
+              ACTIVE PICKUP &amp; DELIVERY PERSONNEL
             </label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {DEFAULT_FLEET.map((drv) => {
-                const val = `${drv.name} (${drv.vehicle})`;
-                const isSelected = selectedDriver.includes(drv.name);
-                return (
-                  <div
-                    key={drv.name}
-                    onClick={() => setSelectedDriver(val)}
-                    className={`pos-driver-card ${isSelected ? 'selected' : ''}`}
-                  >
-                    <div>
-                      <div className="pos-driver-name">{drv.name}</div>
-                      <div className="pos-driver-meta">{drv.vehicle} • {drv.zone}</div>
+
+            {loading ? (
+              <div style={{ padding: '18px 12px', textAlign: 'center', fontSize: '13px', color: '#64748b' }}>
+                Loading active pickup &amp; delivery personnel...
+              </div>
+            ) : error ? (
+              <div style={{ padding: '14px 12px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.08)', color: '#dc2626', fontSize: '12.5px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                <span>⚠️ {error}</span>
+                <button
+                  type="button"
+                  onClick={loadActiveDrivers}
+                  style={{ border: '1px solid #dc2626', background: 'transparent', color: '#dc2626', borderRadius: '6px', padding: '4px 10px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Retry
+                </button>
+              </div>
+            ) : drivers.length === 0 ? (
+              <div style={{ padding: '16px 12px', borderRadius: '8px', background: 'rgba(148, 163, 184, 0.1)', color: '#64748b', fontSize: '12.5px', textAlign: 'center' }}>
+                No active pickup &amp; delivery personnel found. Add active records in Settings → Staff &amp; Delivery Master.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto' }}>
+                {drivers.map((drv) => {
+                  const isSelected = String(selectedId) === String(drv.uniqueId);
+                  const meta = [drv.uniqueId, drv.zone, drv.vehicleInfo, drv.city].filter(Boolean).join(' • ');
+                  return (
+                    <div
+                      key={drv.uniqueId}
+                      onClick={() => setSelectedId(drv.uniqueId)}
+                      className={`pos-driver-card ${isSelected ? 'selected' : ''}`}
+                    >
+                      <div>
+                        <div className="pos-driver-name">{drv.name} ({drv.uniqueId})</div>
+                        <div className="pos-driver-meta">{meta}</div>
+                      </div>
+                      {isSelected && <span className="pos-driver-check">✓</span>}
                     </div>
-                    {isSelected && <span className="pos-driver-check">✓</span>}
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
@@ -101,6 +155,7 @@ export default function DriverAssignModal({ order, isOpen, onClose, onAssignDriv
             <button
               type="button"
               className="pos-dialog-confirm-btn"
+              disabled={loading || !selectedRecord}
               onClick={handleConfirm}
             >
               Assign &amp; Dispatch

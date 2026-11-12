@@ -6252,6 +6252,20 @@ body.light-theme .pagination-btn.pagination-num.active,
   }
   .pos-inline-edit-top-grid > .pos-edit-section-card {
     height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .pos-inline-edit-services-grid {
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 1100px) {
+  #pos-edit-cloth-grid {
+    flex: none !important;
+    max-height: 360px !important;
   }
 }
 

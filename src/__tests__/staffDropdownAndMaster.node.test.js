@@ -114,3 +114,43 @@ test('SettingsModule integrates StaffMasterManager for creating and managing Sta
   assert.match(service, /export async function savePickupDeliveryMasterRecord/);
   assert.match(service, /export async function toggleMasterPersonStatus/);
 });
+
+test('DriverAssignModal loads live ACTIVE pickup/delivery records and StaffMasterManager enforces 10-digit phone', () => {
+  const driverModalPath = path.resolve(__dirname, '../components/DriverAssignModal.jsx');
+  const managerPath = path.resolve(__dirname, '../components/StaffMasterManager.jsx');
+  const driverModal = fs.readFileSync(driverModalPath, 'utf8');
+  const manager = fs.readFileSync(managerPath, 'utf8');
+  const service = fs.readFileSync(servicePath, 'utf8');
+
+  assert.doesNotMatch(driverModal, /DEFAULT_FLEET/);
+  assert.match(driverModal, /fetchActivePickupDeliveryMaster/);
+  assert.match(driverModal, /ACTIVE PICKUP &amp; DELIVERY PERSONNEL/);
+
+  assert.match(manager, /maxLength=\{10\}/);
+  assert.match(manager, /replace\(\/\\D\/g,\s*''\)/);
+  assert.match(manager, /Phone number must be exactly 10 digits/);
+  assert.match(service, /Phone number must be exactly 10 digits/);
+});
+
+test('POSModule inline edit and SideEditPanel use StaffSearchDropdown and washdoor.css styles scrollbar', () => {
+  const posPath = path.resolve(__dirname, '../components/POSModule.jsx');
+  const sideEditPath = path.resolve(__dirname, '../components/SideEditPanel.jsx');
+  const cssPath = path.resolve(__dirname, '../styles/washdoor.css');
+
+  const pos = fs.readFileSync(posPath, 'utf8');
+  const sideEdit = fs.readFileSync(sideEditPath, 'utf8');
+  const css = fs.readFileSync(cssPath, 'utf8');
+
+  assert.match(pos, /<StaffSearchDropdown[\s\S]*id="posEditAttendStaffName"[\s\S]*variant="staff"/);
+  assert.match(pos, /<StaffSearchDropdown[\s\S]*id="posEditAssignedPickupPerson"[\s\S]*variant="pickup"/);
+  assert.match(pos, /attend_staff_id/);
+  assert.match(pos, /assigned_pickup_person_id/);
+
+  assert.match(sideEdit, /<StaffSearchDropdown[\s\S]*id="side-edit-attend-staff"[\s\S]*variant="staff"/);
+  assert.match(sideEdit, /<StaffSearchDropdown[\s\S]*id="side-edit-pickup-person"[\s\S]*variant="pickup"/);
+  assert.match(sideEdit, /attend_staff_id/);
+  assert.match(sideEdit, /assigned_pickup_person_id/);
+
+  assert.match(css, /\.staff-dropdown-menu\s*\{[\s\S]*max-height:\s*158px;[\s\S]*overflow-y:\s*auto;/);
+  assert.match(css, /\.staff-dropdown-menu::-webkit-scrollbar/);
+});

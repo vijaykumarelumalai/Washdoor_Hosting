@@ -260,6 +260,37 @@
   box-shadow: 0 0 0 2.5px rgba(37, 99, 235, 0.14) !important;
 }
 
+.side-edit-panel .staff-dropdown-box {
+  height: 36px;
+  min-height: 36px;
+  border-radius: 6px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  padding: 0 2px 0 7px;
+  gap: 4px;
+}
+
+.side-edit-panel .staff-dropdown-box.open,
+.side-edit-panel .staff-dropdown-box:focus-within {
+  border-color: #2563eb;
+  background: #ffffff;
+  box-shadow: 0 0 0 2.5px rgba(37, 99, 235, 0.14);
+}
+
+.side-edit-panel .staff-dropdown-box input[type="text"].staff-dropdown-input,
+.side-edit-panel .staff-dropdown-box input[type="text"].staff-dropdown-input:focus {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 12px !important;
+  color: #0f172a !important;
+}
+
 /* ── Top Grid: Customer Info (Left) + Services Allocated (Right) ── */
 .side-edit-top-grid {
   display: grid;
@@ -384,6 +415,8 @@
   grid-template-columns: 1.45fr 1fr;
   gap: 14px;
   align-items: stretch;
+  flex: 1;
+  min-height: 0;
 }
 
 @media (max-width: 960px) {
@@ -440,16 +473,24 @@
   color: #0f172a;
 }
 
-/* ── Products Responsive 3-Column Grid on Desktop Device Side ── */
+/* ── Products Responsive 2-Column Grid on Desktop Device Side ── */
 .side-edit-catalog-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  max-height: 380px;
+  flex: 1 1 0;
   min-height: 290px;
+  max-height: none;
   overflow-y: auto;
   padding: 4px 2px;
   scrollbar-width: thin;
+}
+
+@media (max-width: 1040px) {
+  .side-edit-catalog-grid {
+    flex: none;
+    max-height: 380px;
+  }
 }
 
 @media (max-width: 600px) {
@@ -713,17 +754,28 @@
   border-radius: 10px;
   padding: 12px;
   background: #ffffff;
+  flex: 1;
+  min-height: 0;
 }
 
 .side-edit-cart-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 145px;
+  flex: 1 1 0;
+  min-height: 120px;
+  max-height: none;
   overflow-y: auto;
   padding-right: 6px;
   scrollbar-width: thin;
   scrollbar-color: #94a3b8 #f1f5f9;
+}
+
+@media (max-width: 1040px) {
+  .side-edit-cart-list {
+    flex: none;
+    max-height: 180px;
+  }
 }
 
 .side-edit-cart-list::-webkit-scrollbar {

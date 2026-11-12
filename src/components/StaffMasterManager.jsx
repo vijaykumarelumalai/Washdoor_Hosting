@@ -98,10 +98,26 @@ export default function StaffMasterManager({ showToast }) {
     setStatus(rec.status || 'Active');
   };
 
+  const handlePhoneChange = (e) => {
+    let digits = e.target.value.replace(/\D/g, '');
+    if (digits.length === 12 && digits.startsWith('91')) {
+      digits = digits.slice(2);
+    } else if (digits.length === 11 && digits.startsWith('0')) {
+      digits = digits.slice(1);
+    }
+    setPhone(digits.slice(0, 10));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!uniqueId.trim() || !name.trim() || !zone.trim()) {
       showToast?.(`⚠️ Please enter ${isPickup ? 'Employee ID' : 'Staff ID'}, Name, and Zone.`);
+      return;
+    }
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length > 0 && cleanPhone.length !== 10) {
+      showToast?.('⚠️ Phone number must be exactly 10 digits.');
       return;
     }
 
@@ -316,10 +332,13 @@ export default function StaffMasterManager({ showToast }) {
             <label className="form-label">Phone (Optional)</label>
             <input
               type="tel"
+              inputMode="numeric"
+              pattern="[0-9]{10}"
+              maxLength={10}
               className="form-control"
               placeholder="10-digit mobile"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={handlePhoneChange}
             />
           </div>
 
