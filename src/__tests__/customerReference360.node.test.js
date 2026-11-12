@@ -68,3 +68,40 @@ test('Part 2 Steps 1-2: CustomerMUI and customerService support status filter, c
   assert.match(service, /special_occasion:\s*clean\.special_occasion \|\| null/);
   assert.match(service, /const workCustId = clean\.customer_id \|\| clean\.customer_code/);
 });
+
+test('Code Merge Step 2: CustomerManagement, POS/SideEditPanel staff IDs, and Customer 360 -> POS navigation', () => {
+  const cmPath = path.resolve(__dirname, '../components/CustomerManagement.jsx');
+  const sideEditPath = path.resolve(__dirname, '../components/SideEditPanel.jsx');
+  const posPath = path.resolve(__dirname, '../components/POSModule.jsx');
+  const appPath = path.resolve(__dirname, '../App.jsx');
+
+  const cm = fs.readFileSync(cmPath, 'utf8');
+  const sideEdit = fs.readFileSync(sideEditPath, 'utf8');
+  const pos = fs.readFileSync(posPath, 'utf8');
+  const panel = fs.readFileSync(panelPath, 'utf8');
+  const mui = fs.readFileSync(muiPath, 'utf8');
+  const app = fs.readFileSync(appPath, 'utf8');
+
+  // CustomerManagement.jsx: ID resolution, isSaving guard, clipboard fallback, WhatsApp quick action
+  assert.match(cm, /const \[isSaving, setIsSaving\] = useState\(false\)/);
+  assert.match(cm, /isSubmitting=\{isSaving\}/);
+  assert.match(cm, /editingCustomer\?\.customerId \|\|\s*editingCustomer\?\.customer_id \|\|\s*editingCustomer\?\.customer_code/);
+  assert.match(cm, /targetObj\.customer_id \|\| targetObj\.customerId \|\| targetObj\.customer_code \|\| targetObj\.id/);
+  assert.match(cm, /document\.execCommand\('copy'\)/);
+  assert.match(cm, /wa\.me/);
+
+  // SideEditPanel.jsx & POSModule.jsx: attend_staff_id & assigned_pickup_person_id persistence
+  assert.match(sideEdit, /attend_staff_id:\s*order\?\.attend_staff_id \|\| null/);
+  assert.match(sideEdit, /assigned_pickup_person_id:\s*order\?\.assigned_pickup_person_id \|\| null/);
+  assert.match(pos, /attend_staff_id:\s*editFormData\.attend_staff_id \?\? editingOrderRecord\.attend_staff_id \?\? null/);
+  assert.match(pos, /assigned_pickup_person_id:\s*driverId/);
+
+  // Customer360Panel -> CustomerMUI -> App.jsx POS navigation hooks
+  assert.match(panel, /onCreateOrder/);
+  assert.match(panel, /onOpenOrder/);
+  assert.match(panel, /New Order in POS/);
+  assert.match(mui, /onCreateOrder=\{onCreateOrderForCustomer \? \(c\) => \{[\s\S]*?onCreateOrderForCustomer\(c\);/);
+  assert.match(mui, /onOpenOrder=\{onOpenOrderInPos \? \(ord\) => \{[\s\S]*?onOpenOrderInPos\(ord\);/);
+  assert.match(app, /onCreateOrderForCustomer=\{\(\) => \{/);
+  assert.match(app, /onOpenOrderInPos=\{\(ord\) => \{/);
+});

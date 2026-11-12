@@ -37,6 +37,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
   const [expandedCustIds, setExpandedCustIds] = useState(new Set());
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const custListScrollRef = useRef(null);
 
@@ -81,10 +82,39 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
       c.customer_status ? `Status: ${c.customer_status}` : null,
     ].filter(Boolean).join('\n');
 
+    const copyWithFallback = (text) => {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      let ok = false;
+      try {
+        ok = document.execCommand('copy');
+      } catch {
+        ok = false;
+      } finally {
+        document.body.removeChild(textarea);
+      }
+      return ok;
+    };
+
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(lines).then(() => {
         showToast?.(`Copied ${name}'s details to clipboard!`, 'info');
-      }).catch(() => {});
+      }).catch(() => {
+        if (copyWithFallback(lines)) {
+          showToast?.(`Copied ${name}'s details to clipboard!`, 'info');
+        } else {
+          showToast?.('⚠️ Unable to copy customer details to clipboard.', 'error');
+        }
+      });
+    } else if (copyWithFallback(lines)) {
+      showToast?.(`Copied ${name}'s details to clipboard!`, 'info');
+    } else {
+      showToast?.('⚠️ Clipboard is unavailable in this browser.', 'error');
     }
   };
 
@@ -215,29 +245,51 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
   }, [query, custsPageSizeKey]);
 
   const handleUpdate = async ({ customerData, existingCustomerId }) => {
-    const targetId = existingCustomerId || editingCustomer?.customerId || editingCustomer?.customer_id || customerData?.customer_id;
-    const { error } = await updateCustomer(targetId, customerData);
-    if (error) {
-      showToast(`⚠️ ${friendlySupabaseError(error)}`);
-      return;
+    const targetId =
+      editingCustomer?.customerId ||
+      editingCustomer?.customer_id ||
+      editingCustomer?.customer_code ||
+      existingCustomerId ||
+      customerData?.customer_id;
+    setIsSaving(true);
+    try {
+      const { error } = await updateCustomer(targetId, customerData);
+      if (error) {
+        showToast(`⚠️ ${friendlySupabaseError(error)}`);
+        return;
+      }
+      showToast(`✅ Customer ${customerData.customer_name} updated successfully.`);
+      setEditingCustomer(null);
+      await loadData(query);
+    } finally {
+      setIsSaving(false);
     }
-    showToast(`✅ Customer ${customerData.customer_name} updated successfully.`);
-    setEditingCustomer(null);
-    loadData(query);
   };
 
-  const handleDelete = async (id) => {
-    setIsDeleting(true);
-    const { error } = await deleteCustomer(id);
-    setIsDeleting(false);
-    setDeleteConfirmTarget(null);
-
-    if (error) {
-      showToast(`⚠️ ${friendlySupabaseError(error)}`);
+  const handleDelete = async (target) => {
+    const targetObj = target && typeof target === 'object' ? target : null;
+    const idToDelete = targetObj
+      ? (targetObj.customer_id || targetObj.customerId || targetObj.customer_code || targetObj.id)
+      : target;
+    if (!idToDelete) {
+      setDeleteConfirmTarget(null);
       return;
     }
-    showToast(`✅ ${t('customer_deleted_success')}`);
-    loadData(query);
+
+    setIsDeleting(true);
+    try {
+      const { error } = await deleteCustomer(idToDelete);
+      setDeleteConfirmTarget(null);
+
+      if (error) {
+        showToast(`⚠️ ${friendlySupabaseError(error)}`);
+        return;
+      }
+      showToast(`✅ ${t('customer_deleted_success')}`);
+      await loadData(query);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // ── Pagination computed values ──
@@ -604,6 +656,18 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
                         <polyline points="6 9 12 15 18 9" />
                       </svg>
                     </button>
+                    {cleanMobile && (
+                      <a
+                        href={`https://wa.me/91${cleanMobile}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="secondary"
+                        style={{ padding: '7px 12px', fontSize: '12.5px', textDecoration: 'none', color: '#16a34a' }}
+                        title="Message on WhatsApp"
+                      >
+                        <span>WhatsApp</span>
+                      </a>
+                    )}
                     <button
                       type="button"
                       className="select cust-btn-edit"
@@ -1041,8 +1105,9 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
               initialCustomer={editingCustomer}
               customerId={editingCustomer.customerId || editingCustomer.customer_id || `CUST-${String(editingCustomer.id).padStart(5, '0')}`}
               isOrderFlow={false}
-              submitLabel="Update Customer Record"
-              onBack={() => setEditingCustomer(null)}
+              isSubmitting={isSaving}
+              submitLabel={isSaving ? 'Updating...' : 'Update Customer Record'}
+              onBack={() => !isSaving && setEditingCustomer(null)}
               onSubmit={handleUpdate}
             />
           </div>
@@ -1092,25 +1157,32 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
               initialCustomer={prefillData}
               customerId={nextCustId}
               isOrderFlow={false}
-              submitLabel="Register Customer"
+              isSubmitting={isSaving}
+              submitLabel={isSaving ? 'Registering...' : 'Register Customer'}
               onBack={() => {
+                if (isSaving) return;
                 setIsRegisteringNew(false);
                 setPrefillData(null);
               }}
               onSubmit={async ({ customerData }) => {
-                const res = await createCustomer({
-                  ...customerData,
-                  customer_id: nextCustId,
-                });
-                if (res.error) {
-                  showToast(`⚠️ ${friendlySupabaseError(res.error)}`);
-                  return;
+                setIsSaving(true);
+                try {
+                  const res = await createCustomer({
+                    ...customerData,
+                    customer_id: nextCustId,
+                  });
+                  if (res.error) {
+                    showToast(`⚠️ ${friendlySupabaseError(res.error)}`);
+                    return;
+                  }
+                  const assignedId = res.data?.id || res.data?.customerId || nextCustId;
+                  showToast(`✅ Customer ${customerData.customer_name} registered successfully with ID ${assignedId}!`);
+                  setIsRegisteringNew(false);
+                  setPrefillData(null);
+                  await loadData(query);
+                } finally {
+                  setIsSaving(false);
                 }
-                const assignedId = res.data?.id || res.data?.customerId || nextCustId;
-                showToast(`✅ Customer ${customerData.customer_name} registered successfully with ID ${assignedId}!`);
-                setIsRegisteringNew(false);
-                setPrefillData(null);
-                await loadData(query);
               }}
             />
           </div>
@@ -1160,7 +1232,7 @@ export default function CustomerManagement({ showToast, searchQuery = '', onSear
               <button
                 type="button"
                 className="delete-confirm-btn"
-                onClick={() => handleDelete(deleteConfirmTarget.id)}
+                onClick={() => handleDelete(deleteConfirmTarget)}
                 disabled={isDeleting}
               >
                 {isDeleting ? t('btn_deleting') : t('btn_confirm_delete')}

@@ -1632,8 +1632,10 @@ export default function POSModule({
       service_category: editFormData.service_category,
       status: editFormData.status,
       order_status: editFormData.status,
+      attend_staff_id: editFormData.attend_staff_id ?? editingOrderRecord.attend_staff_id ?? null,
       attend_staff_name: staffActor,
       assigned_staff: staffActor,
+      assigned_pickup_person_id: editFormData.assigned_pickup_person_id ?? editingOrderRecord.assigned_pickup_person_id ?? null,
       assigned_pickup_delivery_person: pickupPerson,
       status_updated_at: nowIso,
       status_updated_by: staffActor,
@@ -1727,7 +1729,9 @@ export default function POSModule({
         paymentStatus: editFormData.payment_status,
         paymentMethod: editFormData.payment_method || updatedOrder.payment_method || 'Cash',
         assignedStaff: staffActor,
+        attend_staff_id: updatedOrder.attend_staff_id || null,
         attend_staff_name: staffActor,
+        assigned_pickup_person_id: updatedOrder.assigned_pickup_person_id || null,
         assigned_pickup_delivery_person: pickupPerson,
         assigned_driver: pickupPerson || updatedOrder.assigned_driver,
         status_updated_at: nowIso,
@@ -1765,6 +1769,8 @@ export default function POSModule({
 
   const handleAssignDriverSubmit = ({ order, selectedDriver }) => {
     const driverName = selectedDriver.split(' (')[0] || selectedDriver;
+    const idMatch = String(selectedDriver || '').match(/\(([^)]+)\)/);
+    const driverId = idMatch ? idMatch[1].trim() : (order.assigned_pickup_person_id || null);
     const nowFormatted = new Date().toLocaleDateString('en-IN', {
       day: '2-digit',
       month: 'short',
@@ -1790,6 +1796,8 @@ export default function POSModule({
       ...order,
       assigned_for_pickup: true,
       pickup_status: 'Assigned for Pickup',
+      assigned_pickup_person_id: driverId,
+      assigned_pickup_delivery_person: driverName,
       assigned_driver: driverName,
       assigned_driver_full: selectedDriver,
       pickup_delivery: `Assigned: ${driverName}`,

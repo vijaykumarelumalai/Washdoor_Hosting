@@ -1256,6 +1256,15 @@ export default function App() {
             currencySymbol={currentCurrency?.symbol || '₹'}
             searchQuery={globalSearchQuery}
             onSearchChange={setGlobalSearchQuery}
+            onCreateOrderForCustomer={() => {
+              navigateToTab('pos');
+              setIsModalOpen(true);
+            }}
+            onOpenOrderInPos={(ord) => {
+              const targetOrd = ord?.order_number || ord?.work_number || '';
+              if (targetOrd) setGlobalSearchQuery(targetOrd);
+              navigateToTab('pos');
+            }}
           />
         ) : (activeTab === 'report' || activeTab === 'reports') ? (
           <ReportsModule

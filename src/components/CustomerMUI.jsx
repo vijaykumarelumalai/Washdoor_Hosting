@@ -430,6 +430,8 @@ export default function CustomerMUI({
   currencySymbol = '₹',
   searchQuery = '',
   onSearchChange,
+  onCreateOrderForCustomer,
+  onOpenOrderInPos,
 }) {
   const { t } = useLanguage();
   const themeMode = useWashdoorThemeMode();
@@ -2245,6 +2247,14 @@ export default function CustomerMUI({
                 setIs360Open(false);
                 setDrawerCustomer(c);
               }}
+              onCreateOrder={onCreateOrderForCustomer ? (c) => {
+                setIs360Open(false);
+                onCreateOrderForCustomer(c);
+              } : undefined}
+              onOpenOrder={onOpenOrderInPos ? (ord) => {
+                setIs360Open(false);
+                onOpenOrderInPos(ord);
+              } : undefined}
               onDelete={(c) => setDeleteConfirmTarget(c)}
               onCopy={handleCopyCustomer}
               t={t}

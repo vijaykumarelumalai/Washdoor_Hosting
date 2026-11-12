@@ -139,6 +139,8 @@ export default function Customer360Panel({
   onDelete,
   onCopy,
   onViewFullProfile,
+  onCreateOrder,
+  onOpenOrder,
   t,
 }) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -385,6 +387,19 @@ export default function Customer360Panel({
                 <PersonSearchOutlinedIcon fontSize="small" />
               </ListItemIcon>
               <ListItemText>Full Profile Details</ListItemText>
+            </MenuItem>
+          )}
+          {onCreateOrder && (
+            <MenuItem
+              onClick={() => {
+                setMenuAnchorEl(null);
+                onCreateOrder(customer);
+              }}
+            >
+              <ListItemIcon>
+                <ShoppingBagOutlinedIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>New Order in POS</ListItemText>
             </MenuItem>
           )}
           <MenuItem
@@ -786,6 +801,7 @@ export default function Customer360Panel({
                       <Paper
                         key={ordNum + idx}
                         variant="outlined"
+                        onClick={onOpenOrder ? () => onOpenOrder(ord) : undefined}
                         sx={{
                           px: 1.25,
                           py: 0.9,
@@ -794,6 +810,16 @@ export default function Customer360Panel({
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           gap: 1,
+                          ...(onOpenOrder
+                            ? {
+                                cursor: 'pointer',
+                                transition: 'border-color 0.15s, background-color 0.15s',
+                                '&:hover': {
+                                  borderColor: 'primary.main',
+                                  bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04),
+                                },
+                              }
+                            : {}),
                         }}
                       >
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flex: 1 }}>
@@ -864,7 +890,25 @@ export default function Customer360Panel({
                 const deliveryDisplay = ord.delivery_date || (ord.target_delivery_date ? formatShortDate(ord.target_delivery_date) : '');
                 const st = getOrderStatusStyle(ord.order_status || ord.status);
                 return (
-                  <Paper key={ordNum + idx} variant="outlined" sx={{ p: 1.25, borderRadius: 2 }}>
+                  <Paper
+                    key={ordNum + idx}
+                    variant="outlined"
+                    onClick={onOpenOrder ? () => onOpenOrder(ord) : undefined}
+                    sx={{
+                      p: 1.25,
+                      borderRadius: 2,
+                      ...(onOpenOrder
+                        ? {
+                            cursor: 'pointer',
+                            transition: 'border-color 0.15s, background-color 0.15s',
+                            '&:hover': {
+                              borderColor: 'primary.main',
+                              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04),
+                            },
+                          }
+                        : {}),
+                    }}
+                  >
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                       <Chip
                         size="small"
@@ -946,7 +990,25 @@ export default function Customer360Panel({
                 const ordNum = ord.order_number || ord.work_number || ord.id || `ORD-${idx + 1}`;
                 const payInfo = getOrderPaymentBreakdown(ord);
                 return (
-                  <Paper key={ordNum + idx} variant="outlined" sx={{ p: 1.25, borderRadius: 2 }}>
+                  <Paper
+                    key={ordNum + idx}
+                    variant="outlined"
+                    onClick={onOpenOrder ? () => onOpenOrder(ord) : undefined}
+                    sx={{
+                      p: 1.25,
+                      borderRadius: 2,
+                      ...(onOpenOrder
+                        ? {
+                            cursor: 'pointer',
+                            transition: 'border-color 0.15s, background-color 0.15s',
+                            '&:hover': {
+                              borderColor: 'primary.main',
+                              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04),
+                            },
+                          }
+                        : {}),
+                    }}
+                  >
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Typography sx={{ fontSize: '0.78rem', fontWeight: 700 }}>{ordNum}</Typography>
                       <Chip
