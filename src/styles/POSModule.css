@@ -5527,9 +5527,9 @@ body.dark-theme .pos-edit-cancel-btn:hover,
 /* Orders table: மீதமுள்ள செங்குத்து இடத்தை நிரப்பும் (டெஸ்க்டாப் மட்டும்) */
 @media (min-width: 841px) {
   .pos-orders-table-card {
-    height: calc(100vh - 272px) !important;
-    max-height: calc(100vh - 272px) !important;
-    min-height: 320px;
+    height: calc(100vh - 195px) !important;
+    max-height: calc(100vh - 195px) !important;
+    min-height: 440px;
   }
 }
 
