@@ -1,1618 +1,2112 @@
-// src/components/CustomerForm.jsx
-// Form matching washdoor_create_order_updated.html
+// src/components/SideEditPanel.jsx
+// Professional High-Fidelity Side Order Editing Panel for Washdoor POS & Intake
+// Fully responsive with comprehensive Order Details, Logistics, Status, Payments, Customer, Comments & Audit Trail
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { validateCustomer } from '../utils/validation';
-import ClothSelectionCart from './ClothSelectionCart';
-import { useServiceTypes } from './ServiceTypeSelect';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import ClothIllustration from './ClothIllustration';
+import GarmentInspectionSection from './GarmentInspectionSection';
+import ServiceTypeSelect from './ServiceTypeSelect';
 import StaffSearchDropdown from './StaffSearchDropdown';
-import { fetchActiveStaffMaster, fetchActivePickupDeliveryMaster } from '../services/customerService';
-import { validateOnCallSchedule } from '../utils/onCallScheduling';
+import { formatServiceBreakdown } from '../config/businessRules';
+import {
+  updateOrderInSupabase,
+  fetchActiveStaffMaster,
+  fetchActivePickupDeliveryMaster,
+} from '../services/customerService';
+import {
+  isOnCallOrderType,
+  splitIsoToLocalDateAndTime,
+  validateOnCallSchedule,
+} from '../utils/onCallScheduling';
+import '../styles/SideEditPanel.css';
 
-const PRODUCT_SERVICES = [
-  { id: 'laundry', name: 'Laundry', icon: '🧺' },
-  { id: 'dry_clean', name: 'Dry Cleaning', icon: '🧥' },
-  { id: 'washing', name: 'Washing', icon: '⚖️' },
-  { id: 'shoe_clean', name: 'Shoe Cleaning', icon: '👟' },
-  { id: 'ironing', name: 'Ironing Only', icon: '👔' },
-  { id: 'custom_cat', name: 'Custom Category', icon: '✨' },
+// 16 Standard Catalog Items strictly matching reference mockup display order
+const CATALOG_ITEMS = [
+  { id: 'shirt', name: 'Shirt', category: 'Men', price: 15, unit: 'piece' },
+  { id: 'tshirt', name: 'T-Shirt', category: 'Men', price: 12, unit: 'piece' },
+  { id: 'formal_pant', name: 'Formal Pant', category: 'Men', price: 20, unit: 'piece' },
+  { id: 'jeans', name: 'Jeans', category: 'Men', price: 25, unit: 'piece' },
+  { id: 'saree', name: 'Saree', category: 'Women', price: 60, unit: 'piece' },
+  { id: 'towel', name: 'Towel', category: 'Home Linen', price: 15, unit: 'piece' },
+  { id: 'bedsheet', name: 'Bedsheet', category: 'Home Linen', price: 50, unit: 'piece' },
+  { id: 'pillow_cover', name: 'Pillow Cover', category: 'Home Linen', price: 10, unit: 'piece' },
+  { id: 'jacket', name: 'Jacket', category: 'Men', price: 50, unit: 'piece' },
+  { id: 'blazer_suit', name: 'Blazer / Suit', category: 'Men', price: 100, unit: 'piece' },
+  { id: 'sweater', name: 'Sweater', category: 'Men', price: 40, unit: 'piece' },
+  { id: 'cap', name: 'Cap', category: 'Accessories', price: 10, unit: 'piece' },
+  { id: 'chudidar', name: 'Chudidar / Salwar', category: 'Women', price: 35, unit: 'piece' },
+  { id: 'kurti', name: 'Kurti', category: 'Women', price: 30, unit: 'piece' },
+  { id: 'shorts', name: 'Shorts', category: 'Men', price: 15, unit: 'piece' },
+  { id: 'curtain', name: 'Curtain', category: 'Home Linen', price: 60, unit: 'piece' },
 ];
 
-function getAgeFromDOB(dobStr) {
-  if (!dobStr) return null;
-  const parts = String(dobStr).split('-');
-  if (parts.length !== 3) return null;
-  const year = parseInt(parts[0], 10);
-  const month = parseInt(parts[1], 10) - 1;
-  const day = parseInt(parts[2], 10);
-  const birthDate = new Date(year, month, day);
-  if (isNaN(birthDate.getTime())) return null;
+const CATEGORIES = ['All', 'Men', 'Women', 'Home Linen', 'Accessories'];
 
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const m = today.getMonth() - birthDate.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
-  return age >= 0 && age <= 120 ? age : null;
-}
+const getClothId = (item) => {
+  if (item?.itemId) return item.itemId;
+  if (item?.item_id) return item.item_id;
+  const name = String(item?.name || item?.item_name || '').toLowerCase();
+  if (name.includes('t-shirt') || name.includes('tshirt')) return 'tshirt';
+  if (name.includes('formal') || name.includes('trouser') || name.includes('pant')) return 'formal_pant';
+  if (name.includes('jean')) return 'jeans';
+  if (name.includes('shirt')) return 'shirt';
+  if (name.includes('saree')) return 'saree';
+  if (name.includes('towel')) return 'towel';
+  if (name.includes('bedsheet') || name.includes('bed sheet')) return 'bedsheet';
+  if (name.includes('pillow')) return 'pillow_cover';
+  if (name.includes('blazer') || name.includes('suit')) return 'blazer_suit';
+  if (name.includes('sweater')) return 'sweater';
+  if (name.includes('jacket')) return 'jacket';
+  if (name.includes('cap')) return 'cap';
+  if (name.includes('chudidar') || name.includes('salwar')) return 'chudidar';
+  if (name.includes('kurti')) return 'kurti';
+  if (name.includes('short')) return 'shorts';
+  if (name.includes('curtain')) return 'curtain';
+  return 'shirt';
+};
 
-export default function CustomerForm({
-  initialCustomer = null,
-  initialOrderType = 'walk-in',
-  orderNumber = null,
-  customerId = null,
-  onBack,
-  onSubmit,
-  isSubmitting = false,
-  isOrderFlow = true,
-  isEditOrder = false,
-  submitLabel = null,
+const TABS = [
+  '1. Order Details',
+  '2. Logistics & Factory',
+  '3. Status Updates',
+  '4. Payments',
+  '5. Customer Messages',
+  '6. Comments & Audit',
+];
+
+export default function SideEditPanel({
+  isOpen,
+  order,
+  onClose,
+  onDelete,
+  showToast,
+  currencySymbol = '₹',
+  onUpdateOrder,
 }) {
-  const serviceTypes = useServiceTypes();
-  const isExistingCustomer = Boolean(
-    (initialCustomer && (initialCustomer.id || initialCustomer.customer_id || initialCustomer.customerId)) ||
-    isEditOrder
-  );
+  if (!isOpen) return null;
 
-  // Primary customer fields
-  const [customerName, setCustomerName] = useState(initialCustomer?.customer_name || '');
-  const [mobileNumber, setMobileNumber] = useState(initialCustomer?.mobile_number || '');
-  const [address, setAddress] = useState(initialCustomer?.address || '');
-  const [taxExemption, setTaxExemption] = useState(initialCustomer?.tax_exemption || false);
+  // Extract order defaults
+  const initialOrderNum = order?.order_number || order?.order_id || order?.work_number || '—';
+  const initialCustName = order?.customer_name || order?.customer?.customer_name || '';
+  const initialPhone = order?.mobile_number || order?.customer?.mobile_number || '';
+  const initialAltPhone = order?.alternate_phone || order?.customer?.alternate_phone || '';
+  const initialEmail = order?.email || order?.customer?.email || '';
+  const initialAddress = order?.address || order?.delivery_address || order?.customer?.address || '';
+  const initialStatus = order?.status || order?.order_status || 'In Progress';
+  const initialOrderType = order?.order_type || 'Walk-in';
+  const initialExpectedDelivery = order?.expected_delivery || '';
+  const initialComments = order?.comments || order?.order_notes || order?.special_instructions || '';
 
-  // Order preferences & Intake method
-  const [intakeMethod, setIntakeMethod] = useState(initialOrderType || 'walk-in');
-  const [scheduledPickupDate, setScheduledPickupDate] = useState('');
-  const [scheduledPickupTime, setScheduledPickupTime] = useState('');
-  const [scheduledDeliveryDate, setScheduledDeliveryDate] = useState('');
-  const [scheduledDeliveryTime, setScheduledDeliveryTime] = useState('');
-  const [attendStaffId, setAttendStaffId] = useState(
-    initialCustomer?.attend_staff_id || ''
-  );
+  // 1. Customer & Order Info Form State (Editable)
+  const [customerName, setCustomerName] = useState(initialCustName);
+  const [mobileNumber, setMobileNumber] = useState(initialPhone);
+  const [alternatePhone, setAlternatePhone] = useState(initialAltPhone);
+  const [email, setEmail] = useState(initialEmail);
+  const [address, setAddress] = useState(initialAddress);
+  const [status, setStatus] = useState(initialStatus);
+  const [orderType, setOrderType] = useState(initialOrderType);
+  const [expectedDelivery, setExpectedDelivery] = useState(initialExpectedDelivery);
+  const initialPickupSplit = splitIsoToLocalDateAndTime(order?.scheduled_pickup_at);
+  const initialDeliverySplit = splitIsoToLocalDateAndTime(order?.scheduled_delivery_at);
+  const [scheduledPickupDate, setScheduledPickupDate] = useState(initialPickupSplit.date);
+  const [scheduledPickupTime, setScheduledPickupTime] = useState(initialPickupSplit.time);
+  const [scheduledDeliveryDate, setScheduledDeliveryDate] = useState(initialDeliverySplit.date);
+  const [scheduledDeliveryTime, setScheduledDeliveryTime] = useState(initialDeliverySplit.time);
+  const [scheduleErrors, setScheduleErrors] = useState({});
   const [attendStaffName, setAttendStaffName] = useState(
-    initialCustomer?.attend_staff_name || initialCustomer?.assigned_staff || ''
+    order?.attend_staff_name || order?.status_updated_by || order?.assigned_staff || ''
   );
-  const [assignedPickupPersonId, setAssignedPickupPersonId] = useState(
-    initialCustomer?.assigned_pickup_person_id || ''
+  const [attendStaffId, setAttendStaffId] = useState(
+    order?.attend_staff_id || ''
   );
   const [assignedPickupPerson, setAssignedPickupPerson] = useState(
-    initialCustomer?.assigned_pickup_delivery_person || initialCustomer?.assigned_driver || ''
+    order?.assigned_pickup_delivery_person || order?.assigned_driver || ''
   );
+  const [assignedPickupPersonId, setAssignedPickupPersonId] = useState(
+    order?.assigned_pickup_person_id || ''
+  );
+  const [staffMasterList, setStaffMasterList] = useState([]);
+  const [staffMasterLoading, setStaffMasterLoading] = useState(false);
+  const [staffMasterError, setStaffMasterError] = useState('');
+  const [pickupMasterList, setPickupMasterList] = useState([]);
+  const [pickupMasterLoading, setPickupMasterLoading] = useState(false);
+  const [pickupMasterError, setPickupMasterError] = useState('');
 
-  // Database-driven Staff Master & Pickup/Delivery Master lists
-  const [staffList, setStaffList] = useState([]);
-  const [staffLoading, setStaffLoading] = useState(false);
-  const [staffError, setStaffError] = useState(null);
+  const loadStaffAndPickupMasters = useCallback(async () => {
+    setStaffMasterLoading(true);
+    setPickupMasterLoading(true);
+    setStaffMasterError('');
+    setPickupMasterError('');
 
-  const [pickupList, setPickupList] = useState([]);
-  const [pickupLoading, setPickupLoading] = useState(false);
-  const [pickupError, setPickupError] = useState(null);
+    const [staffRes, pickupRes] = await Promise.all([
+      fetchActiveStaffMaster(),
+      fetchActivePickupDeliveryMaster(),
+    ]);
 
-  const loadStaffMaster = useCallback(async () => {
-    setStaffLoading(true);
-    setStaffError(null);
-    const { data, error } = await fetchActiveStaffMaster();
-    setStaffLoading(false);
-    if (error) {
-      setStaffError(error);
-      setStaffList([]);
-      return;
+    if (staffRes.error) {
+      setStaffMasterError(staffRes.error);
+    } else {
+      setStaffMasterList(staffRes.data || []);
     }
-    setStaffList(data || []);
-  }, []);
+    setStaffMasterLoading(false);
 
-  const loadPickupMaster = useCallback(async () => {
-    setPickupLoading(true);
-    setPickupError(null);
-    const { data, error } = await fetchActivePickupDeliveryMaster();
-    setPickupLoading(false);
-    if (error) {
-      setPickupError(error);
-      setPickupList([]);
-      return;
+    if (pickupRes.error) {
+      setPickupMasterError(pickupRes.error);
+    } else {
+      setPickupMasterList(pickupRes.data || []);
     }
-    setPickupList(data || []);
+    setPickupMasterLoading(false);
   }, []);
 
   useEffect(() => {
-    if (!isOrderFlow) return;
-    loadStaffMaster();
-    loadPickupMaster();
-  }, [isOrderFlow, loadStaffMaster, loadPickupMaster]);
-  const [orderPreference, setOrderPreference] = useState(
-    initialCustomer?.service_category || initialCustomer?.preference || 'Laundry'
-  );
-  const [orderPreferenceNotes, setOrderPreferenceNotes] = useState(
-    initialCustomer?.preference_notes || initialCustomer?.order_notes || ''
+    loadStaffAndPickupMasters();
+  }, [loadStaffAndPickupMasters]);
+
+  const [comments, setComments] = useState(initialComments);
+
+  // 2. Catalog & Item Selection State
+  const [activeCategory, setActiveCategory] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState(CATALOG_ITEMS[2]); // Formal Pant
+  const [selectedServiceType, setSelectedServiceType] = useState('Laundry');
+  const [quantity, setQuantity] = useState(1);
+  const [ratePerPiece, setRatePerPiece] = useState(20.00);
+
+  // 3. Cart State (Editable measures)
+  const [cartItems, setCartItems] = useState(
+    order?.items?.length
+      ? order.items.map((it, idx) => ({
+          id: it.id || idx + 1,
+          itemId: it.itemId || it.item_id || getClothId(it),
+          name: it.name || it.item_name || 'Garment',
+          service: it.service || it.serviceType || it.service_type || 'Laundry',
+          rate: Number(it.rate || it.price || 20),
+          qty: Number(it.qty || it.quantity || 1),
+          icon: it.icon || '🧺',
+        }))
+      : []
   );
 
-  // Product Card state (placed above Address Details & Contact)
-  const [productService, setProductService] = useState(
-    initialCustomer?.service_category || initialCustomer?.preference || 'Laundry'
-  );
-  const [productGarmentType, setProductGarmentType] = useState(
-    initialCustomer?.product_garment_type || 'Standard Daily Wear (Shirts, Tops, Trousers)'
-  );
-  const [productItemCount, setProductItemCount] = useState(
-    Number(initialCustomer?.item_count || 1)
-  );
-  const [productWeight, setProductWeight] = useState(
-    initialCustomer?.product_weight || ''
-  );
-  const [productCareNotes, setProductCareNotes] = useState(
-    initialCustomer?.preference_notes || initialCustomer?.order_notes || ''
-  );
-
-  // Cart & Clothes Selection state
-  const [cartData, setCartData] = useState({
-    cart: initialCustomer?.customer_history?.items || initialCustomer?.items || [],
-    subtotal: 0,
-    gstAmount: 0,
-    grandTotal: 0,
-    totalItemCount: 1,
-    careNotes: initialCustomer?.preference_notes || initialCustomer?.order_notes || '',
+  // 4. Dynamic Garment-by-Garment Inspection State
+  const [inspections, setInspections] = useState(() => {
+    if (order?.garment_inspections && typeof order.garment_inspections === 'object') {
+      return { ...order.garment_inspections };
+    }
+    if (order?.inspections && typeof order.inspections === 'object' && !Array.isArray(order.inspections)) {
+      return { ...order.inspections };
+    }
+    if (order?.items && Array.isArray(order.items)) {
+      const parsed = {};
+      order.items.forEach((it) => {
+        if (it.inspections && Array.isArray(it.inspections)) {
+          it.inspections.forEach((insp) => {
+            if (insp.id) parsed[insp.id] = insp;
+          });
+        }
+      });
+      if (Object.keys(parsed).length > 0) return parsed;
+    }
+    return {};
   });
 
-  // Expandable details state (always hidden/collapsed by default, expanded manually)
-  const [detailsOpen, setDetailsOpen] = useState(false);
-
-  // Communication preferences
-  const [communicationPref, setCommunicationPref] = useState(
-    initialCustomer?.communication_pref || initialCustomer?.communicationPreference || (initialCustomer?.dnd ? 'None (DND)' : 'WhatsApp')
-  );
-  const [communicationLang, setCommunicationLang] = useState(
-    initialCustomer?.communication_lang || initialCustomer?.preferredCommunicationLanguage || initialCustomer?.preferred_language || 'English'
-  );
-  const [dnd, setDnd] = useState(initialCustomer?.dnd || false);
-  const [propertyStatus, setPropertyStatus] = useState(initialCustomer?.property_status || (initialCustomer?.priority === 'Yes' ? 'Yes' : 'No') || 'No');
-  const [orderStatus, setOrderStatus] = useState(initialCustomer?.order_status || 'order recived');
-  const [internalComments, setInternalComments] = useState(initialCustomer?.internal_comments || initialCustomer?.notes || '');
-
-  // Customer & Membership
-  const [defaultDiscount, setDefaultDiscount] = useState(initialCustomer?.default_discount ?? initialCustomer?.default_discount_pct ?? '');
-  const [referralCode, setReferralCode] = useState(initialCustomer?.referral_code || '');
-  const [marketingSource, setMarketingSource] = useState(initialCustomer?.marketing_source || 'Walk-in');
-  const [membershipId, setMembershipId] = useState(initialCustomer?.membership_id || '');
-
-  // Profile & Service settings
-  const [customerClassification, setCustomerClassification] = useState(initialCustomer?.customer_classification || 'Regular Customer');
-  const [customerStatus, setCustomerStatus] = useState(initialCustomer?.customer_status || 'Active');
-  const [priceList, setPriceList] = useState(initialCustomer?.price_list || 'Standard');
-  const [serviceZone, setServiceZone] = useState(initialCustomer?.service_zone || initialCustomer?.area_service_zone || 'Zone 1');
-  const [creditLimit, setCreditLimit] = useState(initialCustomer?.credit_limit || '');
-  const [anniversaryDate, setAnniversaryDate] = useState(initialCustomer?.anniversary_date || '');
-  const [specialOccasion, setSpecialOccasion] = useState(initialCustomer?.special_occasion || '');
-  const [specialOccasionDate, setSpecialOccasionDate] = useState(initialCustomer?.special_occasion_date || '');
-
-  // Contact & Address Details
-  const [alternatePhone, setAlternatePhone] = useState(initialCustomer?.alternate_phone || '');
-  const [gstNumber, setGstNumber] = useState(initialCustomer?.gst_number || '');
-  const [companyName, setCompanyName] = useState(initialCustomer?.company_name || '');
-  const [email, setEmail] = useState(initialCustomer?.email || '');
-  const [city, setCity] = useState(initialCustomer?.city || '');
-  const [pincode, setPincode] = useState(initialCustomer?.pincode || '');
-  const [dob, setDob] = useState(initialCustomer?.date_of_birth || '');
-  const calculatedAge = getAgeFromDOB(dob);
-  const [mapLink, setMapLink] = useState(initialCustomer?.map_link || '');
-  const [customerNotes, setCustomerNotes] = useState(initialCustomer?.notes || '');
-
-  // Address Details & Additional Addresses state
-  const [addressLine1, setAddressLine1] = useState(initialCustomer?.address || '');
-  const [additionalAddresses, setAdditionalAddresses] = useState(
-    Array.isArray(initialCustomer?.additional_addresses)
-      ? initialCustomer.additional_addresses
-      : (Array.isArray(initialCustomer?.additionalAddresses) ? initialCustomer.additionalAddresses : [])
-  );
-  const [addressDetailsOpen, setAddressDetailsOpen] = useState(true);
-  const [businessDetailsOpen, setBusinessDetailsOpen] = useState(true);
-
-  const MAX_ADDITIONAL_ADDRESSES = 5;
-
-  const handleAddAdditionalAddress = () => {
-    setAdditionalAddresses((prev) => {
-      if (prev.length >= MAX_ADDITIONAL_ADDRESSES) {
-        return prev;
+  useEffect(() => {
+    if (order) {
+      if (order.garment_inspections && typeof order.garment_inspections === 'object') {
+        setInspections({ ...order.garment_inspections });
+      } else if (order.inspections && typeof order.inspections === 'object' && !Array.isArray(order.inspections)) {
+        setInspections({ ...order.inspections });
+      } else if (order.items && Array.isArray(order.items)) {
+        const parsed = {};
+        order.items.forEach((it) => {
+          if (it.inspections && Array.isArray(it.inspections)) {
+            it.inspections.forEach((insp) => {
+              if (insp.id) parsed[insp.id] = insp;
+            });
+          }
+        });
+        if (Object.keys(parsed).length > 0) setInspections(parsed);
       }
-      return [
-        ...prev,
-        {
-          id: Date.now() + Math.random(),
-          addressLine: '',
-          city: '',
-          pincode: '',
-          mapLink: '',
-          altPhone: '',
-          email: '',
-        },
-      ];
-    });
-  };
+    }
+  }, [order]);
 
-  const handleRemoveAdditionalAddress = (id) => {
-    setAdditionalAddresses((prev) => prev.filter((addr) => addr.id !== id));
-  };
+  const [previewPhoto, setPreviewPhoto] = useState(null);
 
-  const handleAdditionalAddressChange = (id, field, value) => {
-    setAdditionalAddresses((prev) =>
-      prev.map((addr) => (addr.id === id ? { ...addr, [field]: value } : addr))
+  // 5. Active Tab
+  const [activeTab, setActiveTab] = useState('1. Order Details');
+
+  // 6. Logistics & Factory Fields (Tab 2)
+  const [factoryPlant, setFactoryPlant] = useState('Main Central Laundry Plant - Ranipet #1');
+  const [assignedRider, setAssignedRider] = useState(order?.assigned_driver || order?.assigned_rider || 'Ramesh Kumar');
+  const [riderPhone, setRiderPhone] = useState(order?.rider_phone || '+91 98765 11223');
+  const [vehicleNo, setVehicleNo] = useState(order?.assigned_driver_full || order?.vehicle_no || 'TN 23 BK 4092 (Van 01)');
+  const [routeZone, setRouteZone] = useState(order?.route_zone || 'Zone 1 - East Ranipet');
+  const [pickupTime, setPickupTime] = useState(order?.pickup_time || '28 Oct 2026, 11:30 AM');
+  const [deliverySlot, setDeliverySlot] = useState(order?.delivery_slot || '30 Oct 2026, 05:00 PM - 07:00 PM');
+  const [dispatchBagTag, setDispatchBagTag] = useState(order?.bag_tag || 'BAG-RANIPET-7821');
+  const [logisticsStatus, setLogisticsStatus] = useState(order?.pickup_status || (order?.assigned_driver ? 'Assigned for Pickup' : 'At Factory'));
+  const [driverInstructions, setDriverInstructions] = useState('Ring doorbell twice, customer requested contactless drop.');
+
+  // 7. Status Updates Fields (Tab 3)
+  const [assignedMachine, setAssignedMachine] = useState('Washer Extractor #3');
+  const [qcInspector, setQcInspector] = useState('Ramesh K. (QC Lead)');
+  const [statusRemark, setStatusRemark] = useState('Garments inspected. Pre-spotting applied for collar stains.');
+
+  // 8. Payments Fields (Tab 4)
+  const [paymentStatus, setPaymentStatus] = useState(order?.payment_status || order?.payment?.status || 'Unpaid');
+  const [paymentMode, setPaymentMode] = useState(order?.payment_method || order?.payment?.mode || 'Cash');
+  const [advancePaid, setAdvancePaid] = useState(Number(order?.advance_paid !== undefined ? order.advance_paid : (order?.payment?.advancePaid || 0)));
+  const [transactionRef, setTransactionRef] = useState('UPI/2026/8941729831');
+  const [invoiceNo, setInvoiceNo] = useState('INV-WD-2026-0042');
+  const [discountAmount, setDiscountAmount] = useState(Number(order?.discount_amount !== undefined ? order.discount_amount : (order?.discount || order?.payment?.discount || 0)));
+  const [paymentNote, setPaymentNote] = useState('Advance received via GPay. Balance to be collected upon doorstep delivery.');
+  const [showQRModal, setShowQRModal] = useState(false);
+
+  // 9. Customer Messages Fields (Tab 5)
+  const [notifyWhatsapp, setNotifyWhatsapp] = useState(true);
+  const [notifySms, setNotifySms] = useState(true);
+  const [notifyEmail, setNotifyEmail] = useState(true);
+  const [customMessage, setCustomMessage] = useState(
+    `Dear ${customerName}, your Washdoor laundry order #${initialOrderNum} is currently ${status}. Expected delivery: ${expectedDelivery}. Thank you for choosing Washdoor!`
+  );
+
+  // 10. Comments & Audit Fields (Tab 6)
+  const [staffNote, setStaffNote] = useState('Customer is a regular VIP. Handle silk saree with gentle enzyme wash. Light starch on formal shirts.');
+  const [flags, setFlags] = useState({
+    delicate: true,
+    colorBleed: false,
+    starch: true,
+    express: false,
+    stainTreatment: true,
+  });
+
+  const getInitialAuditLogs = () => {
+    if (order?.audit_logs && Array.isArray(order.audit_logs) && order.audit_logs.length > 0) {
+      return order.audit_logs;
+    }
+    if (order?.logs && Array.isArray(order.logs) && order.logs.length > 0) {
+      return order.logs;
+    }
+    if (order?.customer_history?.logs && Array.isArray(order.customer_history.logs) && order.customer_history.logs.length > 0) {
+      return order.customer_history.logs;
+    }
+    const defaultList = [];
+    if (order?.assigned_driver || order?.pickup_status === 'Assigned for Pickup' || order?.assigned_for_pickup) {
+      defaultList.push({
+        id: `log_pickup_${Date.now()}`,
+        title: 'Assigned for Pickup',
+        detail: `Pickup scheduled with ${order.assigned_driver || 'Driver'} (${order.assigned_driver_full || 'Zone Driver'})`,
+        time: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        author: 'Store Dispatcher',
+        type: 'pickup',
+      });
+    }
+    defaultList.push(
+      {
+        id: 'log_1',
+        title: 'Order Intake Created',
+        detail: `Order #${initialOrderNum} created for ${initialCustName || 'Customer'} (${initialOrderType})`,
+        time: '28 Oct 2026, 10:15 AM',
+        author: 'Admin (Counter #1)',
+        type: 'create',
+      },
+      {
+        id: 'log_2',
+        title: 'Garments & Services Allocated',
+        detail: 'Catalog items added to cart. Service: Normal Wash, Steam Press, Dry Clean.',
+        time: '28 Oct 2026, 10:30 AM',
+        author: 'Staff (Vellore Store)',
+        type: 'items',
+      },
+      {
+        id: 'log_3',
+        title: 'Inspection & Tagging Completed',
+        detail: 'Oil stain noted on shirt sleeve. 3 inspection photos attached.',
+        time: '28 Oct 2026, 10:48 AM',
+        author: 'QC Lead (Ramesh K.)',
+        type: 'inspection',
+      },
+      {
+        id: 'log_4',
+        title: 'Advance Payment Collected',
+        detail: '₹100.00 received via UPI / Google Pay (Ref: UPI/2026/8941729831)',
+        time: '28 Oct 2026, 11:00 AM',
+        author: 'Cashier (Pooja M.)',
+        type: 'payment',
+      }
     );
+    return defaultList;
   };
 
-  // Validation errors
-  const [errors, setErrors] = useState({});
+  const [auditLogs, setAuditLogs] = useState(getInitialAuditLogs);
+  const [newAuditNote, setNewAuditNote] = useState('');
 
-  const handleMobileChange = (e) => {
-    let digits = e.target.value.replace(/\D/g, '');
-    if (digits.length === 12 && digits.startsWith('91')) {
-      digits = digits.slice(2);
-    } else if (digits.length === 11 && digits.startsWith('0')) {
-      digits = digits.slice(1);
-    }
-    const val = digits.slice(0, 10);
-    setMobileNumber(val);
-    if (val.length === 10) {
-      if (!/^[6-9]/.test(val)) {
-        setErrors((prev) => ({ ...prev, mobile_number: 'Indian mobile number must start with 6, 7, 8, or 9.' }));
+  // Sync state when order prop updates
+  useEffect(() => {
+    if (order) {
+      setCustomerName(order.customer_name || order.customer?.customer_name || '');
+      setMobileNumber(order.mobile_number || order.customer?.mobile_number || '');
+      setAlternatePhone(order.alternate_phone || order.customer?.alternate_phone || '');
+      setEmail(order.email || order.customer?.email || '');
+      setAddress(order.address || order.delivery_address || order.customer?.address || '');
+      setStatus(order.status || order.order_status || 'In Progress');
+      setOrderType(order.order_type || 'Walk-in');
+      setExpectedDelivery(order.expected_delivery || order.delivery_date || '');
+      const pSplit = splitIsoToLocalDateAndTime(order.scheduled_pickup_at);
+      const dSplit = splitIsoToLocalDateAndTime(order.scheduled_delivery_at);
+      setScheduledPickupDate(pSplit.date);
+      setScheduledPickupTime(pSplit.time);
+      setScheduledDeliveryDate(dSplit.date);
+      setScheduledDeliveryTime(dSplit.time);
+      setScheduleErrors({});
+      setComments(order.comments || order.order_notes || order.special_instructions || '');
+      if (order.items && Array.isArray(order.items)) {
+        setCartItems(order.items.map((it, idx) => ({
+          id: it.id || idx + 1,
+          name: it.name || it.item_name || 'Garment',
+          service: it.service || it.service_type || 'Laundry',
+          rate: Number(it.rate || it.price || 20),
+          qty: Number(it.qty || it.quantity || 1),
+          icon: it.icon || '🧺',
+        })));
       } else {
-        setErrors((prev) => ({ ...prev, mobile_number: null }));
+        setCartItems([]);
       }
+      setPaymentStatus(order.payment_status || order.payment?.status || 'Unpaid');
+      setPaymentMode(order.payment_method || order.payment?.mode || 'Cash');
+      setAdvancePaid(Number(order.advance_paid !== undefined ? order.advance_paid : (order.payment?.advancePaid || 0)));
+      setDiscountAmount(Number(order.discount_amount !== undefined ? order.discount_amount : (order.discount || order.payment?.discount || 0)));
+      if (order.assigned_driver) setAssignedRider(order.assigned_driver);
+      if (order.assigned_driver_full) setVehicleNo(order.assigned_driver_full);
+      if (order.pickup_status) setLogisticsStatus(order.pickup_status);
+      setAuditLogs(getInitialAuditLogs());
     }
-  };
+  }, [order]);
 
-  const handleAlternatePhoneChange = (e) => {
-    let digits = e.target.value.replace(/\D/g, '');
-    if (digits.length === 12 && digits.startsWith('91')) {
-      digits = digits.slice(2);
-    } else if (digits.length === 11 && digits.startsWith('0')) {
-      digits = digits.slice(1);
+  // Sync selected product rate
+  useEffect(() => {
+    if (selectedProduct) {
+      setRatePerPiece(selectedProduct.price || 20.00);
     }
-    const val = digits.slice(0, 10);
-    setAlternatePhone(val);
+  }, [selectedProduct]);
+
+  // Filter Catalog
+  const filteredCatalog = useMemo(() => {
+    return CATALOG_ITEMS.filter((item) => {
+      const matchCat = activeCategory === 'All' || item.category === activeCategory;
+      const matchSearch = !searchQuery || item.name.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchCat && matchSearch;
+    });
+  }, [activeCategory, searchQuery]);
+
+  // Cart Calculations purely dynamic
+  const subtotal = useMemo(() => {
+    return cartItems.reduce((sum, item) => sum + (Number(item.rate || 0) * Number(item.qty || 0)), 0);
+  }, [cartItems]);
+
+  const taxAmount = useMemo(() => {
+    return subtotal * 0.05;
+  }, [subtotal]);
+
+  const grandTotal = useMemo(() => {
+    return Math.max(0, subtotal + taxAmount - Number(discountAmount || 0));
+  }, [subtotal, taxAmount, discountAmount]);
+
+  const balanceDue = useMemo(() => {
+    return Math.max(0, grandTotal - Number(advancePaid || 0));
+  }, [grandTotal, advancePaid]);
+
+  const totalCartCount = useMemo(() => {
+    return cartItems.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+  }, [cartItems]);
+
+  // Handlers for Cart
+  const handleAddToCart = () => {
+    if (!selectedProduct) return;
+    const newItem = {
+      id: Date.now(),
+      itemId: selectedProduct.id,
+      name: `${selectedProduct.name} (${selectedServiceType})`,
+      service: selectedServiceType,
+      rate: Number(ratePerPiece) || selectedProduct.price,
+      qty: Math.max(1, quantity),
+      icon: '🧺',
+    };
+    setCartItems((prev) => [...prev, newItem]);
+    showToast?.(`✅ Added ${quantity}x ${selectedProduct.name} (${selectedServiceType}) to cart`);
   };
 
-  const handlePincodeChange = (e) => {
-    const val = e.target.value.replace(/\D/g, '').slice(0, 6);
-    setPincode(val);
+  const handleRemoveCartItem = (id) => {
+    setCartItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const [addressTag, setAddressTag] = useState(() => {
-    const raw = initialCustomer?.address || '';
-    if (raw.startsWith('Office:')) return 'Office';
-    if (raw.startsWith('Other:')) return 'Other';
-    return 'Home';
-  });
-
-  const handleSelectAddressTag = (tag) => {
-    setAddressTag(tag);
-    const clean = (address || '').replace(/^(Home|Office|Other):\s*/i, '');
-    setAddress(clean ? `${tag}: ${clean}` : `${tag}: `);
-    const addrEl = document.getElementById('addressInput');
-    if (addrEl) addrEl.focus();
+  // Handler for adding audit log
+  const handleAddAuditLog = () => {
+    if (!newAuditNote.trim()) return;
+    const newEntry = {
+      id: `log_${Date.now()}`,
+      title: 'Manual Staff Audit Note',
+      detail: newAuditNote.trim(),
+      time: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+      author: 'Staff Operator',
+      type: 'manual',
+    };
+    setAuditLogs((prev) => [newEntry, ...prev]);
+    setNewAuditNote('');
+    showToast?.('📝 Audit record added to timeline');
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  // Message template selection
+  const handleSelectTemplate = (templateName) => {
+    let msg = '';
+    switch (templateName) {
+      case 'Order Confirmed':
+        msg = `Hello ${customerName}, your laundry order #${initialOrderNum} has been received and confirmed. Total garments: ${totalCartCount} pcs. Expected delivery: ${expectedDelivery}.`;
+        break;
+      case 'Washing Started':
+        msg = `Hi ${customerName}, order #${initialOrderNum} is now undergoing quality washing and care at our central plant. We will notify you once it's ready.`;
+        break;
+      case 'Ready for Delivery':
+        msg = `Great news ${customerName}! Your laundry order #${initialOrderNum} is fresh, pressed, and READY for delivery / pickup. Total due: ${currencySymbol}${balanceDue.toFixed(2)}.`;
+        break;
+      case 'Out for Delivery':
+        msg = `Hello ${customerName}, your order #${initialOrderNum} is out for delivery with rider ${assignedRider} (${riderPhone}). Please keep payment ready.`;
+        break;
+      case 'Payment Reminder':
+        msg = `Dear ${customerName}, this is a reminder for pending balance ${currencySymbol}${balanceDue.toFixed(2)} on order #${initialOrderNum}. Pay via UPI / Cash upon doorstep delivery.`;
+        break;
+      default:
+        msg = customMessage;
+    }
+    setCustomMessage(msg);
+  };
 
-    // Conditional Address Requirement: Mandatory when On-Call (Pickup / Delivery) is chosen
-    if (intakeMethod === 'on-call' && (!address || !address.trim())) {
-      setErrors((prev) => ({ ...prev, address: 'Address is required for Pickup / Home Delivery orders.' }));
-      const addrEl = document.getElementById('addressInput');
-      if (addrEl) addrEl.focus();
+  // Comprehensive Save
+  const handleSave = () => {
+    // 1. Shared Validation
+    if (!customerName || !customerName.trim()) {
+      showToast?.('⚠️ Customer Name is required.');
+      return;
+    }
+    const cleanPhone = String(mobileNumber || '').replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) {
+      showToast?.('⚠️ A valid 10-digit mobile number is required.');
       return;
     }
 
-    // Conditional On-Call Scheduling Validation
-    let onCallSchedulePayload = {
-      scheduled_pickup_at: null,
-      scheduled_delivery_at: null,
-    };
-    if (isOrderFlow && intakeMethod === 'on-call') {
+    let resolvedScheduledPickupAt = order?.scheduled_pickup_at || null;
+    let resolvedScheduledDeliveryAt = order?.scheduled_delivery_at || null;
+    if (isOnCallOrderType(orderType)) {
       const schedResult = validateOnCallSchedule({
         pickupDate: scheduledPickupDate,
         pickupTime: scheduledPickupTime,
         deliveryDate: scheduledDeliveryDate,
         deliveryTime: scheduledDeliveryTime,
-        isNewOrder: true,
+        isNewOrder: false,
+        initialPickupIso: order?.scheduled_pickup_at || null,
       });
       if (!schedResult.isValid) {
-        setErrors((prev) => ({ ...prev, ...schedResult.errors }));
+        setScheduleErrors(schedResult.errors);
+        showToast?.(`⚠️ ${Object.values(schedResult.errors)[0]}`);
         return;
       }
-      onCallSchedulePayload = {
-        scheduled_pickup_at: schedResult.scheduled_pickup_at,
-        scheduled_delivery_at: schedResult.scheduled_delivery_at,
-      };
+      setScheduleErrors({});
+      resolvedScheduledPickupAt = schedResult.scheduled_pickup_at;
+      resolvedScheduledDeliveryAt = schedResult.scheduled_delivery_at;
     }
 
-    const customerData = {
-      customer_id: initialCustomer?.customerId || initialCustomer?.customer_id || initialCustomer?.id,
+    const totalPieces = cartItems.reduce((sum, c) => sum + Number(c.qty || 0), 0);
+    const nowIso = new Date().toISOString();
+    const staffActor = attendStaffName.trim() || order?.attend_staff_name || order?.assigned_staff || 'Counter Staff';
+    const pickupPerson = assignedPickupPerson.trim() || assignedRider || '';
+    const existingHistory = Array.isArray(order?.activity_history) && order.activity_history.length > 0
+      ? [...order.activity_history]
+      : (Array.isArray(auditLogs) ? [...auditLogs] : []);
+    const newEntries = [];
+
+    if (status !== (order?.order_status || order?.status)) {
+      newEntries.push({
+        id: `act_status_${Date.now()}`,
+        type: status === 'Delivered' ? 'collection' : 'status',
+        title: status === 'Delivered' ? 'Order Delivered' : 'Status Updated',
+        detail: status === 'Delivered'
+          ? `Garments delivered (${pickupPerson || customerName})`
+          : `Status changed to ${status}`,
+        staff: staffActor,
+        timestamp: nowIso,
+      });
+    }
+
+    const prevItemCount = Array.isArray(order?.items) ? order.items.length : 0;
+    const prevCartSig = (order?.items || []).map((i) => `${i.name}:${i.qty}:${i.service || i.serviceType || ''}`).join('|');
+    const nextCartSig = cartItems.map((i) => `${i.name}:${i.qty}:${i.service || ''}`).join('|');
+    if (prevCartSig !== nextCartSig || prevItemCount !== cartItems.length) {
+      const breakdownText = formatServiceBreakdown(cartItems, order?.service_category || 'Laundry', true);
+      newEntries.push({
+        id: `act_svc_${Date.now() + 1}`,
+        type: 'service',
+        title: 'Service Updated',
+        detail: breakdownText || `Order items updated (${totalPieces} pcs)`,
+        staff: staffActor,
+        timestamp: nowIso,
+      });
+    }
+
+    const prevAdv = Number(order?.advance_paid || 0);
+    const nextAdv = Number(advancePaid || 0);
+    if (nextAdv > 0 && (nextAdv !== prevAdv || paymentStatus !== order?.payment_status)) {
+      newEntries.push({
+        id: `act_pay_${Date.now() + 2}`,
+        type: 'payment',
+        title: 'Payment Received',
+        detail: `${currencySymbol}${nextAdv.toFixed(2)} received via ${paymentMode}`,
+        staff: staffActor,
+        timestamp: nowIso,
+      });
+    }
+
+    const combinedHistory = [...newEntries, ...existingHistory];
+    const resolvedPaymentReceivedAt = nextAdv > 0
+      ? (nextAdv !== prevAdv ? nowIso : (order?.payment_received_at || nowIso))
+      : order?.payment_received_at || null;
+    const resolvedCollectionAt = status === 'Delivered'
+      ? (order?.collection_at || nowIso)
+      : (order?.collection_at || null);
+    const resolvedCollectedBy = status === 'Delivered'
+      ? (order?.collected_by_person || pickupPerson || customerName || 'Customer')
+      : (order?.collected_by_person || '');
+
+    const updatedOrder = {
+      ...(order || {}),
+      id: order?.id || initialOrderNum,
+      order_number: initialOrderNum,
+      order_id: initialOrderNum,
       customer_name: customerName,
-      country_code: '+91',
       mobile_number: mobileNumber,
       alternate_phone: alternatePhone,
-      address: addressLine1 || address,
-      additional_addresses: additionalAddresses,
-      city,
-      pincode,
-      date_of_birth: dob,
-      map_link: mapLink,
-      email,
-      gst_number: gstNumber,
-      company_name: companyName,
-      tax_exemption: taxExemption,
-      notes: internalComments,
-      communication_pref: communicationPref,
-      communication_lang: communicationLang,
-      dnd,
-      property_status: propertyStatus,
-      priority: propertyStatus === 'Yes' ? 'Yes' : 'No',
-      order_status: orderStatus,
-      internal_comments: internalComments,
-      order_preference: orderPreference,
-      default_discount: defaultDiscount,
-      referral_code: referralCode,
-      marketing_source: marketingSource,
-      membership_id: membershipId,
-      customer_classification: customerClassification,
-      customer_status: customerStatus,
-      price_list: priceList,
-      service_zone: serviceZone,
-      credit_limit: creditLimit,
-      anniversary_date: anniversaryDate,
-      special_occasion: specialOccasion,
-      special_occasion_date: specialOccasionDate,
+      email: email,
+      address: address,
+      status: status,
+      order_status: status,
+      order_type: orderType,
+      expected_delivery: expectedDelivery,
+      scheduled_pickup_at: isOnCallOrderType(orderType) ? resolvedScheduledPickupAt : (order?.scheduled_pickup_at || null),
+      scheduled_delivery_at: isOnCallOrderType(orderType) ? resolvedScheduledDeliveryAt : (order?.scheduled_delivery_at || null),
+      comments: comments,
+      special_instructions: comments,
+      order_notes: comments,
+      items: cartItems.map((c) => ({
+        id: c.id,
+        name: c.name,
+        service: c.service || 'Laundry',
+        serviceType: c.service || 'Laundry',
+        rate: c.rate,
+        qty: c.qty,
+        quantity: c.qty,
+        total: c.rate * c.qty,
+        icon: c.icon || '👕',
+        inspections: Object.values(inspections).filter((p) => p.cartItemId === c.id),
+      })),
+      services_allocated: cartItems.map((c) => ({
+        name: c.name,
+        count: c.qty,
+        serviceType: c.service || c.serviceType || 'Laundry',
+        service: c.service || c.serviceType || 'Laundry',
+        icon: c.icon || '👕',
+      })),
+      item_count: totalPieces,
+      total_pieces: totalPieces,
+      cart: cartItems,
+      garment_inspections: inspections,
+      inspections: inspections,
+      photos: Object.values(inspections).flatMap((p) => p.photos || []),
+      inspection: {
+        garment: Object.values(inspections)[0]?.name || 'Shirt',
+        color: Object.values(inspections)[0]?.color || '',
+        stains: Object.values(inspections)[0]?.stains || '',
+        make: Object.values(inspections)[0]?.make || '',
+        brand: Object.values(inspections)[0]?.brand || '',
+        fabric: Object.values(inspections)[0]?.fabric || 'Cotton',
+        notes: Object.values(inspections)[0]?.notes || '',
+        photos: Object.values(inspections).flatMap((p) => p.photos || []),
+      },
+      logistics: {
+        factoryPlant,
+        assignedRider,
+        riderPhone,
+        vehicleNo,
+        routeZone,
+        pickupTime,
+        deliverySlot,
+        dispatchBagTag,
+        logisticsStatus,
+        driverInstructions,
+      },
+      workflow: {
+        assignedMachine,
+        qcInspector,
+        statusRemark,
+      },
+      payment: {
+        status: paymentStatus,
+        mode: paymentMode,
+        advancePaid: Number(advancePaid || 0),
+        balanceDue: balanceDue,
+        subtotal: subtotal,
+        tax: taxAmount,
+        discount: Number(discountAmount || 0),
+        grandTotal: grandTotal,
+        invoiceNo: invoiceNo,
+        transactionRef: transactionRef,
+        note: paymentNote,
+      },
+      grand_total: grandTotal,
+      advance_paid: Number(advancePaid || 0),
+      balance_due: balanceDue,
+      payment_status: paymentStatus,
+      staff_notes: staffNote,
+      flags: flags,
+      attend_staff_id: attendStaffId || null,
+      attend_staff_name: staffActor,
+      assigned_staff: staffActor,
+      assigned_pickup_person_id: assignedPickupPersonId || null,
+      assigned_pickup_delivery_person: pickupPerson,
+      assigned_driver: pickupPerson || assignedRider,
+      assigned_driver_full: pickupPerson ? `${pickupPerson} (${vehicleNo})` : `${assignedRider} (${vehicleNo})`,
+      status_updated_at: nowIso,
+      status_updated_by: staffActor,
+      activity_history: combinedHistory,
+      payment_received_at: resolvedPaymentReceivedAt,
+      payment_received_by: nextAdv > 0 ? staffActor : (order?.payment_received_by || ''),
+      collection_at: resolvedCollectionAt,
+      collected_by_person: resolvedCollectedBy,
+      pickup_status: logisticsStatus,
+      assigned_for_pickup: Boolean(pickupPerson || assignedRider || logisticsStatus === 'Assigned for Pickup'),
+      audit_logs: combinedHistory,
+      logs: combinedHistory,
+      updated_at: nowIso,
     };
 
-    const validationErrors = validateCustomer(customerData);
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
+    if (onUpdateOrder) {
+      onUpdateOrder(updatedOrder);
     }
 
-    setErrors({});
-
-    const cartItems = cartData?.cart || [];
-    const calculatedTotal = cartItems.length > 0 ? (cartData?.grandTotal || 0) : 0;
-    const calculatedCount = cartItems.length > 0
-      ? (cartData?.totalItemCount ?? cartItems.reduce((s, i) => s + (Number(i.qty) || 1), 0))
-      : 0;
-    const finalCareNotes = cartData?.careNotes || productCareNotes || orderPreferenceNotes;
-
-    const primaryService = cartItems.length > 0
-      ? (cartItems[0].serviceType ? `${cartItems[0].serviceType}` : productService)
-      : productService;
-
-      onSubmit({
-      customerData: {
-        ...customerData,
-        customer_id: customerId || initialCustomer?.id || null,
-        service_category: primaryService,
-        item_count: calculatedCount,
-        product_weight: productWeight,
-        product_garment_type: productGarmentType,
-        order_notes: finalCareNotes || internalComments,
-        total_amount: calculatedTotal,
+    // Direct Supabase update
+    const saveKey = updatedOrder.order_number || updatedOrder.id || updatedOrder.work_number;
+    if (saveKey) {
+      updateOrderInSupabase(saveKey, {
+        status: updatedOrder.status,
+        orderStatus: updatedOrder.status,
+        customerName: updatedOrder.customer_name,
+        mobileNumber: updatedOrder.mobile_number,
+        alternatePhone: updatedOrder.alternate_phone,
+        email: updatedOrder.email,
+        address: updatedOrder.address,
+        serviceCategory: updatedOrder.service_category,
+        orderType: updatedOrder.order_type,
+        expectedDelivery: updatedOrder.expected_delivery,
+        deliveryDate: updatedOrder.expected_delivery,
+        ...(isOnCallOrderType(updatedOrder.order_type)
+          ? {
+              scheduled_pickup_at: updatedOrder.scheduled_pickup_at,
+              scheduled_delivery_at: updatedOrder.scheduled_delivery_at,
+            }
+          : {}),
+        priority: updatedOrder.priority || 'Normal',
+        orderNotes: updatedOrder.comments,
+        subtotal: subtotal,
+        discountAmount: Number(discountAmount || 0),
+        taxAmount: taxAmount,
+        totalAmount: grandTotal,
+        grandTotal: grandTotal,
+        advancePaid: Number(advancePaid || 0),
+        paymentStatus: paymentStatus,
+        paymentMethod: paymentMode,
+        assignedStaff: staffActor,
         attend_staff_id: attendStaffId || null,
-        attend_staff_name: attendStaffName.trim() || 'Counter Staff',
-        assigned_staff: attendStaffName.trim() || 'Counter Staff',
+        attend_staff_name: staffActor,
         assigned_pickup_person_id: assignedPickupPersonId || null,
-        assigned_pickup_delivery_person: assignedPickupPerson.trim(),
-        assigned_driver: assignedPickupPerson.trim(),
-        scheduled_pickup_at: onCallSchedulePayload.scheduled_pickup_at,
-        scheduled_delivery_at: onCallSchedulePayload.scheduled_delivery_at,
-      },
-      orderType: intakeMethod,
-      orderPreference: primaryService,
-      orderPreferenceNotes: finalCareNotes,
-      cartItems: cartItems,
-      totalAmount: calculatedTotal,
-      itemCount: calculatedCount,
-      existingCustomerId: initialCustomer?.id || null,
-    });
+        assigned_pickup_delivery_person: pickupPerson,
+        assigned_driver: pickupPerson || assignedRider,
+        assigned_driver_full: pickupPerson ? `${pickupPerson} (${vehicleNo})` : `${assignedRider} (${vehicleNo})`,
+        status_updated_at: nowIso,
+        status_updated_by: staffActor,
+        activity_history: combinedHistory,
+        payment_received_at: resolvedPaymentReceivedAt,
+        payment_received_by: nextAdv > 0 ? staffActor : (order?.payment_received_by || ''),
+        collection_at: resolvedCollectionAt,
+        collected_by_person: resolvedCollectedBy,
+        staff_notes: staffNote,
+        flags: flags,
+        items: updatedOrder.items,
+        garment_inspections: inspections,
+      }).catch((e) => console.warn('Supabase SideEdit update note:', e));
+    }
+
+    // Persist to local cache so updates remain immediate
+    try {
+      const cached = localStorage.getItem('washdoor_orders_cache');
+      if (cached) {
+        const list = JSON.parse(cached);
+        const nextList = list.map((o) =>
+          o.id === updatedOrder.id || o.order_number === updatedOrder.order_number ? updatedOrder : o
+        );
+        localStorage.setItem('washdoor_orders_cache', JSON.stringify(nextList));
+      }
+    } catch {}
+
+    showToast?.(`✅ Order ${initialOrderNum} updated successfully with all tabs saved!`);
+    onClose();
+  };
+
+  // Helper for status badge class
+  const getStatusClass = (st) => {
+    const s = String(st).toLowerCase();
+    if (s.includes('ready')) return 'ready';
+    if (s.includes('deliver')) return 'delivered';
+    if (s.includes('cancel')) return 'cancelled';
+    if (s.includes('progress') || s.includes('wash')) return 'in-progress';
+    return 'received';
   };
 
   return (
-    <form className="new-form show" id="newCustomerForm" onSubmit={handleSubmit}>
-      {/* ── Financial Summary Strip (Ledger-Backed, Read-Only) ── */}
-      {isExistingCustomer && (
-        <div className="financial-summary-strip" aria-label="Customer Financial Summary">
-          <div className="financial-card due">
-            <span className="financial-label">Outstanding Due</span>
-            <strong className="financial-val due">
-              ₹{Number(initialCustomer?.outstanding_balance || initialCustomer?.outstandingBalance || 0).toFixed(2)}
-            </strong>
-            <span className="financial-sub">From unpaid orders</span>
-          </div>
-          <div className="financial-card advance">
-            <span className="financial-label">Available Advance</span>
-            <strong className="financial-val advance">
-              ₹{Number(initialCustomer?.available_advance || initialCustomer?.availableAdvance || 0).toFixed(2)}
-            </strong>
-            <span className="financial-sub">Active prepayments</span>
-          </div>
-          <div className="financial-card wallet">
-            <span className="financial-label">Wallet Credit</span>
-            <strong className="financial-val wallet">
-              ₹{Number(initialCustomer?.wallet_balance || initialCustomer?.walletBalance || 0).toFixed(2)}
-            </strong>
-            <span className="financial-sub">Store loyalty balance</span>
-          </div>
-          <div className="financial-card credit-limit">
-            <span className="financial-label">Credit Limit</span>
-            <strong className="financial-val credit">
-              ₹{Number(initialCustomer?.credit_limit || initialCustomer?.creditLimit || 0).toFixed(2)}
-            </strong>
-            <span className="financial-sub">Max allowed postpaid</span>
-          </div>
-        </div>
-      )}
-
-      {/* ── Primary Form Grid ── */}
-      <div className="form-grid">
-        <div className={`field ${errors.customer_name ? 'invalid' : ''}`} id="nameField">
-          <label htmlFor="fullName">Name *</label>
-          <input
-            id="fullName"
-            required
-            maxLength={100}
-            autoComplete="name"
-            placeholder="Enter name"
-            value={customerName}
-            onChange={(e) => {
-              setCustomerName(e.target.value);
-              if (e.target.value.trim()) {
-                setErrors((prev) => ({ ...prev, customer_name: null }));
-              }
-            }}
-          />
-          <span className="field-error" id="nameError">
-            {errors.customer_name || 'Please enter a valid name.'}
-          </span>
-        </div>
-
-        <div className={`field ${errors.mobile_number ? 'invalid' : ''}`} id="phoneField">
-          <label htmlFor="phone">Mobile number *</label>
-          <div className="phone-input-wrap">
-            <span className="phone-country-code">+91</span>
-            <input
-              id="phone"
-              required
-              type="tel"
-              inputMode="numeric"
-              pattern="[0-9]{10}"
-              minLength={10}
-              maxLength={10}
-              autoComplete="tel-national"
-              placeholder="Enter 10-digit mobile number"
-              value={mobileNumber}
-              onChange={handleMobileChange}
-            />
-          </div>
-          <span className="field-error" id="phoneError">
-            {errors.mobile_number || 'Enter a valid 10-digit mobile number.'}
-          </span>
-        </div>
-
-        <div className={`field address-field ${errors.address ? 'invalid' : ''}`} id="addressField">
-          <div className="address-label-row">
-            <label htmlFor="addressInput">
-              Address {intakeMethod === 'on-call' ? (
-                <span className="required-flag" style={{ color: '#f87171', fontWeight: '700' }}>* (Required for Pickup / Delivery)</span>
-              ) : (
-                '(optional)'
-              )}
-            </label>
-            <div className="address-tag-chips">
-              <button
-                type="button"
-                className={`address-tag-chip ${addressTag === 'Home' ? 'active' : ''}`}
-                onClick={() => handleSelectAddressTag('Home')}
-              >
-                🏠 Home
-              </button>
-              <button
-                type="button"
-                className={`address-tag-chip ${addressTag === 'Office' ? 'active' : ''}`}
-                onClick={() => handleSelectAddressTag('Office')}
-              >
-                🏢 Office
-              </button>
-              <button
-                type="button"
-                className={`address-tag-chip ${addressTag === 'Other' ? 'active' : ''}`}
-                onClick={() => handleSelectAddressTag('Other')}
-              >
-                📍 Other
-              </button>
+    <div className="side-edit-backdrop" onClick={onClose}>
+      <div className="side-edit-panel" onClick={(e) => e.stopPropagation()}>
+        {/* ── Top Header ── */}
+        <div className="side-edit-header">
+          <div className="side-edit-header-left">
+            <div className="side-edit-icon-badge">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+            </div>
+            <div className="side-edit-title-wrap">
+              <h2 className="side-edit-title">Edit Order — {initialOrderNum}</h2>
+              <p className="side-edit-subtitle">Update customer details, services, garments and other information.</p>
             </div>
           </div>
-          <input
-            id="addressInput"
-            autoComplete="street-address"
-            placeholder={
-              intakeMethod === 'on-call'
-                ? 'Enter complete doorstep pickup / delivery address'
-                : 'Enter address, street, area, city (optional for walk-ins)'
-            }
-            value={address}
-            onChange={(e) => {
-              setAddress(e.target.value);
-              if (e.target.value.trim()) {
-                setErrors((prev) => ({ ...prev, address: null }));
-              }
-            }}
-          />
-          {errors.address && (
-            <span className="field-error" id="addressError">
-              {errors.address}
-            </span>
-          )}
-        </div>
-      </div>
 
-      {/* ── Tax Exemption Row ── */}
-      <label className={`tax-exemption-row ${taxExemption ? 'active' : ''}`} htmlFor="taxExemption">
-        <span className={`custom-checkbox ${taxExemption ? 'checked' : ''}`}>
-          <input
-            type="checkbox"
-            id="taxExemption"
-            name="taxExemption"
-            checked={taxExemption}
-            onChange={(e) => setTaxExemption(e.target.checked)}
-          />
-          {taxExemption && (
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-          )}
-        </span>
-        <span className="tax-exemption-label">Tax Exemption</span>
-        {taxExemption && (
-          <span className="tax-exemption-badge">
-            Tax Exempt
-          </span>
-        )}
-      </label>
-
-      {/* ── Intake & Property/Priority Options (only in Order flow) ── */}
-      {isOrderFlow && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' , marginTop: '4px' }}>
-          <div className="intake-options" role="group" aria-label="Order intake method" style={{ margin: 0 }}>
+          <div className="side-edit-header-right">
+            <div className={`side-edit-status-badge ${getStatusClass(status)}`}>
+              <span>● {status}</span>
+            </div>
             <button
               type="button"
-              className={`intake-option ${intakeMethod === 'walk-in' ? 'active' : ''}`}
-              onClick={() => {
-                setIntakeMethod('walk-in');
-                setErrors((prev) => {
-                  const next = { ...prev };
-                  delete next.scheduled_pickup_at;
-                  delete next.scheduled_delivery_at;
-                  return next;
-                });
-              }}
+              className="side-edit-close-btn"
+              onClick={onClose}
+              title="Close Side Edit Panel"
+              aria-label="Close"
             >
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
-                <circle cx="12" cy="5" r="3"></circle>
-                <path d="M12 8v8l-3 4"></path>
-                <path d="M12 14l3 4"></path>
-                <path d="M9 12l6-2"></path>
-              </svg>
-              Walk-In (Store Drop)
+              ✕
             </button>
-            <button
-              type="button"
-              className={`intake-option ${intakeMethod === 'on-call' ? 'active' : ''}`}
-              onClick={() => setIntakeMethod('on-call')}
-            >
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
-                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-              </svg>
-              On-Call (Pickup)
-            </button>
-          </div>
-
-          {/* On-Call Pickup & Delivery Scheduling Fields (On-Call ONLY) */}
-          {intakeMethod === 'on-call' && (
-            <div className="oncall-schedule-grid">
-              <div className="field">
-                <label htmlFor="scheduledPickupDate">
-                  Scheduled Pickup Date &amp; Time <span className="req">*</span>
-                </label>
-                <div className="oncall-datetime-pair">
-                  <input
-                    id="scheduledPickupDate"
-                    type="date"
-                    value={scheduledPickupDate}
-                    onChange={(e) => {
-                      setScheduledPickupDate(e.target.value);
-                      if (errors.scheduled_pickup_at) {
-                        setErrors((prev) => ({ ...prev, scheduled_pickup_at: '' }));
-                      }
-                    }}
-                    aria-label="Scheduled Pickup Date"
-                  />
-                  <input
-                    id="scheduledPickupTime"
-                    type="time"
-                    value={scheduledPickupTime}
-                    onChange={(e) => {
-                      setScheduledPickupTime(e.target.value);
-                      if (errors.scheduled_pickup_at) {
-                        setErrors((prev) => ({ ...prev, scheduled_pickup_at: '' }));
-                      }
-                    }}
-                    aria-label="Scheduled Pickup Time"
-                  />
-                </div>
-                {errors.scheduled_pickup_at && (
-                  <div className="oncall-field-error">{errors.scheduled_pickup_at}</div>
-                )}
-              </div>
-
-              <div className="field">
-                <label htmlFor="scheduledDeliveryDate">
-                  Scheduled Delivery Date &amp; Time <span className="req">*</span>
-                </label>
-                <div className="oncall-datetime-pair">
-                  <input
-                    id="scheduledDeliveryDate"
-                    type="date"
-                    value={scheduledDeliveryDate}
-                    min={scheduledPickupDate || undefined}
-                    onChange={(e) => {
-                      setScheduledDeliveryDate(e.target.value);
-                      if (errors.scheduled_delivery_at) {
-                        setErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
-                      }
-                    }}
-                    aria-label="Scheduled Delivery Date"
-                  />
-                  <input
-                    id="scheduledDeliveryTime"
-                    type="time"
-                    value={scheduledDeliveryTime}
-                    onChange={(e) => {
-                      setScheduledDeliveryTime(e.target.value);
-                      if (errors.scheduled_delivery_at) {
-                        setErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
-                      }
-                    }}
-                    aria-label="Scheduled Delivery Time"
-                  />
-                </div>
-                {errors.scheduled_delivery_at && (
-                  <div className="oncall-field-error">{errors.scheduled_delivery_at}</div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Property / Priority Status Toggle */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255, 255, 255, 0.04)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>
-              Property / Priority Status:
-            </span>
-            <div style={{ display: 'inline-flex', borderRadius: '6px', overflow: 'hidden', border: '1px solid #29384e' }}>
-              <button
-                type="button"
-                onClick={() => setPropertyStatus('Yes')}
-                style={{
-                  padding: '4px 14px',
-                  fontSize: '11.5px',
-                  fontWeight: 700,
-                  border: 'none',
-                  cursor: 'pointer',
-                  background: propertyStatus === 'Yes' ? '#ef4444' : 'transparent',
-                  color: propertyStatus === 'Yes' ? '#ffffff' : '#94a3b8',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                ★ Yes
-              </button>
-              <button
-                type="button"
-                onClick={() => setPropertyStatus('No')}
-                style={{
-                  padding: '4px 14px',
-                  fontSize: '11.5px',
-                  fontWeight: 700,
-                  border: 'none',
-                  cursor: 'pointer',
-                  background: propertyStatus === 'No' ? '#334155' : 'transparent',
-                  color: propertyStatus === 'No' ? '#ffffff' : '#94a3b8',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                No
-              </button>
-            </div>
-          </div>
-
-          {/* Attend Staff Name & Assigned Pickup / Delivery Person */}
-          <div className="form-grid" style={{ marginTop: '4px', marginBottom: '2px' }}>
-            <div className="field">
-              <label htmlFor="attendStaffName">Attend Staff Name</label>
-              <StaffSearchDropdown
-                id="attendStaffName"
-                variant="staff"
-                options={staffList}
-                value={attendStaffId}
-                fallbackName={attendStaffName}
-                loading={staffLoading}
-                error={staffError}
-                onRetry={loadStaffMaster}
-                placeholder="Search by staff name or ID..."
-                emptyMessage="No active staff found in Staff Master."
-                onChange={(selected) => {
-                  if (selected) {
-                    setAttendStaffId(selected.uniqueId || '');
-                    setAttendStaffName(selected.name || '');
-                  } else {
-                    setAttendStaffId('');
-                    setAttendStaffName('');
-                  }
-                }}
-              />
-            </div>
-
-            <div className="field">
-              <label htmlFor="assignedPickupPerson">Assigned Pickup &amp; Delivery Person</label>
-              <StaffSearchDropdown
-                id="assignedPickupPerson"
-                variant="pickup"
-                options={pickupList}
-                value={assignedPickupPersonId}
-                fallbackName={assignedPickupPerson}
-                loading={pickupLoading}
-                error={pickupError}
-                onRetry={loadPickupMaster}
-                placeholder="Search by name or employee ID..."
-                emptyMessage="No active pickup/delivery staff found."
-                onChange={(selected) => {
-                  if (selected) {
-                    setAssignedPickupPersonId(selected.uniqueId || '');
-                    setAssignedPickupPerson(selected.name || '');
-                  } else {
-                    setAssignedPickupPersonId('');
-                    setAssignedPickupPerson('');
-                  }
-                }}
-              />
-            </div>
           </div>
         </div>
-      )}
 
-      {/* ── Additional Customer Details (Collapsible) ── */}
-      <section className={`details-card ${detailsOpen ? 'open' : ''}`} id="additionalDetails">
-        <button
-          type="button"
-          className="details-toggle"
-          id="detailsToggle"
-          aria-expanded={detailsOpen}
-          onClick={() => setDetailsOpen(!detailsOpen)}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9290ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}>
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-            <line x1="3" y1="9" x2="21" y2="9"></line>
-            <line x1="9" y1="21" x2="9" y2="9"></line>
-          </svg>
-          <span className="details-label">
-            {isOrderFlow ? 'Clothes Selection, Services & Additional Details' : 'Additional Customer Details'}
-          </span>
-          <span className="expand-label" id="expandLabel">
-            {detailsOpen ? 'Hide' : 'Expand'}
-          </span>
-          <span className="chevron" aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </span>
-        </button>
-
-        {detailsOpen && (
-          <div className="details-content" id="detailsContent">
-            <div className="details-fields">
-              {/* ── Cloth Selection & Cart Section (Inside Expanding Panel) ── */}
-              {isOrderFlow && (
-                <div style={{ gridColumn: '1 / -1', width: '100%' }}>
-                  <ClothSelectionCart
-                    initialCart={initialCustomer?.customer_history?.items || initialCustomer?.items || []}
-                    initialCareNotes={orderPreferenceNotes}
-                    isTaxExempt={Boolean(taxExemption)}
-                    onChange={(cData) => setCartData(cData)}
-                  />
-                </div>
-              )}
-
-              {/* ── 1. Address Details Card (Collapsible) ── */}
-              <div className="addr-section-card">
-                <div className="addr-card-header">
-                  <div className="addr-card-title">
-                    <span className="addr-card-title-icon">
-                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                        <circle cx="12" cy="10" r="3"></circle>
-                      </svg>
-                    </span>
-                    <span>Address Details</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="addr-card-toggle"
-                    onClick={() => setAddressDetailsOpen(!addressDetailsOpen)}
-                    aria-label="Toggle Address Details"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={{
-                        transform: addressDetailsOpen ? 'rotate(0deg)' : 'rotate(180deg)',
-                        transition: 'transform 0.2s ease',
-                      }}
-                    >
-                      <polyline points="18 15 12 9 6 15"></polyline>
+        {/* ── Scrollable Body with Visible Scroller ── */}
+        <div className="side-edit-body">
+          {/* TAB 1: ORDER DETAILS */}
+          {activeTab === '1. Order Details' && (
+            <>
+              {/* Top 2-Column Grid */}
+              <div className="side-edit-top-grid">
+                {/* Card 1: Customer & Order Information */}
+                <div className="side-edit-card">
+                  <div className="side-edit-card-head">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="12" cy="7" r="4"></circle>
                     </svg>
-                  </button>
-                </div>
+                    <span>Customer &amp; Order Information</span>
+                  </div>
 
-                {addressDetailsOpen && (
-                  <>
-                    <div className="addr-fields-grid">
-                      {/* Address Line */}
-                      <div className="addr-field-group">
-                        <label className="addr-field-label" htmlFor="addrLine1">
-                          Address Line
+                  <div className="side-edit-field">
+                    <label className="side-edit-label">
+                      Customer Name <span className="side-edit-req">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="side-edit-input"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="Customer Name"
+                    />
+                  </div>
+
+                  <div className="side-edit-row-2col">
+                    <div className="side-edit-field">
+                      <label className="side-edit-label">
+                        Mobile Number <span className="side-edit-req">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="side-edit-input"
+                        value={mobileNumber}
+                        onChange={(e) => setMobileNumber(e.target.value)}
+                        placeholder="+91 Mobile number"
+                      />
+                    </div>
+
+                    <div className="side-edit-field">
+                      <label className="side-edit-label">Alternate Phone</label>
+                      <input
+                        type="text"
+                        className="side-edit-input"
+                        value={alternatePhone}
+                        onChange={(e) => setAlternatePhone(e.target.value)}
+                        placeholder="Secondary contact"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="side-edit-field">
+                    <label className="side-edit-label">Email Address</label>
+                    <input
+                      type="email"
+                      className="side-edit-input"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="customer@email.com"
+                    />
+                  </div>
+
+                  <div className="side-edit-field">
+                    <label className="side-edit-label">
+                      Delivery Address <span className="side-edit-req">*</span>
+                    </label>
+                    <textarea
+                      rows={2}
+                      className="side-edit-textarea"
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      placeholder="Delivery Address & Landmark"
+                    />
+                  </div>
+
+                  <div className="side-edit-row-2col">
+                    <div className="side-edit-field">
+                      <label className="side-edit-label">
+                        Status <span className="side-edit-req">*</span>
+                      </label>
+                      <select
+                        className="side-edit-select"
+                        value={status}
+                        onChange={(e) => setStatus(e.target.value)}
+                      >
+                        <option value="In Progress">In Progress</option>
+                        <option value="Order Received">Order Received</option>
+                        <option value="Ready">Ready</option>
+                        <option value="Delivered">Delivered</option>
+                        <option value="Cancelled">Cancelled</option>
+                      </select>
+                    </div>
+
+                    <div className="side-edit-field">
+                      <label className="side-edit-label">
+                        Order Type <span className="side-edit-req">*</span>
+                      </label>
+                      <select
+                        className="side-edit-select"
+                        value={isOnCallOrderType(orderType) ? 'On-Call' : orderType}
+                        onChange={(e) => {
+                          setOrderType(e.target.value);
+                          setScheduleErrors({});
+                        }}
+                      >
+                        <option value="Walk-in">Walk-in</option>
+                        <option value="On-Call">On-Call (Pickup)</option>
+                        <option value="Home Delivery">Home Delivery</option>
+                        <option value="Express">Express 24H</option>
+                        <option value="Commercial">Commercial / B2B</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {isOnCallOrderType(orderType) && (
+                    <div className="oncall-schedule-grid oncall-schedule-grid--stacked">
+                      <div className="side-edit-field">
+                        <label className="side-edit-label">
+                          Scheduled Pickup Date &amp; Time <span className="side-edit-req">*</span>
                         </label>
-                        <div className="addr-input-wrap">
-                          <span className="addr-input-icon">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                              <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                            </svg>
-                          </span>
-                          <input
-                            id="addrLine1"
-                            className="addr-input"
-                            placeholder="Enter address line"
-                            value={addressLine1}
-                            onChange={(e) => {
-                              setAddressLine1(e.target.value);
-                              setAddress(e.target.value);
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* City */}
-                      <div className="addr-field-group">
-                        <label className="addr-field-label" htmlFor="addrCity1">
-                          City
-                        </label>
-                        <div className="addr-input-wrap">
-                          <span className="addr-input-icon">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
-                              <line x1="9" y1="6" x2="9" y2="6.01"></line>
-                              <line x1="15" y1="6" x2="15" y2="6.01"></line>
-                              <line x1="9" y1="10" x2="9" y2="10.01"></line>
-                              <line x1="15" y1="10" x2="15" y2="10.01"></line>
-                              <line x1="9" y1="14" x2="9" y2="14.01"></line>
-                              <line x1="15" y1="14" x2="15" y2="14.01"></line>
-                              <line x1="9" y1="18" x2="15" y2="18"></line>
-                            </svg>
-                          </span>
-                          <input
-                            id="addrCity1"
-                            className="addr-input"
-                            placeholder="Enter city"
-                            value={city}
-                            onChange={(e) => setCity(e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Pincode */}
-                      <div className="addr-field-group">
-                        <label className="addr-field-label" htmlFor="addrPincode1">
-                          Pincode
-                        </label>
-                        <div className="addr-input-wrap">
-                          <span className="addr-input-icon">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                              <circle cx="12" cy="10" r="3"></circle>
-                            </svg>
-                          </span>
-                          <input
-                            id="addrPincode1"
-                            className="addr-input"
-                            inputMode="numeric"
-                            maxLength={6}
-                            placeholder="Enter 6-digit pincode"
-                            value={pincode}
-                            onChange={handlePincodeChange}
-                          />
-                        </div>
-                        {errors.pincode && <span className="field-error">{errors.pincode}</span>}
-                      </div>
-
-                      {/* Map Link */}
-                      <div className="addr-field-group">
-                        <label className="addr-field-label" htmlFor="addrMapLink1">
-                          Map Link
-                        </label>
-                        <div className="addr-input-wrap">
-                          <span className="addr-input-icon">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-                            </svg>
-                          </span>
-                          <input
-                            id="addrMapLink1"
-                            className="addr-input"
-                            type="url"
-                            placeholder="https://maps.google.com/..."
-                            value={mapLink}
-                            onChange={(e) => setMapLink(e.target.value)}
-                          />
-                        </div>
-                        {errors.map_link && <span className="field-error">{errors.map_link}</span>}
-                      </div>
-
-                      {/* Alternative Phone No. */}
-                      <div className="addr-field-group">
-                        <label className="addr-field-label" htmlFor="addrAltPhone1">
-                          Alternative Phone No.
-                        </label>
-                        <div className="addr-input-wrap">
-                          <span className="addr-input-icon">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                            </svg>
-                          </span>
-                          <input
-                            id="addrAltPhone1"
-                            className="addr-input"
-                            type="tel"
-                            inputMode="numeric"
-                            maxLength={10}
-                            placeholder="Enter 10-digit number"
-                            value={alternatePhone}
-                            onChange={handleAlternatePhoneChange}
-                          />
-                        </div>
-                        {errors.alternate_phone && <span className="field-error">{errors.alternate_phone}</span>}
-                      </div>
-
-                      {/* Email */}
-                      <div className="addr-field-group">
-                        <label className="addr-field-label" htmlFor="addrEmail1">
-                          Email
-                        </label>
-                        <div className="addr-input-wrap">
-                          <span className="addr-input-icon">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                              <polyline points="22,6 12,13 2,6"></polyline>
-                            </svg>
-                          </span>
-                          <input
-                            id="addrEmail1"
-                            className="addr-input"
-                            type="email"
-                            placeholder="name@example.com"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                          />
-                        </div>
-                        {errors.email && <span className="field-error">{errors.email}</span>}
-                      </div>
-
-                      {/* Date of Birth */}
-                      <div className="addr-field-group">
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <label className="addr-field-label" htmlFor="dob">Date of Birth</label>
-                          {calculatedAge !== null && (
-                            <span className="dob-age-pill" style={{ fontSize: '11px', padding: '1px 6px' }} title="Calculated Customer Age">
-                              🎂 {calculatedAge} yrs old
-                            </span>
-                          )}
-                        </div>
-                        <div className="addr-input-wrap">
-                          <span className="addr-input-icon">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                              <line x1="16" y1="2" x2="16" y2="6"></line>
-                              <line x1="8" y1="2" x2="8" y2="6"></line>
-                              <line x1="3" y1="10" x2="21" y2="10"></line>
-                            </svg>
-                          </span>
+                        <div className="oncall-datetime-pair">
                           <input
                             type="date"
-                            className="addr-input"
-                            id="dob"
-                            max={new Date().toISOString().split('T')[0]}
-                            min="1920-01-01"
-                            value={dob}
-                            onChange={(e) => setDob(e.target.value)}
+                            className="side-edit-input"
+                            value={scheduledPickupDate}
+                            onChange={(e) => {
+                              setScheduledPickupDate(e.target.value);
+                              if (scheduleErrors.scheduled_pickup_at) {
+                                setScheduleErrors((prev) => ({ ...prev, scheduled_pickup_at: '' }));
+                              }
+                            }}
+                            aria-label="Scheduled Pickup Date"
+                          />
+                          <input
+                            type="time"
+                            className="side-edit-input"
+                            value={scheduledPickupTime}
+                            onChange={(e) => {
+                              setScheduledPickupTime(e.target.value);
+                              if (scheduleErrors.scheduled_pickup_at) {
+                                setScheduleErrors((prev) => ({ ...prev, scheduled_pickup_at: '' }));
+                              }
+                            }}
+                            aria-label="Scheduled Pickup Time"
                           />
                         </div>
+                        {scheduleErrors.scheduled_pickup_at && (
+                          <div className="oncall-field-error">{scheduleErrors.scheduled_pickup_at}</div>
+                        )}
+                      </div>
+
+                      <div className="side-edit-field">
+                        <label className="side-edit-label">
+                          Scheduled Delivery Date &amp; Time
+                        </label>
+                        <div className="oncall-datetime-pair">
+                          <input
+                            type="date"
+                            className="side-edit-input"
+                            value={scheduledDeliveryDate}
+                            min={scheduledPickupDate || undefined}
+                            onChange={(e) => {
+                              setScheduledDeliveryDate(e.target.value);
+                              if (scheduleErrors.scheduled_delivery_at) {
+                                setScheduleErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
+                              }
+                            }}
+                            aria-label="Scheduled Delivery Date"
+                          />
+                          <input
+                            type="time"
+                            className="side-edit-input"
+                            value={scheduledDeliveryTime}
+                            onChange={(e) => {
+                              setScheduledDeliveryTime(e.target.value);
+                              if (scheduleErrors.scheduled_delivery_at) {
+                                setScheduleErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
+                              }
+                            }}
+                            aria-label="Scheduled Delivery Time"
+                          />
+                        </div>
+                        {scheduleErrors.scheduled_delivery_at && (
+                          <div className="oncall-field-error">{scheduleErrors.scheduled_delivery_at}</div>
+                        )}
                       </div>
                     </div>
+                  )}
 
-                    {/* + Add Additional Address Button (Max Limit: 5) */}
-                    <div className="addr-add-btn-wrap">
-                      <button
-                        type="button"
-                        className="addr-add-btn"
-                        onClick={handleAddAdditionalAddress}
-                        disabled={additionalAddresses.length >= MAX_ADDITIONAL_ADDRESSES}
-                        style={
-                          additionalAddresses.length >= MAX_ADDITIONAL_ADDRESSES
-                            ? { opacity: 0.55, cursor: 'not-allowed', pointerEvents: 'none' }
-                            : {}
-                        }
-                        title={
-                          additionalAddresses.length >= MAX_ADDITIONAL_ADDRESSES
-                            ? 'Maximum limit of 5 additional addresses reached'
-                            : 'Add another additional address'
-                        }
-                      >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="12" y1="5" x2="12" y2="19"></line>
-                          <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        <span>
-                          {additionalAddresses.length >= MAX_ADDITIONAL_ADDRESSES
-                            ? 'Additional Address Limit Reached (Max 5)'
-                            : `Add Additional Address (${additionalAddresses.length}/5)`}
-                        </span>
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* ── 2. Additional Address Card(s) (Dynamic 1, 2, 3, 5+) ── */}
-              {additionalAddresses.map((addr, idx) => {
-                const num = idx + 2;
-                return (
-                  <div key={addr.id} className="addr-section-card additional-addr">
-                    <div className="addr-card-header">
-                      <div className="addr-card-title">
-                        <span className="addr-card-title-icon">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                            <circle cx="12" cy="10" r="3"></circle>
-                          </svg>
-                        </span>
-                        <span>Additional Address</span>
-                      </div>
-                      <button
-                        type="button"
-                        className="addr-card-remove-btn"
-                        onClick={() => handleRemoveAdditionalAddress(addr.id)}
-                        title="Remove this additional address"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6"></polyline>
-                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                        </svg>
-                        <span>Remove</span>
-                      </button>
-                    </div>
-
-                    <div className="addr-fields-grid">
-                      {/* Address Line N */}
-                      <div className="addr-field-group">
-                        <label className="addr-field-label">Address Line {num}</label>
-                        <div className="addr-input-wrap">
-                          <span className="addr-input-icon">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                              <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                            </svg>
-                          </span>
-                          <input
-                            className="addr-input"
-                            placeholder={`Enter address line ${num}`}
-                            value={addr.addressLine || ''}
-                            onChange={(e) => handleAdditionalAddressChange(addr.id, 'addressLine', e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      {/* City N */}
-                      <div className="addr-field-group">
-                        <label className="addr-field-label">City {num}</label>
-                        <div className="addr-input-wrap">
-                          <span className="addr-input-icon">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
-                              <line x1="9" y1="6" x2="9" y2="6.01"></line>
-                              <line x1="15" y1="6" x2="15" y2="6.01"></line>
-                              <line x1="9" y1="10" x2="9" y2="10.01"></line>
-                              <line x1="15" y1="10" x2="15" y2="10.01"></line>
-                              <line x1="9" y1="14" x2="9" y2="14.01"></line>
-                              <line x1="15" y1="14" x2="15" y2="14.01"></line>
-                              <line x1="9" y1="18" x2="15" y2="18"></line>
-                            </svg>
-                          </span>
-                          <input
-                            className="addr-input"
-                            placeholder={`Enter city ${num}`}
-                            value={addr.city || ''}
-                            onChange={(e) => handleAdditionalAddressChange(addr.id, 'city', e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Pincode N */}
-                      <div className="addr-field-group">
-                        <label className="addr-field-label">Pincode {num}</label>
-                        <div className="addr-input-wrap">
-                          <span className="addr-input-icon">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                              <circle cx="12" cy="10" r="3"></circle>
-                            </svg>
-                          </span>
-                          <input
-                            className="addr-input"
-                            inputMode="numeric"
-                            maxLength={6}
-                            placeholder={`Enter 6-digit pincode ${num}`}
-                            value={addr.pincode || ''}
-                            onChange={(e) => handleAdditionalAddressChange(addr.id, 'pincode', e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Map Link N */}
-                      <div className="addr-field-group">
-                        <label className="addr-field-label">Map Link {num}</label>
-                        <div className="addr-input-wrap">
-                          <span className="addr-input-icon">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-                            </svg>
-                          </span>
-                          <input
-                            className="addr-input"
-                            type="url"
-                            placeholder="https://maps.google.com/..."
-                            value={addr.mapLink || ''}
-                            onChange={(e) => handleAdditionalAddressChange(addr.id, 'mapLink', e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Alternative Phone No. N */}
-                      <div className="addr-field-group">
-                        <label className="addr-field-label">Alternative Phone No. {num}</label>
-                        <div className="addr-input-wrap">
-                          <span className="addr-input-icon">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                            </svg>
-                          </span>
-                          <input
-                            className="addr-input"
-                            type="tel"
-                            inputMode="numeric"
-                            maxLength={10}
-                            placeholder="Enter 10-digit number"
-                            value={addr.altPhone || ''}
-                            onChange={(e) => handleAdditionalAddressChange(addr.id, 'altPhone', e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Additional Email N */}
-                      <div className="addr-field-group">
-                        <label className="addr-field-label">Additional Email {num}</label>
-                        <div className="addr-input-wrap">
-                          <span className="addr-input-icon">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                              <polyline points="22,6 12,13 2,6"></polyline>
-                            </svg>
-                          </span>
-                          <input
-                            className="addr-input"
-                            type="email"
-                            placeholder="name@example.com"
-                            value={addr.email || ''}
-                            onChange={(e) => handleAdditionalAddressChange(addr.id, 'email', e.target.value)}
-                          />
-                        </div>
-                      </div>
+                  {!isOnCallOrderType(orderType) && (
+<div className="side-edit-field">
+                    <label className="side-edit-label">
+                      Expected Delivery <span className="side-edit-req">*</span>
+                    </label>
+                    <div className="side-edit-icon-wrap">
+                  
+                      <input
+                        type="text"
+                        className="side-edit-input"
+                        value={expectedDelivery}
+                        onChange={(e) => setExpectedDelivery(e.target.value)}
+                        placeholder="30 Oct 2026, 05:00 PM"
+                      />
                     </div>
                   </div>
-                );
-              })}
+)}
 
-              {/* ── 3. Business Details Card ── */}
-              <div className="addr-section-card">
-                <div className="addr-card-header">
-                  <div className="addr-card-title">
-                    <span className="addr-card-title-icon">
-                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
-                        <line x1="9" y1="6" x2="9" y2="6.01"></line>
-                        <line x1="15" y1="6" x2="15" y2="6.01"></line>
-                        <line x1="9" y1="10" x2="9" y2="10.01"></line>
-                        <line x1="15" y1="10" x2="15" y2="10.01"></line>
-                        <line x1="9" y1="14" x2="9" y2="14.01"></line>
-                        <line x1="15" y1="14" x2="15" y2="14.01"></line>
-                        <line x1="9" y1="18" x2="15" y2="18"></line>
-                      </svg>
-                    </span>
-                    <span>Business Details</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="addr-card-toggle"
-                    onClick={() => setBusinessDetailsOpen(!businessDetailsOpen)}
-                    aria-label="Toggle Business Details"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={{
-                        transform: businessDetailsOpen ? 'rotate(0deg)' : 'rotate(180deg)',
-                        transition: 'transform 0.2s ease',
+                  <div className="side-edit-field">
+                    <label className="side-edit-label">Attend Staff Name</label>
+                    <StaffSearchDropdown
+                      id="side-edit-attend-staff"
+                      variant="staff"
+                      options={staffMasterList}
+                      value={attendStaffId}
+                      fallbackName={attendStaffName}
+                      onChange={(selected) => {
+                        setAttendStaffId(selected ? selected.uniqueId : '');
+                        setAttendStaffName(selected ? selected.name : '');
                       }}
-                    >
-                      <polyline points="18 15 12 9 6 15"></polyline>
-                    </svg>
-                  </button>
+                      loading={staffMasterLoading}
+                      error={staffMasterError}
+                      onRetry={loadStaffAndPickupMasters}
+                      placeholder="Search by staff name or ID..."
+                      emptyMessage="No active staff found"
+                    />
+                  </div>
+
+                  <div className="side-edit-field">
+                    <label className="side-edit-label">Assigned Pickup &amp; Delivery Person</label>
+                    <StaffSearchDropdown
+                      id="side-edit-pickup-person"
+                      variant="pickup"
+                      options={pickupMasterList}
+                      value={assignedPickupPersonId}
+                      fallbackName={assignedPickupPerson}
+                      onChange={(selected) => {
+                        const nextName = selected ? selected.name : '';
+                        setAssignedPickupPersonId(selected ? selected.uniqueId : '');
+                        setAssignedPickupPerson(nextName);
+                        setAssignedRider(nextName);
+                      }}
+                      loading={pickupMasterLoading}
+                      error={pickupMasterError}
+                      onRetry={loadStaffAndPickupMasters}
+                      placeholder="Search by name or employee ID..."
+                      emptyMessage="No active pickup/delivery person found"
+                    />
+                  </div>
+
+                  <div className="side-edit-field">
+                    <label className="side-edit-label">Comments / Special Notes</label>
+                    <textarea
+                      rows={2}
+                      className="side-edit-textarea"
+                      value={comments}
+                      onChange={(e) => setComments(e.target.value)}
+                      placeholder="Customer special notes, fabric instructions, or delivery directions..."
+                    />
+                  </div>
                 </div>
 
-                {businessDetailsOpen && (
-                  <div className="addr-fields-grid">
-                    {/* Company Name */}
-                    <div className="addr-field-group">
-                      <label className="addr-field-label" htmlFor="businessCompanyName">Company Name</label>
-                      <div className="addr-input-wrap">
-                        <span className="addr-input-icon">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
-                            <line x1="9" y1="6" x2="9" y2="6.01"></line>
-                            <line x1="15" y1="6" x2="15" y2="6.01"></line>
-                            <line x1="9" y1="10" x2="9" y2="10.01"></line>
-                            <line x1="15" y1="10" x2="15" y2="10.01"></line>
-                            <line x1="9" y1="14" x2="9" y2="14.01"></line>
-                            <line x1="15" y1="14" x2="15" y2="14.01"></line>
-                            <line x1="9" y1="18" x2="15" y2="18"></line>
-                          </svg>
-                        </span>
+                {/* Card 2: Services Allocated & Garment Selection */}
+                <div className="side-edit-card">
+                  <div className="side-edit-card-head">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
+                    </svg>
+                    <span>Services Allocated &amp; Garment Selection</span>
+                  </div>
+
+                  <div className="side-edit-services-split">
+                    {/* Sub-col 1: Catalog */}
+                    <div className="side-edit-catalog-box">
+                      <span className="side-edit-subhead">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                          <polyline points="2 17 12 22 22 17"></polyline>
+                          <polyline points="2 12 12 17 22 12"></polyline>
+                        </svg>
+                        Cloth Selection &amp; Catalog
+                      </span>
+
+                      {/* Search box with ample left padding preventing icon overlap */}
+                      <div className="side-edit-icon-wrap">
+                        
                         <input
-                          id="businessCompanyName"
-                          className="addr-input"
-                          placeholder="Enter company name"
-                          value={companyName}
-                          onChange={(e) => setCompanyName(e.target.value)}
+                          type="text"
+                          className="side-edit-input"
+                          placeholder="Search clothes (e.g. shirt, saree)..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
                         />
+                      </div>
+
+                      {/* Category Pills */}
+                      <div className="side-edit-pills-row">
+                        {CATEGORIES.map((cat) => (
+                          <button
+                            key={cat}
+                            type="button"
+                            className={`side-edit-filter-pill ${activeCategory === cat ? 'active' : ''}`}
+                            onClick={() => setActiveCategory(cat)}
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Single-Grid (1 Card Per Row) for Desktop & Clean Visibility matching Image 2 */}
+                      <div className="side-edit-catalog-grid">
+                        {filteredCatalog.map((item) => {
+                          const isSelected = selectedProduct?.id === item.id;
+                          return (
+                            <div
+                              key={item.id}
+                              className={`side-edit-prod-card ${isSelected ? 'selected' : ''}`}
+                              onClick={() => setSelectedProduct(item)}
+                            >
+                              <div className="side-edit-prod-img">
+                                <ClothIllustration itemId={item.id} size={36} />
+                              </div>
+                              <div className="side-edit-prod-info">
+                                <span className="side-edit-prod-name" title={item.name}>
+                                  {item.name}
+                                </span>
+                                <span className="side-edit-prod-price">
+                                  <span>{currencySymbol}{item.price}</span>
+                                  <span className="side-edit-prod-unit"> / {item.unit}</span>
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                className="side-edit-prod-add"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedProduct(item);
+                                }}
+                              >
+                                + Add
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="side-edit-catalog-footer-hint">
+                        <span>↕</span>
+                        <span>Showing {filteredCatalog.length} garments in catalog</span>
                       </div>
                     </div>
 
-                    {/* GST Number */}
-                    <div className="addr-field-group">
-                      <label className="addr-field-label" htmlFor="businessGstNumber">GST Number</label>
-                      <div className="addr-input-wrap">
-                        <span className="addr-input-icon">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="2" y="5" width="20" height="14" rx="2"></rect>
-                            <line x1="2" y1="10" x2="22" y2="10"></line>
-                          </svg>
-                        </span>
-                        <input
-                          id="businessGstNumber"
-                          className="addr-input"
-                          placeholder="Enter GST number"
-                          value={gstNumber}
-                          onChange={(e) => setGstNumber(e.target.value)}
+                    {/* Sub-col 2: Selected Item & Cart */}
+                    <div className="side-edit-item-details-box">
+                      <span className="side-edit-subhead">Selected Item Details</span>
+
+                      {selectedProduct ? (
+                        <div className="side-edit-selected-item-bar">
+                          <ClothIllustration itemId={selectedProduct.id} size={34} />
+                          <div className="side-edit-selected-meta">
+                            <strong>{selectedProduct.name}</strong>
+                            <span>{currencySymbol}{ratePerPiece.toFixed(2)} / piece</span>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <div className="side-edit-field">
+                        <ServiceTypeSelect
+                          label="Service Type"
+                          labelClassName="side-edit-label"
+                          selectClassName="side-edit-select"
+                          value={selectedServiceType}
+                          onChange={setSelectedServiceType}
+                          onServiceAdded={(added, isNew) => {
+                            if (isNew) showToast?.(`✅ Added service type "${added}"`);
+                          }}
                         />
+                      </div>
+
+                      <div className="side-edit-row-2col">
+                        <div className="side-edit-field">
+                          <label className="side-edit-label">Quantity</label>
+                          <div className="side-edit-qty-row">
+                            <button
+                              type="button"
+                              className="side-edit-qty-btn"
+                              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                            >
+                              -
+                            </button>
+                            <span className="side-edit-qty-val">{quantity}</span>
+                            <button
+                              type="button"
+                              className="side-edit-qty-btn"
+                              onClick={() => setQuantity((q) => q + 1)}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="side-edit-field">
+                          <label className="side-edit-label">Rate per piece ({currencySymbol})</label>
+                          <input
+                            type="number"
+                            className="side-edit-input"
+                            value={ratePerPiece}
+                            onChange={(e) => setRatePerPiece(Number(e.target.value) || 0)}
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="side-edit-btn-add-cart"
+                        onClick={handleAddToCart}
+                      >
+                        <span>🛒</span> Add to Cart
+                      </button>
+
+                      {/* Cart Items List */}
+                      <div className="side-edit-cart-box">
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span className="side-edit-subhead" style={{ fontSize: '11.5px' }}>
+                            Cart Items ({cartItems.length})
+                          </span>
+                          <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 650 }}>
+                            {totalCartCount} pieces total
+                          </span>
+                        </div>
+
+                        <div className="side-edit-cart-list">
+                          {cartItems.map((c) => (
+                            <div key={c.id} className="side-edit-cart-item">
+                              <div className="side-edit-cart-item-title">
+                                <div className="side-edit-cart-item-thumb">
+                                  <ClothIllustration itemId={c.itemId || getClothId(c)} size={24} />
+                                </div>
+                                <span className="side-edit-cart-item-name">{c.name.split(' (')[0]} × {c.qty}</span>
+                              </div>
+                              <div className="side-edit-cart-item-price">
+                                <span>{currencySymbol}{(c.rate * c.qty).toFixed(2)}</span>
+                                <button
+                                  type="button"
+                                  className="side-edit-cart-item-del"
+                                  onClick={() => handleRemoveCartItem(c.id)}
+                                  title="Remove item"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                          {cartItems.length === 0 && (
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted, #64748b)', textAlign: 'center', padding: '8px 0', fontStyle: 'italic' }}>
+                              No garments in cart. Select above to add.
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="side-edit-cart-totals">
+                          <div className="side-edit-total-line">
+                            <span>Subtotal</span>
+                            <span>{currencySymbol}{subtotal.toFixed(2)}</span>
+                          </div>
+                          <div className="side-edit-total-line">
+                            <span>GST / Tax (5%)</span>
+                            <span>{currencySymbol}{taxAmount.toFixed(2)}</span>
+                          </div>
+                          <div className="side-edit-total-line grand">
+                            <span>Grand Total</span>
+                            <span>{currencySymbol}{grandTotal.toFixed(2)}</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                )}
+                </div>
               </div>
 
-              {/* 2. Communication Preferences */}
-              <div className="details-section-title">Communication Preferences</div>
-              <div className="field">
-                <label htmlFor="communicationPreference">Communication Preference</label>
-                <select
-                  id="communicationPreference"
-                  value={communicationPref}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setCommunicationPref(val);
-                    setDnd(val === 'None (DND)' || val === 'none');
-                  }}
-                >
-                  <option value="WhatsApp">WhatsApp</option>
-                  <option value="SMS">SMS</option>
-                  <option value="Email">Email</option>
-                  <option value="Phone call">Phone call</option>
-                  <option value="None (DND)">No communication (DND)</option>
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="communicationLanguage">Preferred Communication Language</label>
-                <select
-                  id="communicationLanguage"
-                  value={communicationLang}
-                  onChange={(e) => setCommunicationLang(e.target.value)}
-                >
-                  <option value="English">English</option>
-                  <option value="Tamil">Tamil</option>
-                  <option value="Hindi">Hindi</option>
-                  <option value="Telugu">Telugu</option>
-                  <option value="Kannada">Kannada</option>
-                  <option value="Malayalam">Malayalam</option>
-                </select>
-              </div>
-              <div className="field" style={{ gridColumn: '1 / -1' }}>
-                <label htmlFor="internalComments">Internal Comments (staff only)</label>
-                <input
-                  id="internalComments"
-                  placeholder="VIP customer, fraud alert, handling notes…"
-                  value={internalComments}
-                  onChange={(e) => setInternalComments(e.target.value)}
-                />
+              {/* Dynamic Garment-by-Garment Inspection & Care Section */}
+              <GarmentInspectionSection
+                cart={cartItems}
+                inspections={inspections}
+                onChangeInspections={setInspections}
+                showToast={showToast}
+              />
+            </>
+          )}
+
+          {/* TAB 2: LOGISTICS & FACTORY */}
+          {activeTab === '2. Logistics & Factory' && (
+            <div className="side-edit-card">
+              <div className="side-edit-card-head">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="1" y="3" width="15" height="13"></rect>
+                  <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                  <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                  <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                </svg>
+                <span>Logistics &amp; Factory Processing Dispatch</span>
               </div>
 
-              {/* 3. Customer Profile & Service Settings */}
-              <div className="details-section-title">Profile &amp; Services Setting</div>
-              <div className="field">
-                <label htmlFor="customerClassification">Customer Classification</label>
-                <select
-                  id="customerClassification"
-                  value={customerClassification}
-                  onChange={(e) => setCustomerClassification(e.target.value)}
-                >
-                  <option value="Regular Customer">Regular Customer</option>
-                  <option value="VIP Customer">VIP Customer</option>
-                  <option value="Corporate Customer">Corporate Customer</option>
-                  <option value="Fraud / Review">Fraud / Review Required</option>
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="customerStatus">Customer Status</label>
-                <select
-                  id="customerStatus"
-                  value={customerStatus}
-                  onChange={(e) => setCustomerStatus(e.target.value)}
-                >
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                  <option value="Archived">Archived</option>
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="serviceZone">Area Service Zone</label>
-                <select
-                  id="serviceZone"
-                  value={serviceZone}
-                  onChange={(e) => setServiceZone(e.target.value)}
-                >
-                  <option value="">Select service zone</option>
-                  <option value="zone-1">Zone 1</option>
-                  <option value="zone-2">Zone 2</option>
-                  <option value="zone-3">Zone 3</option>
-                  <option value="outside-zone">Outside service zone</option>
-                </select>
-              </div>
-
-              {/* 4. Customer & Membership */}
-              <div className="details-section-title">Customer &amp; Membership</div>
-              <div className="field">
-                <label htmlFor="membershipId">Membership ID (optional)</label>
-                <input
-                  id="membershipId"
-                  placeholder="e.g. MEM-00001"
-                  value={membershipId}
-                  onChange={(e) => setMembershipId(e.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="priceList">Specific Price List</label>
-                <select
-                  id="priceList"
-                  value={priceList}
-                  onChange={(e) => setPriceList(e.target.value)}
-                >
-                  <option value="Standard">Standard</option>
-                  <option value="Premium">Premium</option>
-                  <option value="Wholesale">Wholesale</option>
-                  <option value="Corporate">Corporate</option>
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="orderPreferenceSelect">Order Preference</label>
-                <select
-                  id="orderPreferenceSelect"
-                  value={orderPreference}
-                  onChange={(e) => {
-                    setOrderPreference(e.target.value);
-                    setProductService(e.target.value);
-                  }}
-                >
-                  {(serviceTypes.some((s) => s.toLowerCase() === String(orderPreference || '').toLowerCase())
-                    ? serviceTypes
-                    : [...serviceTypes, orderPreference].filter(Boolean)
-                  ).map((srv) => (
-                    <option key={srv} value={srv}>{srv}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="marketingSource">Marketing Source</label>
-                <select
-                  id="marketingSource"
-                  value={marketingSource}
-                  onChange={(e) => setMarketingSource(e.target.value)}
-                >
-                  <option value="Walk-in">Walk-in</option>
-                  <option value="Google">Google</option>
-                  <option value="Instagram">Instagram</option>
-                  <option value="Word of Mouth">Word of Mouth</option>
-                  <option value="Pamphlet">Pamphlet</option>
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor="defaultDiscount">Default Discount (%)</label>
-                <input
-                  id="defaultDiscount"
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  placeholder="0"
-                  value={defaultDiscount}
-                  onChange={(e) => setDefaultDiscount(e.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="referralCode">Referral Code (optional)</label>
-                <input
-                  id="referralCode"
-                  placeholder="Enter referral code"
-                  value={referralCode}
-                  onChange={(e) => setReferralCode(e.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="creditLimit">Credit Limit (₹)</label>
-                <input
-                  id="creditLimit"
-                  type="number"
-                  min="0"
-                  step="100"
-                  placeholder="0.00"
-                  value={creditLimit}
-                  onChange={(e) => setCreditLimit(e.target.value)}
-                />
-                <small>Approved credit limit for postpaid customer orders.</small>
-              </div>
-
-              {/* 5. Customer Insights & 6. Customer History (only shown for existing customers) */}
-              {isExistingCustomer && (
-                <>
-                  {/* 5. Customer Insights (read-only) */}
-                  <div className="details-section-title">Customer Insights (read-only)</div>
-                  <div className="insights-grid">
-                    <div className="insight-card">
-                      <span className="insight-label">Customer-wise Sales</span>
-                      <span className="insight-value" id="customerSales">
-                        {initialCustomer ? '₹4,890.00' : '—'}
-                      </span>
-                    </div>
-                    <div className="insight-card">
-                      <span className="insight-label">Customer Due Report</span>
-                      <span className="insight-value" id="customerDue">
-                        {initialCustomer ? '₹0.00' : '—'}
-                      </span>
-                    </div>
-                    <div className="insight-card">
-                      <span className="insight-label">Customer Wallet</span>
-                      <span className="insight-value" id="customerWallet">
-                        {initialCustomer ? `₹${Number(initialCustomer.wallet_balance || 0).toFixed(0)}` : '—'}
-                      </span>
-                    </div>
-                    <div className="insight-card">
-                      <span className="insight-label">Last Visits</span>
-                      <span className="insight-value" id="customerLastVisit">
-                        {initialCustomer ? '3 days ago' : '—'}
-                      </span>
-                    </div>
-                    <div className="insight-card">
-                      <span className="insight-label">Order Frequency</span>
-                      <span className="insight-value" id="customerFrequency">
-                        {initialCustomer ? '3.2/month' : '—'}
-                      </span>
+              {(order?.assigned_driver || order?.assigned_for_pickup || logisticsStatus === 'Assigned for Pickup') && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '10px 14px',
+                  background: '#f0fdf4',
+                  border: '1.5px solid #86efac',
+                  borderRadius: '10px',
+                  marginBottom: '14px',
+                  color: '#15803d',
+                  fontSize: '13px'
+                }}>
+                  <span style={{ fontSize: '20px' }}>🚚</span>
+                  <div>
+                    <div style={{ fontWeight: 750, color: '#166534' }}>Assigned for Pickup</div>
+                    <div style={{ fontSize: '11.5px', color: '#15803d', fontWeight: 500, marginTop: '2px' }}>
+                      Driver: <strong>{assignedRider || order?.assigned_driver}</strong> {vehicleNo ? `• ${vehicleNo}` : ''}
                     </div>
                   </div>
-                  <p className="insight-note">
-                    These values are computed live from customer orders, ledger, and wallet history.
-                  </p>
-
-                  {/* 6. Customer History (read-only) */}
-                  <div className="details-section-title">Customer History (read-only)</div>
-                  <div className="field">
-                    <label htmlFor="orderHistory">Order History</label>
-                    <textarea
-                      id="orderHistory"
-                      readOnly
-                      placeholder="Customer orders, status, and payment position will appear here."
-                      value={initialCustomer ? `${initialCustomer.orders?.[0]?.count || 0} completed counter orders` : ''}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="complaintHistory">Complaint History</label>
-                    <textarea
-                      id="complaintHistory"
-                      readOnly
-                      placeholder="Linked complaints and manual resolution notes will appear here."
-                      value={initialCustomer ? 'No active complaints logged.' : ''}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="activeMembership">Active Customer Plan / Membership</label>
-                    <textarea
-                      id="activeMembership"
-                      readOnly
-                      placeholder="Plan, validity, and remaining entitlement will appear here."
-                      value={initialCustomer ? `Tier: ${initialCustomer.tier || 'PLATINUM ELITE'} (Active)` : ''}
-                    />
-                  </div>
-                </>
+                </div>
               )}
+
+              {/* Scheduling Section */}
+              <div style={{ fontSize: '12px', fontWeight: 750, color: '#1e3a8a', marginTop: '4px' }}>
+                1. Pickup &amp; Delivery Scheduling
+              </div>
+              <div className="side-edit-row-3col">
+                <div className="side-edit-field">
+                  <label className="side-edit-label">Pickup Scheduled Time</label>
+                  <input
+                    type="text"
+                    className="side-edit-input"
+                    value={pickupTime}
+                    onChange={(e) => setPickupTime(e.target.value)}
+                  />
+                </div>
+
+                <div className="side-edit-field">
+                  <label className="side-edit-label">Delivery Slot Window</label>
+                  <input
+                    type="text"
+                    className="side-edit-input"
+                    value={deliverySlot}
+                    onChange={(e) => setDeliverySlot(e.target.value)}
+                  />
+                </div>
+
+                <div className="side-edit-field">
+                  <label className="side-edit-label">Transit Bag / Crate Tag</label>
+                  <input
+                    type="text"
+                    className="side-edit-input"
+                    value={dispatchBagTag}
+                    onChange={(e) => setDispatchBagTag(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Driver & Vehicle Section */}
+              <div style={{ fontSize: '12px', fontWeight: 750, color: '#1e3a8a', marginTop: '6px' }}>
+                2. Driver Assignment &amp; Routing
+              </div>
+              <div className="side-edit-row-3col">
+                <div className="side-edit-field">
+                  <label className="side-edit-label">Assigned Delivery Rider</label>
+                  <input
+                    type="text"
+                    className="side-edit-input"
+                    value={assignedRider}
+                    onChange={(e) => setAssignedRider(e.target.value)}
+                  />
+                </div>
+
+                <div className="side-edit-field">
+                  <label className="side-edit-label">Rider Phone Contact</label>
+                  <input
+                    type="text"
+                    className="side-edit-input"
+                    value={riderPhone}
+                    onChange={(e) => setRiderPhone(e.target.value)}
+                  />
+                </div>
+
+                <div className="side-edit-field">
+                  <label className="side-edit-label">Vehicle / Van Number</label>
+                  <input
+                    type="text"
+                    className="side-edit-input"
+                    value={vehicleNo}
+                    onChange={(e) => setVehicleNo(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Plant & Processing */}
+              <div style={{ fontSize: '12px', fontWeight: 750, color: '#1e3a8a', marginTop: '6px' }}>
+                3. Factory Processing Plant
+              </div>
+              <div className="side-edit-row-2col">
+                <div className="side-edit-field">
+                  <label className="side-edit-label">Processing Factory Plant <span className="side-edit-req">*</span></label>
+                  <select
+                    className="side-edit-select"
+                    value={factoryPlant}
+                    onChange={(e) => setFactoryPlant(e.target.value)}
+                  >
+                    <option value="Main Central Laundry Plant - Ranipet #1">Main Central Laundry Plant - Ranipet #1</option>
+                    <option value="Express Washing & Dry Cleaning Hub #2">Express Washing &amp; Dry Cleaning Hub #2</option>
+                    <option value="Township Garment Care Station">Township Garment Care Station</option>
+                  </select>
+                </div>
+
+                <div className="side-edit-field">
+                  <label className="side-edit-label">Logistics Stage Status</label>
+                  <select
+                    className="side-edit-select"
+                    value={logisticsStatus}
+                    onChange={(e) => setLogisticsStatus(e.target.value)}
+                  >
+                    <option value="At Factory">At Factory (In Washing/Pressing)</option>
+                    <option value="In Transit">In Transit to Store</option>
+                    <option value="Dispatched to Store">Dispatched to Store</option>
+                    <option value="Out for Delivery">Out for Delivery with Rider</option>
+                    <option value="Delivered">Delivered to Customer</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="side-edit-field">
+                <label className="side-edit-label">Rider Instructions &amp; Gate Access</label>
+                <textarea
+                  rows={2}
+                  className="side-edit-textarea"
+                  value={driverInstructions}
+                  onChange={(e) => setDriverInstructions(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: STATUS UPDATES */}
+          {activeTab === '3. Status Updates' && (
+            <div className="side-edit-card">
+              <div className="side-edit-card-head">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                  <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+                <span>Workflow Progression &amp; Status Timeline</span>
+              </div>
+
+              {/* Interactive Visual Stepper */}
+              <div className="side-edit-stepper">
+                <div className="side-edit-stepper-line"></div>
+                {[
+                  { name: 'Order Received', label: 'Order Received' },
+                  { name: 'In Progress', label: 'In Progress' },
+                  { name: 'Ready', label: 'Ready' },
+                  { name: 'Delivered', label: 'Delivered' },
+                ].map((step, idx) => {
+                  const currentIdx = ['Order Received', 'In Progress', 'Ready', 'Delivered'].indexOf(status === 'Received' ? 'Order Received' : status);
+                  const isCompleted = currentIdx > idx;
+                  const isActive = currentIdx === idx;
+                  return (
+                    <div
+                      key={step.name}
+                      className={`side-edit-step-node ${isCompleted ? 'completed' : ''} ${isActive ? 'active' : ''}`}
+                      onClick={() => setStatus(step.name)}
+                      title={`Click to switch status to ${step.name}`}
+                    >
+                      <div className="side-edit-step-circle">
+                        {isCompleted ? '✓' : idx + 1}
+                      </div>
+                      <span className="side-edit-step-label">{step.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="side-edit-row-2col">
+                <div className="side-edit-field">
+                  <label className="side-edit-label">Current Order Status</label>
+                  <select
+                    className="side-edit-select"
+                    value={status === 'Received' ? 'Order Received' : status}
+                    onChange={(e) => setStatus(e.target.value)}
+                  >
+                    <option value="Order Received">Order Received &amp; Tagged</option>
+                    <option value="In Progress">In Progress / Washing</option>
+                    <option value="Ready">Ready for Pickup / Delivery</option>
+                    <option value="Delivered">Delivered</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </div>
+
+                <div className="side-edit-field">
+                  <label className="side-edit-label">Assigned Washer / Machine</label>
+                  <select
+                    className="side-edit-select"
+                    value={assignedMachine}
+                    onChange={(e) => setAssignedMachine(e.target.value)}
+                  >
+                    <option value="Washer Extractor #3">Washer Extractor #3 (Heavy Load)</option>
+                    <option value="Steam Press Station #1">Steam Press Station #1</option>
+                    <option value="Dry Cleaning Unit A">Dry Cleaning Unit A (Delicates)</option>
+                    <option value="Tumbler Dryer #2">Tumbler Dryer #2</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="side-edit-row-2col">
+                <div className="side-edit-field">
+                  <label className="side-edit-label">Quality Inspector Lead</label>
+                  <input
+                    type="text"
+                    className="side-edit-input"
+                    value={qcInspector}
+                    onChange={(e) => setQcInspector(e.target.value)}
+                  />
+                </div>
+
+                <div className="side-edit-field">
+                  <label className="side-edit-label">Estimated Completion</label>
+                  <input
+                    type="text"
+                    className="side-edit-input"
+                    value={expectedDelivery}
+                    onChange={(e) => setExpectedDelivery(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="side-edit-field">
+                <label className="side-edit-label">Status Update Remarks</label>
+                <textarea
+                  rows={2}
+                  className="side-edit-textarea"
+                  value={statusRemark}
+                  onChange={(e) => setStatusRemark(e.target.value)}
+                />
+              </div>
+
+              <div className="side-edit-field" style={{ marginTop: '4px' }}>
+                <label className="side-edit-label">Stage Event History</label>
+                <div className="side-edit-timeline-list">
+                  <div className="side-edit-timeline-item">
+                    <span className="side-edit-timeline-dot"></span>
+                    <div className="side-edit-timeline-content">
+                      <span className="side-edit-timeline-title">Order Received at Intake Register</span>
+                      <span className="side-edit-timeline-time">28 Oct 2026, 10:15 AM · By Counter Lead</span>
+                    </div>
+                  </div>
+                  <div className="side-edit-timeline-item">
+                    <span className="side-edit-timeline-dot"></span>
+                    <div className="side-edit-timeline-content">
+                      <span className="side-edit-timeline-title">Garments Checked &amp; Tagged</span>
+                      <span className="side-edit-timeline-time">28 Oct 2026, 11:20 AM · Bag Tag: {dispatchBagTag}</span>
+                    </div>
+                  </div>
+                  <div className="side-edit-timeline-item">
+                    <span className="side-edit-timeline-dot" style={{ background: '#f59e0b' }}></span>
+                    <div className="side-edit-timeline-content">
+                      <span className="side-edit-timeline-title">Moved to Washing Cycle ({assignedMachine})</span>
+                      <span className="side-edit-timeline-time">28 Oct 2026, 02:40 PM · Active Washing Stage</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: PAYMENTS */}
+          {activeTab === '4. Payments' && (
+            <div className="side-edit-card">
+              <div className="side-edit-card-head">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                  <line x1="1" y1="10" x2="23" y2="10"></line>
+                </svg>
+                <span>Payments, Invoicing &amp; Billing Summary</span>
+              </div>
+
+              {/* 4 Metric Summary Boxes */}
+              <div className="side-edit-metric-cards">
+                <div className="side-edit-metric-box">
+                  <span className="side-edit-metric-label">Total Payable</span>
+                  <span className="side-edit-metric-val">{currencySymbol}{grandTotal.toFixed(2)}</span>
+                </div>
+                <div className="side-edit-metric-box">
+                  <span className="side-edit-metric-label">Advance Paid</span>
+                  <span className="side-edit-metric-val green">{currencySymbol}{Number(advancePaid || 0).toFixed(2)}</span>
+                </div>
+                <div className="side-edit-metric-box">
+                  <span className="side-edit-metric-label">Balance Due</span>
+                  <span className="side-edit-metric-val blue">{currencySymbol}{balanceDue.toFixed(2)}</span>
+                </div>
+                <div className="side-edit-metric-box">
+                  <span className="side-edit-metric-label">Payment Status</span>
+                  <span className={`side-edit-metric-val ${balanceDue === 0 ? 'green' : 'amber'}`} style={{ fontSize: '15px' }}>
+                    {balanceDue === 0 ? 'Paid in Full' : (advancePaid > 0 ? 'Partially Paid' : 'Unpaid')}
+                  </span>
+                </div>
+              </div>
+
+              <div className="side-edit-row-2col">
+                <div className="side-edit-field">
+                  <label className="side-edit-label">Payment Status <span className="side-edit-req">*</span></label>
+                  <select
+                    className="side-edit-select"
+                    value={paymentStatus}
+                    onChange={(e) => setPaymentStatus(e.target.value)}
+                  >
+                    <option value="Paid in Full">Paid in Full</option>
+                    <option value="Partially Paid">Partially Paid</option>
+                    <option value="Unpaid / Pay on Delivery">Unpaid / Pay on Delivery</option>
+                  </select>
+                </div>
+
+                <div className="side-edit-field">
+                  <label className="side-edit-label">Payment Mode <span className="side-edit-req">*</span></label>
+                  <select
+                    className="side-edit-select"
+                    value={paymentMode}
+                    onChange={(e) => setPaymentMode(e.target.value)}
+                  >
+                    <option value="UPI / Google Pay">UPI / Google Pay (GPay / PhonePe / Paytm)</option>
+                    <option value="Cash">Cash at Counter</option>
+                    <option value="Credit Card">Credit Card (POS Terminal)</option>
+                    <option value="Debit Card">Debit Card</option>
+                    <option value="Net Banking">Net Banking</option>
+                    <option value="Store Credit">Store Credit / Wallet</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="side-edit-row-3col">
+                <div className="side-edit-field">
+                  <label className="side-edit-label">Advance Amount ({currencySymbol})</label>
+                  <input
+                    type="number"
+                    className="side-edit-input"
+                    value={advancePaid}
+                    onChange={(e) => setAdvancePaid(Number(e.target.value) || 0)}
+                  />
+                </div>
+
+                <div className="side-edit-field">
+                  <label className="side-edit-label">Discount Applied ({currencySymbol})</label>
+                  <input
+                    type="number"
+                    className="side-edit-input"
+                    value={discountAmount}
+                    onChange={(e) => setDiscountAmount(Number(e.target.value) || 0)}
+                  />
+                </div>
+
+                <div className="side-edit-field">
+                  <label className="side-edit-label">UPI Instant Pay</label>
+                  <button
+                    type="button"
+                    className="btn-show-qr"
+                    onClick={() => setShowQRModal(true)}
+                    title="Display UPI QR code to scan and pay"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="14" width="7" height="7"></rect>
+                      <rect x="3" y="14" width="7" height="7"></rect>
+                      <path d="M7 7h.01"></path>
+                      <path d="M17 7h.01"></path>
+                      <path d="M7 17h.01"></path>
+                    </svg>
+                    <span>SHOW QR</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="side-edit-field">
+                <label className="side-edit-label">Transaction / UPI Reference Number</label>
+                <input
+                  type="text"
+                  className="side-edit-input"
+                  value={transactionRef}
+                  onChange={(e) => setTransactionRef(e.target.value)}
+                  placeholder="e.g. UPI/2026/8941729831"
+                />
+              </div>
+
+              <div className="side-edit-field">
+                <label className="side-edit-label">Payment Notes &amp; Receipts</label>
+                <textarea
+                  rows={2}
+                  className="side-edit-textarea"
+                  value={paymentNote}
+                  onChange={(e) => setPaymentNote(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: CUSTOMER MESSAGES */}
+          {activeTab === '5. Customer Messages' && (
+            <div className="side-edit-card">
+              <div className="side-edit-card-head">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <span>Customer Notifications &amp; Messaging</span>
+              </div>
+
+              <div className="side-edit-row-3col">
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: 650, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={notifyWhatsapp}
+                    onChange={(e) => setNotifyWhatsapp(e.target.checked)}
+                  />
+                  <span>WhatsApp Alerts</span>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: 650, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={notifySms}
+                    onChange={(e) => setNotifySms(e.target.checked)}
+                  />
+                  <span>SMS Transactional</span>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: 650, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={notifyEmail}
+                    onChange={(e) => setNotifyEmail(e.target.checked)}
+                  />
+                  <span>Email Invoices</span>
+                </label>
+              </div>
+
+              <div className="side-edit-field" style={{ marginTop: '4px' }}>
+                <label className="side-edit-label">Quick Notification Templates (Click to apply)</label>
+                <div className="side-edit-templates-row">
+                  {[
+                    'Order Confirmed',
+                    'Washing Started',
+                    'Ready for Delivery',
+                    'Out for Delivery',
+                    'Payment Reminder',
+                  ].map((tpl) => (
+                    <button
+                      key={tpl}
+                      type="button"
+                      className="side-edit-template-chip"
+                      onClick={() => handleSelectTemplate(tpl)}
+                    >
+                      ⚡ {tpl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="side-edit-row-2col">
+                <div className="side-edit-field">
+                  <label className="side-edit-label">Recipient Mobile</label>
+                  <input
+                    type="text"
+                    className="side-edit-input"
+                    value={mobileNumber}
+                    onChange={(e) => setMobileNumber(e.target.value)}
+                  />
+                </div>
+
+                <div className="side-edit-field">
+                  <label className="side-edit-label">Recipient Email</label>
+                  <input
+                    type="email"
+                    className="side-edit-input"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="side-edit-field">
+                <label className="side-edit-label">Message Content</label>
+                <textarea
+                  rows={3}
+                  className="side-edit-textarea"
+                  value={customMessage}
+                  onChange={(e) => setCustomMessage(e.target.value)}
+                />
+              </div>
+
+              <button
+                type="button"
+                className="side-edit-btn-save"
+                style={{ width: 'fit-content' }}
+                onClick={() => showToast?.(`💬 Notification dispatched to ${mobileNumber} & ${email}`)}
+              >
+                Send Message to Customer
+              </button>
+            </div>
+          )}
+
+          {/* TAB 6: COMMENTS & AUDIT */}
+          {activeTab === '6. Comments & Audit' && (
+            <div className="side-edit-card">
+              <div className="side-edit-card-head">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                </svg>
+                <span>Internal Staff Notes &amp; Persistent Audit Trail</span>
+              </div>
+
+              <div className="side-edit-field">
+                <label className="side-edit-label">Internal Staff Notes (Private · Not visible on customer receipt)</label>
+                <textarea
+                  rows={2}
+                  className="side-edit-textarea"
+                  value={staffNote}
+                  onChange={(e) => setStaffNote(e.target.value)}
+                />
+              </div>
+
+              <div className="side-edit-field">
+                <label className="side-edit-label">Special Handling Tags</label>
+                <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', fontSize: '12px', fontWeight: 650 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <input
+                      type="checkbox"
+                      checked={flags.delicate}
+                      onChange={(e) => setFlags({ ...flags, delicate: e.target.checked })}
+                    />
+                    <span>Delicate Fabric</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <input
+                      type="checkbox"
+                      checked={flags.colorBleed}
+                      onChange={(e) => setFlags({ ...flags, colorBleed: e.target.checked })}
+                    />
+                    <span>Color Bleed Risk</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <input
+                      type="checkbox"
+                      checked={flags.starch}
+                      onChange={(e) => setFlags({ ...flags, starch: e.target.checked })}
+                    />
+                    <span>Starch Requested</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <input
+                      type="checkbox"
+                      checked={flags.express}
+                      onChange={(e) => setFlags({ ...flags, express: e.target.checked })}
+                    />
+                    <span>Express Priority</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <input
+                      type="checkbox"
+                      checked={flags.stainTreatment}
+                      onChange={(e) => setFlags({ ...flags, stainTreatment: e.target.checked })}
+                    />
+                    <span>Heavy Stain Treatment</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Add New Audit Entry */}
+              <div className="side-edit-field" style={{ marginTop: '8px' }}>
+                <label className="side-edit-label">Record New Audit Log Entry</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    className="side-edit-input"
+                    placeholder="Enter audit checkpoint, inspection observation, or customer communication..."
+                    value={newAuditNote}
+                    onChange={(e) => setNewAuditNote(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleAddAuditLog(); }}
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    className="side-edit-btn-upload"
+                    onClick={handleAddAuditLog}
+                  >
+                    <span>+ Log Event</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Chronological Audit Trail Timeline */}
+              <div className="side-edit-field" style={{ marginTop: '8px' }}>
+                <label className="side-edit-label">Audit Trail History ({auditLogs.length} events)</label>
+                <div className="side-edit-timeline-list">
+                  {auditLogs.map((log) => (
+                    <div key={log.id} className="side-edit-timeline-item">
+                      <span className="side-edit-timeline-dot"></span>
+                      <div className="side-edit-timeline-content">
+                        <span className="side-edit-timeline-title">
+                          {log.title} — <strong style={{ color: '#2563eb' }}>{log.author}</strong>
+                        </span>
+                        <span style={{ fontSize: '11.5px', color: '#334155' }}>{log.detail}</span>
+                        <span className="side-edit-timeline-time">{log.time}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Fixed Footer & Navigation Tabs ── */}
+        <div className="side-edit-footer">
+          <div className="side-edit-nav-tabs">
+            {TABS.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                className={`side-edit-nav-btn ${activeTab === tab ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveTab(tab);
+                  showToast?.(`Switched to: ${tab}`);
+                }}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          <div className="side-edit-footer-actions">
+            {onDelete && (
+              <button
+                type="button"
+                className="side-edit-btn-delete"
+                onClick={onDelete}
+                title="Delete this order"
+              >
+                🗑️ Delete Order
+              </button>
+            )}
+            <button
+              type="button"
+              className="side-edit-btn-cancel"
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="side-edit-btn-save"
+              onClick={handleSave}
+            >
+              Save Changes
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── UPI Payment QR Code Modal in Side Edit ── */}
+      {showQRModal && (
+        <div className="pos-held-modal-backdrop" style={{ zIndex: 11000 }} onClick={() => setShowQRModal(false)}>
+          <div
+            className="pos-dialog-modal pos-qr-dialog-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="pos-dialog-header">
+              <div className="pos-dialog-title">
+                <span style={{ fontSize: '18px' }}>📱</span>
+                <span>UPI Payment QR Code</span>
+              </div>
+              <button
+                type="button"
+                className="pos-dialog-close-btn"
+                onClick={() => setShowQRModal(false)}
+                title="Close QR"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="pos-qr-order-banner">
+              <div style={{ fontSize: '13px', fontWeight: 800, color: '#38bdf8' }}>
+                #{order?.order_number || order?.order_id || 'ORDER'}
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary, #94a3b8)', marginTop: '2px' }}>
+                {customerName || 'Customer'}
+              </div>
+              <div style={{ marginTop: '8px', fontSize: '24px', fontWeight: 800, color: '#10b981' }}>
+                {currencySymbol}{(balanceDue > 0 ? balanceDue : grandTotal).toFixed(2)}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary, #94a3b8)', marginTop: '2px' }}>
+                Scan to Pay via any UPI App
+              </div>
+            </div>
+
+            {/* QR Code Container */}
+            <div className="pos-qr-image-wrapper">
+              <img
+                src="/sample-qr.png"
+                alt="UPI Payment QR Code"
+                className="pos-qr-image"
+              />
+            </div>
+
+            <div className="pos-qr-apps-badge">
+              <span>Google Pay</span>
+              <span>•</span>
+              <span>PhonePe</span>
+              <span>•</span>
+              <span>Paytm</span>
+              <span>•</span>
+              <span>BHIM UPI</span>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+              <button
+                type="button"
+                className="pos-btn-secondary"
+                style={{ flex: 1, padding: '9px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}
+                onClick={() => setShowQRModal(false)}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                style={{
+                  flex: 1.2,
+                  padding: '9px 14px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  background: '#10b981',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)'
+                }}
+                onClick={() => {
+                  setPaymentStatus('Paid in Full');
+                  setAdvancePaid(grandTotal);
+                  setShowQRModal(false);
+                  showToast?.('✓ Payment received via QR & marked as Fully Paid!');
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Mark Paid via QR</span>
+              </button>
             </div>
           </div>
-        )}
-      </section>
+        </div>
+      )}
 
-      {/* ── Form Actions ── */}
-      <div className="form-actions">
-        <button
-          type="button"
-          className="secondary"
-          id="cancelNew"
-          onClick={onBack}
-          disabled={isSubmitting}
-        >
-          {isOrderFlow ? 'Back' : 'Cancel'}
-        </button>
-        <button
-          type="submit"
-          className="create"
-          disabled={isSubmitting}
-        >
-          {isSubmitting
-            ? (isOrderFlow ? 'Saving Order…' : 'Updating Customer…')
-            : (submitLabel || (isOrderFlow ? 'Save Order' : 'Update Customer Record'))}
-        </button>
-      </div>
-    </form>
+      {/* ── Photo Preview Lightbox Modal ── */}
+      {previewPhoto && (
+        <div className="side-edit-lightbox-overlay" onClick={() => setPreviewPhoto(null)}>
+          <div className="side-edit-lightbox-card" onClick={(e) => e.stopPropagation()}>
+            <div className="side-edit-lightbox-head">
+              <div>
+                <strong style={{ fontSize: '13px', color: '#0f172a' }}>{previewPhoto.tag}</strong>
+                <div style={{ fontSize: '11px', color: '#64748b' }}>{previewPhoto.name} · {previewPhoto.size}</div>
+              </div>
+              <button
+                type="button"
+                className="side-edit-close-btn"
+                onClick={() => setPreviewPhoto(null)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="side-edit-lightbox-body">
+              <img src={previewPhoto.url} alt={previewPhoto.name} />
+            </div>
+            <div className="side-edit-lightbox-footer">
+              <span>Attached: {previewPhoto.timestamp}</span>
+              <button
+                type="button"
+                className="side-edit-btn-cancel"
+                onClick={() => setPreviewPhoto(null)}
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

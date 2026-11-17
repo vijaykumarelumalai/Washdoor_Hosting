@@ -8,6 +8,7 @@ import ServiceTypeSelect from './ServiceTypeSelect';
 import { updateOrder, searchCustomers, getProducts, DEFAULT_PRODUCTS } from '../services/customerService';
 import { normalizeMobileNumber, formatPhoneDisplay } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
+import { isOnCallOrderType } from '../utils/onCallScheduling';
 import '../styles/EditOrderModal.css';
 
 // Standard Catalog Items shared with service pricing defaults
@@ -814,7 +815,8 @@ export default function EditOrderModal({
                 />
               </div>
 
-              <div className="pos-field-group" style={{ marginBottom: 0 }}>
+              {!isOnCallOrderType(order?.order_type || 'Walk-In') && (
+  <div className="pos-field-group" style={{ marginBottom: 0 }}>
                 <label className="pos-field-label">Expected Delivery</label>
                 <input
                   type="date"
@@ -823,6 +825,7 @@ export default function EditOrderModal({
                   onChange={(e) => setDeliveryDate(e.target.value)}
                 />
               </div>
+)}
             </div>
           </div>
         </div>

@@ -6280,7 +6280,7 @@ body.light-theme .pagination-btn.pagination-num.active,
 .pos-edit-customer-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: auto auto auto auto minmax(90px, 1fr) auto;
+  align-content: start;
   gap: 12px;
   flex: 1;
   min-height: 0;
@@ -7797,5 +7797,665 @@ body:not(.light-theme):not([data-theme="light"]) .pos-status-timeline-time {
 @media (max-width: 420px) {
   .oncall-datetime-pair {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Orders & POS — Professional Minimal Layout Refresh
+   Scoped to the POS module so no other screen is affected.
+   ═══════════════════════════════════════════════════════════ */
+
+.pos-module-container {
+  --pos-accent: #2563eb;
+  --pos-accent-hover: #1d4ed8;
+  --pos-accent-soft: #eff6ff;
+  --pos-accent-border: #bfdbfe;
+  --pos-surface: #ffffff;
+  --pos-surface-subtle: #f8fafc;
+  --pos-surface-muted: #f1f5f9;
+  --pos-border: #e2e8f0;
+  --pos-border-strong: #cbd5e1;
+  --pos-text: #0f172a;
+  --pos-text-secondary: #475569;
+  --pos-text-muted: #64748b;
+  --pos-radius: 12px;
+  --pos-radius-sm: 9px;
+  --pos-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --pos-shadow-md: 0 4px 16px rgba(15, 23, 42, 0.06);
+  --pos-focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  gap: 14px;
+}
+
+body.dark-theme .pos-module-container,
+[data-theme="dark"] .pos-module-container {
+  --pos-accent: #3b82f6;
+  --pos-accent-hover: #60a5fa;
+  --pos-accent-soft: rgba(59, 130, 246, 0.14);
+  --pos-accent-border: rgba(59, 130, 246, 0.35);
+  --pos-surface: #0f172a;
+  --pos-surface-subtle: #111c31;
+  --pos-surface-muted: #16223a;
+  --pos-border: #1e293b;
+  --pos-border-strong: #334155;
+  --pos-text: #f1f5f9;
+  --pos-text-secondary: #cbd5e1;
+  --pos-text-muted: #94a3b8;
+  --pos-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --pos-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --pos-focus-ring: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+body .pos-module-container .pos-screen-header {
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 2px;
+}
+
+body .pos-module-container .pos-screen-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+body .pos-module-container .pos-screen-title {
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+  line-height: 1.2 !important;
+  color: var(--pos-text) !important;
+}
+
+body .pos-module-container .pos-screen-subtitle {
+  margin-top: 0 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--pos-text-muted) !important;
+}
+
+body .pos-module-container .pos-screen-actions {
+  gap: 8px;
+}
+
+body .pos-module-container .pos-search-input-wrap {
+  height: 38px !important;
+  border-radius: var(--pos-radius-sm) !important;
+  background: var(--pos-surface) !important;
+  border: 1px solid var(--pos-border) !important;
+  box-shadow: var(--pos-shadow-sm) !important;
+}
+
+body .pos-module-container .pos-search-input-wrap:focus-within {
+  border-color: var(--pos-accent) !important;
+  box-shadow: var(--pos-focus-ring) !important;
+}
+
+body .pos-module-container .pos-search-input-wrap input {
+  font-size: 13px !important;
+  color: var(--pos-text) !important;
+}
+
+body .pos-module-container .pos-status-pills-bar .pos-status-pill:first-child:not(.active) > span:first-child {
+  background: var(--pos-text-muted) !important;
+}
+
+body .pos-module-container .pos-toolbar-btn,
+body .pos-module-container .pos-toolbar-icon-btn {
+  height: 38px !important;
+  border-radius: var(--pos-radius-sm) !important;
+  background: var(--pos-surface) !important;
+  border: 1px solid var(--pos-border) !important;
+  color: var(--pos-text-secondary) !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  box-shadow: var(--pos-shadow-sm) !important;
+}
+
+body .pos-module-container .pos-toolbar-icon-btn {
+  width: 38px !important;
+}
+
+body .pos-module-container .pos-toolbar-btn:hover,
+body .pos-module-container .pos-toolbar-btn.active,
+body .pos-module-container .pos-toolbar-icon-btn:hover {
+  background: var(--pos-surface-subtle) !important;
+  border-color: var(--pos-border-strong) !important;
+  color: var(--pos-text) !important;
+}
+
+body .pos-module-container .pos-create-order-btn {
+  height: 38px !important;
+  padding: 0 16px !important;
+  border-radius: var(--pos-radius-sm) !important;
+  background: var(--pos-accent) !important;
+  border: 1px solid var(--pos-accent) !important;
+  color: #ffffff !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.18) !important;
+}
+
+body .pos-module-container .pos-create-order-btn:hover {
+  background: var(--pos-accent-hover) !important;
+  border-color: var(--pos-accent-hover) !important;
+  transform: none !important;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.2) !important;
+}
+
+body .pos-module-container .pos-key-badge {
+  border-radius: 4px !important;
+  background: rgba(255, 255, 255, 0.18) !important;
+  font-size: 10.5px !important;
+  padding: 2px 6px !important;
+}
+
+body .pos-module-container .pos-status-toolbar-row {
+  gap: 12px !important;
+  margin-bottom: 0 !important;
+}
+
+body .pos-module-container .pos-status-pills-bar {
+  gap: 6px !important;
+  padding: 0 0 2px !important;
+  background: transparent !important;
+  border: none !important;
+  scrollbar-width: none !important;
+}
+
+body .pos-module-container .pos-status-pills-bar::-webkit-scrollbar {
+  display: none !important;
+}
+
+body .pos-module-container .pos-status-pill {
+  height: 32px !important;
+  padding: 0 14px !important;
+  border-radius: 999px !important;
+  background: var(--pos-surface) !important;
+  border: 1px solid var(--pos-border) !important;
+  color: var(--pos-text-secondary) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  box-shadow: var(--pos-shadow-sm) !important;
+}
+
+body .pos-module-container .pos-status-pill:hover {
+  background: var(--pos-surface-subtle) !important;
+  border-color: var(--pos-border-strong) !important;
+  color: var(--pos-text) !important;
+}
+
+body .pos-module-container .pos-status-pill.active {
+  background: var(--pos-accent) !important;
+  border-color: var(--pos-accent) !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2) !important;
+}
+
+body .pos-module-container .pos-status-pill-count {
+  background: var(--pos-surface-muted) !important;
+  color: var(--pos-text-secondary) !important;
+  border-radius: 6px !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  padding: 1px 6px !important;
+}
+
+body .pos-module-container .pos-status-pill.active .pos-status-pill-count {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+}
+
+body .pos-module-container .pos-orders-table-card {
+  background: var(--pos-surface) !important;
+  border: 1px solid var(--pos-border) !important;
+  border-radius: var(--pos-radius) !important;
+  box-shadow: var(--pos-shadow-sm) !important;
+}
+
+body .pos-module-container .pos-orders-table th {
+  padding: 11px 14px !important;
+  background: var(--pos-surface-subtle) !important;
+  border-bottom: 1px solid var(--pos-border) !important;
+  color: var(--pos-text-muted) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+body .pos-module-container .pos-orders-table tbody tr.pos-order-row > td {
+  padding: 12px 14px !important;
+  background: var(--pos-surface) !important;
+  border-bottom: 1px solid var(--pos-surface-muted) !important;
+  font-size: 12.5px !important;
+  color: var(--pos-text) !important;
+}
+
+body .pos-module-container .pos-orders-table tbody tr.pos-order-row:hover > td {
+  background: var(--pos-surface-subtle) !important;
+}
+
+body .pos-module-container .pos-orders-table tbody tr.pos-order-row > td.col-order_id {
+  border-left: 3px solid transparent !important;
+  padding-left: 13px !important;
+}
+
+body .pos-module-container .pos-orders-table tbody tr.pos-order-row:hover > td.col-order_id,
+body .pos-module-container .pos-orders-table tbody tr.pos-order-row-editing > td.col-order_id {
+  border-left-color: var(--pos-accent) !important;
+}
+
+body .pos-module-container .pos-orders-table tbody tr.pos-order-row {
+  transition: background-color 0.12s ease;
+}
+
+body .pos-module-container .pos-ticket-num {
+  font-weight: 700 !important;
+  font-size: 13px !important;
+  letter-spacing: 0 !important;
+  color: var(--pos-accent) !important;
+}
+
+body .pos-module-container .pos-icon-action-btn {
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 7px !important;
+  box-shadow: none !important;
+}
+
+body .pos-module-container .pos-icon-action-btn:hover {
+  transform: none !important;
+  box-shadow: var(--pos-shadow-sm) !important;
+}
+
+body .pos-module-container .pos-table-pagination-footer,
+body .pos-module-container .pos-cards-pagination-bar {
+  margin-top: 0 !important;
+  padding: 10px 14px !important;
+  background: var(--pos-surface) !important;
+  border-top: 1px solid var(--pos-border) !important;
+}
+
+body .pos-module-container .pagination-info {
+  font-size: 12px !important;
+  color: var(--pos-text-muted) !important;
+}
+
+body .pos-module-container .pagination-btn {
+  min-width: 30px !important;
+  height: 30px !important;
+  border-radius: 7px !important;
+  border: 1px solid var(--pos-border) !important;
+  background: var(--pos-surface) !important;
+  color: var(--pos-text-secondary) !important;
+  font-size: 12.5px !important;
+  box-shadow: none !important;
+}
+
+body .pos-module-container .pagination-btn:hover:not(:disabled) {
+  background: var(--pos-surface-subtle) !important;
+  border-color: var(--pos-border-strong) !important;
+  color: var(--pos-text) !important;
+}
+
+body .pos-module-container .pagination-btn.pagination-num.active {
+  background: var(--pos-accent) !important;
+  border-color: var(--pos-accent) !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+body .pos-module-container .pagination-size-select {
+  height: 30px !important;
+  border-radius: 7px !important;
+  border: 1px solid var(--pos-border) !important;
+  background: var(--pos-surface) !important;
+  color: var(--pos-text-secondary) !important;
+  font-size: 12px !important;
+}
+
+body .pos-module-container .pos-module-grid {
+  gap: 14px !important;
+  align-items: start;
+}
+
+body .pos-module-container .pos-card-panel {
+  background: var(--pos-surface) !important;
+  border: 1px solid var(--pos-border) !important;
+  border-radius: var(--pos-radius) !important;
+  box-shadow: var(--pos-shadow-sm) !important;
+  padding: 16px !important;
+  gap: 14px !important;
+}
+
+body .pos-module-container .pos-panel-header {
+  padding-bottom: 12px !important;
+  border-bottom: 1px solid var(--pos-border) !important;
+}
+
+body .pos-module-container .pos-panel-title {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: var(--pos-text) !important;
+  letter-spacing: -0.01em !important;
+}
+
+body .pos-module-container .pos-pill-count {
+  background: var(--pos-accent-soft) !important;
+  color: var(--pos-accent) !important;
+  border-radius: 6px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+
+body .pos-module-container .pos-catalog-search-input {
+  height: 36px !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--pos-border) !important;
+  background: var(--pos-surface-subtle) !important;
+  color: var(--pos-text) !important;
+  font-size: 12.5px !important;
+  box-shadow: none !important;
+}
+
+body .pos-module-container .pos-catalog-search-input:focus {
+  background: var(--pos-surface) !important;
+  border-color: var(--pos-accent) !important;
+  box-shadow: var(--pos-focus-ring) !important;
+}
+
+body .pos-module-container .pos-catalog-tab-btn {
+  padding: 5px 11px !important;
+  border-radius: 6px !important;
+  border: 1px solid var(--pos-border) !important;
+  background: var(--pos-surface) !important;
+  color: var(--pos-text-secondary) !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+body .pos-module-container .pos-catalog-tab-btn:hover {
+  background: var(--pos-surface-subtle) !important;
+  border-color: var(--pos-border-strong) !important;
+  color: var(--pos-text) !important;
+}
+
+body .pos-module-container .pos-catalog-tab-btn.active {
+  background: var(--pos-accent-soft) !important;
+  border-color: var(--pos-accent-border) !important;
+  color: var(--pos-accent) !important;
+  box-shadow: none !important;
+}
+
+body .pos-module-container .pos-item-card {
+  background: var(--pos-surface) !important;
+  border: 1px solid var(--pos-border) !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+body .pos-module-container .pos-item-card:hover {
+  background: var(--pos-surface) !important;
+  border-color: var(--pos-border-strong) !important;
+  transform: none !important;
+  box-shadow: var(--pos-shadow-sm) !important;
+}
+
+body .pos-module-container .pos-item-card.in-cart {
+  background: var(--pos-accent-soft) !important;
+  border-color: var(--pos-accent-border) !important;
+}
+
+body .pos-module-container .pos-item-img-box {
+  background: var(--pos-surface-subtle) !important;
+  border-radius: 8px !important;
+}
+
+body .pos-module-container .pos-item-title {
+  color: var(--pos-text) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+body .pos-module-container .pos-item-price-tag {
+  color: var(--pos-text) !important;
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+}
+
+body .pos-module-container .pos-item-add-btn {
+  border-radius: 6px !important;
+  border: 1px solid var(--pos-border) !important;
+  background: var(--pos-surface-subtle) !important;
+  color: var(--pos-text-secondary) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+
+body .pos-module-container .pos-item-card:hover .pos-item-add-btn {
+  background: var(--pos-accent) !important;
+  border-color: var(--pos-accent) !important;
+  color: #ffffff !important;
+}
+
+body .pos-module-container .pos-cart-row {
+  background: var(--pos-surface-subtle) !important;
+  border: 1px solid var(--pos-border) !important;
+  border-radius: 8px !important;
+  padding: 8px 10px !important;
+}
+
+body .pos-module-container .pos-cart-row:hover {
+  background: var(--pos-surface-muted) !important;
+  border-color: var(--pos-border-strong) !important;
+}
+
+body .pos-module-container .pos-cart-item-name {
+  color: var(--pos-text) !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+}
+
+body .pos-module-container .pos-cart-stepper {
+  border-radius: 7px !important;
+  border: 1px solid var(--pos-border) !important;
+  background: var(--pos-surface) !important;
+}
+
+body .pos-module-container .pos-stepper-btn {
+  border-radius: 5px !important;
+  background: var(--pos-surface-subtle) !important;
+  color: var(--pos-text-secondary) !important;
+}
+
+body .pos-module-container .pos-stepper-btn:hover {
+  background: var(--pos-accent) !important;
+  color: #ffffff !important;
+}
+
+body .pos-module-container .pos-stepper-val {
+  color: var(--pos-text) !important;
+}
+
+body .pos-module-container .pos-cart-amount {
+  color: var(--pos-text) !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+}
+
+body .pos-module-container .pos-summary-box {
+  background: var(--pos-surface-subtle) !important;
+  border: 1px solid var(--pos-border) !important;
+  border-radius: 10px !important;
+  padding: 12px !important;
+}
+
+body .pos-module-container .pos-summary-line {
+  color: var(--pos-text-secondary) !important;
+  font-size: 12.5px !important;
+}
+
+body .pos-module-container .pos-summary-line strong {
+  color: var(--pos-text) !important;
+}
+
+body .pos-module-container .pos-summary-line.grand {
+  border-top: 1px solid var(--pos-border) !important;
+  color: var(--pos-text) !important;
+  font-weight: 600 !important;
+}
+
+body .pos-module-container .pos-summary-line.grand strong {
+  color: var(--pos-accent) !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+}
+
+body .pos-module-container .pos-field-label {
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  color: var(--pos-text-muted) !important;
+  letter-spacing: 0.01em !important;
+}
+
+body .pos-module-container .pos-input,
+body .pos-module-container .pos-select,
+body .pos-module-container .pos-textarea {
+  border-radius: 8px !important;
+  border: 1px solid var(--pos-border) !important;
+  background: var(--pos-surface) !important;
+  color: var(--pos-text) !important;
+  font-size: 12.5px !important;
+  box-shadow: none !important;
+}
+
+body .pos-module-container .pos-input:focus,
+body .pos-module-container .pos-select:focus,
+body .pos-module-container .pos-textarea:focus {
+  border-color: var(--pos-accent) !important;
+  box-shadow: var(--pos-focus-ring) !important;
+}
+
+body .pos-module-container .pos-cust-mode-tabs {
+  display: flex !important;
+  gap: 4px !important;
+  padding: 3px !important;
+  background: var(--pos-surface-muted) !important;
+  border: 1px solid var(--pos-border) !important;
+  border-radius: 8px !important;
+}
+
+body .pos-module-container .pos-cust-mode-btn {
+  flex: 1 1 0 !important;
+  height: 30px !important;
+  border: 1px solid transparent !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: var(--pos-text-secondary) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+body .pos-module-container .pos-cust-mode-btn:hover {
+  color: var(--pos-text) !important;
+}
+
+body .pos-module-container .pos-cust-mode-btn.active {
+  background: var(--pos-surface) !important;
+  border-color: var(--pos-border) !important;
+  color: var(--pos-text) !important;
+  box-shadow: var(--pos-shadow-sm) !important;
+}
+
+body .pos-module-container .pos-selected-cust-card {
+  background: var(--pos-accent-soft) !important;
+  border: 1px solid var(--pos-accent-border) !important;
+  border-radius: 9px !important;
+  padding: 10px 12px !important;
+}
+
+body .pos-module-container .pos-selected-cust-name {
+  color: var(--pos-text) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+body .pos-module-container .pos-selected-cust-phone {
+  color: var(--pos-text-secondary) !important;
+  font-size: 11.5px !important;
+}
+
+body .pos-module-container .pos-btn-primary {
+  border-radius: 9px !important;
+  background: var(--pos-accent) !important;
+  border: 1px solid var(--pos-accent) !important;
+  box-shadow: none !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  padding: 11px !important;
+}
+
+body .pos-module-container .pos-btn-primary:hover:not(:disabled) {
+  background: var(--pos-accent-hover) !important;
+  border-color: var(--pos-accent-hover) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+body .pos-module-container .pos-btn-hold {
+  border-radius: 9px !important;
+  background: var(--pos-surface) !important;
+  border: 1px solid var(--pos-border) !important;
+  color: var(--pos-text-secondary) !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+}
+
+body .pos-module-container .pos-btn-hold:hover {
+  background: var(--pos-surface-subtle) !important;
+  border-color: var(--pos-border-strong) !important;
+  color: var(--pos-text) !important;
+}
+
+body .pos-module-container .pos-search-results-list {
+  background: var(--pos-surface) !important;
+  border: 1px solid var(--pos-border) !important;
+  border-radius: 9px !important;
+  box-shadow: var(--pos-shadow-md) !important;
+}
+
+body .pos-module-container .pos-search-result-item {
+  border-bottom: 1px solid var(--pos-surface-muted) !important;
+}
+
+body .pos-module-container .pos-search-result-item:hover {
+  background: var(--pos-surface-subtle) !important;
+}
+
+body .pos-module-container .pos-search-result-name {
+  color: var(--pos-text) !important;
+  font-weight: 600 !important;
+}
+
+body .pos-module-container .pos-search-result-phone {
+  color: var(--pos-text-muted) !important;
+}
+
+body .pos-module-container .pos-orders-empty-state {
+  background: var(--pos-surface) !important;
+  border: 1px dashed var(--pos-border) !important;
+  border-radius: var(--pos-radius) !important;
+}
+
+@media (max-width: 860px) {
+  body .pos-module-container .pos-screen-title {
+    font-size: 18px !important;
+  }
+
+  body .pos-module-container .pos-screen-subtitle {
+    font-size: 11.5px !important;
   }
 }
