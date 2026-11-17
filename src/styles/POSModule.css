@@ -6280,7 +6280,7 @@ body.light-theme .pagination-btn.pagination-num.active,
 .pos-edit-customer-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-content: start;
+  grid-template-rows: auto auto auto auto minmax(90px, 1fr) auto;
   gap: 12px;
   flex: 1;
   min-height: 0;

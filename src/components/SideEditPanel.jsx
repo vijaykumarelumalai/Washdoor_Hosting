@@ -922,7 +922,7 @@ export default function SideEditPanel({
                   </div>
 
                   {isOnCallOrderType(orderType) && (
-                    <div className="oncall-schedule-grid oncall-schedule-grid--stacked" style={{ marginBottom: '12px' }}>
+                    <div className="oncall-schedule-grid oncall-schedule-grid--stacked">
                       <div className="side-edit-field">
                         <label className="side-edit-label">
                           Scheduled Pickup Date &amp; Time <span className="side-edit-req">*</span>
@@ -996,7 +996,8 @@ export default function SideEditPanel({
                     </div>
                   )}
 
-                  <div className="side-edit-field">
+                  {!isOnCallOrderType(orderType) && (
+<div className="side-edit-field">
                     <label className="side-edit-label">
                       Expected Delivery <span className="side-edit-req">*</span>
                     </label>
@@ -1011,6 +1012,7 @@ export default function SideEditPanel({
                       />
                     </div>
                   </div>
+)}
 
                   <div className="side-edit-field">
                     <label className="side-edit-label">Attend Staff Name</label>
