@@ -3,6 +3,7 @@
 // Fully responsive with comprehensive Order Details, Logistics, Status, Payments, Customer, Comments & Audit Trail
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { normalizeOrdersV2Status } from './OrdersV2List';
 import ClothIllustration from './ClothIllustration';
 import GarmentInspectionSection from './GarmentInspectionSection';
 import ServiceTypeSelect from './ServiceTypeSelect';
@@ -15,6 +16,7 @@ import {
 } from '../services/customerService';
 import {
   isOnCallOrderType,
+  resolveOptionalDelivery,
   splitIsoToLocalDateAndTime,
   validateOnCallSchedule,
 } from '../utils/onCallScheduling';
@@ -92,7 +94,7 @@ export default function SideEditPanel({
   const initialAltPhone = order?.alternate_phone || order?.customer?.alternate_phone || '';
   const initialEmail = order?.email || order?.customer?.email || '';
   const initialAddress = order?.address || order?.delivery_address || order?.customer?.address || '';
-  const initialStatus = order?.status || order?.order_status || 'In Progress';
+  const initialStatus = normalizeOrdersV2Status(order?.status || order?.order_status);
   const initialOrderType = order?.order_type || 'Walk-in';
   const initialExpectedDelivery = order?.expected_delivery || '';
   const initialComments = order?.comments || order?.order_notes || order?.special_instructions || '';
@@ -348,7 +350,7 @@ export default function SideEditPanel({
       setAlternatePhone(order.alternate_phone || order.customer?.alternate_phone || '');
       setEmail(order.email || order.customer?.email || '');
       setAddress(order.address || order.delivery_address || order.customer?.address || '');
-      setStatus(order.status || order.order_status || 'In Progress');
+      setStatus(normalizeOrdersV2Status(order.status || order.order_status));
       setOrderType(order.order_type || 'Walk-in');
       setExpectedDelivery(order.expected_delivery || order.delivery_date || '');
       const pSplit = splitIsoToLocalDateAndTime(order.scheduled_pickup_at);
@@ -512,9 +514,22 @@ export default function SideEditPanel({
       setScheduleErrors({});
       resolvedScheduledPickupAt = schedResult.scheduled_pickup_at;
       resolvedScheduledDeliveryAt = schedResult.scheduled_delivery_at;
+    } else {
+      const deliveryResult = resolveOptionalDelivery({
+        deliveryDate: scheduledDeliveryDate,
+        deliveryTime: scheduledDeliveryTime,
+      });
+      if (!deliveryResult.isValid) {
+        setScheduleErrors(deliveryResult.errors);
+        showToast?.(`⚠️ ${Object.values(deliveryResult.errors)[0]}`);
+        return;
+      }
+      setScheduleErrors({});
+      resolvedScheduledDeliveryAt = deliveryResult.scheduled_delivery_at;
     }
 
     const totalPieces = cartItems.reduce((sum, c) => sum + Number(c.qty || 0), 0);
+    const resolvedStatus = normalizeOrdersV2Status(status);
     const nowIso = new Date().toISOString();
     const staffActor = attendStaffName.trim() || order?.attend_staff_name || order?.assigned_staff || 'Counter Staff';
     const pickupPerson = assignedPickupPerson.trim() || assignedRider || '';
@@ -523,14 +538,14 @@ export default function SideEditPanel({
       : (Array.isArray(auditLogs) ? [...auditLogs] : []);
     const newEntries = [];
 
-    if (status !== (order?.order_status || order?.status)) {
+    if (resolvedStatus !== normalizeOrdersV2Status(order?.order_status || order?.status)) {
       newEntries.push({
         id: `act_status_${Date.now()}`,
-        type: status === 'Delivered' ? 'collection' : 'status',
-        title: status === 'Delivered' ? 'Order Delivered' : 'Status Updated',
-        detail: status === 'Delivered'
+        type: resolvedStatus === 'Delivered' ? 'collection' : 'status',
+        title: resolvedStatus === 'Delivered' ? 'Order Delivered' : 'Status Updated',
+        detail: resolvedStatus === 'Delivered'
           ? `Garments delivered (${pickupPerson || customerName})`
-          : `Status changed to ${status}`,
+          : `Status changed to ${resolvedStatus}`,
         staff: staffActor,
         timestamp: nowIso,
       });
@@ -568,10 +583,10 @@ export default function SideEditPanel({
     const resolvedPaymentReceivedAt = nextAdv > 0
       ? (nextAdv !== prevAdv ? nowIso : (order?.payment_received_at || nowIso))
       : order?.payment_received_at || null;
-    const resolvedCollectionAt = status === 'Delivered'
-      ? (order?.collection_at || nowIso)
+    const resolvedCollectionAt = resolvedStatus === 'Delivered'
+      ? nowIso
       : (order?.collection_at || null);
-    const resolvedCollectedBy = status === 'Delivered'
+    const resolvedCollectedBy = resolvedStatus === 'Delivered'
       ? (order?.collected_by_person || pickupPerson || customerName || 'Customer')
       : (order?.collected_by_person || '');
 
@@ -585,12 +600,12 @@ export default function SideEditPanel({
       alternate_phone: alternatePhone,
       email: email,
       address: address,
-      status: status,
-      order_status: status,
+      status: resolvedStatus,
+      order_status: resolvedStatus,
       order_type: orderType,
       expected_delivery: expectedDelivery,
       scheduled_pickup_at: isOnCallOrderType(orderType) ? resolvedScheduledPickupAt : (order?.scheduled_pickup_at || null),
-      scheduled_delivery_at: isOnCallOrderType(orderType) ? resolvedScheduledDeliveryAt : (order?.scheduled_delivery_at || null),
+      scheduled_delivery_at: resolvedScheduledDeliveryAt,
       comments: comments,
       special_instructions: comments,
       order_notes: comments,
@@ -706,11 +721,9 @@ export default function SideEditPanel({
         expectedDelivery: updatedOrder.expected_delivery,
         deliveryDate: updatedOrder.expected_delivery,
         ...(isOnCallOrderType(updatedOrder.order_type)
-          ? {
-              scheduled_pickup_at: updatedOrder.scheduled_pickup_at,
-              scheduled_delivery_at: updatedOrder.scheduled_delivery_at,
-            }
+          ? { scheduled_pickup_at: updatedOrder.scheduled_pickup_at }
           : {}),
+        scheduled_delivery_at: updatedOrder.scheduled_delivery_at,
         priority: updatedOrder.priority || 'Normal',
         orderNotes: updatedOrder.comments,
         subtotal: subtotal,
@@ -997,22 +1010,57 @@ export default function SideEditPanel({
                   )}
 
                   {!isOnCallOrderType(orderType) && (
-<div className="side-edit-field">
-                    <label className="side-edit-label">
-                      Expected Delivery <span className="side-edit-req">*</span>
-                    </label>
-                    <div className="side-edit-icon-wrap">
-                  
-                      <input
-                        type="text"
-                        className="side-edit-input"
-                        value={expectedDelivery}
-                        onChange={(e) => setExpectedDelivery(e.target.value)}
-                        placeholder="30 Oct 2026, 05:00 PM"
-                      />
-                    </div>
-                  </div>
-)}
+                    <>
+                      <div className="side-edit-field">
+                        <label className="side-edit-label">
+                          Expected Delivery <span className="side-edit-req">*</span>
+                        </label>
+                        <div className="side-edit-icon-wrap">
+                          <input
+                            type="text"
+                            className="side-edit-input"
+                            value={expectedDelivery}
+                            onChange={(e) => setExpectedDelivery(e.target.value)}
+                            placeholder="30 Oct 2026, 05:00 PM"
+                          />
+                        </div>
+                      </div>
+                      <div className="oncall-schedule-grid oncall-schedule-grid--stacked">
+                        <div className="side-edit-field">
+                          <label className="side-edit-label">Delivery Date &amp; Time (optional)</label>
+                          <div className="oncall-datetime-pair">
+                            <input
+                              type="date"
+                              className="side-edit-input"
+                              value={scheduledDeliveryDate}
+                              onChange={(e) => {
+                                setScheduledDeliveryDate(e.target.value);
+                                if (scheduleErrors.scheduled_delivery_at) {
+                                  setScheduleErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
+                                }
+                              }}
+                              aria-label="Scheduled Delivery Date"
+                            />
+                            <input
+                              type="time"
+                              className="side-edit-input"
+                              value={scheduledDeliveryTime}
+                              onChange={(e) => {
+                                setScheduledDeliveryTime(e.target.value);
+                                if (scheduleErrors.scheduled_delivery_at) {
+                                  setScheduleErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
+                                }
+                              }}
+                              aria-label="Scheduled Delivery Time"
+                            />
+                          </div>
+                          {scheduleErrors.scheduled_delivery_at && (
+                            <div className="oncall-field-error">{scheduleErrors.scheduled_delivery_at}</div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
 
                   <div className="side-edit-field">
                     <label className="side-edit-label">Attend Staff Name</label>
@@ -1470,7 +1518,7 @@ export default function SideEditPanel({
                   { name: 'Ready', label: 'Ready' },
                   { name: 'Delivered', label: 'Delivered' },
                 ].map((step, idx) => {
-                  const currentIdx = ['Order Received', 'In Progress', 'Ready', 'Delivered'].indexOf(status === 'Received' ? 'Order Received' : status);
+                  const currentIdx = ['Order Received', 'In Progress', 'Ready', 'Delivered'].indexOf(normalizeOrdersV2Status(status));
                   const isCompleted = currentIdx > idx;
                   const isActive = currentIdx === idx;
                   return (
@@ -1494,7 +1542,7 @@ export default function SideEditPanel({
                   <label className="side-edit-label">Current Order Status</label>
                   <select
                     className="side-edit-select"
-                    value={status === 'Received' ? 'Order Received' : status}
+                    value={normalizeOrdersV2Status(status)}
                     onChange={(e) => setStatus(e.target.value)}
                   >
                     <option value="Order Received">Order Received &amp; Tagged</option>
@@ -1645,7 +1693,7 @@ export default function SideEditPanel({
                 </div>
               </div>
 
-              <div className="side-edit-row-3col">
+              <div className="side-edit-row-2col">
                 <div className="side-edit-field">
                   <label className="side-edit-label">Advance Amount ({currencySymbol})</label>
                   <input
@@ -1665,8 +1713,10 @@ export default function SideEditPanel({
                     onChange={(e) => setDiscountAmount(Number(e.target.value) || 0)}
                   />
                 </div>
+              </div>
 
-                <div className="side-edit-field">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '12px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                <div style={{ minWidth: '180px', flex: '0 1 240px' }}>
                   <label className="side-edit-label">UPI Instant Pay</label>
                   <button
                     type="button"
@@ -1686,6 +1736,34 @@ export default function SideEditPanel({
                     <span>SHOW QR</span>
                   </button>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdvancePaid(grandTotal);
+                    setPaymentStatus('Paid in Full');
+                    showToast?.('✅ Marked order as fully paid!');
+                  }}
+                  className="pos-edit-save-btn"
+                  style={{
+                    height: '38px',
+                    fontSize: '12px',
+                    background: '#16a34a',
+                    borderColor: '#16a34a',
+                    color: '#ffffff',
+                    borderRadius: '7px',
+                    fontWeight: 700,
+                    padding: '0 16px',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    border: 'none',
+                    boxShadow: '0 2px 6px rgba(22, 163, 74, 0.25)',
+                  }}
+                >
+                  ✓ Mark as Fully Paid
+                </button>
               </div>
 
               <div className="side-edit-field">

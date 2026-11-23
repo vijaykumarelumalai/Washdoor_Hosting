@@ -89,7 +89,8 @@ test('Create, Edit, and SideEditPanel all use shared ServiceTypeSelect / useServ
   assert.match(sideEdit, /<ServiceTypeSelect/);
   assert.match(editModal, /<ServiceTypeSelect/);
   assert.match(custForm, /useServiceTypes/);
-  assert.match(svcSelect, /addCustomServiceType/);
+  assert.match(svcSelect, /createServiceType/);
+  assert.doesNotMatch(svcSelect, /addCustomServiceType/);
   assert.match(svcSelect, /\+ Add New Service Type/);
 });
 
@@ -134,4 +135,43 @@ test('ClothSelectionCart uses catalog item price/base_price and spacious inline 
   assert.doesNotMatch(clothCart, /resolveServicePrice/);
   assert.match(clothCart, /selectedProduct\.price \?\? selectedProduct\.base_price/);
   assert.match(clothCss, /\.cloth-service-group:has\(\.wd-add-service-inline\)/);
+});
+
+test('Orders v2 shares one canonical active service list with Inline Edit', () => {
+  const ordersV2 = fs.readFileSync(path.join(srcDir, 'components/OrdersV2.jsx'), 'utf8');
+  const ordersV2List = fs.readFileSync(path.join(srcDir, 'components/OrdersV2List.jsx'), 'utf8');
+
+  assert.match(ordersV2, /serviceTypes=\{serviceTypes\}/);
+  assert.match(ordersV2, /isLoadingServiceTypes=\{isLoadingServiceTypes\}/);
+  assert.match(ordersV2, /withNameHistory\(dedupeServiceTypes\(result\.data\)\)/);
+  assert.match(ordersV2, /SERVICE_TYPES_UPDATED_EVENT/);
+  assert.match(ordersV2, /result\.source !== 'supabase'/);
+
+  assert.match(ordersV2List, /serviceTypes = \[\]/);
+  assert.match(ordersV2List, /serviceTypes\.map\(\(svc\)/);
+  assert.doesNotMatch(ordersV2List, /serviceTypesList/);
+  assert.doesNotMatch(ordersV2List, /getFallbackServiceTypes/);
+  assert.doesNotMatch(ordersV2List, /fetchServiceTypes/);
+  assert.doesNotMatch(ordersV2List, /SERVICE_TYPES_UPDATED_EVENT/);
+  assert.match(ordersV2List, /result\.source === 'supabase'/);
+});
+
+test('Orders v2 service filtering covers multiple cart services and historical item aliases', () => {
+  const ordersV2List = fs.readFileSync(path.join(srcDir, 'components/OrdersV2List.jsx'), 'utf8');
+
+  assert.match(ordersV2List, /getServiceFilterKeys[\s\S]*?svc\.names \|\| \[svc\.name\]/);
+  assert.match(ordersV2List, /raw\?\.service_category \|\| raw\?\.serviceCategory/);
+  assert.match(ordersV2List, /raw\?\.items, raw\?\.services_allocated, raw\?\.services/);
+  assert.match(ordersV2List, /item\?\.serviceType \|\| item\?\.service_type \|\| item\?\.service \|\| item\?\.category/);
+});
+
+test('Shared ServiceTypeSelect persists new services through the Supabase master', () => {
+  const serviceTypeSelect = fs.readFileSync(path.join(srcDir, 'components/ServiceTypeSelect.jsx'), 'utf8');
+  const serviceTypeService = fs.readFileSync(path.join(srcDir, 'services/serviceTypeService.js'), 'utf8');
+
+  assert.match(serviceTypeSelect, /await createServiceType\(\{ name: trimmed \}\)/);
+  assert.doesNotMatch(serviceTypeSelect, /addCustomServiceType/);
+  assert.match(serviceTypeService, /fetchedData\.some\(\(s\) => isDbId\(s\.id\)/);
+  assert.match(serviceTypeService, /syncLocalAdd\(clean\)/);
+  assert.match(serviceTypeService, /notifyServiceTypesChanged/);
 });

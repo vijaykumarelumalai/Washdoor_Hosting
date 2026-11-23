@@ -2105,7 +2105,7 @@ function mapCustomerWorkRowToOrder(row, factoryRow = null, scheduleRow = null, g
         careNotes: it.care_instructions || '',
       }));
 
-  const itemCount = row.total_pieces !== undefined && row.total_pieces !== null ? Number(row.total_pieces) : (items.length || 1);
+  const itemCount = row.total_pieces !== undefined && row.total_pieces !== null ? Number(row.total_pieces) : items.length;
   if (Object.keys(garmentInspections).length === 0 && Array.isArray(items)) {
     items.forEach((it) => {
       if (it.inspections && Array.isArray(it.inspections)) {
@@ -2211,7 +2211,7 @@ function mapCustomerWorkRowToOrder(row, factoryRow = null, scheduleRow = null, g
   const subtotal = Number(row.subtotal !== undefined && row.subtotal !== null ? row.subtotal : (totalAmount ? +(totalAmount / 1.05).toFixed(2) : 0));
   const discountAmount = Number(row.discount_amount || 0);
   const taxAmount = Number(row.tax_amount !== undefined && row.tax_amount !== null ? row.tax_amount : +(subtotal * 0.05).toFixed(2));
-  const balanceDue = row.balance_due !== undefined && row.balance_due !== null ? Number(row.balance_due) : Math.max(0, totalAmount - advancePaid);
+  const balanceDue = (totalAmount > 0 && advancePaid >= totalAmount) ? 0 : (row.balance_due !== undefined && row.balance_due !== null ? Number(row.balance_due) : Math.max(0, totalAmount - advancePaid));
 
   const formattedExpectedDelivery = internalNotesObj.expected_delivery_display || (row.target_delivery_date ? new Date(row.target_delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
 
@@ -2259,10 +2259,10 @@ function mapCustomerWorkRowToOrder(row, factoryRow = null, scheduleRow = null, g
     grand_total: totalAmount,
     advance_paid: advancePaid,
     balance_due: balanceDue,
-    payment_status: row.payment_status || (balanceDue <= 0 ? 'Paid' : advancePaid > 0 ? 'Partially Paid' : 'Unpaid'),
+    payment_status: (totalAmount > 0 && advancePaid <= 0) ? 'Unpaid' : (((totalAmount > 0 && advancePaid >= totalAmount) || (balanceDue <= 0 && (advancePaid > 0 || totalAmount > 0))) ? 'Paid' : (advancePaid > 0 ? 'Partially Paid' : (row.payment_status || 'Unpaid'))),
     payment_method: internalNotesObj.payment_method_display || row.payment_method || 'Cash',
     payment: {
-      status: row.payment_status || (balanceDue <= 0 ? 'Paid' : advancePaid > 0 ? 'Partially Paid' : 'Unpaid'),
+      status: (totalAmount > 0 && advancePaid <= 0) ? 'Unpaid' : (((totalAmount > 0 && advancePaid >= totalAmount) || (balanceDue <= 0 && (advancePaid > 0 || totalAmount > 0))) ? 'Paid' : (advancePaid > 0 ? 'Partially Paid' : (row.payment_status || 'Unpaid'))),
       mode: internalNotesObj.payment_method_display || row.payment_method || 'Cash',
       advancePaid: advancePaid,
       balanceDue: balanceDue,
@@ -2293,8 +2293,8 @@ function mapCustomerWorkRowToOrder(row, factoryRow = null, scheduleRow = null, g
     attend_staff_name: row.attend_staff_name || internalNotesObj.attend_staff_name || row.assigned_staff || '',
     assigned_pickup_person_id: row.assigned_pickup_person_id || internalNotesObj.assigned_pickup_person_id || null,
     assigned_pickup_delivery_person: row.assigned_pickup_delivery_person || internalNotesObj.assigned_pickup_delivery_person || factoryData.assigned_driver || schedData.assigned_driver_name || internalNotesObj.assigned_driver || '',
-    assigned_driver: internalNotesObj.assigned_pickup_delivery_person || factoryData.assigned_driver || schedData.assigned_driver_name || internalNotesObj.assigned_driver || row.assigned_staff || '',
-    assigned_driver_full: schedData.assigned_driver_full || internalNotesObj.assigned_driver_full || internalNotesObj.assigned_pickup_delivery_person || row.assigned_staff || '',
+    assigned_driver: row.assigned_pickup_delivery_person || internalNotesObj.assigned_pickup_delivery_person || factoryData.assigned_driver || schedData.assigned_driver_name || internalNotesObj.assigned_driver || '',
+    assigned_driver_full: schedData.assigned_driver_full || internalNotesObj.assigned_driver_full || internalNotesObj.assigned_pickup_delivery_person || row.assigned_pickup_delivery_person || '',
     status_updated_at: internalNotesObj.status_updated_at || row.updated_at || row.created_at || null,
     status_updated_by: internalNotesObj.status_updated_by || internalNotesObj.attend_staff_name || row.assigned_staff || 'Counter Staff',
     activity_history: Array.isArray(internalNotesObj.activity_history) ? internalNotesObj.activity_history : [],
@@ -2716,7 +2716,7 @@ export async function createCustomer(payload) {
       mobile_number: normMobile || clean.mobile_number,
       alternate_phone: clean.alternate_phone || null,
       email: clean.email || null,
-      delivery_address: clean.address || (clean.city ? `${clean.city}${clean.pincode ? ' - ' + clean.pincode : ''}` : 'Counter Walk-In'),
+      delivery_address: clean.address || (clean.city ? `${clean.city}${clean.pincode ? ' - ' + clean.pincode : ''}` : null),
       service_type: clean.service_category || clean.order_preference || clean.orderPreference || 'Wash & Steam Press',
       work_status: 'Received',
       priority: 'Normal',
@@ -3130,7 +3130,7 @@ export async function createOrderWithCustomer({
     }
 
     const calculatedItemCount = (items && items.length > 0)
-      ? items.reduce((s, i) => s + (Number(i.qty) || 1), 0)
+      ? items.reduce((s, i) => s + (Number(i.qty) || 0), 0)
       : (cleanCust.item_count !== undefined && cleanCust.item_count !== null ? Number(cleanCust.item_count) : 0);
 
     const masterInsert = {
@@ -3191,6 +3191,18 @@ export async function createOrderWithCustomer({
     const initialWorkStatus = 'Received';
     const rawDelivery = cleanCust.target_delivery_date || cleanCust.deliveryDate || cleanCust.delivery_date || cleanCust.expected_delivery || cleanCust.expectedDelivery;
 
+    // Parse scheduled timestamps (pickup is On-Call only; delivery is optional for Walk-In)
+    const isOnCallIntake = normalizedIntake === 'On-Call';
+    const parseIsoOrNull = (val) => {
+      if (!val) return null;
+      const d = new Date(val);
+      return !isNaN(d.getTime()) ? d.toISOString() : null;
+    };
+    const scheduledPickupAtIso = isOnCallIntake
+      ? parseIsoOrNull(cleanCust.scheduled_pickup_at || cleanCust.scheduledPickupAt)
+      : null;
+    const scheduledDeliveryAtIso = parseIsoOrNull(cleanCust.scheduled_delivery_at || cleanCust.scheduledDeliveryAt);
+
     try {
       // Compute exact financial metrics
       const calculatedSubtotal = cleanCust.subtotal !== undefined && cleanCust.subtotal !== null
@@ -3219,20 +3231,6 @@ export async function createOrderWithCustomer({
           targetDeliveryDateIso = d.toISOString();
         }
       }
-
-      // Parse On-Call scheduling timestamps (On-Call orders only; Walk-In remains null)
-      const isOnCallIntake = normalizedIntake === 'On-Call';
-      const parseIsoOrNull = (val) => {
-        if (!val) return null;
-        const d = new Date(val);
-        return !isNaN(d.getTime()) ? d.toISOString() : null;
-      };
-      const scheduledPickupAtIso = isOnCallIntake
-        ? parseIsoOrNull(cleanCust.scheduled_pickup_at || cleanCust.scheduledPickupAt)
-        : null;
-      const scheduledDeliveryAtIso = isOnCallIntake
-        ? parseIsoOrNull(cleanCust.scheduled_delivery_at || cleanCust.scheduledDeliveryAt)
-        : null;
 
       // Weight & shelf location
       const weightVal = cleanCust.weight_kg !== undefined && cleanCust.weight_kg !== null
@@ -3312,13 +3310,13 @@ export async function createOrderWithCustomer({
         mobile_number: cleanCust.mobile_number,
         alternate_phone: cleanCust.alternate_phone || null,
         email: cleanCust.email || null,
-        delivery_address: cleanCust.address || cleanCust.street_area || (normalizedIntake === 'Walk-In' ? 'Counter Walk-In' : 'Pending Address'),
+        delivery_address: cleanCust.address || cleanCust.street_area || null,
         service_type: orderPreference || cleanCust.service_category || 'Wash & Steam Press',
         work_status: initialWorkStatus,
         priority: normalizeDbPriority(cleanCust.property_status || cleanCust.priority),
         intake_method: normalizedIntake,
         items: items || [],
-        total_pieces: calculatedItemCount || 1,
+        total_pieces: Math.max(0, Number(calculatedItemCount) || 0),
         weight_kg: weightVal,
         rack_shelf_location: rackLocation,
         subtotal: Number(calculatedSubtotal.toFixed(2)),
@@ -3409,7 +3407,7 @@ export async function createOrderWithCustomer({
         assigned_pickup_person_id: cleanCust.assigned_pickup_person_id || null,
         assigned_pickup_delivery_person: cleanCust.assigned_pickup_delivery_person || null,
         scheduled_pickup_at: cleanCust.order_type === 'on-call' || orderType === 'on-call' ? (cleanCust.scheduled_pickup_at || null) : null,
-        scheduled_delivery_at: cleanCust.order_type === 'on-call' || orderType === 'on-call' ? (cleanCust.scheduled_delivery_at || null) : null,
+        scheduled_delivery_at: scheduledDeliveryAtIso,
       };
       const { error: mErr } = await supabase
         .from('washdoor_orders_master')
@@ -3839,7 +3837,8 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
     }
 
     if (updatePayload.address !== undefined || updatePayload.delivery_address !== undefined) {
-      const addr = updatePayload.address ?? updatePayload.delivery_address ?? null;
+      const rawAddr = updatePayload.address ?? updatePayload.delivery_address ?? null;
+      const addr = rawAddr === '' ? null : rawAddr;
       workUpdate.delivery_address = addr;
       updateObj.street_area = addr;
     }
@@ -3887,11 +3886,15 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
     if (updatePayload.assigned_pickup_person_id !== undefined) {
       workUpdate.assigned_pickup_person_id = updatePayload.assigned_pickup_person_id || null;
     }
-    if (updatePayload.assigned_pickup_delivery_person !== undefined) {
-      workUpdate.assigned_pickup_delivery_person = updatePayload.assigned_pickup_delivery_person || null;
+    if (updatePayload.assigned_pickup_person_id !== undefined) {
+      workUpdate.assigned_pickup_person_id = updatePayload.assigned_pickup_person_id || null;
     }
-    if (updatePayload.attend_staff_name || updatePayload.assignedStaff || updatePayload.assigned_staff || updatePayload.assignedDriver || updatePayload.assigned_driver) {
-      workUpdate.assigned_staff = updatePayload.attend_staff_name || updatePayload.assignedStaff || updatePayload.assigned_staff || updatePayload.assignedDriver || updatePayload.assigned_driver;
+    const resolvedDriverName = updatePayload.assigned_pickup_delivery_person ?? updatePayload.assignedDriver ?? updatePayload.assigned_driver;
+    if (resolvedDriverName !== undefined) {
+      workUpdate.assigned_pickup_delivery_person = resolvedDriverName || null;
+    }
+    if (updatePayload.attend_staff_name || updatePayload.assignedStaff || updatePayload.assigned_staff) {
+      workUpdate.assigned_staff = updatePayload.attend_staff_name || updatePayload.assignedStaff || updatePayload.assigned_staff;
     }
 
     if (updatePayload.rackShelfLocation || updatePayload.rack_shelf_location) {
@@ -4020,7 +4023,7 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
 
     if (updatePayload.items) {
       workUpdate.items = updatePayload.items;
-      workUpdate.total_pieces = updatePayload.items.reduce((s, i) => s + (Number(i.qty) || 1), 0);
+      workUpdate.total_pieces = updatePayload.items.reduce((s, i) => s + (Number(i.qty) || 0), 0);
       updateObj.customer_history = {
         ...(updateObj.customer_history || {}),
         items: updatePayload.items,
@@ -4033,7 +4036,7 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
     const targetStatus = updatePayload.status || updatePayload.order_status;
     const targetPropertyStatus = updatePayload.property_status || (updatePayload.priority === 'Yes' ? 'Yes' : prevNotesObj.property_status || 'No');
     const nextAttendStaff = updatePayload.attend_staff_name ?? updatePayload.status_updated_by ?? updatePayload.assignedStaff ?? prevNotesObj.attend_staff_name ?? '';
-    const nextPickupPerson = updatePayload.assigned_pickup_delivery_person ?? updatePayload.assigned_driver ?? prevNotesObj.assigned_pickup_delivery_person ?? '';
+    const nextPickupPerson = updatePayload.assigned_pickup_delivery_person ?? updatePayload.assignedDriver ?? updatePayload.assigned_driver ?? prevNotesObj.assigned_pickup_delivery_person ?? '';
     const notesPayload = {
       ...prevNotesObj,
       garment_inspections: inspData,
@@ -4041,12 +4044,12 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       scheduled_pickup_at: nextScheduledPickupAt,
       scheduled_delivery_at: nextScheduledDeliveryAt,
       payment_method_display: updatePayload.paymentMethod || updatePayload.payment_method || updatePayload.paymentMode || prevNotesObj.payment_method_display || '',
-      assigned_driver: nextPickupPerson || updatePayload.assignedStaff || prevNotesObj.assigned_driver || '',
+      assigned_driver: nextPickupPerson || '',
       assigned_driver_full: updatePayload.assigned_driver_full ?? (nextPickupPerson || prevNotesObj.assigned_driver_full || ''),
       attend_staff_id: updatePayload.attend_staff_id !== undefined ? updatePayload.attend_staff_id : (prevNotesObj.attend_staff_id ?? null),
       attend_staff_name: nextAttendStaff,
       assigned_pickup_person_id: updatePayload.assigned_pickup_person_id !== undefined ? updatePayload.assigned_pickup_person_id : (prevNotesObj.assigned_pickup_person_id ?? null),
-      assigned_pickup_delivery_person: nextPickupPerson,
+      assigned_pickup_delivery_person: nextPickupPerson || '',
       status_updated_at: updatePayload.status_updated_at ?? (targetStatus ? new Date().toISOString() : prevNotesObj.status_updated_at) ?? new Date().toISOString(),
       status_updated_by: updatePayload.status_updated_by ?? (nextAttendStaff || prevNotesObj.status_updated_by || ''),
       activity_history: Array.isArray(updatePayload.activity_history) ? updatePayload.activity_history : (Array.isArray(updatePayload.audit_logs) ? updatePayload.audit_logs : (Array.isArray(prevNotesObj.activity_history) ? prevNotesObj.activity_history : [])),
@@ -4333,8 +4336,8 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
                 mobile_number: updatePayload.mobileNumber || updatePayload.mobile_number || o.mobile_number,
                 alternate_phone: updatePayload.alternatePhone || updatePayload.alternate_phone || o.alternate_phone,
                 email: updatePayload.email || o.email,
-                address: updatePayload.address || updatePayload.delivery_address || o.address,
-                delivery_address: updatePayload.address || updatePayload.delivery_address || o.delivery_address,
+                address: updatePayload.address ?? updatePayload.delivery_address ?? o.address,
+                delivery_address: updatePayload.address ?? updatePayload.delivery_address ?? o.delivery_address,
                 status: targetStatus ? normalizeOrderStatus(targetStatus) : o.status,
                 order_status: targetStatus ? normalizeOrderStatus(targetStatus) : o.order_status,
                 property_status: targetPropertyStatus || o.property_status || 'No',
@@ -4350,7 +4353,7 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
                 assigned_staff: workUpdate.assigned_staff || o.assigned_staff,
                 attend_staff_name: notesPayload.attend_staff_name || o.attend_staff_name,
                 assigned_pickup_delivery_person: notesPayload.assigned_pickup_delivery_person !== undefined ? notesPayload.assigned_pickup_delivery_person : o.assigned_pickup_delivery_person,
-                assigned_driver: notesPayload.assigned_driver || o.assigned_driver,
+                assigned_driver: notesPayload.assigned_driver !== undefined ? notesPayload.assigned_driver : o.assigned_driver,
                 assigned_driver_full: notesPayload.assigned_driver_full || o.assigned_driver_full,
                 status_updated_at: notesPayload.status_updated_at || o.status_updated_at,
                 status_updated_by: notesPayload.status_updated_by || o.status_updated_by,

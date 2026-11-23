@@ -588,6 +588,7 @@ export default function CustomerForm({
                   const next = { ...prev };
                   delete next.scheduled_pickup_at;
                   delete next.scheduled_delivery_at;
+                  delete next.address;
                   return next;
                 });
               }}

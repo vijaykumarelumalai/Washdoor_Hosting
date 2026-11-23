@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import CustomerManagement from './components/CustomerManagement';
 import CustomerMUI from './components/CustomerMUI';
 import POSModule from './components/POSModule';
+import OrdersV2 from './components/OrdersV2';
 import DashboardModule from './components/DashboardModule';
 import CreateOrderModal from './components/CreateOrderModal';
 import EditOrderModal from './components/EditOrderModal';
@@ -124,6 +125,19 @@ const NAV_ITEMS = [
         <path d="M16 13H8"></path>
         <path d="M16 17H8"></path>
         <path d="M10 9H8"></path>
+      </svg>
+    ),
+  },
+  {
+    id: 'orders-v2',
+    label: 'Orders v2',
+    title: 'Orders v2',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect>
+        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+        <path d="M9 12h6"></path>
+        <path d="M9 16h6"></path>
       </svg>
     ),
   },
@@ -1212,7 +1226,7 @@ export default function App() {
       </aside>
 
       {/* ── Main Content ── */}
-      <main className={`main ${!isMobile && isNavCollapsed ? 'sidebar-collapsed' : ''}`}>
+      <main className={`main ${!isMobile && isNavCollapsed ? 'sidebar-collapsed' : ''} ${activeTab === 'orders-v2' ? 'orders-v2-main' : ''}`}>
         {activeTab === 'dashboard' ? (
           <DashboardModule
             orders={orders}
@@ -1229,6 +1243,22 @@ export default function App() {
           />
         ) : (activeTab === 'order' || activeTab === 'pos') ? (
           <POSModule
+            orders={orders}
+            loadingOrders={loadingOrders}
+            onRefreshOrders={loadOrders}
+            onCreateOrder={() => setIsModalOpen(true)}
+            currencySymbol={currentCurrency?.symbol || '₹'}
+            showToast={showToast}
+            onEditOrder={(orderToEdit) => setEditingOrder(orderToEdit)}
+            onOrderCreated={loadOrders}
+            onNavigateTab={navigateToTab}
+            onUpdateOrder={handleUpdateOrderRecord}
+            onDeleteOrder={handleDeleteOrderRecord}
+            searchQuery={globalSearchQuery}
+            onSearchChange={setGlobalSearchQuery}
+          />
+        ) : activeTab === 'orders-v2' ? (
+          <OrdersV2
             orders={orders}
             loadingOrders={loadingOrders}
             onRefreshOrders={loadOrders}

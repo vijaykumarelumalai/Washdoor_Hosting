@@ -48,6 +48,7 @@ import {
   isOnCallOrderType,
   splitIsoToLocalDateAndTime,
   formatScheduledDateTime,
+  resolveDisplayScheduledDelivery,
   validateOnCallSchedule,
 } from '../utils/onCallScheduling';
 import '../styles/POSModule.css';
@@ -619,18 +620,26 @@ function OrderStatusSidePanel({
                       {orderTypeLabel}
                     </span>
                   </div>
+                  {!isOnCallOrder && (
+                    <div className="pos-status-kv-row">
+                      <span className="pos-status-kv-label">Scheduled Delivery</span>
+                      <span className="pos-status-kv-val">
+                        {formatScheduledDateTime(resolveDisplayScheduledDelivery(order), 'Not Scheduled')}
+                      </span>
+                    </div>
+                  )}
                   {isOnCallOrder && (
                     <>
                       <div className="pos-status-kv-row">
                         <span className="pos-status-kv-label">Scheduled Pickup</span>
                         <span className="pos-status-kv-val">
-                          {formatScheduledDateTime(order.scheduled_pickup_at, 'Not scheduled')}
+                          {formatScheduledDateTime(order.scheduled_pickup_at, 'Not Scheduled')}
                         </span>
                       </div>
                       <div className="pos-status-kv-row">
                         <span className="pos-status-kv-label">Scheduled Delivery</span>
                         <span className="pos-status-kv-val">
-                          {formatScheduledDateTime(order.scheduled_delivery_at, 'Not scheduled')}
+                          {formatScheduledDateTime(resolveDisplayScheduledDelivery(order), 'Not Scheduled')}
                         </span>
                       </div>
                     </>
@@ -679,7 +688,14 @@ function OrderStatusSidePanel({
                     Primary Service: <strong>{primaryServiceSummary}</strong>
                   </div>
                 ) : (
-                  <div className="pos-status-garment-list">
+                  <div
+                    className="pos-status-garment-list"
+                    style={{
+                      maxHeight: '260px',
+                      overflowY: 'auto',
+                      paddingRight: '6px',
+                    }}
+                  >
                     {items.map((it, idx) => {
                       const qty = Number(it.qty || it.quantity || it.count || 1);
                       const rate = Number(it.rate || it.unit_price || it.price || 0);

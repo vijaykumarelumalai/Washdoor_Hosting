@@ -2,10 +2,8 @@
 // Shared Service Type selector & inline "Add New Service Type" control used across Create, Edit, and Side Panel flows.
 
 import React, { useState, useEffect } from 'react';
-import {
-  getServiceTypes,
-  addCustomServiceType,
-} from '../config/businessRules';
+import { getServiceTypes } from '../config/businessRules';
+import { createServiceType } from '../services/serviceTypeService';
 import '../styles/ServiceTypeSelect.css';
 
 export const ADD_NEW_SERVICE_SENTINEL = '__add_new_service__';
@@ -74,11 +72,17 @@ export default function ServiceTypeSelect({
     onChange?.(nextVal);
   };
 
-  const handleConfirmAdd = () => {
+  const handleConfirmAdd = async () => {
     const trimmed = newServiceName.trim();
     if (!trimmed) return;
-    const { added, isNew } = addCustomServiceType(trimmed);
-    if (added) {
+    const existedLocally = getServiceTypes().some((s) => s.toLowerCase() === trimmed.toLowerCase());
+    let result = { data: null, source: 'local', error: 'Unable to save service type' };
+    try {
+      result = await createServiceType({ name: trimmed });
+    } catch {}
+    const added = result.data?.name || trimmed;
+    const isNew = Boolean(result.data) && (!existedLocally || result.source === 'supabase');
+    if (result.data) {
       onChange?.(added);
       onServiceAdded?.(added, isNew);
     }

@@ -1,0 +1,262 @@
+﻿/* src/styles/OrdersV2.css - Styles for Orders v2 Module, Counter Intake, and Inline Edit matching reference design */
+
+.orders-v2-container {
+  width: 100%;
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+.main.orders-v2-main {
+  min-height: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+/* Header & Action Bar */
+.orders-v2-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.orders-v2-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.orders-v2-subtitle {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+/* Stat Cards */
+.orders-v2-stat-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.orders-v2-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+/* Filter Toolbar */
+.orders-v2-toolbar {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 18px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+/* Status Filter Badges */
+.orders-v2-status-pills {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  margin-bottom: 18px;
+  scrollbar-width: none;
+}
+
+.orders-v2-status-pills::-webkit-scrollbar {
+  display: none;
+}
+
+.orders-v2-pill {
+  border-radius: 20px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  cursor: pointer;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #334155;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.orders-v2-pill.active {
+  background: #007A3D;
+  color: #ffffff;
+  border-color: #007A3D;
+  box-shadow: 0 2px 4px rgba(0, 122, 61, 0.2);
+}
+
+/* Inline Edit Card (matches the green theme in reference) */
+.orders-v2-inline-edit {
+  background: #f0fdf4;
+  border: 1.5px solid #bbf7d0;
+  border-radius: 12px;
+  padding: 0;
+  margin: 12px 0;
+  box-shadow: 0 4px 16px rgba(0, 122, 61, 0.06);
+  overflow: hidden;
+}
+
+.inline-edit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  background: #eef9f2;
+  border-bottom: 1px solid #bbf7d0;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.inline-edit-header-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Status Stepper Buttons */
+.inline-status-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Mobile Responsiveness adjustments */
+@media (max-width: 768px) {
+  .orders-v2-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .inline-edit-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .orders-v2-stat-card {
+    padding: 14px;
+  }
+}
+
+/* UPI Instant Pay Button (SHOW QR) */
+.btn-show-qr {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1.5px solid #2563eb;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 12.5px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.btn-show-qr:hover {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  transform: translateY(-1px);
+}
+
+/* Services & Garment Details Scroll Bar */
+.pos-status-garment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #f1f5f9;
+}
+
+.pos-status-garment-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.pos-status-garment-list::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.pos-status-garment-list::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 4px;
+}
+
+.pos-status-garment-list::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+body:not(.light-theme):not([data-theme="light"]) .pos-status-garment-list {
+  scrollbar-color: #475569 #0f172a;
+}
+
+body:not(.light-theme):not([data-theme="light"]) .pos-status-garment-list::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+body:not(.light-theme):not([data-theme="light"]) .pos-status-garment-list::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+body:not(.light-theme):not([data-theme="light"]) .pos-status-garment-list::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+.orders-v2-pagination-footer {
+  row-gap: 8px;
+  column-gap: 8px;
+}
+
+.orders-v2-pagination-nav {
+  margin: 0;
+  padding: 0;
+}
+
+.orders-v2-pagination-nav > span {
+  display: inline-flex;
+  align-items: center;
+}
+
+.orders-v2-pagination-nav .MuiIconButton-root {
+  margin: 0;
+}
+
+@media (max-width: 599.95px) {
+  .orders-v2-pagination-footer {
+    row-gap: 6px;
+  }
+
+  .orders-v2-pagination-nav {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+

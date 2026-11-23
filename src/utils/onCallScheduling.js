@@ -52,6 +52,42 @@ export function combineLocalDateAndTimeToIso(dateStr, timeStr) {
   return localDate.toISOString();
 }
 
+export function resolveOptionalDelivery({ deliveryDate, deliveryTime, nowMs = Date.now() }) {
+  const hasDeliveryDate = Boolean(String(deliveryDate || '').trim());
+  const hasDeliveryTime = Boolean(String(deliveryTime || '').trim());
+
+  if (!hasDeliveryDate && !hasDeliveryTime) {
+    return { isValid: true, errors: {}, scheduled_delivery_at: null };
+  }
+
+  if (!hasDeliveryDate || !hasDeliveryTime) {
+    return {
+      isValid: false,
+      errors: { scheduled_delivery_at: 'Please enter both delivery date and time.' },
+      scheduled_delivery_at: null,
+    };
+  }
+
+  const scheduledDeliveryAt = combineLocalDateAndTimeToIso(deliveryDate, deliveryTime);
+  if (!scheduledDeliveryAt) {
+    return {
+      isValid: false,
+      errors: { scheduled_delivery_at: 'Please enter a valid delivery date and time.' },
+      scheduled_delivery_at: null,
+    };
+  }
+
+  if (new Date(scheduledDeliveryAt).getTime() <= nowMs) {
+    return {
+      isValid: false,
+      errors: { scheduled_delivery_at: 'Delivery date and time must be in the future.' },
+      scheduled_delivery_at: null,
+    };
+  }
+
+  return { isValid: true, errors: {}, scheduled_delivery_at: scheduledDeliveryAt };
+}
+
 /**
  * Formats a scheduled timestamp for read-only display (e.g. "13 Nov 2026, 10:30 AM").
  * Returns fallback ("Not scheduled") for null/legacy values.
@@ -71,6 +107,26 @@ export function formatScheduledDateTime(isoValue, fallback = 'Not scheduled') {
     hour12: true,
   });
   return `${datePart}, ${timePart}`;
+}
+
+export function resolveDisplayScheduledDelivery(order) {
+  const source = order || {};
+  const parseIso = (value) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  };
+
+  const scheduled = parseIso(source.scheduled_delivery_at || source.scheduledDeliveryAt);
+  if (scheduled) return scheduled;
+
+  const legacyDate = source.scheduled_delivery_date || source.delivery_date;
+  const legacyTime = source.scheduled_delivery_time || source.delivery_time;
+  if (legacyDate && legacyTime) {
+    return parseIso(combineLocalDateAndTimeToIso(legacyDate, legacyTime));
+  }
+
+  return null;
 }
 
 /**

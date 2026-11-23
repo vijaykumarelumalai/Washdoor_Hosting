@@ -1,0 +1,585 @@
+================================================================================
+WASHDOOR POS & ORDERS v2 – COMPLETE TECHNICAL & FUNCTIONAL REFERENCE
+================================================================================
+Application: Washdoor Laundry POS & Customer Management System
+Module: Orders v2 (Orders & POS Intake)
+Generated: 2026-11-20
+Version: 2.2 Production Specification
+================================================================================
+
+TABLE OF CONTENTS
+--------------------------------------------------------------------------------
+1. MODULE ARCHITECTURE & OVERVIEW
+2. COMPLETE FILES DIRECTORY (FRONTEND, BACKEND, UTILITIES, STYLES, SCHEMAS)
+3. SUPABASE DATABASE SCHEMA SPECIFICATION
+   3.1 Primary Orders Table (public.customer_works)
+   3.2 Customer Directory (public.customers)
+   3.3 Staff & Driver Masters (washdoor_staff_master, washdoor_pickup_delivery_master)
+   3.4 Dynamic Service Types (public.washdoor_service_types)
+   3.5 Products & Order Items (washdoor_products, washdoor_order_items)
+   3.6 Garment Inspection & Photos (garment_cards, inspections, photos)
+   3.7 Logistics & Schedules (washdoor_pickup_delivery_schedules)
+   3.8 Financial & Payment Ledger (washdoor_payment_ledger, gateway_transactions)
+   3.9 Status History & Audit Logs (status_history, audit_logs)
+   3.10 Unified Master Table (washdoor_orders_master)
+   3.11 Database Sequences, RPC Functions & RLS Policies
+4. COMPLETE FUNCTIONAL WORKFLOWS
+   4.1 Step 1 – Order Basics (Customer, Mode, Order Type, On-Call + Walk-In Schedule, Staff)
+   4.2 Step 2 – Build the Order (Catalog, Cart, Accordeons, Real-Time Summary, Save)
+   4.3 Orders List & Table Features (Toolbar, Filters, KPI Cards, Services Popover, Pagination)
+   4.4 The 7-Tab Horizontal Stepper Inline Edit Workflow
+   4.5 Edit Drawers & Ancillary Modals (Thermal Receipt, POS Drawer)
+   4.6 Walk-In Address & Delivery Scheduling Updates
+5. DATA FLOW PIPELINES
+    5.1 Order Creation Data Flow
+    5.2 Order Query & Normalization Pipeline
+    5.3 Order Update & Inline Edit Pipeline
+    5.4 Dynamic Service Type Sync Flow
+    5.5 Photo Upload & Inspection Flow
+    5.6 Cascading Order Deletion Flow
+    5.7 Scheduled Delivery Persistence & Display Flow
+================================================================================
+
+
+1. MODULE ARCHITECTURE & OVERVIEW
+--------------------------------------------------------------------------------
+Orders v2 is the modern, reactive order management and point-of-sale intake
+engine for Washdoor Laundry. Built with React and Material-UI on Vite, and
+backed by Supabase (PostgreSQL), Orders v2 replaces fragmented intake screens
+with a unified, high-density operational center.
+
+Key Highlights:
+- Two-Step Order Wizard: Fast customer lookup/registration, On-Call schedule
+  validation, staff assignment, and product catalog cart builder.
+- Real-Time Table Workspace: Multi-criteria filtering, live KPI summary cards,
+  canonical status mapping, and dynamic services popover.
+- 7-Tab Horizontal Stepper: In-place row expansion providing editing across
+  customer, order, garment inspection, processing, billing, messages, and review.
+- Double-Entry Auditing: Append-only status transitions, immutable activity
+  logs, and financial payment ledgers.
+- Optional Walk-In Scheduling: Delivery date/time may be added to Walk-In orders
+  with future-only validation; On-Call pickup rules remain unchanged.
+
+
+2. COMPLETE FILES DIRECTORY
+--------------------------------------------------------------------------------
+
+A. FRONTEND COMPONENTS (src/components/)
+--------------------------------------------------------------------------------
+1. src/components/OrdersV2.jsx
+   - Main Orders v2 container shell and orchestrator.
+   - Houses the top header with blue cart icon, filter toolbar, 6 status pills,
+     4 KPI summary cards, and mounts list, drawer, and modal children.
+2. src/components/OrdersV2CreateOrder.jsx
+   - Two-step order intake wizard modal dialog.
+    - Step 1: Customer autocomplete/registration, order type, On-Call scheduling,
+      optional Walk-In delivery scheduling, counter staff and driver assignment.
+   - Step 2: Garment catalog, pricing checks, per-item services, cart ledger,
+     care notes, discounts, tax exemption, advance payment, and order saving.
+3. src/components/OrdersV2List.jsx
+   - Core orders data table with column resizing and sticky header.
+   - Features the Services column with grouped garment popover.
+   - Houses the 7-Tab Horizontal Stepper Inline Edit in expanded table rows.
+   - Implements DataGrid-style sticky footer pagination (10 default, 10/20/50/100).
+ 4. src/components/OrdersV2EditDrawer.jsx
+    - Fast 5-tab slide-over drawer (Details, Items, Payments, Schedule, Notes).
+    - Modifies customer contact, status, logistics dates, line items, payments,
+      staff/driver assignment, and activity history.
+ 5. src/components/OrdersV2Counter.jsx
+    - High-fidelity POS counter intake view for fast walk-in drop-offs.
+    - Separate shortcut flow with On-Call-only schedule validation and a
+      "Counter Walk-In" placeholder address for blanks (see section 4.6).
+ 6. src/components/SideEditPanel.jsx
+    - Deep 6-tab inspection panel (Order Details, Logistics & Factory, Status
+      Updates, Payments, Customer Messages, Comments & Audit).
+ 7. src/components/pos/OrderStatusDrawer.jsx
+    - POS-style 4-tab lifecycle dialog (Order Details, Activity History,
+      Payment Info, Collection Info) launched via the "View" button.
+    - Order Summary shows Scheduled Delivery below Order Type for On-Call and
+      all non-On-Call types; Scheduled Pickup remains On-Call-only.
+8. src/components/ThermalReceiptModal.jsx
+   - Standard 80mm thermal receipt generator and print preview modal.
+9. src/components/GarmentInspectionSection.jsx
+   - Per-garment inspection interface: fabric, make, condition, stains,
+     damage location, finish preferences, extra charges, and photo uploads.
+10. src/components/ClothIllustration.jsx / .tsx
+    - High-fidelity SVG vector garment illustration component for 16 apparel types.
+11. src/components/ClothSelectionCart.jsx
+    - Reusable interactive garment grid selector and cart ledger.
+12. src/components/ServiceTypeSelect.jsx
+    - Service selector dropdown with inline "+ Add New Service Type" creator
+      that writes directly to Supabase washdoor_service_types.
+13. src/components/StaffSearchDropdown.jsx
+    - Searchable dropdown for counter staff and delivery driver selection.
+14. src/components/StaffMasterManager.jsx
+    - Administrative CRUD manager for staff and driver rosters.
+15. src/components/CustomerSearchPanel.jsx / .tsx
+    - Customer search and directory management panel.
+16. src/components/CustomerDetailDrawer.jsx
+    - Slide-out customer 360 profile drawer with lifetime order history.
+17. src/components/pos/ServicesPopover.jsx
+    - Flyout popover showing garment breakdown for services in table rows.
+18. src/components/pos/PaginationBar.jsx
+    - Sticky footer pagination bar with First, Prev, Next, Last navigation.
+19. src/components/pos/QRPaymentDialog.jsx
+    - Dynamic UPI QR code generator for counter scanning.
+20. src/components/common/LoadingState.jsx
+    - Animated spinner and status indicator ("Syncing Orders...").
+21. src/components/common/StatusChip.jsx
+    - Standardized order status pill component.
+
+B. STYLESHEETS (src/styles/)
+--------------------------------------------------------------------------------
+1. src/styles/OrdersV2.css
+   - Core styling for Orders v2 container, KPI cards, table, and toolbar.
+2. src/styles/SideEditPanel.css
+   - Layout grids and animations for the side edit drawer.
+3. src/styles/GarmentInspection.css
+   - Inspection cards, defect tags, photo grids, and severity chips.
+4. src/styles/POSModule.css
+   - POS styling, status drawer panels, and thermal receipt print layout.
+5. src/styles/theme.css
+   - Global color palette, typography, and elevation tokens.
+
+C. CONFIGURATION & BUSINESS RULES (src/config/)
+--------------------------------------------------------------------------------
+1. src/config/orderColumnsConfig.js
+   - Central definition of the 9 default table columns + 8 dynamic columns.
+2. src/config/businessRules.js
+   - 5% default GST rate, currency symbol (₹), calculateOrderTotals,
+     message templates, and default store profile fallback.
+3. src/config/posConstants.ts
+   - POS payment modes, workflow statuses, and operational limits.
+
+D. HOOKS & UTILITIES (src/hooks/ & src/utils/)
+--------------------------------------------------------------------------------
+1. src/hooks/useOrdersPagination.ts
+   - Pagination calculation and page slice management.
+2. src/hooks/useDebounce.js
+   - Input debounce hook (300ms) for customer search optimization.
+3. src/types/order.ts & src/types/order.types.ts
+   - TypeScript interfaces for Orders, Items, Statuses, and Inspections.
+4. src/utils/normalizeOrder.ts
+   - Single source of truth order row normalizer. Guarantees safety against nulls.
+5. src/utils/orderStatus.ts
+   - Status canonicalization into 5 states and color token mapping.
+ 6. src/utils/onCallScheduling.js
+    - On-Call schedule date/time splitting, combining, and validation logic.
+    - Shared resolveOptionalDelivery() for future-only Walk-In delivery validation
+      and resolveDisplayScheduledDelivery() for display fallback handling.
+7. src/utils/validation.js / .ts
+   - 10-digit Indian phone validation (/^[6-9]\d{9}$/) and customer checks.
+8. src/utils/dateFormat.ts & src/utils/money.ts
+   - Date, time, and Indian currency (₹ / en-IN) formatting helpers.
+9. src/lib/supabaseClient.js
+   - Supabase client initialization and connection health checks.
+
+E. SERVICES & API LAYER (src/services/)
+--------------------------------------------------------------------------------
+ 1. src/services/customerService.js
+    - Core database API: getOrders, createOrderWithCustomer, updateOrder,
+      deleteOrderFromSupabase, getNextOrderId, saveOrderItems, audit logging.
+    - Persists scheduled_delivery_at for Walk-In orders and stores empty addresses
+      as NULL instead of placeholder text.
+2. src/services/serviceTypeService.js
+   - CRUD API for washdoor_service_types with event bus notification.
+3. src/services/columnPreferenceService.js
+   - Table column visibility and width persistence in localStorage.
+4. src/services/storeSettingsService.js
+   - Database sync for store settings and branding.
+5. src/services/auditService.js & exportService.js
+   - Audit trail queries and CSV/Excel export utilities.
+
+F. SUPABASE SQL SCHEMAS (supabase/)
+--------------------------------------------------------------------------------
+1. supabase/customer_works.sql
+   - Primary table DDL, sequence, auto-number function, and triggers.
+2. supabase/washdoor_orders_master.sql
+   - Unified master table schema, sequence, RLS, and seed data.
+3. supabase/order_pos_integration_migration.sql
+   - Complete relational integration migration adding factory orders,
+     schedules, addresses, products, order items, and get_next_order_number().
+4. supabase/schema.sql
+   - Production schema v2.1 containing all 13 core relational tables.
+5. supabase/staff_and_pickup_master.sql
+   - Staff master and pickup/delivery master table schemas.
+6. supabase/service_types.sql
+   - Dynamic service type master table with case-insensitive unique index.
+7. supabase/store_settings.sql & notification_templates.sql
+   - Store settings and customer notification templates schemas.
+
+
+3. SUPABASE DATABASE SCHEMA SPECIFICATION
+--------------------------------------------------------------------------------
+
+3.1 Primary Orders Table: public.customer_works
+- work_id: UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- work_number: VARCHAR(30) UNIQUE NOT NULL DEFAULT generate_customer_work_number()
+- customer_id: VARCHAR(50) NOT NULL
+- customer_name: VARCHAR(150) NOT NULL
+- mobile_number: VARCHAR(15) NOT NULL
+- alternate_phone: VARCHAR(15)
+- email: VARCHAR(255)
+- delivery_address: TEXT
+- service_type: VARCHAR(60) NOT NULL DEFAULT 'Wash & Steam Press'
+- work_status: VARCHAR(40) NOT NULL DEFAULT 'Received'
+  CHECK: ('Received', 'In Progress', 'Washing', 'Steam Pressing', 'Dry Cleaning',
+          'Quality Check', 'Ready', 'Ready for Delivery', 'Delivered', 'Cancelled')
+- priority: VARCHAR(20) NOT NULL DEFAULT 'Normal'
+- intake_method: VARCHAR(30) NOT NULL DEFAULT 'Walk-In'
+- items: JSONB NOT NULL DEFAULT '[]'::jsonb
+- total_pieces: INTEGER NOT NULL DEFAULT 1 CHECK (total_pieces >= 0)
+- weight_kg: NUMERIC(6,2)
+- special_instructions: TEXT
+- rack_shelf_location: VARCHAR(50)
+- subtotal: NUMERIC(10,2) NOT NULL DEFAULT 0.00
+- discount_pct: NUMERIC(5,2) NOT NULL DEFAULT 0.00
+- discount_amount: NUMERIC(10,2) NOT NULL DEFAULT 0.00
+- taxable_amount: NUMERIC(10,2) NOT NULL DEFAULT 0.00
+- tax_exemption: BOOLEAN NOT NULL DEFAULT FALSE
+- gst_percentage: NUMERIC(5,2) NOT NULL DEFAULT 5.00
+- tax_amount: NUMERIC(10,2) NOT NULL DEFAULT 0.00
+- cgst_amount / sgst_amount / igst_amount: NUMERIC(10,2) DEFAULT 0.00
+- total_amount: NUMERIC(10,2) NOT NULL DEFAULT 0.00
+- advance_paid: NUMERIC(10,2) NOT NULL DEFAULT 0.00
+- balance_due: NUMERIC(10,2) GENERATED ALWAYS AS (GREATEST(0.00, total_amount - advance_paid)) STORED
+- refund_amount: NUMERIC(10,2) DEFAULT 0.00
+- payment_status: VARCHAR(30) NOT NULL DEFAULT 'Unpaid'
+- payment_method: VARCHAR(30) DEFAULT 'Cash'
+- invoice_number: VARCHAR(40)
+- invoice_date: TIMESTAMPTZ
+- handling_flags: JSONB NOT NULL DEFAULT '{}'::jsonb
+- attend_staff_id: VARCHAR(30) REFERENCES washdoor_staff_master(staff_id)
+- attend_staff_name: VARCHAR(120)
+- assigned_pickup_person_id: VARCHAR(30) REFERENCES washdoor_pickup_delivery_master(employee_id)
+- assigned_pickup_delivery_person: VARCHAR(120)
+- assigned_staff / assigned_driver: VARCHAR(100)
+- intake_date / target_delivery_date / completed_at / delivered_at: TIMESTAMPTZ
+- scheduled_pickup_at / scheduled_delivery_at: TIMESTAMPTZ (application scheduling
+  timestamps; pickup is On-Call-only, delivery is used by Walk-In and On-Call.
+  mapCustomerWorkRow() also falls back to internal_notes for legacy rows.)
+- created_at / updated_at: TIMESTAMPTZ NOT NULL DEFAULT now()
+
+3.2 Customer Directory: public.customers
+- id: BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY
+- customer_code: VARCHAR(30) UNIQUE NOT NULL DEFAULT generate_customer_number()
+- customer_name: VARCHAR(150) NOT NULL
+- mobile_number: VARCHAR(15) UNIQUE NOT NULL (Regex: ^(\+91)?[6-9][0-9]{9}$)
+- alternate_phone / email / address / city / state / pincode
+- date_of_birth / anniversary_date / map_link / gst_number / company_name
+- tax_exemption: BOOLEAN NOT NULL DEFAULT FALSE
+- customer_classification: Regular Customer, VIP Customer, Corporate / B2B, Student / Senior
+- customer_status: Active, Inactive, Blacklisted
+- price_list / service_zone / credit_limit / wallet_balance / default_discount
+- communication_pref: WhatsApp, SMS, Call, Email
+- preferred_language / dnd / internal_comments / notes
+- created_at / updated_at: TIMESTAMPTZ
+
+3.3 Staff & Delivery Masters
+- public.washdoor_staff_master:
+  id (UUID PK), staff_id (VARCHAR(30) UNIQUE), staff_name, zone, city, phone, role, status (Active/Inactive).
+- public.washdoor_pickup_delivery_master:
+  id (UUID PK), employee_id (VARCHAR(30) UNIQUE), employee_name, zone, city, phone, vehicle_info, status.
+
+3.4 Dynamic Service Types: public.washdoor_service_types
+- id: UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- service_name: VARCHAR(80) NOT NULL (Unique on lower(service_name))
+- icon_type: VARCHAR(40) NOT NULL DEFAULT 'custom' (laundry, dry_cleaning, washing, shoe, iron, category)
+- is_default: BOOLEAN NOT NULL DEFAULT FALSE
+- is_active: BOOLEAN NOT NULL DEFAULT TRUE
+- display_order: INTEGER NOT NULL DEFAULT 0
+- Seeded items: Laundry, Dry Cleaning, Washing, Shoe Cleaning, Ironing Only, Custom Category.
+
+3.5 Products & Order Items
+- public.washdoor_products: product_id (PK), item_code (UK), name, category,
+  base_price, iron_price, wash_price, dry_clean_price, unit, is_active.
+- public.washdoor_order_items: item_id (PK), order_number, work_id (FK),
+  product_id, product_name, service_type, rate, quantity, line_amount, care_instructions.
+
+3.6 Garment Cards, Inspections & Photos
+- washdoor_garment_cards: card_id (PK), work_id (FK), unit_index, garment_tag_number (UK),
+  garment_name, service_type, color, brand, fabric_type, make, stains, damage, finish_preference, processing_stage.
+- washdoor_garment_inspections: inspection_id (PK), card_id (FK), work_id (FK), category_name,
+  defect_location, severity, action_plan, extra_charge, customer_approval, notes.
+- washdoor_garment_photos: photo_id (PK), card_id (FK), work_id (FK), photo_type,
+  storage_path, photo_url, caption, file_name, file_size_kb, is_customer_visible.
+
+3.7 Logistics & Financial Tables
+- washdoor_pickup_delivery_schedules: schedule_id (PK), work_id (FK), schedule_type (Pickup/Delivery),
+  scheduled_date, slot_label, pickup_time_display, delivery_slot_display, assigned_driver_name, vehicle_number.
+- washdoor_payment_ledger: ledger_id (PK), payment_number (UK), work_id (FK), entry_type,
+  payment_mode, amount, reference_number, collected_by, collected_at.
+- washdoor_status_history: history_id (PK), work_id (FK), old_status, new_status,
+  changed_by_name, changed_by_role, change_source, remarks, changed_at.
+- washdoor_audit_logs: audit_id (PK), audit_number (UK), entity_name, operation (INSERT/UPDATE/DELETE),
+  old_data (JSONB), new_data (JSONB), changed_by_name, created_at.
+
+3.8 Database Sequences & Functions
+- Sequences: customer_work_seq, order_number_seq, seq_washdoor_order_number, seq_washdoor_customer_number.
+- RPC Functions:
+  - generate_customer_work_number() -> 'ORD' || lpad(nextval('customer_work_seq')::text, 5, '0')
+  - get_next_order_number() -> Inspects MAX numeric suffix from customer_works and returns formatted next ID.
+
+
+4. COMPLETE FUNCTIONAL WORKFLOWS
+--------------------------------------------------------------------------------
+
+4.1 Step 1 – Order Basics (OrdersV2CreateOrder.jsx)
+1. Customer Selection & Address:
+   - Two modes: Existing Customer (default) and New Customer.
+   - Existing Customer autocomplete searches name, mobile, address, or customer ID
+     with a 300ms debounce. Its first action can create a new customer from the
+     typed query and extracts a 10-digit mobile when present.
+   - Selecting an existing customer validates its name/mobile, then pre-fills name,
+     normalized mobile, tag-stripped address, detected address tag, and default
+     discount percentage (clamped 0-100).
+   - New Customer mode collects customer name and mobile only; validation requires
+     a non-blank name and a 10-digit Indian mobile (/^[6-9]\d{9}$/ after normalization).
+   - A shared Home/Office/Other chip row and multiline address field are shown in
+     both modes. The label is "Address * required" for On-Call and
+     "Address (optional for Walk-In orders)" for Walk-In. On save, any existing
+     prefix is stripped and the selected tag is re-applied as
+     "Home|Office|Other: <address>". A blank Walk-In address is saved as NULL.
+2. Order Type:
+   - Walk-In: Direct counter drop-off. No Scheduled Pickup; Delivery Date/Time optional.
+   - On-Call: Pickup fields are required; delivery fields are optional but validated
+     when supplied.
+3. On-Call Schedule Validation (validateOnCallSchedule in onCallScheduling.js):
+   - New orders: Pickup Date + Time are mandatory and must be strictly in the future.
+   - Delivery is optional. If either delivery field is entered, both are required,
+     valid, and the delivery must be strictly after pickup.
+   - Existing orders are legacy-tolerant: unchanged historical past pickups remain
+     editable, but partial values, changed past pickups, or delivery before/at
+     pickup are rejected.
+4. Walk-In Delivery Schedule Validation (resolveOptionalDelivery in onCallScheduling.js):
+   - Delivery Date and Time are optional. Both empty is valid and stores NULL.
+   - If only one field is entered, validation fails with
+     "Please enter both delivery date and time.".
+   - The combined date/time must be in the future relative to the current local
+     clock; past or equal values fail with
+     "Delivery date and time must be in the future.".
+   - The entered date/time is interpreted in the browser's local timezone, then
+     converted to an ISO timestamp in scheduled_delivery_at for Supabase.
+   - The same validator is used by Create Order, Edit Order, Inline Edit, and
+     Side Edit Drawer so validation and error messages remain consistent.
+5. Staff Assignment:
+   - Attend Staff Name: Optional dropdown from active washdoor_staff_master records;
+     blank falls back to "Counter Staff".
+   - Assigned Pickup & Delivery Person: Optional dropdown from active
+     washdoor_pickup_delivery_master records.
+6. Step 1 Footer Actions:
+   - Cancel: closes the wizard.
+   - Create Order: direct create path. It validates Step 1 and the schedule but
+     does not require cart items; it saves with empty items and no primary service
+     through the same persistOrder pipeline, without opening Step 2.
+   - Continue to Order: validates all Step 1 fields and advances to Step 2.
+   - When errors exist, the wizard shows "Please review the highlighted fields
+     before continuing." and marks invalid fields inline.
+
+4.2 Step 2 – Build the Order (OrdersV2CreateOrder.jsx)
+1. Header Summary:
+   - Displays Order ID, Customer, Order type, and Attend Staff chips.
+   - A footer Back button returns to Step 1 without losing cart or form data.
+2. Garment Catalog (Left Column):
+   - Category pills: All, Men, Women, Kids, Home Linen, Accessories.
+   - Search matches garment name, category, or item code.
+   - Product cards show an SVG illustration, title, category, and unit price
+     (₹XX.00 / piece) or red "Price unavailable"; the Add button is disabled when
+     no positive price/base_price exists.
+   - Service selection and quantity are configured in the cart, not on the card.
+3. Order Cart Ledger (Right Column):
+   - Each line shows illustration, name, "service • ₹rate each", delete icon,
+     service dropdown, quantity stepper, and line total. The same garment and
+     service merge when added again.
+   - The service dropdown includes "+ Add New Service Type…" which writes directly
+     to washdoor_service_types.
+   - Clear opens a confirmation dialog with Keep Items / Clear Cart actions.
+4. Additional Accordions:
+   - Additional Details: care/service notes, internal comments, discount % (0-100),
+     and Tax Exemption toggle.
+   - Payment / Billing: shown only when at least one payment method is enabled in
+     store settings. Includes Payment Status (Paid in Full / Partially Paid /
+     Unpaid / Pay on Delivery) which auto-fills advance, payment method, advance
+     collected, reference/transaction ID, UPI Instant Pay "SHOW QR", and
+     "Mark as Fully Paid".
+   - Review & Actions: six-line checklist: Customer, Order type, Staff,
+     Items (piece count), Scheduled pickup ("Not required" for Walk-In), and
+     Delivery ("Not scheduled" when empty).
+5. Real-Time Sticky Footer Summary:
+   - Calculates Total Items (lines), Total Pieces, Subtotal, Discount amount,
+     GST / Tax (5% or 0%), and Grand Total.
+6. Order Saving (persistOrder):
+   - The Save Order action re-validates Step 1 and schedule fields and requires at
+     least one cart item.
+   - Calls createOrderWithCustomer in customerService.js, registers new customers,
+     generates ORD0000X, and writes customer_works, washdoor_orders_master, items,
+     garment cards, payment ledger, status history, and audit history.
+   - Shows a success toast, emits the created payload to onOrderSuccess, closes the
+     dialog, and the parent handler calls onRefreshOrders().
+
+4.3 Orders List & Table Features (OrdersV2List.jsx)
+1. Top Toolbar & Filters:
+   - Multi-field search (Order ID, Customer, Mobile, Address).
+   - Status filter dropdown.
+   - Dynamic service category filter dropdown (from washdoor_service_types).
+   - Time range filter dropdown (All Time, Today, This Week, This Month).
+   - Reset filters button.
+2. Status Pills: Quick-filter chips with live counts: All, Order Received, In Progress,
+   Ready, Delivered, Cancelled.
+3. 4 KPI Summary Cards: Total Orders, Total Revenue, Pending Balance, Ready for Pickup.
+4. Table Columns:
+   - Order ID: ID, order type, priority, and intake date/time.
+   - Customer: Name, mobile, and address.
+   - Services Column: Displays primary service badge with icon and piece count.
+     If multiple services exist, shows +N More button. Clicking opens ServicesPopover
+     with accordion breakdown of garments per service with vector thumbnails.
+   - Total: Grand total, advance paid, balance due, and payment status badge.
+   - Status: Canonical status chip with color-coded dot indicator.
+   - Date: Formatted intake date.
+   - Actions: Bill (Thermal receipt), View (POS drawer), Inline Edit expand,
+     Slide Drawer edit, and Delete.
+5. DataGrid Sticky Footer Pagination:
+   - Page sizes: 10 (default), 20, 50, 100.
+   - Range indicator: Showing X–Y of N orders.
+   - Navigation buttons: First, Previous, Next, Last.
+
+4.4 The 7-Tab Horizontal Stepper Inline Edit Workflow
+Clicking the expand arrow on any row opens the 7-tab stepper defined by
+HORIZONTAL_TABS in OrdersV2List.jsx:
+- Tab 1 (Customer Details): Edit customer name, mobile, address, intake method
+  (Walk-In / On-Call Pickup), attend staff, assigned pickup & delivery person, and
+  a separate Order Priority select. There is no address-type field in this editor.
+  Address is required only for On-Call; delivery date/time are shown for both
+  methods (Walk-In optional/future-only; On-Call pickup required with delivery
+  validated under existing-order rules). The tab footer validity hint checks
+  customer name and mobile.
+- Tab 2 (Order Details): Blue-themed workspace to change service category,
+  use "+ Add New Service Type" (persisting to DB), add garments, and adjust rates/quantities.
+- Tab 3 (Garment Inspection): Inspect garments via GarmentInspectionSection:
+  fabric, make, condition, stains, damage location, finish preference, and photo uploads.
+- Tab 4 (Laundry Processing): Stage tracking (Sorting, Washing, Drying, Ironing, QC, Ready),
+  machine assignment, and rack location.
+- Tab 5 (Payments & Billing): Recalculate totals, record advance/balance payments,
+  select payment modes, and enter transaction reference.
+- Tab 6 (Customer Messages): Preview and send automated WhatsApp & SMS templates.
+- Tab 7 (Review & Messages): Heading "Review & Confirm Changes" with full change
+  review, audit history, and Confirm Changes / Cancel actions.
+Save behavior: handleSaveInlineEdit blocks blank On-Call addresses, validates
+On-Call schedules in existing-order mode, validates non-On-Call delivery with
+resolveOptionalDelivery, composes status/service/payment activity entries into
+activity_history/audit_logs/logs plus status_updated_at/by, and calls
+updateOrderInSupabase.
+
+4.5 Edit Drawers & Ancillary Modals
+- OrdersV2EditDrawer: 5-tab slide-over editor (1. Details, 2. Items, 3. Payments,
+  4. Schedule, 5. Notes). Details edits customer/contact, service category, order
+  type, status, and address. Items edits line items and pricing. Payments edits
+  totals/payment state. Schedule edits expected delivery, On-Call pickup/delivery,
+  delivery date/time for all order types, attend staff, and driver. Notes edits
+  comments. Save enforces On-Call address, validates schedules, recalculates
+  subtotal/tax/total/balance/payment status, appends activity events, and calls
+  updateOrderInSupabase.
+- SideEditPanel: 6-tab comprehensive panel (1. Order Details, 2. Logistics &
+  Factory, 3. Status Updates, 4. Payments, 5. Customer Messages, 6. Comments &
+  Audit). It supports Walk-In, On-Call, Home Delivery, Express, and Commercial
+  types, applies validateOnCallSchedule for On-Call and resolveOptionalDelivery
+  for non-On-Call delivery, then saves via onUpdateOrder, updateOrderInSupabase,
+  and a local cache. The Delivery Address field is visually marked required, but
+  the save handler currently enforces only name and 10-digit mobile.
+- OrderStatusDrawer / POSModule OrderStatusSidePanel: 4-tab lifecycle drawers
+  (Order Details, Activity History, Payment Info, Collection Info). Timelines are
+  synthesized from stored activity_history/audit_logs/logs with fallback events.
+- ThermalReceiptModal: Formats print-ready 80mm thermal receipts with store logo,
+  barcode, QR code, itemized billing, and tax breakdown.
+
+4.6 Walk-In Address & Delivery Scheduling Updates
+- Create modal: Walk-In/new-customer addresses are optional and stored as NULL;
+  On-Call addresses are required. Delivery date/time are optional with both-or-none
+  and future-only validation.
+- Inline edit, OrdersV2EditDrawer, and SideEditPanel: non-On-Call delivery uses
+  resolveOptionalDelivery; On-Call uses validateOnCallSchedule in existing-order
+  mode and remains legacy-tolerant for unchanged past pickups.
+- POSModule full edit exception: handleSaveOrderEdit validates schedules only for
+  On-Call and persists scheduled pickup/delivery only for On-Call; it does not
+  add/update optional Walk-In delivery. Quick status updates do not revalidate schedules.
+- OrdersV2Counter quick-intake exception: it uses On-Call-only validation and
+  stores "Counter Walk-In" as an address placeholder for blank addresses.
+- Display: On-Call Order Summary rows show Scheduled Pickup and Scheduled Delivery;
+  all non-On-Call rows show Scheduled Delivery only. Valid delivery renders as
+  "20 Nov 2026, 05:30 PM", or "Not Scheduled" when no valid value exists.
+
+
+5. DATA FLOW PIPELINES
+--------------------------------------------------------------------------------
+
+5.1 Order Creation Flow:
+OrdersV2CreateOrder.jsx (handleSave or direct handleCreateDirect) -> schedule
+validation (validateOnCallSchedule / resolveOptionalDelivery) -> calculateOrderTotals()
+-> buildCustomerData() -> createOrderWithCustomer() in customerService.js ->
+cleanPayload() (empty strings to NULL) -> mobile-based customer lookup or
+getNextCustomerId() -> INSERT customers for new customers (blank address to NULL)
+-> getNextOrderId()/formatOrderId() -> INSERT customer_works with normalized
+intake_method, work_status 'Received', scheduled_pickup_at (On-Call only),
+scheduled_delivery_at (Walk-In or On-Call when supplied), and address NULL when blank
+-> INSERT washdoor_orders_master -> UPSERT washdoor_factory_orders ->
+saveOrderItems() + syncGarmentCardsAndInspections() -> recordAuditLogEntry() ->
+recordPaymentLedger() and recordStatusHistory() when advance paid -> order note,
+customer message and notification -> return {order_id, order_number, customer_id,
+isNewCustomer, status:'success'} -> onOrderSuccess() -> parent onRefreshOrders().
+Creation persists schedule timestamps as columns on customer_works and
+washdoor_orders_master; it does not insert washdoor_pickup_delivery_schedules rows.
+The Step 1 direct Create Order action uses this same pipeline with empty items and
+no Step 2 review. The separate OrdersV2Counter shortcut has the exceptions noted
+in section 4.6.
+
+5.2 Order Query & Normalization Flow:
+OrdersV2.jsx -> onRefreshOrders() -> getOrders() in customerService.js ->
+SELECT FROM customer_works -> mapCustomerWorkRow() -> normalizeOrder() ->
+restoreOrderPricing() -> normalizeOrdersV2Status() -> Multi-field filters ->
+useOrdersPagination() -> Render Table & 4 KPI cards.
+
+5.3 Order Update & Inline Edit Flow:
+OrdersV2List.jsx (Inline Stepper) / OrdersV2EditDrawer.jsx / SideEditPanel.jsx ->
+pre-save validation (On-Call address/schedule via validateOnCallSchedule; non-On-Call
+delivery via resolveOptionalDelivery) -> updateOrderInSupabase() (alias of updateOrder)
+-> customerService.js -> UPDATE customer_works with delivery_address NULL for empty
+strings and scheduled_pickup_at/scheduled_delivery_at set or cleared -> merge
+internal_notes, activity_history, audit_logs, payment/collection metadata ->
+saveOrderItems() and syncGarmentCardsAndInspections() when item/inspection payloads
+are present -> recordPickupDeliverySchedule() when schedule-slot fields are present
+-> recordStatusHistory()/recordPaymentLedger()/recordAuditLogEntry() as applicable ->
+onUpdateOrder() -> onRefreshOrders(). POSModule handleSaveOrderEdit and
+handleQuickStatusUpdate have the On-Call/quick-update exceptions noted in section 4.6.
+
+5.4 Dynamic Service Types Sync Flow:
+ServiceTypeSelect.jsx -> "+ Add New Service Type" -> createServiceType() in
+serviceTypeService.js -> Supabase: INSERT washdoor_service_types -> Dispatch DOM
+CustomEvent 'washdoor_service_types_updated' -> OrdersV2.jsx listener re-fetches
+service types via fetchServiceTypes() -> Real-time dropdown and badge updates.
+
+5.5 Garment Inspection & Photos Flow:
+GarmentInspectionSection.jsx -> Upload photo -> uploadGarmentPhotos() in
+customerService.js -> Supabase Storage: upload to bucket 'washdoor-garment-photos' ->
+Supabase DB: INSERT washdoor_garment_photos -> Updates inspection card state.
+
+5.6 Order Deletion Flow:
+OrdersV2List.jsx -> Delete icon -> Confirm dialog -> deleteOrderFromSupabase() ->
+Supabase: DELETE FROM customer_works (ON DELETE CASCADE removes items, cards,
+schedules, ledger) -> INSERT washdoor_audit_logs ('DELETE') -> onDeleteOrder() ->
+onRefreshOrders().
+
+5.7 Scheduled Delivery Persistence & Display Flow:
+Create modal / Inline Edit / OrdersV2EditDrawer / SideEditPanel ->
+validateOnCallSchedule() for On-Call or resolveOptionalDelivery() for non-On-Call ->
+ISO scheduled_delivery_at -> createOrderWithCustomer() / updateOrderInSupabase() ->
+Supabase mapped row -> mapCustomerWorkRow() -> resolveDisplayScheduledDelivery() ->
+formatScheduledDateTime() -> Order Summary in POSModule.jsx and OrderStatusDrawer.jsx.
+Fallback order: scheduled_delivery_at, scheduledDeliveryAt, then legacy paired
+scheduled_delivery_date/delivery_date + scheduled_delivery_time/delivery_time.
+Unparseable values are ignored; if no valid value remains, the drawers pass the
+explicit "Not Scheduled" fallback. On-Call rows show pickup and delivery; other
+intake types show delivery only. Pickup is never derived from delivery data.
+
+================================================================================
+END OF ORDERS v2 COMPLETE REFERENCE
+================================================================================

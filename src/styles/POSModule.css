@@ -7465,6 +7465,29 @@ body:not(.light-theme):not([data-theme="light"]) .pos-services-popover-body::-we
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #f1f5f9;
+}
+
+.pos-status-garment-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.pos-status-garment-list::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.pos-status-garment-list::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 4px;
+}
+
+.pos-status-garment-list::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }
 
 .pos-status-garment-row {
@@ -7706,6 +7729,22 @@ body:not(.light-theme):not([data-theme="light"]) .pos-status-mini-val {
 body:not(.light-theme):not([data-theme="light"]) .pos-status-drawer-body {
   background: #08111f;
   scrollbar-color: #334155 #0f172a;
+}
+
+body:not(.light-theme):not([data-theme="light"]) .pos-status-garment-list {
+  scrollbar-color: #475569 #0f172a;
+}
+
+body:not(.light-theme):not([data-theme="light"]) .pos-status-garment-list::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+body:not(.light-theme):not([data-theme="light"]) .pos-status-garment-list::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+body:not(.light-theme):not([data-theme="light"]) .pos-status-garment-list::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }
 
 body:not(.light-theme):not([data-theme="light"]) .pos-status-drawer-body::-webkit-scrollbar-track {
