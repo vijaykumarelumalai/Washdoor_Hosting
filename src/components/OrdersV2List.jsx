@@ -5,7 +5,7 @@ import {
   Collapse, Chip, Avatar, IconButton, Typography, Grid, Stack,
   Tooltip, TextField, MenuItem, Button, Divider, InputAdornment, Dialog,
   DialogTitle, DialogContent, DialogActions, Select, Alert, CircularProgress,
-  Popover, ButtonBase,
+  Popover, ButtonBase, ToggleButton, ToggleButtonGroup,
 } from '@mui/material';
 import {
   KeyboardArrowRight, KeyboardArrowLeft, KeyboardArrowDown, FirstPage, LastPage, EditOutlined, VisibilityOutlined,
@@ -17,12 +17,16 @@ import {
   CalendarTodayOutlined, WhatsApp, ChatOutlined, SendOutlined,
   Inventory2Outlined, ShoppingBagOutlined, CheckroomOutlined,
   AccountBalanceWalletOutlined, PaymentOutlined, LocalOfferOutlined,
-  HistoryOutlined, InfoOutlined, AttachFileOutlined, SentimentSatisfiedAltOutlined,
-  DoneAllOutlined, StorefrontOutlined, EmailOutlined, FactCheckOutlined,
-  DescriptionOutlined, NotificationsActiveOutlined, MonetizationOnOutlined,
-  LocalLaundryServiceOutlined, DryCleaningOutlined, WaterDropOutlined, IronOutlined,
-  CategoryOutlined, LabelOutlined, ShoppingCartOutlined,
+   HistoryOutlined, InfoOutlined, AttachFileOutlined, SentimentSatisfiedAltOutlined,
+   DoneAllOutlined, StorefrontOutlined, EmailOutlined, FactCheckOutlined,
+   DescriptionOutlined, NotificationsActiveOutlined, MonetizationOnOutlined,
+   LocalLaundryServiceOutlined, DryCleaningOutlined, WaterDropOutlined, IronOutlined,
+   CategoryOutlined, LabelOutlined, ShoppingCartOutlined, PrintOutlined,
+   PhotoCameraOutlined, DownloadOutlined, QrCode2, QrCodeScanner,
 } from '@mui/icons-material';
+import JsBarcode from 'jsbarcode';
+import { BarcodeFormat, BrowserMultiFormatReader } from '@zxing/browser';
+import { DecodeHintType } from '@zxing/library';
 import { normalizeOrder, sanitizeAddress } from '../utils/normalizeOrder';
 import { formatServiceBreakdown } from '../config/businessRules';
 import ClothIllustration from './ClothIllustration';
@@ -38,6 +42,9 @@ import {
   updateOrderInSupabase,
   fetchActiveStaffMaster,
   fetchActivePickupDeliveryMaster,
+  getOrderById,
+  getGarmentBarcodeDetails,
+  fetchOrderGarmentBarcodes,
   DEFAULT_PRODUCTS,
 } from '../services/customerService';
 import {
@@ -45,7 +52,28 @@ import {
   resolveOptionalDelivery,
   splitIsoToLocalDateAndTime,
   validateOnCallSchedule,
+  formatDeliveryDateTimeForDisplay,
+  formatDeliveryInputsForDisplay,
 } from '../utils/onCallScheduling';
+import {
+  PROCESSING_PRIORITIES,
+  FACTORY_PLANTS,
+  PACKAGING_TYPES,
+  ASSIGNED_MACHINES,
+  PROCESSING_STAGES,
+  withCurrentOption,
+  getProcessingFieldValues,
+  getProcessingTimeline,
+  formatLogisticsDeliveryInfo,
+  buildProcessingPayload,
+} from '../utils/laundryProcessing';
+import {
+  BARCODE_RENDER_OPTIONS,
+  getOrderIdFromBarcode,
+  assignGarmentBarcodes,
+  getGarmentBarcodeEntries,
+  mergeGarmentBarcodePatch,
+} from '../utils/garmentBarcodes';
 
 const normalizePaymentStatusOption = (status, balance = 0, advance = 0, total = 0) => {
   const adv = Number(advance) || 0;
@@ -78,6 +106,110 @@ const MONEY = (v) => {
 const toFiniteNumber = (v, fallback = 0) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
+};
+
+const INLINE_PROCESSING_INPUT_SX = {
+  height: 40,
+  borderRadius: '8px',
+  bgcolor: '#ffffff',
+  fontSize: '14px',
+  '& .MuiOutlinedInput-notchedOutline': { borderRadius: '8px', borderColor: '#cbd5e1' },
+  '& .MuiInputBase-input, & .MuiSelect-select': {
+    py: 0,
+    fontSize: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    height: '100%',
+  },
+};
+
+const INLINE_PROCESSING_MENU_PROPS = {
+  PaperProps: {
+    sx: {
+      maxHeight: 320,
+      '& .MuiMenuItem-root': { whiteSpace: 'normal', fontSize: '14px', lineHeight: 1.3, py: 1 },
+    },
+  },
+};
+
+const TIMELINE_STAGE_ICONS = [
+  LocalLaundryServiceOutlined,
+  WaterDropOutlined,
+  IronOutlined,
+  CheckroomOutlined,
+  LocalShippingOutlined,
+  CheckCircle,
+];
+
+const CODE_128_HINTS = new Map([
+  [DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128]],
+]);
+
+const CompactProcessingField = ({ label, required, children }) => (
+  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 0 }}>
+    <Typography variant="caption" fontWeight={700} color="#334155" sx={{ fontSize: '13px', minHeight: 18, lineHeight: '18px' }}>
+      {label}{required ? ' *' : ''}
+    </Typography>
+    {children}
+  </Box>
+);
+
+export const GarmentBarcodeSvg = ({ value, label, svgRef }) => {
+  const localRef = useRef(null);
+  const targetRef = svgRef || localRef;
+
+  useEffect(() => {
+    const element = targetRef.current;
+    if (!element || !value) return;
+    try {
+      JsBarcode(element, value, BARCODE_RENDER_OPTIONS);
+    } catch {}
+  }, [targetRef, value]);
+
+  return (
+    <Box sx={{ bgcolor: '#ffffff', p: 1, borderRadius: '8px', border: '1px solid #e2e8f0', overflowX: 'auto' }}>
+      <svg ref={targetRef} height={80} role="img" aria-label={`${label || value} Code 128 barcode`} />
+    </Box>
+  );
+};
+
+const normalizeScanCode = (value) => String(value ?? '').trim().toUpperCase().replace(/\s+/g, '');
+
+const getOrderScanCodes = (order) => [
+  order?.order_number,
+  order?.work_number,
+  order?.id,
+  order?.bag_barcode,
+  order?.dispatch_bag_tag,
+  order?.barcode,
+  order?.qr_code,
+].filter(Boolean).map(normalizeScanCode);
+
+const getGarmentScanEntries = (cart, inspectionsMap) => {
+  const entries = [];
+  Object.entries(inspectionsMap || {}).forEach(([key, detail]) => {
+    const cartItem = (cart || []).find((item) => String(item.id) === String(detail?.cartItemId || detail?.productId || key));
+    entries.push({
+      key,
+      detail,
+      cartItem,
+      codes: [detail?.tagNumber, detail?.barcode, detail?.garment_barcode, detail?.qr_code, detail?.garmentTag, key, detail?.id]
+        .filter(Boolean)
+        .map(normalizeScanCode),
+    });
+  });
+  (cart || []).forEach((cartItem) => {
+    if (entries.some((entry) => String(entry.cartItem?.id) === String(cartItem.id))) return;
+    entries.push({
+      key: `cart-${cartItem.id}`,
+      detail: null,
+      cartItem,
+      codes: [cartItem.barcode, cartItem.tagNumber, cartItem.qr_code, cartItem.id]
+        .filter(Boolean)
+        .map(normalizeScanCode),
+    });
+  });
+  return entries;
 };
 
 const getRawOrderItems = (raw) => {
@@ -446,6 +578,540 @@ export function OrdersV2List({
   const [inlineAddressError, setInlineAddressError] = useState('');
   const [isSavingInline, setIsSavingInline] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
+  const [scanMode, setScanMode] = useState('order');
+  const [scanInput, setScanInput] = useState('');
+  const [scanResult, setScanResult] = useState(null);
+  const [scanNotice, setScanNotice] = useState({ severity: 'info', text: '' });
+  const [scannedGarmentKeys, setScannedGarmentKeys] = useState([]);
+  const [barcodePreviewEntry, setBarcodePreviewEntry] = useState(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [barcodesLoading, setBarcodesLoading] = useState(false);
+  const [barcodesError, setBarcodesError] = useState('');
+  const barcodeLoadTokenRef = useRef(0);
+  const barcodeSvgRef = useRef(null);
+  const barcodeVideoRef = useRef(null);
+  const cameraControlsRef = useRef(null);
+  const barcodeReaderRef = useRef(null);
+  const barcodeImageInputRef = useRef(null);
+
+  const inlineSelectedPickup = driverList.find(
+    (option) => String(option.uniqueId) === String(inlineDraft?.assigned_pickup_person_id)
+  ) || driverList.find(
+    (option) => String(option.name).toLowerCase() === String(inlineDraft?.assigned_driver || inlineDraft?.assigned_pickup_delivery_person || '').trim().toLowerCase()
+  ) || null;
+  const inlineLogisticsDisplay = inlineDraft
+    ? formatLogisticsDeliveryInfo(inlineDraft, inlineSelectedPickup)
+    : 'Not Assigned';
+  const inlineProcessingTimeline = inlineDraft
+    ? getProcessingTimeline(inlineDraft, inlineDraft.order_status || inlineDraft.status)
+    : [];
+  const garmentScanEntries = useMemo(
+    () => getGarmentScanEntries(inlineCart, inspections),
+    [inlineCart, inspections]
+  );
+  const garmentBarcodeEntries = useMemo(
+    () => getGarmentBarcodeEntries({ cart: inlineCart, inspections }),
+    [inlineCart, inspections]
+  );
+  const scanTotalGarments = inlineCart.reduce(
+    (sum, item) => sum + Math.max(1, parseInt(item.qty ?? item.quantity ?? item.count, 10) || 1),
+    0
+  );
+  const scanScannedGarments = Math.min(scannedGarmentKeys.length, scanTotalGarments);
+  const scanRemainingGarments = Math.max(0, scanTotalGarments - scanScannedGarments);
+
+  const handleScanModeChange = (event, nextMode) => {
+    if (!nextMode) return;
+    setScanMode(nextMode);
+    setScanInput('');
+    setScanResult(null);
+    setScanNotice({ severity: 'info', text: '' });
+  };
+
+  const hydrateScanResultFromSupabase = async (result, orderIdentifier) => {
+    try {
+      if (result.kind === 'garment') {
+        const { data: details } = await getGarmentBarcodeDetails(result.code);
+        if (!details) return;
+        const currentKeys = [inlineDraft?.order_number, inlineDraft?.work_number, inlineDraft?.id]
+          .filter(Boolean)
+          .map(normalizeScanCode);
+        const detailOrderId = normalizeScanCode(details.orderId || details.workId || details.order?.order_number);
+        if (detailOrderId && currentKeys.length > 0 && !currentKeys.includes(detailOrderId)) {
+          setScanResult(null);
+          setScanNotice({
+            severity: 'warning',
+            text: `This barcode belongs to order ${details.orderId || details.workId || detailOrderId}, not ${inlineDraft?.order_number || inlineDraft?.id || 'this order'}.`,
+          });
+          return;
+        }
+        setScanResult((prev) => {
+          if (!prev || prev.code !== result.code) return prev;
+          return {
+            ...prev,
+            order: details.order || prev.order,
+            entry: {
+              ...(prev.entry || {}),
+              key: details.barcode || prev.entry?.key,
+              detail: {
+                ...(prev.entry?.detail || {}),
+                name: details.garmentName || prev.entry?.detail?.name,
+                barcode: details.barcode || prev.entry?.detail?.barcode,
+                garment_barcode: details.barcode || prev.entry?.detail?.garment_barcode,
+                barcodeFormat: details.barcodeFormat || prev.entry?.detail?.barcodeFormat,
+                barcodeOrderId: details.barcodeOrderId || prev.entry?.detail?.barcodeOrderId,
+                barcodeGeneratedAt: details.barcodeGeneratedAt || prev.entry?.detail?.barcodeGeneratedAt,
+                unitIndex: details.unitIndex || prev.entry?.detail?.unitIndex,
+                tagNumber: details.garmentTagNumber || prev.entry?.detail?.tagNumber,
+                service: details.service || prev.entry?.detail?.service,
+                serviceType: details.service || prev.entry?.detail?.serviceType,
+                quantity: details.quantity || prev.entry?.detail?.quantity,
+                color: details.color || prev.entry?.detail?.color,
+                fabric: details.fabric || prev.entry?.detail?.fabric,
+                brand: details.brand || prev.entry?.detail?.brand,
+                condition: details.condition || prev.entry?.detail?.condition,
+                defectLocation: details.defectLocation || prev.entry?.detail?.defectLocation,
+                severity: details.severity || prev.entry?.detail?.severity,
+                actionPlan: details.treatmentAction || prev.entry?.detail?.actionPlan,
+                notes: details.inspectionNotes || prev.entry?.detail?.notes,
+                inspectedBy: details.inspectedBy || prev.entry?.detail?.inspectedBy,
+                inspectedAt: details.inspectedAt || prev.entry?.detail?.inspectedAt,
+                processingStage: details.processingStage || prev.entry?.detail?.processingStage,
+                assignedStaff: details.assignedStaff || prev.entry?.detail?.assignedStaff,
+                processingInstructions: details.processingInstructions || prev.entry?.detail?.processingInstructions,
+              },
+              cartItem: {
+                ...(prev.entry?.cartItem || {}),
+                id: details.orderItemId || details.garmentId || prev.entry?.cartItem?.id,
+                name: details.garmentName || prev.entry?.cartItem?.name,
+                qty: details.quantity || prev.entry?.cartItem?.qty,
+                serviceType: details.service || prev.entry?.cartItem?.serviceType,
+              },
+            },
+            barcodeDetails: details,
+            source: 'Supabase',
+          };
+        });
+        return;
+      }
+
+      const { data } = await getOrderById(orderIdentifier);
+      if (!data) return;
+      const dbInspections = data.garment_inspections || data.inspections || {};
+      const dbEntry = Object.entries(dbInspections).find(([key, detail]) => [
+        detail?.barcode,
+        detail?.garment_barcode,
+        detail?.tagNumber,
+        key,
+      ].filter(Boolean).some((value) => normalizeScanCode(value) === result.code));
+      setScanResult((prev) => {
+        if (!prev || prev.code !== result.code) return prev;
+        return {
+          ...prev,
+          order: data,
+          entry: dbEntry ? { ...prev.entry, key: dbEntry[0], detail: dbEntry[1], cartItem: prev.entry?.cartItem } : prev.entry,
+          source: 'Supabase',
+        };
+      });
+    } catch {}
+  };
+
+  const processBarcodeValue = async (rawCode, source = 'manual') => {
+    const code = normalizeScanCode(rawCode);
+    if (!code || !inlineDraft) {
+      setScanResult(null);
+      setScanNotice({ severity: 'warning', text: 'Enter or scan a barcode/QR code before pressing Scan.' });
+      return;
+    }
+
+    const allOrders = Array.isArray(orders) ? orders : [];
+    const currentOrder = allOrders.find(
+      (order) => String(order.order_number || order.id) === String(inlineDraft.order_number || inlineDraft.id)
+    ) || inlineDraft;
+    const currentKeys = [currentOrder.order_number, currentOrder.work_number, currentOrder.id]
+      .filter(Boolean)
+      .map((value) => normalizeScanCode(value));
+    const currentOrderLabel = currentOrder.order_number || currentOrder.id || 'this order';
+    const barcodeOrderId = normalizeScanCode(getOrderIdFromBarcode(code));
+    const looksLikeGarmentBarcode = scanMode === 'garment' || /-G\d+$/.test(code);
+    let dbGarment = null;
+
+    if (looksLikeGarmentBarcode) {
+      try {
+        const { data } = await getGarmentBarcodeDetails(code);
+        dbGarment = data || null;
+      } catch {}
+    }
+
+    if (dbGarment) {
+      const dbOrderKeys = [
+        dbGarment.workId,
+        dbGarment.workNumber,
+        dbGarment.orderId,
+        dbGarment.order?.order_number,
+        dbGarment.order?.id,
+        dbGarment.barcodeOrderId,
+      ].filter(Boolean).map((value) => normalizeScanCode(value));
+      const orderMismatch = currentKeys.length > 0 && dbOrderKeys.length > 0
+        && !dbOrderKeys.some((key) => currentKeys.includes(key));
+
+      if (orderMismatch) {
+        setScanResult(null);
+        setScanNotice({
+          severity: 'warning',
+          text: `This barcode belongs to order ${dbGarment.orderId || dbGarment.workNumber || dbOrderKeys[0]}, not ${currentOrderLabel}.`,
+        });
+        return;
+      }
+
+      if (scanMode === 'order') {
+        setScanResult(null);
+        setScanNotice({ severity: 'info', text: 'This is a garment barcode. Select Scan Garment to count it.' });
+        return;
+      }
+
+      const duplicateKey = dbGarment.barcode || code;
+      const duplicate = scannedGarmentKeys.includes(duplicateKey);
+      if (!duplicate) {
+        setScannedGarmentKeys((prev) => [...prev, duplicateKey]);
+      }
+      const detail = {
+        name: dbGarment.garmentName || 'Garment',
+        barcode: dbGarment.barcode || code,
+        garment_barcode: dbGarment.barcode || code,
+        barcodeFormat: dbGarment.barcodeFormat || '',
+        barcodeOrderId: dbGarment.barcodeOrderId || '',
+        barcodeGeneratedAt: dbGarment.barcodeGeneratedAt || '',
+        unitIndex: dbGarment.unitIndex || 1,
+        tagNumber: dbGarment.garmentTagNumber || '',
+        service: dbGarment.service || '',
+        serviceType: dbGarment.service || '',
+        quantity: dbGarment.quantity || 1,
+        color: dbGarment.color || '',
+        fabric: dbGarment.fabric || '',
+        brand: dbGarment.brand || '',
+        condition: dbGarment.condition || '',
+        defectLocation: dbGarment.defectLocation || '',
+        severity: dbGarment.severity || '',
+        actionPlan: dbGarment.treatmentAction || '',
+        notes: dbGarment.inspectionNotes || '',
+        inspectedBy: dbGarment.inspectedBy || '',
+        inspectedAt: dbGarment.inspectedAt || '',
+        processingStage: dbGarment.processingStage || '',
+        assignedStaff: dbGarment.assignedStaff || '',
+        processingInstructions: dbGarment.processingInstructions || '',
+      };
+      const result = {
+        kind: 'garment',
+        code,
+        order: dbGarment.order || currentOrder,
+        entry: {
+          key: duplicateKey,
+          detail,
+          cartItem: {
+            id: dbGarment.orderItemId || dbGarment.garmentId || '',
+            name: detail.name,
+            qty: dbGarment.quantity || 1,
+            quantity: dbGarment.quantity || 1,
+            serviceType: detail.serviceType,
+          },
+        },
+        barcodeDetails: dbGarment,
+        duplicate,
+        source: 'Supabase',
+      };
+      setScanNotice({
+        severity: duplicate ? 'warning' : 'success',
+        text: duplicate
+          ? `Barcode ${duplicateKey} was already scanned and was not counted again.`
+          : `Garment ${detail.name} verified from Supabase and counted.`,
+      });
+      setScanResult(result);
+      setScanInput('');
+      return;
+    }
+
+    const belongsToCurrentOrder = !barcodeOrderId || currentKeys.includes(barcodeOrderId);
+    let scannedOrder = currentOrder;
+    if (!belongsToCurrentOrder) {
+      try {
+        const { data } = await getOrderById(barcodeOrderId);
+        if (data) scannedOrder = data;
+      } catch {}
+      setScanResult(null);
+      setScanNotice({
+        severity: 'warning',
+        text: `This barcode belongs to order ${scannedOrder.order_number || scannedOrder.id || barcodeOrderId}, not ${currentOrderLabel}.`,
+      });
+      return;
+    }
+
+    const scannedItems = scannedOrder.items || inlineCart;
+    const scannedInspections = scannedOrder.garment_inspections || scannedOrder.inspections || inspections;
+    const orderMatch = getOrderScanCodes(scannedOrder).includes(code);
+    const garmentMatch = getGarmentScanEntries(scannedItems, scannedInspections).find((entry) => entry.codes.includes(code));
+    const otherOrder = allOrders.find((order) => {
+      if (!order) return false;
+      const keys = [order.order_number, order.work_number, order.id].filter(Boolean).map((value) => normalizeScanCode(value));
+      if (keys.some((key) => currentKeys.includes(key))) return false;
+      if (getOrderScanCodes(order).includes(code)) return true;
+      const orderInspections = order.garment_inspections || order.inspections || {};
+      return Object.values(orderInspections).some((detail) => [
+        detail?.tagNumber,
+        detail?.barcode,
+        detail?.garment_barcode,
+        detail?.qr_code,
+        detail?.garmentTag,
+        detail?.id,
+      ].filter(Boolean).some((value) => normalizeScanCode(value) === code));
+    });
+
+    if (orderMatch) {
+      if (scanMode === 'garment') {
+        setScanResult(null);
+        setScanNotice({ severity: 'info', text: 'This is an order barcode. Select Scan Order to verify it.' });
+        return;
+      }
+      const result = { kind: 'order', code, order: scannedOrder, source };
+      setScanNotice({ severity: 'success', text: `Order ${currentOrderLabel} verified from ${source === 'manual' ? 'manual entry' : source}.` });
+      setScanResult(result);
+      setScanInput('');
+      void hydrateScanResultFromSupabase(result, currentOrder.order_number || currentOrder.id);
+      return;
+    }
+
+    if (garmentMatch) {
+      if (scanMode === 'order') {
+        setScanResult(null);
+        setScanNotice({ severity: 'info', text: 'This is a garment barcode. Select Scan Garment to count it.' });
+        return;
+      }
+      const duplicateKey = code;
+      const duplicate = scannedGarmentKeys.includes(duplicateKey);
+      if (!duplicate) {
+        setScannedGarmentKeys((prev) => [...prev, duplicateKey]);
+      }
+      const result = { kind: 'garment', code, order: scannedOrder, entry: garmentMatch, duplicate, source };
+      setScanNotice({
+        severity: duplicate ? 'warning' : 'success',
+        text: duplicate ? 'This garment was already scanned and was not counted again.' : `Garment ${garmentMatch.detail?.name || garmentMatch.key} matched and counted.`,
+      });
+      setScanResult(result);
+      setScanInput('');
+      void hydrateScanResultFromSupabase(result, currentOrder.order_number || currentOrder.id);
+      return;
+    }
+
+    setScanResult(null);
+    setScanNotice({
+      severity: 'warning',
+      text: otherOrder
+        ? `This code belongs to order ${otherOrder.order_number || otherOrder.id}, not ${currentOrderLabel}.`
+        : looksLikeGarmentBarcode
+          ? `No garment record found for barcode ${code}. Print the latest tag or save this order again.`
+          : 'No matching order or garment barcode was found for the selected order.',
+    });
+  };
+
+  const handleScannerScan = () => processBarcodeValue(scanInput, 'manual');
+
+  const scanResultDetails = scanResult ? (() => {
+    const detail = scanResult.entry?.detail || {};
+    const db = scanResult.barcodeDetails || {};
+    const sourceOrder = db.order || scanResult.order || inlineDraft || {};
+    const sourceItems = Array.isArray(sourceOrder.items) && sourceOrder.items.length > 0 ? sourceOrder.items : inlineCart;
+    const isOrderScan = scanResult.kind === 'order';
+    const orderServices = [...new Set(sourceItems.map((item) => item.serviceType || item.service).filter(Boolean))].join(', ');
+    const inspectionDetails = [
+      (db.color || detail.color) && `Color: ${db.color || detail.color}`,
+      (db.fabric || detail.fabric) && `Fabric: ${db.fabric || detail.fabric}`,
+      (db.brand || detail.brand) && `Brand: ${db.brand || detail.brand}`,
+      (db.condition || detail.condition) && `Condition: ${db.condition || detail.condition}`,
+      (db.treatmentAction || detail.actionPlan) && `Treatment: ${db.treatmentAction || detail.actionPlan}`,
+      (db.inspectionNotes || detail.notes) && `Notes: ${db.inspectionNotes || detail.notes}`,
+      (db.defectLocation || detail.defectLocation) && `Defect: ${db.defectLocation || detail.defectLocation}`,
+      (db.severity || detail.severity) && `Severity: ${db.severity || detail.severity}`,
+      detail.stains && `Stains: ${detail.stains}`,
+      detail.damage && `Damage: ${detail.damage}`,
+      (db.inspectedBy || detail.inspectedBy) && `Inspected By: ${db.inspectedBy || detail.inspectedBy}`,
+      (db.inspectedAt || detail.inspectedAt) && `Inspected At: ${formatDeliveryDateTimeForDisplay({ target_delivery_date: db.inspectedAt || detail.inspectedAt })}`,
+      detail.qcPassed ? 'QC Passed' : '',
+    ].filter(Boolean).join(' • ');
+    const totalGarments = Number(db.totalGarments) || Number(sourceOrder.total_pieces) || scanTotalGarments;
+    return {
+      orderId: db.orderId || db.workNumber || sourceOrder.order_number || sourceOrder.id || inlineDraft?.order_number || '-',
+      customer: db.customerName || sourceOrder.customer_name || '-',
+      customerPhone: db.mobileNumber || sourceOrder.mobile_number || '-',
+      customerAddress: sanitizeAddress(db.deliveryAddress || sourceOrder.address || sourceOrder.delivery_address) || '-',
+      garment: isOrderScan ? 'Order-level (all garments)' : (db.garmentName || detail.name || scanResult.entry?.cartItem?.name || 'Garment'),
+      garmentTag: isOrderScan
+        ? (sourceOrder.bag_barcode || sourceOrder.dispatch_bag_tag || 'Not Assigned')
+        : (db.barcode || detail.barcode || detail.garment_barcode || detail.tagNumber || scanResult.entry?.key || 'Not Assigned'),
+      garmentQuantity: Number(db.quantity) || Number(scanResult.entry?.cartItem?.qty ?? scanResult.entry?.cartItem?.quantity) || 1,
+      service: isOrderScan
+        ? (orderServices || sourceOrder.service_category || '-')
+        : (db.service || detail.service || detail.serviceType || scanResult.entry?.cartItem?.serviceType || scanResult.entry?.cartItem?.service || '-'),
+      inspection: inspectionDetails || (isOrderScan ? sourceOrder.comments || '-' : 'No additional inspection notes'),
+      orderStatus: db.orderStatus || sourceOrder.order_status || sourceOrder.status || '-',
+      processingStage: db.processingStage || detail.processingStage || sourceOrder.processing_stage || '-',
+      expectedDelivery: db.expectedDeliveryDate
+        ? formatDeliveryDateTimeForDisplay({ target_delivery_date: db.expectedDeliveryDate, expected_delivery: db.expectedDeliveryDate })
+        : formatDeliveryDateTimeForDisplay(sourceOrder),
+      assignedStaff: db.assignedStaff || sourceOrder.assigned_staff || sourceOrder.attend_staff_name || 'Not Assigned',
+      processingInstructions: db.processingInstructions || sourceOrder.processing_instructions || '-',
+      totalGarments,
+      scannedGarments: Math.min(scanScannedGarments, totalGarments),
+      remainingGarments: Math.max(0, totalGarments - Math.min(scanScannedGarments, totalGarments)),
+    };
+  })() : null;
+
+  const createBarcodeSvgElement = (value) => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    JsBarcode(svg, value, BARCODE_RENDER_OPTIONS);
+    return svg;
+  };
+
+  const downloadBarcodeFile = (href, filename, revoke = false) => {
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    if (revoke) setTimeout(() => URL.revokeObjectURL(href), 1000);
+  };
+
+  const handleExportBarcode = async (entry, exportFormat) => {
+    if (!entry?.barcode) return;
+    try {
+      const svg = createBarcodeSvgElement(entry.barcode);
+      const filename = `${entry.barcode}.${exportFormat}`;
+      if (exportFormat === 'svg') {
+        const markup = new XMLSerializer().serializeToString(svg);
+        const blob = new Blob([markup], { type: 'image/svg+xml;charset=utf-8' });
+        downloadBarcodeFile(URL.createObjectURL(blob), filename, true);
+        return;
+      }
+      const width = Number(svg.getAttribute('width')) || 600;
+      const height = Number(svg.getAttribute('height')) || 120;
+      const markup = new XMLSerializer().serializeToString(svg);
+      const imageUrl = URL.createObjectURL(new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }));
+      const image = new Image();
+      await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = reject;
+        image.src = imageUrl;
+      });
+      const scale = 3;
+      const canvas = document.createElement('canvas');
+      canvas.width = width * scale;
+      canvas.height = height * scale;
+      const context = canvas.getContext('2d');
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(imageUrl);
+      downloadBarcodeFile(canvas.toDataURL('image/png'), filename);
+    } catch {
+      alert('Unable to export this barcode. Save the order to regenerate it.');
+    }
+  };
+
+  const handlePrintBarcode = (entry) => {
+    if (!entry?.barcode) return;
+    let svg;
+    try {
+      svg = createBarcodeSvgElement(entry.barcode);
+    } catch {
+      alert('This barcode cannot be encoded as Code 128. Save the order to regenerate it.');
+      return;
+    }
+    const printWindow = window.open('', '_blank', 'width=720,height=420');
+    if (!printWindow) {
+      alert('Allow pop-ups to print garment barcodes.');
+      return;
+    }
+    printWindow.document.write('<!doctype html><html><head><meta charset="utf-8" /><title>Garment Barcode</title></head><body></body></html>');
+    printWindow.document.close();
+
+    const orderLine = printWindow.document.createElement('div');
+    orderLine.style.cssText = 'font:600 14px Arial,sans-serif;margin-bottom:4px;';
+    orderLine.textContent = `Order: ${inlineDraft?.order_number || inlineDraft?.id || '-'}`;
+
+    const garmentLine = printWindow.document.createElement('div');
+    garmentLine.style.cssText = 'font:600 13px Arial,sans-serif;margin-bottom:12px;';
+    garmentLine.textContent = `${entry.garmentName} • Piece ${entry.piece}`;
+
+    const barcodeHolder = printWindow.document.createElement('div');
+    barcodeHolder.appendChild(printWindow.document.importNode(svg, true));
+
+    const instructionLine = printWindow.document.createElement('div');
+    instructionLine.style.cssText = 'font:11px Arial,sans-serif;margin-top:10px;color:#475569;';
+    instructionLine.textContent = 'Print at 100% scale and attach securely to the individual garment.';
+
+    printWindow.document.body.style.cssText = 'margin:24px;text-align:center;';
+    printWindow.document.body.append(orderLine, garmentLine, barcodeHolder, instructionLine);
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 200);
+  };
+
+  const stopCameraScanner = useCallback(() => {
+    cameraControlsRef.current?.stop?.();
+    cameraControlsRef.current = null;
+    barcodeReaderRef.current = null;
+    setCameraActive(false);
+  }, []);
+
+  useEffect(() => () => {
+    cameraControlsRef.current?.stop?.();
+  }, []);
+
+  const startCameraScanner = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setScanNotice({ severity: 'warning', text: 'Camera scanning is not available in this browser. Use USB, image upload or manual entry.' });
+      return;
+    }
+    stopCameraScanner();
+    try {
+      const reader = new BrowserMultiFormatReader(CODE_128_HINTS, { delayBetweenScanAttempts: 120 });
+      barcodeReaderRef.current = reader;
+      const controls = await reader.decodeFromVideoDevice(
+        undefined,
+        barcodeVideoRef.current,
+        (result) => {
+          if (!result) return;
+          const code = result.getText();
+          setScanInput(code);
+          processBarcodeValue(code, 'camera');
+          stopCameraScanner();
+        }
+      );
+      cameraControlsRef.current = controls;
+      setCameraActive(true);
+      setScanNotice({ severity: 'info', text: 'Camera scanner active. Point it at a garment barcode.' });
+    } catch {
+      stopCameraScanner();
+      setScanNotice({ severity: 'warning', text: 'Camera could not be started. Check browser permission or use image upload/manual entry.' });
+    }
+  };
+
+  const handleBarcodeImageUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const imageUrl = URL.createObjectURL(file);
+    try {
+      const reader = new BrowserMultiFormatReader(CODE_128_HINTS);
+      const result = await reader.decodeFromImageUrl(imageUrl);
+      const code = result.getText();
+      setScanInput(code);
+      processBarcodeValue(code, 'image upload');
+    } catch {
+      setScanNotice({ severity: 'warning', text: 'No barcode detected in the uploaded image. Use a sharp, straight-on Code 128 image.' });
+    } finally {
+      URL.revokeObjectURL(imageUrl);
+      event.target.value = '';
+    }
+  };
 
   const [servicesPopup, setServicesPopup] = useState({
     anchorEl: null,
@@ -807,6 +1473,10 @@ export function OrdersV2List({
   const handleToggleInlineEdit = (order) => {
     const oid = order.order_number || order.id;
     if (inlineEditingOrderId === oid) {
+      barcodeLoadTokenRef.current += 1;
+      setBarcodesLoading(false);
+      setBarcodesError('');
+      stopCameraScanner();
       setInlineEditingOrderId(null);
       setInlineDraft(null);
       setInlineCart([]);
@@ -816,6 +1486,11 @@ export function OrdersV2List({
       return;
     }
 
+    barcodeLoadTokenRef.current += 1;
+    const barcodeToken = barcodeLoadTokenRef.current;
+    setBarcodesLoading(true);
+    setBarcodesError('');
+
     const pickupSplit = splitIsoToLocalDateAndTime(order.scheduled_pickup_at);
     const deliverySplit = splitIsoToLocalDateAndTime(order.scheduled_delivery_at);
     const normalizedStatus = normalizeOrdersV2Status(order.order_status || order.status);
@@ -823,6 +1498,7 @@ export function OrdersV2List({
     const rawInitialDriver = (order.assigned_pickup_delivery_person || order.assigned_driver || '').trim();
     const safeInitialDriver = (rawInitialDriver === 'Counter Staff' || rawInitialDriver === 'Not assigned' || (order.assigned_staff && rawInitialDriver === order.assigned_staff && !order.assigned_pickup_delivery_person)) ? '' : rawInitialDriver;
     const initialAttendStaff = (order.attend_staff_name || order.assigned_staff || 'Counter Staff').trim();
+    const processingValues = getProcessingFieldValues(order);
     const draft = {
       ...order,
       order_number: order.order_number || order.id,
@@ -850,11 +1526,16 @@ export function OrdersV2List({
       payment_method: order.payment_method || '',
       payment_status: order.payment_status || '',
       comments: order.comments || order.order_notes || order.special_instructions || '',
-      priority: order.priority || '',
-      factory_plant: order.factory_plant || '',
-      bag_barcode: order.bag_barcode || '',
-      packaging_preference: order.packaging_preference || '',
-      processing_stage: order.processing_stage || '',
+      priority: processingValues.processingPriority,
+      factory_plant: processingValues.factoryPlant,
+      factory_hub: processingValues.factoryPlant,
+      bag_barcode: processingValues.bagTag,
+      dispatch_bag_tag: processingValues.bagTag,
+      packaging_preference: processingValues.packagingType,
+      packaging_type: processingValues.packagingType,
+      assigned_machine: processingValues.assignedMachine,
+      processing_stage: processingValues.processingStage,
+      processing_instructions: processingValues.processingInstructions,
     };
 
     const rawItems = Array.isArray(order.items) ? order.items : [];
@@ -887,8 +1568,30 @@ export function OrdersV2List({
     setInlineDraft(draft);
     setInlineCart(items);
     setInspections(order.garment_inspections || order.inspections || {});
+    setScanMode('order');
+    setScanInput('');
+    setScanResult(null);
+    setScanNotice({ severity: 'info', text: '' });
+    setScannedGarmentKeys([]);
+    setBarcodePreviewEntry(null);
+    stopCameraScanner();
     setInlineScheduleErrors({});
     setInlineAddressError('');
+
+    void fetchOrderGarmentBarcodes(oid, items)
+      .then(({ data, error }) => {
+        if (barcodeLoadTokenRef.current !== barcodeToken) return;
+        if (data?.inspections) {
+          setInspections((prev) => mergeGarmentBarcodePatch(prev, data.inspections));
+        }
+        setBarcodesError(error || '');
+        setBarcodesLoading(false);
+      })
+      .catch((err) => {
+        if (barcodeLoadTokenRef.current !== barcodeToken) return;
+        setBarcodesError(err?.message || 'Unable to load garment barcodes.');
+        setBarcodesLoading(false);
+      });
 
     // Helper to format date and time together (e.g., "20 Nov 2026, 12:32 PM")
     const formatPaymentDateTime = (ts) => {
@@ -1247,6 +1950,12 @@ export function OrdersV2List({
       const baseHistory = prevHistory.length > 0 ? prevHistory : initialHistory;
       const combinedHistory = [...addedEvents, ...baseHistory];
       const cleanAddress = sanitizeAddress(inlineDraft.address);
+      const processingPayload = buildProcessingPayload(inlineDraft);
+      const barcodeResult = assignGarmentBarcodes({
+        orderId: inlineDraft.order_number || inlineDraft.id,
+        inspections,
+      });
+      const inspectionsWithBarcodes = barcodeResult.inspections;
 
       const updatedRecord = {
         ...inlineDraft,
@@ -1258,7 +1967,9 @@ export function OrdersV2List({
         service_category: resolvedServiceCategory,
         order_status: newStatus,
         status: newStatus,
-        expected_delivery: inlineDraft.expected_delivery,
+        expected_delivery: resolvedDelivery
+          ? formatDeliveryDateTimeForDisplay(resolvedDelivery)
+          : (inlineDraft.expected_delivery || ''),
         scheduled_pickup_at: resolvedPickup,
         scheduled_delivery_at: resolvedDelivery,
         assigned_staff: inlineDraft.assigned_staff || 'Counter Staff',
@@ -1268,7 +1979,9 @@ export function OrdersV2List({
         assigned_pickup_delivery_person: inlineDraft.assigned_driver || '',
         assigned_pickup_person_id: inlineDraft.assigned_pickup_person_id || null,
         items: inlineCart,
-        garment_inspections: inspections,
+        garment_inspections: inspectionsWithBarcodes,
+        inspections: inspectionsWithBarcodes,
+        garment_barcodes: barcodeResult.barcodes,
         subtotal: inlineSubtotal,
         discount_amount: discountAmount,
         gst_percentage: Math.round(inlineGstRate * 100),
@@ -1281,11 +1994,10 @@ export function OrdersV2List({
         payment_history: paymentHistory,
         comments: inlineDraft.comments,
         special_instructions: inlineDraft.comments,
-        priority: inlineDraft.priority,
-        factory_plant: inlineDraft.factory_plant,
-        bag_barcode: inlineDraft.bag_barcode,
-        packaging_preference: inlineDraft.packaging_preference,
-        processing_stage: inlineDraft.processing_stage,
+        ...processingPayload,
+        factory_plant: processingPayload.factory_hub,
+        bag_barcode: processingPayload.dispatch_bag_tag,
+        packaging_preference: processingPayload.packaging_type,
         activity_history: combinedHistory,
         audit_logs: combinedHistory,
         logs: combinedHistory,
@@ -1311,8 +2023,12 @@ export function OrdersV2List({
         assigned_driver: updatedRecord.assigned_driver,
         assigned_pickup_delivery_person: updatedRecord.assigned_pickup_delivery_person,
         assigned_pickup_person_id: updatedRecord.assigned_pickup_person_id,
+        assigned_pickup_person_city: updatedRecord.assigned_pickup_person_city,
+        assigned_pickup_person_zone: updatedRecord.assigned_pickup_person_zone,
         items: inlineCart,
-        garment_inspections: inspections,
+        garment_inspections: inspectionsWithBarcodes,
+        inspections: inspectionsWithBarcodes,
+        garment_barcodes: barcodeResult.barcodes,
         subtotal: inlineSubtotal,
         discountAmount: discountAmount,
         taxAmount: inlineTax,
@@ -1322,7 +2038,7 @@ export function OrdersV2List({
         paymentStatus: updatedRecord.payment_status,
         paymentMethod: updatedRecord.payment_method,
         orderNotes: updatedRecord.comments,
-        priority: updatedRecord.priority,
+        ...processingPayload,
         activity_history: combinedHistory,
         audit_logs: combinedHistory,
         status_updated_at: nowIso,
@@ -1330,6 +2046,7 @@ export function OrdersV2List({
       });
 
       onUpdateOrder?.(updatedRecord);
+      stopCameraScanner();
       setInlineEditingOrderId(null);
       setInlineDraft(null);
       setInlineCart([]);
@@ -2351,6 +3068,8 @@ export function OrdersV2List({
                                             assigned_driver: chosenDriver,
                                             assigned_pickup_delivery_person: chosenDriver,
                                             assigned_pickup_person_id: matched?.uniqueId || matched?.id || null,
+                                            assigned_pickup_person_city: matched?.city || '',
+                                            assigned_pickup_person_zone: matched?.zone || '',
                                           });
                                         }}
                                         InputProps={{
@@ -3077,10 +3796,10 @@ export function OrdersV2List({
                               {/* ══════════════════════════════════════════════════════════
                                   TAB 4: ORDER INFORMATION AND LAUNDRY PROCESSING
                                  ══════════════════════════════════════════════════════════ */}
-                              {activeTab === 'processing' && (
-                                <Paper elevation={0} sx={{ p: { xs: 2, sm: 3 }, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, mb: 2.5 }}>
-                                    <Box sx={{ width: 34, height: 34, borderRadius: '50%', bgcolor: '#2563eb', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                               {activeTab === 'processing' && (
+                                 <Paper elevation={0} sx={{ p: { xs: 1.5, sm: 2.5 }, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
+                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, mb: 1.25 }}>
+                                    <Box sx={{ width: 32, height: 32, borderRadius: '50%', bgcolor: '#2563eb', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                       <FactoryOutlined fontSize="small" />
                                     </Box>
                                     <Box>
@@ -3093,12 +3812,18 @@ export function OrdersV2List({
                                     </Box>
                                   </Box>
 
-                                  <Grid container spacing={2.5}>
-                                    {/* Order Priority */}
-                                    <Grid item xs={12} sm={6}>
-                                      <Typography variant="caption" fontWeight={700} color="#334155" display="block" mb={0.5}>
-                                        Order Priority
-                                      </Typography>
+                                  <Box
+                                    sx={{
+                                      display: 'grid',
+                                      gridTemplateColumns: {
+                                        xs: '1fr',
+                                        sm: 'repeat(2, minmax(0, 1fr))',
+                                        md: 'repeat(4, minmax(0, 1fr))',
+                                      },
+                                      gap: 1.5,
+                                    }}
+                                  >
+                                    <CompactProcessingField label="Processing Priority">
                                       <TextField
                                         select
                                         fullWidth
@@ -3111,109 +3836,604 @@ export function OrdersV2List({
                                               <FlagOutlined fontSize="small" sx={{ color: '#64748b' }} />
                                             </InputAdornment>
                                           ),
-                                          sx: { borderRadius: '8px' },
+                                          sx: INLINE_PROCESSING_INPUT_SX,
                                         }}
+                                        MenuProps={INLINE_PROCESSING_MENU_PROPS}
                                       >
-                                        <MenuItem value="Normal">Normal Handling</MenuItem>
-                                        <MenuItem value="High">High Priority</MenuItem>
-                                        <MenuItem value="Urgent">Urgent / Express Delivery</MenuItem>
+                                        {withCurrentOption(PROCESSING_PRIORITIES, inlineDraft.priority).map((option) => (
+                                          <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                                        ))}
                                       </TextField>
-                                    </Grid>
+                                    </CompactProcessingField>
 
-                                    {/* Factory Processing Plant */}
-                                    <Grid item xs={12} sm={6}>
-                                      <Typography variant="caption" fontWeight={700} color="#334155" display="block" mb={0.5}>
-                                        Processing Factory Plant *
-                                      </Typography>
+                                    <CompactProcessingField label="Required Factory / Plant" required>
                                       <TextField
                                         select
                                         fullWidth
                                         size="small"
                                         value={inlineDraft.factory_plant || ''}
-                                        onChange={(e) => setInlineDraft({ ...inlineDraft, factory_plant: e.target.value })}
-                                        InputProps={{ sx: { borderRadius: '8px' } }}
+                                        onChange={(e) => setInlineDraft({
+                                          ...inlineDraft,
+                                          factory_plant: e.target.value,
+                                          factory_hub: e.target.value,
+                                        })}
+                                        InputProps={{ sx: INLINE_PROCESSING_INPUT_SX }}
+                                        MenuProps={INLINE_PROCESSING_MENU_PROPS}
                                       >
-                                        <MenuItem value="Main Laundry Factory Hub">Main Laundry Factory Hub (Central)</MenuItem>
-                                        <MenuItem value="Express Wash & Press Unit">Express Wash &amp; Press Unit (Downtown)</MenuItem>
-                                        <MenuItem value="Specialist Dry Cleaning Facility">Specialist Dry Cleaning Facility (North Hub)</MenuItem>
-                                        <MenuItem value="Eco-Friendly Laundry Works">Eco-Friendly Laundry Works (South Hub)</MenuItem>
+                                        {withCurrentOption(FACTORY_PLANTS, inlineDraft.factory_plant).map((option) => (
+                                          <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                                        ))}
                                       </TextField>
-                                    </Grid>
+                                    </CompactProcessingField>
 
-                                    {/* Factory Bag / Bin Tag Barcode */}
-                                    <Grid item xs={12} sm={6}>
-                                      <Typography variant="caption" fontWeight={700} color="#334155" display="block" mb={0.5}>
-                                        Factory Bag / Bin Tag Barcode
-                                      </Typography>
+                                    <CompactProcessingField label="Bag Tag / Crate No.">
                                       <TextField
                                         fullWidth
                                         size="small"
                                         value={inlineDraft.bag_barcode || ''}
-                                        onChange={(e) => setInlineDraft({ ...inlineDraft, bag_barcode: e.target.value })}
-                                        InputProps={{ sx: { borderRadius: '8px' } }}
+                                        onChange={(e) => setInlineDraft({
+                                          ...inlineDraft,
+                                          bag_barcode: e.target.value,
+                                          dispatch_bag_tag: e.target.value,
+                                        })}
+                                        placeholder="Not Assigned"
+                                        InputProps={{ sx: INLINE_PROCESSING_INPUT_SX }}
                                       />
-                                    </Grid>
+                                    </CompactProcessingField>
 
-                                    {/* Packaging Preference */}
-                                    <Grid item xs={12} sm={6}>
-                                      <Typography variant="caption" fontWeight={700} color="#334155" display="block" mb={0.5}>
-                                        Packaging Preference
-                                      </Typography>
+                                    <CompactProcessingField label="Packaging Type">
                                       <TextField
                                         select
                                         fullWidth
                                         size="small"
                                         value={inlineDraft.packaging_preference || ''}
-                                        onChange={(e) => setInlineDraft({ ...inlineDraft, packaging_preference: e.target.value })}
-                                        InputProps={{ sx: { borderRadius: '8px' } }}
+                                        onChange={(e) => setInlineDraft({
+                                          ...inlineDraft,
+                                          packaging_preference: e.target.value,
+                                          packaging_type: e.target.value,
+                                        })}
+                                        InputProps={{ sx: INLINE_PROCESSING_INPUT_SX }}
+                                        MenuProps={INLINE_PROCESSING_MENU_PROPS}
                                       >
-                                        <MenuItem value="Folded & Poly-Wrapped">Folded &amp; Poly-Wrapped</MenuItem>
-                                        <MenuItem value="Hanger on Plastic Sleeve">Hanger on Plastic Sleeve</MenuItem>
-                                        <MenuItem value="Eco-Friendly Paper Packaging">Eco-Friendly Paper Packaging</MenuItem>
-                                        <MenuItem value="Boxed Packaging (Premium)">Boxed Packaging (Premium)</MenuItem>
+                                        {withCurrentOption(PACKAGING_TYPES, inlineDraft.packaging_preference).map((option) => (
+                                          <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                                        ))}
                                       </TextField>
-                                    </Grid>
+                                    </CompactProcessingField>
 
-                                    {/* Processing Stage */}
-                                    <Grid item xs={12} sm={6}>
-                                      <Typography variant="caption" fontWeight={700} color="#334155" display="block" mb={0.5}>
-                                        Current Processing Stage
-                                      </Typography>
+                                    <CompactProcessingField label="Expected Delivery Date & Time">
+                                      <TextField
+                                        type="text"
+                                        fullWidth
+                                        size="small"
+                                        value={
+                                          (inlineDraft.scheduled_delivery_date || inlineDraft.scheduled_delivery_time)
+                                            ? formatDeliveryInputsForDisplay(inlineDraft.scheduled_delivery_date, inlineDraft.scheduled_delivery_time)
+                                            : formatDeliveryDateTimeForDisplay({
+                                              target_delivery_date: inlineDraft.target_delivery_date,
+                                              expected_delivery: inlineDraft.expected_delivery,
+                                              delivery_date: inlineDraft.delivery_date,
+                                            })
+                                        }
+                                        placeholder="Not Scheduled"
+                                        InputProps={{ readOnly: true, sx: INLINE_PROCESSING_INPUT_SX }}
+                                      />
+                                    </CompactProcessingField>
+
+                                    <CompactProcessingField label="Assigned Machine">
+                                      <TextField
+                                        select
+                                        fullWidth
+                                        size="small"
+                                        value={inlineDraft.assigned_machine || ''}
+                                        onChange={(e) => setInlineDraft({ ...inlineDraft, assigned_machine: e.target.value })}
+                                        InputProps={{ sx: INLINE_PROCESSING_INPUT_SX }}
+                                        MenuProps={INLINE_PROCESSING_MENU_PROPS}
+                                      >
+                                        {withCurrentOption(ASSIGNED_MACHINES, inlineDraft.assigned_machine).map((option) => (
+                                          <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                                        ))}
+                                      </TextField>
+                                    </CompactProcessingField>
+
+                                    <CompactProcessingField label="Current Processing Stage">
                                       <TextField
                                         select
                                         fullWidth
                                         size="small"
                                         value={inlineDraft.processing_stage || ''}
                                         onChange={(e) => setInlineDraft({ ...inlineDraft, processing_stage: e.target.value })}
-                                        InputProps={{ sx: { borderRadius: '8px' } }}
+                                        InputProps={{ sx: INLINE_PROCESSING_INPUT_SX }}
+                                        MenuProps={INLINE_PROCESSING_MENU_PROPS}
                                       >
-                                        <MenuItem value="Received at Processing Plant">Received at Processing Plant</MenuItem>
-                                        <MenuItem value="Washing & Cleaning Cycle">Washing &amp; Cleaning Cycle</MenuItem>
-                                        <MenuItem value="Steam Press & Quality Inspection">Steam Press &amp; Quality Inspection</MenuItem>
-                                        <MenuItem value="Packaging & Bagging Completed">Packaging &amp; Bagging Completed</MenuItem>
-                                        <MenuItem value="Dispatched for Store / Delivery">Dispatched for Store / Delivery</MenuItem>
+                                        {withCurrentOption(PROCESSING_STAGES, inlineDraft.processing_stage).map((option) => (
+                                          <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                                        ))}
                                       </TextField>
-                                    </Grid>
+                                    </CompactProcessingField>
 
-                                    {/* Expected Delivery Date */}
-                                    <Grid item xs={12} sm={6}>
-                                      <Typography variant="caption" fontWeight={700} color="#334155" display="block" mb={0.5}>
-                                        Expected Delivery Date
+                                    <CompactProcessingField label="Logistics & Delivery Information">
+                                      <Tooltip title={inlineLogisticsDisplay} placement="top-start">
+                                        <TextField
+                                          type="text"
+                                          fullWidth
+                                          size="small"
+                                          value={inlineLogisticsDisplay}
+                                          placeholder="Not Assigned"
+                                          inputProps={{ title: inlineLogisticsDisplay }}
+                                          InputProps={{
+                                            readOnly: true,
+                                            sx: {
+                                              ...INLINE_PROCESSING_INPUT_SX,
+                                              '& .MuiInputBase-input': {
+                                                fontSize: '13px',
+                                                textOverflow: 'ellipsis',
+                                              },
+                                            },
+                                          }}
+                                        />
+                                      </Tooltip>
+                                    </CompactProcessingField>
+
+                                    <Box sx={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
+                                      <CompactProcessingField label="Processing Instructions">
+                                        <TextField
+                                          type="text"
+                                          fullWidth
+                                          size="small"
+                                          value={inlineDraft.processing_instructions || ''}
+                                          onChange={(e) => setInlineDraft({ ...inlineDraft, processing_instructions: e.target.value })}
+                                          placeholder="Special care directions, stain notes, or customer delivery requests..."
+                                          sx={{
+                                            width: '100%',
+                                            '& .MuiOutlinedInput-root': {
+                                              height: '50px !important',
+                                              minHeight: '50px !important',
+                                              maxHeight: '50px !important',
+                                              boxSizing: 'border-box',
+                                            },
+                                            '& .MuiOutlinedInput-input': {
+                                              height: '100% !important',
+                                              boxSizing: 'border-box',
+                                              padding: '0 12px !important',
+                                              border: '0 !important',
+                                              outline: 'none !important',
+                                              boxShadow: 'none !important',
+                                              backgroundColor: 'transparent !important',
+                                              '&:hover, &:focus': {
+                                                border: '0 !important',
+                                                outline: 'none !important',
+                                                boxShadow: 'none !important',
+                                                backgroundColor: 'transparent !important',
+                                              },
+                                            },
+                                          }}
+                                          InputProps={{ sx: INLINE_PROCESSING_INPUT_SX }}
+                                        />
+                                      </CompactProcessingField>
+                                    </Box>
+                                  </Box>
+
+                                  <Box sx={{ mt: 1.25, p: 1.25, borderRadius: '10px', bgcolor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1 }}>
+                                      <HistoryOutlined sx={{ fontSize: 18, color: '#2563eb' }} />
+                                      <Typography variant="subtitle2" fontWeight={800} color="#0f172a">
+                                        Processing Progress Timeline
                                       </Typography>
+                                    </Box>
+                                    <Box sx={{ display: 'flex', alignItems: 'flex-start', overflowX: 'auto', pb: 0.5 }}>
+                                      {inlineProcessingTimeline.map((step, idx) => {
+                                        const StageIcon = TIMELINE_STAGE_ICONS[idx] || FactCheckOutlined;
+                                        return (
+                                          <Box
+                                            key={step.name}
+                                            sx={{ flex: '1 1 0', minWidth: 130, position: 'relative', textAlign: 'center', px: 0.5 }}
+                                          >
+                                            {idx < inlineProcessingTimeline.length - 1 && (
+                                              <Box
+                                                sx={{
+                                                  position: 'absolute',
+                                                  top: 16,
+                                                  left: 'calc(50% + 18px)',
+                                                  right: 'calc(-50% + 18px)',
+                                                  height: 2,
+                                                  bgcolor: step.isCompleted ? '#16a34a' : '#e2e8f0',
+                                                  zIndex: 0,
+                                                }}
+                                              />
+                                            )}
+                                            <Box
+                                              sx={{
+                                                position: 'relative',
+                                                zIndex: 1,
+                                                width: 32,
+                                                height: 32,
+                                                borderRadius: '50%',
+                                                mx: 'auto',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                bgcolor: step.isActive ? '#2563eb' : step.isCompleted ? '#16a34a' : '#e2e8f0',
+                                                color: step.isActive || step.isCompleted ? '#ffffff' : '#64748b',
+                                                boxShadow: step.isActive ? '0 0 0 4px rgba(37, 99, 235, 0.16)' : 'none',
+                                              }}
+                                            >
+                                              <StageIcon sx={{ fontSize: 17 }} />
+                                            </Box>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, mt: 0.5, minHeight: 18 }}>
+                                              <Typography
+                                                variant="caption"
+                                                fontWeight={700}
+                                                color={step.isActive ? '#2563eb' : step.isCompleted ? '#15803d' : '#64748b'}
+                                                sx={{ fontSize: '12px', lineHeight: 1.2 }}
+                                              >
+                                                {step.name}
+                                              </Typography>
+                                              {step.isActive && (
+                                                <Chip label="Current" size="small" sx={{ height: 16, fontSize: '0.625rem', bgcolor: '#2563eb', color: '#ffffff' }} />
+                                              )}
+                                            </Box>
+                                            <Typography variant="caption" color="#64748b" sx={{ display: 'block', fontSize: '0.6875rem', lineHeight: 1.25 }}>
+                                              {step.time}
+                                            </Typography>
+                                          </Box>
+                                        );
+                                      })}
+                                    </Box>
+                                  </Box>
+
+                                  <Paper elevation={0} sx={{ mt: 1.25, p: 1.5, borderRadius: '10px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1.25 }}>
+                                      <QrCodeScanner sx={{ fontSize: 18, color: '#2563eb' }} />
+                                      <Typography variant="subtitle2" fontWeight={800} color="#0f172a">
+                                        Order &amp; Garment Scanner
+                                      </Typography>
+                                    </Box>
+                                    <ToggleButtonGroup
+                                      exclusive
+                                      fullWidth
+                                      size="small"
+                                      value={scanMode}
+                                      onChange={handleScanModeChange}
+                                      sx={{
+                                        mb: 1.25,
+                                        '& .MuiToggleButton-root': {
+                                          textTransform: 'none',
+                                          fontWeight: 700,
+                                          fontSize: '13px',
+                                          py: 0.75,
+                                          borderColor: '#cbd5e1',
+                                          color: '#475569',
+                                          '&.Mui-selected': {
+                                            bgcolor: '#eff6ff',
+                                            color: '#2563eb',
+                                            borderColor: '#2563eb',
+                                          },
+                                        },
+                                      }}
+                                    >
+                                      <ToggleButton value="order">Scan Order</ToggleButton>
+                                      <ToggleButton value="garment">Scan Garment</ToggleButton>
+                                    </ToggleButtonGroup>
+                                    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, alignItems: 'stretch' }}>
                                       <TextField
-                                        type="date"
                                         fullWidth
                                         size="small"
-                                        value={inlineDraft.expected_delivery ? String(inlineDraft.expected_delivery).substring(0, 10) : ''}
-                                        onChange={(e) => setInlineDraft({ ...inlineDraft, expected_delivery: e.target.value })}
-                                        InputLabelProps={{ shrink: true }}
-                                        InputProps={{ sx: { borderRadius: '8px' } }}
+                                        value={scanInput}
+                                        onChange={(e) => {
+                                          setScanInput(e.target.value);
+                                          setScanNotice({ severity: 'info', text: '' });
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleScannerScan();
+                                          }
+                                        }}
+                                        placeholder={
+                                          scanMode === 'order'
+                                            ? 'Scan or enter order barcode / ID'
+                                            : 'Scan or enter garment tag / barcode'
+                                        }
+                                        InputProps={{
+                                          startAdornment: (
+                                            <InputAdornment position="start">
+                                              <QrCode2 fontSize="small" sx={{ color: '#2563eb' }} />
+                                            </InputAdornment>
+                                          ),
+                                          sx: INLINE_PROCESSING_INPUT_SX,
+                                        }}
                                       />
+                                      <Button
+                                        variant="contained"
+                                        size="small"
+                                        onClick={handleScannerScan}
+                                        startIcon={<QrCodeScanner />}
+                                        sx={{
+                                          textTransform: 'none',
+                                          fontWeight: 700,
+                                          bgcolor: '#2563eb',
+                                          borderRadius: '8px',
+                                          whiteSpace: 'nowrap',
+                                          px: 2,
+                                          minWidth: 110,
+                                          height: 40,
+                                          boxShadow: '0 3px 8px rgba(37, 99, 235, 0.25)',
+                                          '&:hover': { bgcolor: '#1d4ed8' },
+                                        }}
+                                      >
+                                        Scan
+                                      </Button>
+                                    </Box>
+                                    <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+                                      <Button
+                                        size="small"
+                                        variant="outlined"
+                                        startIcon={<PhotoCameraOutlined />}
+                                        onClick={cameraActive ? stopCameraScanner : startCameraScanner}
+                                        sx={{ textTransform: 'none', fontSize: '12px', borderRadius: '8px' }}
+                                      >
+                                        {cameraActive ? 'Stop Camera' : 'Scan with Camera'}
+                                      </Button>
+                                      <Button
+                                        size="small"
+                                        variant="outlined"
+                                        startIcon={<AttachFileOutlined />}
+                                        onClick={() => barcodeImageInputRef.current?.click()}
+                                        sx={{ textTransform: 'none', fontSize: '12px', borderRadius: '8px' }}
+                                      >
+                                        Upload Barcode Image
+                                      </Button>
+                                      <input
+                                        ref={barcodeImageInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        hidden
+                                        onChange={handleBarcodeImageUpload}
+                                      />
+                                    </Box>
+                                    <Box
+                                      component="video"
+                                      ref={barcodeVideoRef}
+                                      playsInline
+                                      muted
+                                      sx={{
+                                        display: cameraActive ? 'block' : 'none',
+                                        width: '100%',
+                                        maxHeight: 220,
+                                        mt: 1,
+                                        borderRadius: '8px',
+                                        bgcolor: '#0f172a',
+                                        objectFit: 'cover',
+                                      }}
+                                    />
+                                    <Alert
+                                      severity={scanNotice.severity || 'info'}
+                                      sx={{ mt: 1.25, py: 0.25, fontSize: '0.8125rem', alignItems: 'center' }}
+                                    >
+                                      {scanNotice.text || 'Use camera, uploaded image, USB scanner or manual entry. Codes are verified against live Supabase order and garment records.'}
+                                    </Alert>
+                                    {scanMode === 'garment' && (
+                                      <Box sx={{ display: 'flex', gap: 1, mt: 1.25, flexWrap: 'wrap' }}>
+                                        <Chip size="small" label={`Total: ${scanTotalGarments}`} sx={{ bgcolor: '#eff6ff', color: '#1d4ed8', fontWeight: 700 }} />
+                                        <Chip size="small" label={`Scanned: ${scanScannedGarments}`} sx={{ bgcolor: '#dcfce7', color: '#15803d', fontWeight: 700 }} />
+                                        <Chip size="small" label={`Remaining: ${scanRemainingGarments}`} sx={{ bgcolor: '#f1f5f9', color: '#475569', fontWeight: 700 }} />
+                                      </Box>
+                                    )}
+                                    {scanResultDetails && (
+                                      <Alert severity="success" sx={{ mt: 1.25, py: 0.75, bgcolor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1 }}>
+                                          <CheckCircle sx={{ fontSize: 18, color: '#16a34a' }} />
+                                          <Typography variant="subtitle2" fontWeight={800} color="#166534">
+                                            Barcode matched successfully
+                                          </Typography>
+                                        </Box>
+                                        <Grid container spacing={1}>
+                                          <Grid item xs={12} sm={6} md={3}>
+                                            <Typography variant="caption" component="div" color="#334155"><strong>Order ID:</strong> {scanResultDetails.orderId}</Typography>
+                                          </Grid>
+                                          <Grid item xs={12} sm={6} md={3}>
+                                            <Typography variant="caption" component="div" color="#334155"><strong>Customer:</strong> {scanResultDetails.customer}</Typography>
+                                          </Grid>
+                                          <Grid item xs={12} sm={6} md={3}>
+                                            <Typography variant="caption" component="div" color="#334155"><strong>Phone:</strong> {scanResultDetails.customerPhone}</Typography>
+                                          </Grid>
+                                          <Grid item xs={12} sm={6} md={3}>
+                                            <Typography variant="caption" component="div" color="#334155"><strong>Expected Delivery:</strong> {scanResultDetails.expectedDelivery}</Typography>
+                                          </Grid>
+                                          <Grid item xs={12}>
+                                            <Typography variant="caption" component="div" color="#334155"><strong>Customer Address:</strong> {scanResultDetails.customerAddress}</Typography>
+                                          </Grid>
+                                          <Grid item xs={12} sm={6}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                              <CheckroomOutlined sx={{ fontSize: 18, color: '#2563eb' }} />
+                                              <Typography variant="caption" component="div" color="#334155"><strong>Garment:</strong> {scanResultDetails.garment} • Qty: {scanResultDetails.garmentQuantity}</Typography>
+                                            </Box>
+                                          </Grid>
+                                          <Grid item xs={12} sm={6}>
+                                            <Typography variant="caption" component="div" color="#334155"><strong>Unique Barcode:</strong> {scanResultDetails.garmentTag}</Typography>
+                                          </Grid>
+                                          <Grid item xs={12} sm={6}>
+                                            <Typography variant="caption" component="div" color="#334155"><strong>Service:</strong> {scanResultDetails.service}</Typography>
+                                          </Grid>
+                                          <Grid item xs={12} sm={6}>
+                                            <Typography variant="caption" component="div" color="#334155"><strong>Order Status:</strong> {scanResultDetails.orderStatus}</Typography>
+                                          </Grid>
+                                          <Grid item xs={12} sm={6}>
+                                            <Typography variant="caption" component="div" color="#334155"><strong>Processing Stage:</strong> {scanResultDetails.processingStage}</Typography>
+                                          </Grid>
+                                          <Grid item xs={12} sm={6}>
+                                            <Typography variant="caption" component="div" color="#334155"><strong>Assigned Staff:</strong> {scanResultDetails.assignedStaff}</Typography>
+                                          </Grid>
+                                          <Grid item xs={12}>
+                                            <Typography variant="caption" component="div" color="#334155"><strong>Inspection Details:</strong> {scanResultDetails.inspection}</Typography>
+                                          </Grid>
+                                          <Grid item xs={12}>
+                                            <Typography variant="caption" component="div" color="#334155"><strong>Processing Instructions:</strong> {scanResultDetails.processingInstructions}</Typography>
+                                          </Grid>
+                                          <Grid item xs={12}>
+                                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 0.25 }}>
+                                              <Chip size="small" label={`Total: ${scanResultDetails.totalGarments}`} sx={{ bgcolor: '#ffffff', color: '#1d4ed8', fontWeight: 700 }} />
+                                              <Chip size="small" label={`Scanned: ${scanResultDetails.scannedGarments}`} sx={{ bgcolor: '#ffffff', color: '#15803d', fontWeight: 700 }} />
+                                              <Chip size="small" label={`Remaining: ${scanResultDetails.remainingGarments}`} sx={{ bgcolor: '#ffffff', color: '#475569', fontWeight: 700 }} />
+                                            </Box>
+                                          </Grid>
+                                        </Grid>
+                                      </Alert>
+                                    )}
+                                  </Paper>
+
+                                  <Paper elevation={0} sx={{ mt: 1.25, p: 1.5, borderRadius: '10px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.5 }}>
+                                      <QrCode2 sx={{ fontSize: 18, color: '#2563eb' }} />
+                                      <Typography variant="subtitle2" fontWeight={800} color="#0f172a">
+                                        Individual Garment Barcodes
+                                      </Typography>
+                                    </Box>
+                                    <Typography variant="caption" color="#64748b" sx={{ display: 'block', mb: 1.25 }}>
+                                      Save order → generate unique Code 128 garment tags → print &amp; attach → scan garment → view live order details.
+                                    </Typography>
+                                    {barcodesLoading && (
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.25 }}>
+                                        <CircularProgress size={14} />
+                                        <Typography variant="caption" color="#64748b">Loading garment barcodes…</Typography>
+                                      </Box>
+                                    )}
+                                    {!barcodesLoading && barcodesError && (
+                                      <Alert severity="warning" sx={{ mb: 1.25, py: 0.25, fontSize: '0.75rem' }}>
+                                        {barcodesError}
+                                      </Alert>
+                                    )}
+                                    <Box
+                                      sx={{
+                                        maxHeight: 360,
+                                        pr: 1,
+                                        overflowY: 'auto',
+                                        overflowX: 'hidden',
+                                        scrollbarWidth: 'thin',
+                                        scrollbarColor: '#94a3b8 #e2e8f0',
+                                        '&::-webkit-scrollbar': { width: 8 },
+                                        '&::-webkit-scrollbar-track': { bgcolor: '#e2e8f0', borderRadius: '8px' },
+                                        '&::-webkit-scrollbar-thumb': { bgcolor: '#94a3b8', borderRadius: '8px' },
+                                      }}
+                                    >
+                                    <Grid container spacing={1.25} alignItems="stretch">
+                                      {garmentBarcodeEntries.map((entry) => (
+                                        <Grid item xs={12} sm={6} md={4} key={entry.key}>
+                                          <Box sx={{ height: '100%', p: 1, borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+                                              <CheckroomOutlined sx={{ fontSize: 18, color: '#2563eb', flexShrink: 0 }} />
+                                              <Box sx={{ minWidth: 0 }}>
+                                                <Typography variant="caption" fontWeight={700} color="#0f172a" noWrap sx={{ display: 'block' }}>
+                                                  {entry.garmentName} – Piece {entry.piece}
+                                                </Typography>
+                                                <Typography variant="caption" color="#64748b" noWrap sx={{ display: 'block' }}>
+                                                  {entry.cartItem?.serviceType || entry.cartItem?.service || 'Laundry service'}
+                                                </Typography>
+                                              </Box>
+                                            </Box>
+                                            {entry.barcode
+                                              ? <GarmentBarcodeSvg value={entry.barcode} label={entry.barcode} />
+                                              : (
+                                                <Box sx={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px', border: '1px dashed #cbd5e1', bgcolor: '#f8fafc' }}>
+                                                  <Typography variant="caption" color="#64748b">Generated when order is saved</Typography>
+                                                </Box>
+                                              )}
+                                            <Typography variant="caption" color="#0f172a" fontFamily="monospace" noWrap>
+                                              {entry.barcode || 'Pending generation'}
+                                            </Typography>
+                                            <Box sx={{ display: 'flex', gap: 0.75, mt: 'auto' }}>
+                                              <Button
+                                                size="small"
+                                                variant="outlined"
+                                                startIcon={<VisibilityOutlined />}
+                                                disabled={!entry.barcode}
+                                                onClick={() => setBarcodePreviewEntry(entry)}
+                                                sx={{ textTransform: 'none', fontSize: '12px', borderRadius: '8px', flex: 1 }}
+                                              >
+                                                View Barcode
+                                              </Button>
+                                              <Button
+                                                size="small"
+                                                variant="contained"
+                                                startIcon={<PrintOutlined />}
+                                                disabled={!entry.barcode}
+                                                onClick={() => handlePrintBarcode(entry)}
+                                                sx={{ textTransform: 'none', fontSize: '12px', borderRadius: '8px', bgcolor: '#2563eb', flex: 1 }}
+                                              >
+                                                Print Barcode
+                                              </Button>
+                                            </Box>
+                                          </Box>
+                                        </Grid>
+                                      ))}
                                     </Grid>
-                                  </Grid>
+                                    </Box>
+                                  </Paper>
+
+                                  <Dialog open={Boolean(barcodePreviewEntry)} onClose={() => setBarcodePreviewEntry(null)} maxWidth="sm" fullWidth>
+                                    <DialogTitle sx={{ pb: 1 }}>
+                                      <Typography variant="subtitle1" fontWeight={800} color="#0f172a">
+                                        Garment Barcode
+                                      </Typography>
+                                    </DialogTitle>
+                                    <DialogContent dividers>
+                                      {barcodePreviewEntry && (
+                                        <Stack spacing={1.25}>
+                                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <CheckroomOutlined sx={{ color: '#2563eb' }} />
+                                            <Box>
+                                              <Typography variant="body2" fontWeight={700} color="#0f172a">
+                                                {barcodePreviewEntry.garmentName} – Piece {barcodePreviewEntry.piece}
+                                              </Typography>
+                                              <Typography variant="caption" color="#64748b">
+                                                Order {inlineDraft?.order_number || inlineDraft?.id || '-'} • Code 128
+                                              </Typography>
+                                            </Box>
+                                          </Box>
+                                          <GarmentBarcodeSvg value={barcodePreviewEntry.barcode} label={barcodePreviewEntry.barcode} svgRef={barcodeSvgRef} />
+                                          <Typography variant="caption" color="#334155" fontFamily="monospace" textAlign="center">
+                                            {barcodePreviewEntry.barcode}
+                                          </Typography>
+                                        </Stack>
+                                      )}
+                                    </DialogContent>
+                                    <DialogActions sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                                      <Button onClick={() => setBarcodePreviewEntry(null)} sx={{ textTransform: 'none' }}>Close</Button>
+                                      <Button
+                                        size="small"
+                                        variant="outlined"
+                                        startIcon={<DownloadOutlined />}
+                                        disabled={!barcodePreviewEntry?.barcode}
+                                        onClick={() => handleExportBarcode(barcodePreviewEntry, 'svg')}
+                                        sx={{ textTransform: 'none', fontSize: '12px', borderRadius: '8px' }}
+                                      >
+                                        SVG
+                                      </Button>
+                                      <Button
+                                        size="small"
+                                        variant="outlined"
+                                        startIcon={<DownloadOutlined />}
+                                        disabled={!barcodePreviewEntry?.barcode}
+                                        onClick={() => handleExportBarcode(barcodePreviewEntry, 'png')}
+                                        sx={{ textTransform: 'none', fontSize: '12px', borderRadius: '8px' }}
+                                      >
+                                        PNG
+                                      </Button>
+                                      <Button
+                                        variant="contained"
+                                        startIcon={<PrintOutlined />}
+                                        disabled={!barcodePreviewEntry?.barcode}
+                                        onClick={() => handlePrintBarcode(barcodePreviewEntry)}
+                                        sx={{ textTransform: 'none', bgcolor: '#2563eb', borderRadius: '8px' }}
+                                      >
+                                        Print Barcode
+                                      </Button>
+                                    </DialogActions>
+                                  </Dialog>
 
                                   {/* Tab 4 Navigation */}
-                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pt: 3, mt: 3, borderTop: '1px solid #f1f5f9' }}>
+                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pt: 2, mt: 2, borderTop: '1px solid #f1f5f9' }}>
                                     <Button variant="outlined" size="small" onClick={handlePrevTab} startIcon={<ArrowBack />} sx={{ textTransform: 'none', borderRadius: '8px' }}>
                                       Back
                                     </Button>

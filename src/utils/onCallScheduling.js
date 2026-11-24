@@ -129,6 +129,32 @@ export function resolveDisplayScheduledDelivery(order) {
   return null;
 }
 
+export const NOT_SCHEDULED_LABEL = 'Not Scheduled';
+
+/**
+ * Formats the delivery date/time actually saved on an order for edit-form display.
+ * Accepts an order-like object (preferred) or a raw date value.
+ */
+export function formatDeliveryDateTimeForDisplay(source, fallback = NOT_SCHEDULED_LABEL) {
+  if (source && typeof source === 'object' && !(source instanceof Date)) {
+    const iso = resolveDisplayScheduledDelivery(source);
+    if (iso) return formatScheduledDateTime(iso, fallback);
+    return formatScheduledDateTime(
+      source.target_delivery_date || source.expected_delivery || source.delivery_date,
+      fallback
+    );
+  }
+  return formatScheduledDateTime(source, fallback);
+}
+
+/**
+ * Formats the current Customer Details delivery date/time inputs for display.
+ */
+export function formatDeliveryInputsForDisplay(date, time) {
+  if (!date || !time) return NOT_SCHEDULED_LABEL;
+  return formatDeliveryDateTimeForDisplay({ scheduled_delivery_date: date, scheduled_delivery_time: time });
+}
+
 /**
  * Validates On-Call pickup and delivery date/time inputs.
  *

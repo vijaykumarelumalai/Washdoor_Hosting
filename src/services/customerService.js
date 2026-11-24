@@ -727,6 +727,12 @@ export async function syncGarmentCardsAndInspections(workIdentifier, workNumber,
       .select('*')
       .eq('work_id', workId);
 
+    const { data: dbOrderItems } = await supabase
+      .from('washdoor_order_items')
+      .select('item_id, product_id, product_name, service_type, quantity')
+      .eq('work_id', workId)
+      .order('created_at', { ascending: true });
+
     const existingPhotosByUrl = new Map();
     const existingPhotosByCardId = new Map();
     (existingPhotos || []).forEach((ph) => {
@@ -742,7 +748,8 @@ export async function syncGarmentCardsAndInspections(workIdentifier, workNumber,
     const cardPieceLookup = [];
     let globalUnitIndex = 1;
 
-    items.forEach((item) => {
+    items.forEach((item, itemIndex) => {
+      const exactOrderItem = Array.isArray(dbOrderItems) ? dbOrderItems[itemIndex] : null;
       const qty = Math.max(1, parseInt(item.qty || item.quantity || 1, 10));
       for (let i = 0; i < qty; i++) {
         const pieceNum = i + 1;
@@ -759,7 +766,10 @@ export async function syncGarmentCardsAndInspections(workIdentifier, workNumber,
           work_id: workId,
           work_number: cleanNum,
           unit_index: globalUnitIndex,
+          order_item_id: exactOrderItem?.item_id || null,
           garment_tag_number: tagNum,
+          barcode: insp.barcode || insp.garment_barcode || null,
+          barcode_format: insp.barcode_format || 'CODE128',
           garment_name: insp.name || item.name || item.product_name || 'Garment',
           service_type: item.serviceType || item.service_type || item.service || 'Wash & Steam Press',
           color: insp.color || null,
@@ -806,7 +816,7 @@ export async function syncGarmentCardsAndInspections(workIdentifier, workNumber,
       cardErr = res.error;
 
       if (cardErr && (cardErr.code === 'PGRST204' || String(cardErr.message).includes('column'))) {
-        const baseCards = cardsToUpsert.map(({ make, stains, damage, finish_preference, size, assigned_staff, qc_passed, customer_ack, customer_ack_at, ...rest }) => rest);
+        const baseCards = cardsToUpsert.map(({ make, stains, damage, finish_preference, size, assigned_staff, qc_passed, customer_ack, customer_ack_at, barcode, barcode_format, order_item_id, ...rest }) => rest);
         const fbRes = await supabase.from('washdoor_garment_cards').upsert(baseCards, { onConflict: 'work_id,unit_index' }).select();
         syncedCards = fbRes.data;
         cardErr = fbRes.error;
@@ -2172,6 +2182,14 @@ function mapCustomerWorkRowToOrder(row, factoryRow = null, scheduleRow = null, g
         ...existing,
         id: pieceId,
         card_id: card.card_id,
+        order_item_id: card.order_item_id || existing.order_item_id || '',
+        garment_id: card.card_id || existing.garment_id || '',
+        barcode: card.barcode || existing.barcode || '',
+        garment_barcode: card.barcode || existing.garment_barcode || '',
+        barcode_format: card.barcode_format || existing.barcode_format || '',
+        barcode_order_id: card.barcode_order_id || existing.barcode_order_id || card.work_number || '',
+        barcode_garment_id: card.card_id || existing.barcode_garment_id || '',
+        barcode_generated_at: card.barcode_generated_at || existing.barcode_generated_at || null,
         cartItemId: mapping?.cartItemId || existing.cartItemId || slugFallback,
         productId: mapping?.productId || existing.productId || slugFallback,
         piece: mapping?.piece || existing.piece || card.unit_index,
@@ -2276,6 +2294,7 @@ function mapCustomerWorkRowToOrder(row, factoryRow = null, scheduleRow = null, g
     items: items,
     garment_inspections: garmentInspections,
     inspections: garmentInspections,
+    garment_barcodes: internalNotesObj.garment_barcodes || [],
     photos: allPhotos,
     customer_history: { items: items },
     intake_date: row.intake_date || row.created_at,
@@ -2344,6 +2363,12 @@ function mapCustomerWorkRowToOrder(row, factoryRow = null, scheduleRow = null, g
       statusRemark: '',
     },
     staff_notes: row.staff_notes || internalNotesObj.staff_notes || '',
+    packaging_type: internalNotesObj.packaging_type || '',
+    assigned_machine: factoryData.assigned_machine || internalNotesObj.assigned_machine || '',
+    processing_stage: internalNotesObj.processing_stage || '',
+    processing_instructions: factoryData.driver_instructions || internalNotesObj.processing_instructions || '',
+    assigned_pickup_person_city: internalNotesObj.assigned_pickup_person_city || '',
+    assigned_pickup_person_zone: internalNotesObj.assigned_pickup_person_zone || '',
     flags: (row.handling_flags && Object.keys(row.handling_flags).length > 0) ? row.handling_flags : (internalNotesObj.flags || {}),
     status_history: (garmentBundle?.statusHistory || []).map((sh) => ({
       id: sh.history_id,
@@ -4040,6 +4065,7 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
     const notesPayload = {
       ...prevNotesObj,
       garment_inspections: inspData,
+      garment_barcodes: updatePayload.garment_barcodes ?? prevNotesObj.garment_barcodes ?? [],
       expected_delivery_display: expectedDeliveryDisplay,
       scheduled_pickup_at: nextScheduledPickupAt,
       scheduled_delivery_at: nextScheduledDeliveryAt,
@@ -4078,6 +4104,12 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       collected_by_staff: updatePayload.collected_by_staff ?? updatePayload.assignedStaff ?? prevNotesObj.collected_by_staff ?? '',
       plant_transit_status: updatePayload.plant_transit_status ?? prevNotesObj.plant_transit_status ?? '',
       staff_notes: updatePayload.staff_notes ?? prevNotesObj.staff_notes ?? '',
+      packaging_type: updatePayload.packaging_type ?? prevNotesObj.packaging_type ?? '',
+      assigned_machine: updatePayload.assigned_machine ?? updatePayload.assignedMachine ?? prevNotesObj.assigned_machine ?? '',
+      processing_stage: updatePayload.processing_stage ?? prevNotesObj.processing_stage ?? '',
+      processing_instructions: updatePayload.processing_instructions ?? prevNotesObj.processing_instructions ?? '',
+      assigned_pickup_person_city: updatePayload.assigned_pickup_person_city ?? prevNotesObj.assigned_pickup_person_city ?? '',
+      assigned_pickup_person_zone: updatePayload.assigned_pickup_person_zone ?? prevNotesObj.assigned_pickup_person_zone ?? '',
       flags: updatePayload.flags ?? prevNotesObj.flags ?? {},
       order_status: targetStatus ? normalizeOrderStatus(targetStatus) : prevNotesObj.order_status,
       property_status: targetPropertyStatus,
@@ -4366,6 +4398,7 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
                 items: updatePayload.items || o.items,
                 garment_inspections: inspData,
                 inspections: inspData,
+                garment_barcodes: notesPayload.garment_barcodes || [],
                 customer_history: {
                   ...(o.customer_history || {}),
                   items: updatePayload.items || o.customer_history?.items || [],
@@ -4426,6 +4459,396 @@ export async function getOrderById(identifier) {
       return { data: null, error: error?.message || 'Order not found' };
     }
     return { data: mapCustomerWorkRowToOrder(data), error: null };
+  } catch (err) {
+    return { data: null, error: err.message };
+  }
+}
+
+function isSupabaseMissingColumnError(error) {
+  const code = String(error?.code || '');
+  const message = `${error?.message || ''} ${error?.details || ''}`;
+  return code === '42703' || code === 'PGRST204' || /column\s+.*\s+does not exist/i.test(message);
+}
+
+function buildFallbackBarcode(workNumber, unitIndex) {
+  const prefix = String(workNumber || '').trim().toUpperCase().replace(/\s+/g, '') || 'WORK';
+  const piece = Math.max(1, Number(unitIndex) || 1);
+  return `${prefix}-G${String(piece).padStart(3, '0')}`;
+}
+
+export async function fetchOrderGarmentBarcodes(identifier, cartItems = []) {
+  if (!isSupabaseConfigured() || !identifier) {
+    return { data: null, error: 'Supabase not configured' };
+  }
+
+  try {
+    const numMatch = String(identifier).match(/\d+/);
+    const num = numMatch ? parseInt(numMatch[0], 10) : null;
+    const ordId = num ? `ORD${String(num).padStart(5, '0')}` : identifier;
+    const workIdPattern = num ? `WORK-${String(num).padStart(5, '0')}` : identifier;
+    const orderIdPattern = num ? `ORDER-${String(num).padStart(5, '0')}` : identifier;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
+    const workQuery = supabase.from('customer_works').select('work_id, work_number').or(
+      isUuid
+        ? `work_number.eq.${ordId},work_number.eq.${workIdPattern},work_number.eq.${orderIdPattern},work_id.eq.${identifier}`
+        : `work_number.eq.${ordId},work_number.eq.${workIdPattern},work_number.eq.${orderIdPattern},work_number.eq.${identifier}`
+    );
+    const { data: workRows, error: workError } = await workQuery.limit(1);
+    if (workError || !Array.isArray(workRows) || workRows.length === 0) {
+      return { data: null, error: workError?.message || 'Order not found in Supabase' };
+    }
+
+    const work = workRows[0];
+    const workId = work.work_id;
+    const workNumber = work.work_number || ordId;
+    const legacyCardColumns = 'card_id, work_id, work_number, unit_index, garment_name, service_type, garment_tag_number, color, fabric_type, brand, garment_condition, care_instructions, processing_stage, assigned_staff';
+    const fullCardColumns = `${legacyCardColumns}, order_item_id, barcode, barcode_format, barcode_order_id, barcode_generated_at`;
+    const noOrderItemCardColumns = `${legacyCardColumns}, barcode, barcode_format, barcode_order_id, barcode_generated_at`;
+    const selectCards = (columns) => supabase
+      .from('washdoor_garment_cards')
+      .select(columns)
+      .eq('work_id', workId)
+      .order('unit_index', { ascending: true });
+
+    const orderItemsRes = await supabase
+      .from('washdoor_order_items')
+      .select('item_id, product_id, product_name, service_type, quantity, line_amount, care_instructions')
+      .eq('work_id', workId)
+      .order('created_at', { ascending: true });
+
+    if (orderItemsRes.error) {
+      return { data: null, error: orderItemsRes.error.message };
+    }
+
+    let cardColumns = fullCardColumns;
+    let hasOrderItemColumn = true;
+    let hasBarcodeColumns = true;
+    let cardsRes = await selectCards(cardColumns);
+    if (isSupabaseMissingColumnError(cardsRes.error)) {
+      cardColumns = noOrderItemCardColumns;
+      hasOrderItemColumn = false;
+      cardsRes = await selectCards(cardColumns);
+    }
+    if (isSupabaseMissingColumnError(cardsRes.error)) {
+      cardColumns = legacyCardColumns;
+      hasBarcodeColumns = false;
+      cardsRes = await selectCards(cardColumns);
+    }
+    if (cardsRes.error) {
+      return { data: null, error: cardsRes.error.message };
+    }
+
+    const orderItems = Array.isArray(orderItemsRes.data) ? orderItemsRes.data : [];
+    let cards = Array.isArray(cardsRes.data) ? [...cardsRes.data] : [];
+    const expectedCards = [];
+    const unitKeyMap = {};
+    const keyItems = Array.isArray(cartItems) && cartItems.length > 0 ? cartItems : orderItems;
+    let unitIndex = 1;
+
+    keyItems.forEach((item, itemIndex) => {
+      const qty = Math.max(1, parseInt(item.qty ?? item.quantity ?? item.count, 10) || 1);
+      const appItemId = item.id || item.product_id || item.item_id || item.itemId || `item-${itemIndex + 1}`;
+      for (let piece = 1; piece <= qty; piece += 1) {
+        unitKeyMap[unitIndex] = { pieceId: `${appItemId}-piece-${piece}`, cartItemId: appItemId, piece };
+        unitIndex += 1;
+      }
+    });
+
+    unitIndex = 1;
+    orderItems.forEach((item) => {
+      const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+      for (let piece = 1; piece <= qty; piece += 1) {
+        expectedCards.push({
+          work_id: workId,
+          work_number: workNumber,
+          unit_index: unitIndex,
+          order_item_id: item.item_id || null,
+          garment_name: item.product_name || 'Garment',
+          service_type: item.service_type || null,
+          barcode: null,
+          barcode_format: 'CODE128',
+          barcode_order_id: workNumber,
+        });
+        unitIndex += 1;
+      }
+    });
+
+    const existingUnits = new Set(cards.map((card) => Number(card.unit_index)));
+    const cardsToCreate = expectedCards.filter((card) => !existingUnits.has(Number(card.unit_index)));
+    if (cardsToCreate.length > 0) {
+      const rowsToCreate = cardsToCreate.map((card) => {
+        const row = {
+          work_id: card.work_id,
+          work_number: card.work_number,
+          unit_index: card.unit_index,
+          garment_name: card.garment_name,
+          service_type: card.service_type,
+        };
+        if (hasOrderItemColumn) row.order_item_id = card.order_item_id;
+        if (hasBarcodeColumns) {
+          row.barcode = null;
+          row.barcode_format = 'CODE128';
+          row.barcode_order_id = workNumber;
+        }
+        return row;
+      });
+      const createRes = await supabase
+        .from('washdoor_garment_cards')
+        .upsert(rowsToCreate, { onConflict: 'work_id,unit_index' })
+        .select(cardColumns);
+      if (createRes.error) {
+        return { data: null, error: createRes.error.message };
+      }
+      cards = [...cards, ...(createRes.data || [])];
+    }
+
+    const missingCards = hasBarcodeColumns
+      ? cards.filter((card) => !String(card.barcode || '').trim())
+      : [];
+    for (const card of missingCards) {
+      const generateRes = await supabase
+        .from('washdoor_garment_cards')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('card_id', card.card_id)
+        .select(cardColumns)
+        .maybeSingle();
+      if (generateRes.error) {
+        return { data: null, error: generateRes.error.message };
+      }
+      if (generateRes.data) {
+        const idx = cards.findIndex((item) => item.card_id === card.card_id);
+        if (idx >= 0) cards[idx] = generateRes.data;
+      }
+    }
+
+    if ((missingCards.length > 0 || cardsToCreate.length > 0) && hasBarcodeColumns) {
+      const refreshRes = await selectCards(cardColumns);
+      if (!refreshRes.error && Array.isArray(refreshRes.data)) cards = refreshRes.data;
+    }
+
+    const patch = {};
+    cards
+      .slice()
+      .sort((a, b) => Number(a.unit_index || 0) - Number(b.unit_index || 0))
+      .forEach((card) => {
+        const mapping = unitKeyMap[Number(card.unit_index)];
+        const slugFallback = String(card.garment_name || 'garment').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+        const pieceId = mapping?.pieceId || `${slugFallback}-piece-${card.unit_index}`;
+        const barcode = (hasBarcodeColumns && String(card.barcode || '').trim())
+          ? String(card.barcode).trim().toUpperCase()
+          : buildFallbackBarcode(card.work_number || workNumber, card.unit_index);
+        patch[pieceId] = {
+          id: pieceId,
+          card_id: card.card_id,
+          order_item_id: hasOrderItemColumn ? card.order_item_id || '' : '',
+          garment_id: card.card_id || '',
+          barcode,
+          garment_barcode: barcode,
+          barcode_format: card.barcode_format || 'CODE128',
+          barcode_order_id: card.barcode_order_id || workNumber || barcode.split('-G')[0],
+          barcode_garment_id: card.card_id || '',
+          barcode_generated_at: card.barcode_generated_at || '',
+          unit_index: Number(card.unit_index) || 1,
+          piece: mapping?.piece || Number(card.unit_index) || 1,
+          cartItemId: mapping?.cartItemId || '',
+          name: card.garment_name || 'Garment',
+          tagNumber: card.garment_tag_number || '',
+          serviceType: card.service_type || '',
+          color: card.color || '',
+          fabric: card.fabric_type || '',
+          brand: card.brand || '',
+          condition: card.garment_condition || '',
+          notes: card.care_instructions || '',
+          processingStage: card.processing_stage || '',
+          assignedStaff: card.assigned_staff || '',
+        };
+      });
+
+    return {
+      data: {
+        workId,
+        workNumber,
+        inspections: patch,
+        cards,
+        hasOrderItemColumn,
+        hasBarcodeColumns,
+        barcodesPersisted: hasBarcodeColumns && !cards.some((card) => !String(card.barcode || '').trim()),
+      },
+      error: null,
+    };
+  } catch (err) {
+    return { data: null, error: err.message };
+  }
+}
+
+function isSupabaseMissingFunctionError(error) {
+  const message = `${error?.message || ''}`;
+  return error?.code === 'PGRST202' || /could not find the function/i.test(message);
+}
+
+function parseInternalNotesText(noteText, key) {
+  try {
+    const parsed = typeof noteText === 'string' ? JSON.parse(noteText) : noteText;
+    if (!parsed || typeof parsed !== 'object') return '';
+    return String(parsed[key] || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+async function fetchGarmentBarcodeDetailsFallback(normalized) {
+  const orderHint = normalized.replace(/-G\d+$/, '');
+  const cardsRes = await supabase
+    .from('washdoor_garment_cards')
+    .select('card_id, work_id, work_number, unit_index, garment_name, service_type, garment_tag_number, color, fabric_type, brand, garment_condition, care_instructions, processing_stage, assigned_staff')
+    .eq('work_number', orderHint)
+    .order('unit_index', { ascending: true });
+  if (cardsRes.error) return { data: null, error: cardsRes.error.message };
+
+  const card = (cardsRes.data || []).find((item) => buildFallbackBarcode(item.work_number || orderHint, item.unit_index) === normalized)
+    || (cardsRes.data || [])[0];
+  if (!card) return { data: null, error: 'Barcode not found' };
+
+  const [workRes, itemsRes, inspectionsRes] = await Promise.all([
+    supabase
+      .from('customer_works')
+      .select('work_id, work_number, work_status, internal_notes, target_delivery_date, customer_name, mobile_number, delivery_address, total_pieces, assigned_staff, special_instructions')
+      .eq('work_id', card.work_id)
+      .maybeSingle(),
+    supabase.from('washdoor_order_items').select('quantity').eq('work_id', card.work_id),
+    supabase
+      .from('washdoor_garment_inspections')
+      .select('action_plan, inspection_notes, defect_location, severity, inspected_by, inspected_at')
+      .eq('card_id', card.card_id)
+      .order('inspected_at', { ascending: false })
+      .limit(1),
+  ]);
+  if (workRes.error) return { data: null, error: workRes.error.message };
+
+  const work = workRes.data || {};
+  const inspection = Array.isArray(inspectionsRes.data) ? inspectionsRes.data[0] : null;
+  const totalGarments = Array.isArray(itemsRes.data)
+    ? itemsRes.data.reduce((sum, item) => sum + (Math.max(1, parseInt(item.quantity, 10) || 1)), 0)
+    : 0;
+
+  return {
+    data: {
+      order_id: work.work_number || card.work_number || orderHint,
+      work_id: work.work_id || card.work_id,
+      work_number: work.work_number || card.work_number || orderHint,
+      order_status: parseInternalNotesText(work.internal_notes, 'order_status') || work.work_status || '',
+      expected_delivery_date: work.target_delivery_date || '',
+      customer_name: work.customer_name || '',
+      mobile_number: work.mobile_number || '',
+      delivery_address: work.delivery_address || '',
+      garment_name: card.garment_name || '',
+      barcode: normalized,
+      barcode_format: 'CODE128',
+      barcode_order_id: orderHint,
+      barcode_generated_at: '',
+      garment_id: card.card_id,
+      order_item_id: '',
+      unit_index: Number(card.unit_index) || 1,
+      garment_tag_number: card.garment_tag_number || '',
+      service: card.service_type || '',
+      quantity: 1,
+      total_garments: totalGarments || Number(work.total_pieces) || 0,
+      color: card.color || '',
+      fabric: card.fabric_type || '',
+      brand: card.brand || '',
+      condition: card.garment_condition || '',
+      defect_location: inspection?.defect_location || '',
+      severity: inspection?.severity || '',
+      treatment_action: inspection?.action_plan || '',
+      inspection_notes: inspection?.inspection_notes || card.care_instructions || '',
+      inspected_by: inspection?.inspected_by || '',
+      inspected_at: inspection?.inspected_at || '',
+      processing_stage: parseInternalNotesText(work.internal_notes, 'processing_stage') || card.processing_stage || '',
+      assigned_staff: card.assigned_staff || parseInternalNotesText(work.internal_notes, 'attend_staff_name') || work.assigned_staff || '',
+      processing_instructions: parseInternalNotesText(work.internal_notes, 'processing_instructions') || work.special_instructions || '',
+    },
+    error: null,
+  };
+}
+
+export async function getGarmentBarcodeDetails(barcode) {
+  const normalized = String(barcode ?? '').trim().toUpperCase();
+  if (!isSupabaseConfigured() || !normalized) {
+    return { data: null, error: 'Supabase not configured' };
+  }
+  try {
+    let rpcResult = await supabase.rpc('get_garment_barcode_details', { p_barcode: normalized });
+    if (rpcResult.error && isSupabaseMissingFunctionError(rpcResult.error)) {
+      rpcResult = await fetchGarmentBarcodeDetailsFallback(normalized);
+    }
+    const { data, error } = rpcResult;
+    if (error || !data || typeof data !== 'object' || Array.isArray(data) || !data.barcode) {
+      return { data: null, error: error?.message || 'Barcode not found' };
+    }
+    const orderId = data.order_id || data.work_number || '';
+    const workId = data.work_id || '';
+    const orderStatus = data.order_status || '';
+    const deliveryDate = data.expected_delivery_date || '';
+    const assignedStaff = data.assigned_staff || '';
+    return {
+      data: {
+        order: {
+          id: workId || orderId,
+          order_id: workId || orderId,
+          order_number: orderId,
+          work_number: data.work_number || orderId,
+          work_id: workId,
+          order_status: orderStatus,
+          status: orderStatus,
+          customer_name: data.customer_name || '',
+          mobile_number: data.mobile_number || '',
+          address: data.delivery_address || '',
+          delivery_address: data.delivery_address || '',
+          target_delivery_date: deliveryDate,
+          scheduled_delivery_at: deliveryDate,
+          expected_delivery: deliveryDate,
+          assigned_staff: assignedStaff,
+          attend_staff_name: assignedStaff,
+          processing_stage: data.processing_stage || '',
+          processing_instructions: data.processing_instructions || '',
+          total_pieces: Number(data.total_garments) || 0,
+        },
+        orderId,
+        workId,
+        workNumber: data.work_number || orderId,
+        orderStatus,
+        expectedDeliveryDate: deliveryDate,
+        customerName: data.customer_name || '',
+        mobileNumber: data.mobile_number || '',
+        deliveryAddress: data.delivery_address || '',
+        garmentName: data.garment_name || '',
+        barcode: data.barcode || normalized,
+        barcodeFormat: data.barcode_format || 'CODE128',
+        barcodeOrderId: data.barcode_order_id || orderId,
+        barcodeGeneratedAt: data.barcode_generated_at || '',
+        garmentId: data.garment_id || '',
+        orderItemId: data.order_item_id || '',
+        unitIndex: Number(data.unit_index) || 1,
+        garmentTagNumber: data.garment_tag_number || '',
+        service: data.service || '',
+        quantity: Number(data.quantity) || 1,
+        totalGarments: Number(data.total_garments) || 0,
+        color: data.color || '',
+        fabric: data.fabric || '',
+        brand: data.brand || '',
+        condition: data.condition || '',
+        defectLocation: data.defect_location || '',
+        severity: data.severity || '',
+        treatmentAction: data.treatment_action || '',
+        inspectionNotes: data.inspection_notes || '',
+        inspectedBy: data.inspected_by || '',
+        inspectedAt: data.inspected_at || '',
+        processingStage: data.processing_stage || '',
+        assignedStaff,
+        processingInstructions: data.processing_instructions || '',
+      },
+      error: null,
+    };
   } catch (err) {
     return { data: null, error: err.message };
   }

@@ -3,22 +3,53 @@
 // Fully responsive with Customer Details, Garments & Services, Garment Inspection, Laundry Processing, Payments & Billing, Messages & Review
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { normalizeOrdersV2Status } from './OrdersV2List';
+import JsBarcode from 'jsbarcode';
+import { BarcodeFormat, BrowserMultiFormatReader } from '@zxing/browser';
+import { DecodeHintType } from '@zxing/library';
+import { GarmentBarcodeSvg, normalizeOrdersV2Status } from './OrdersV2List';
+import { sanitizeAddress } from '../utils/normalizeOrder';
 import ClothIllustration from './ClothIllustration';
 import GarmentInspectionSection from './GarmentInspectionSection';
 import ServiceTypeSelect from './ServiceTypeSelect';
 import StaffSearchDropdown from './StaffSearchDropdown';
 import { formatServiceBreakdown } from '../config/businessRules';
 import {
+  PROCESSING_PRIORITIES,
+  FACTORY_PLANTS,
+  PACKAGING_TYPES,
+  ASSIGNED_MACHINES,
+  PROCESSING_STAGES,
+  withCurrentOption,
+  getProcessingFieldValues,
+  getProcessingTimeline,
+  formatLogisticsDeliveryInfo,
+  buildProcessingPayload,
+} from '../utils/laundryProcessing';
+import {
   updateOrderInSupabase,
+  getOrderById,
+  getGarmentBarcodeDetails,
+  fetchOrderGarmentBarcodes,
   fetchActiveStaffMaster,
   fetchActivePickupDeliveryMaster,
 } from '../services/customerService';
 import {
+  BARCODE_RENDER_OPTIONS,
+  assignGarmentBarcodes,
+  getGarmentBarcodeEntries,
+  getOrderIdFromBarcode,
+  normalizeBarcodeValue,
+  mergeGarmentBarcodePatch,
+} from '../utils/garmentBarcodes';
+import {
   isOnCallOrderType,
   resolveOptionalDelivery,
+  resolveDisplayScheduledDelivery,
   splitIsoToLocalDateAndTime,
   validateOnCallSchedule,
+  formatDeliveryDateTimeForDisplay,
+  formatDeliveryInputsForDisplay,
+  NOT_SCHEDULED_LABEL,
 } from '../utils/onCallScheduling';
 import '../styles/OrdersV2SideEditPanel.css';
 
@@ -43,6 +74,10 @@ const CATALOG_ITEMS = [
 ];
 
 const CATEGORIES = ['All', 'Laundry', 'Dry Cleaning', 'Ironing', 'Others', 'Men', 'Women', 'Home Linen'];
+
+const CODE_128_HINTS = new Map([
+  [DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128]],
+]);
 
 const getClothId = (item) => {
   if (item?.itemId) return item.itemId;
@@ -175,7 +210,7 @@ export default function OrdersV2SideEditPanel({
   const initialAddress = order?.address || order?.delivery_address || order?.customer?.address || 'No.16, Anna Nagar, Ranipet - 632401';
   const initialStatus = normalizeOrdersV2Status(order?.status || order?.order_status || 'Delivered');
   const initialOrderType = order?.order_type || 'Walk-in';
-  const initialExpectedDelivery = order?.expected_delivery || '30 Oct 2026, 05:00 PM';
+  const initialExpectedDelivery = formatDeliveryDateTimeForDisplay(order);
   const initialComments = order?.comments || order?.order_notes || order?.special_instructions || 'Handle with care. VIP regular customer.';
 
   // 1. Customer & Order Info Form State (Editable)
@@ -188,11 +223,12 @@ export default function OrdersV2SideEditPanel({
   const [orderType, setOrderType] = useState(initialOrderType);
   const [expectedDelivery, setExpectedDelivery] = useState(initialExpectedDelivery);
   const initialPickupSplit = splitIsoToLocalDateAndTime(order?.scheduled_pickup_at);
-  const initialDeliverySplit = splitIsoToLocalDateAndTime(order?.scheduled_delivery_at);
+  const initialDeliverySplit = splitIsoToLocalDateAndTime(resolveDisplayScheduledDelivery(order));
+  const deliveryTouchedRef = useRef(false);
   const [scheduledPickupDate, setScheduledPickupDate] = useState(initialPickupSplit.date || '2026-10-28');
   const [scheduledPickupTime, setScheduledPickupTime] = useState(initialPickupSplit.time || '10:15');
-  const [scheduledDeliveryDate, setScheduledDeliveryDate] = useState(initialDeliverySplit.date || '2026-10-30');
-  const [scheduledDeliveryTime, setScheduledDeliveryTime] = useState(initialDeliverySplit.time || '17:00');
+  const [scheduledDeliveryDate, setScheduledDeliveryDate] = useState(initialDeliverySplit.date || '');
+  const [scheduledDeliveryTime, setScheduledDeliveryTime] = useState(initialDeliverySplit.time || '');
   const [scheduleErrors, setScheduleErrors] = useState({});
   const [attendStaffName, setAttendStaffName] = useState(
     order?.attend_staff_name || order?.status_updated_by || order?.assigned_staff || 'Ramesh K. (CNT102)'
@@ -201,10 +237,16 @@ export default function OrdersV2SideEditPanel({
     order?.attend_staff_id || 'STAFF-102'
   );
   const [assignedPickupPerson, setAssignedPickupPerson] = useState(
-    order?.assigned_pickup_delivery_person || order?.assigned_driver || 'Suresh R. (PUP204) - Zone 201 - Ranipet'
+    order?.assigned_pickup_delivery_person || order?.assigned_driver || ''
   );
   const [assignedPickupPersonId, setAssignedPickupPersonId] = useState(
-    order?.assigned_pickup_person_id || 'PICKUP-204'
+    order?.assigned_pickup_person_id || ''
+  );
+  const [assignedPickupPersonCity, setAssignedPickupPersonCity] = useState(
+    order?.assigned_pickup_person_city || ''
+  );
+  const [assignedPickupPersonZone, setAssignedPickupPersonZone] = useState(
+    order?.assigned_pickup_person_zone || ''
   );
   const [staffMasterList, setStaffMasterList] = useState([]);
   const [staffMasterLoading, setStaffMasterLoading] = useState(false);
@@ -412,45 +454,521 @@ export default function OrdersV2SideEditPanel({
   };
 
   // 6. Laundry Processing & Logistics Fields
-  const [processingPriority, setProcessingPriority] = useState('Normal');
-  const [factoryPlant, setFactoryPlant] = useState('Main Central Laundry Plant - Ranipet #1');
-  const [bagTag, setBagTag] = useState(order?.bag_tag || 'BAG-RANIPET-7821');
-  const [packagingType, setPackagingType] = useState('Hanger Pack');
-  const [assignedRider, setAssignedRider] = useState(order?.assigned_driver || 'Karthik V.');
-  const [riderPhone, setRiderPhone] = useState(order?.rider_phone || '+91 98765 11223');
-  const [vehicleNo, setVehicleNo] = useState(order?.assigned_driver_full || order?.vehicle_no || 'TN 23 BK 4092 (Van 01)');
-  const [routeZone, setRouteZone] = useState(order?.route_zone || 'Zone 201 - Ranipet');
-  const [assignedMachine, setAssignedMachine] = useState('Washer Extractor #3');
-  const [qcInspector, setQcInspector] = useState('Ramesh K. (QC Lead)');
-  const [logisticsStatus, setLogisticsStatus] = useState(order?.pickup_status || 'Delivered');
-  const [processingInstructions, setProcessingInstructions] = useState(
-    'Ring doorbell twice, customer requested contactless drop. Handle silk saree with gentle enzyme wash.'
+  const initialProcessing = getProcessingFieldValues(order);
+  const [processingPriority, setProcessingPriority] = useState(initialProcessing.processingPriority);
+  const [factoryPlant, setFactoryPlant] = useState(initialProcessing.factoryPlant);
+  const [bagTag, setBagTag] = useState(initialProcessing.bagTag);
+  const [packagingType, setPackagingType] = useState(initialProcessing.packagingType);
+  const [assignedRider, setAssignedRider] = useState(
+    order?.assigned_pickup_delivery_person || order?.assigned_driver || order?.logistics?.assignedRider || ''
   );
+  const [riderPhone, setRiderPhone] = useState(order?.rider_phone || order?.logistics?.riderPhone || '');
+  const [vehicleNo, setVehicleNo] = useState(
+    order?.assigned_driver_full || order?.vehicle_name || order?.logistics?.vehicleNo || ''
+  );
+  const [routeZone, setRouteZone] = useState(order?.route_from_to || order?.logistics?.routeZone || '');
+  const [assignedMachine, setAssignedMachine] = useState(initialProcessing.assignedMachine);
+  const [processingStage, setProcessingStage] = useState(initialProcessing.processingStage);
+  const [qcInspector, setQcInspector] = useState(order?.qc_inspector || order?.workflow?.qcInspector || '');
+  const [logisticsStatus, setLogisticsStatus] = useState(order?.pickup_status || '');
+  const [processingInstructions, setProcessingInstructions] = useState(initialProcessing.processingInstructions);
+  const processingTouchedRef = useRef(false);
+  const [scanMode, setScanMode] = useState('order');
+  const [scanInput, setScanInput] = useState('');
+  const [scanResult, setScanResult] = useState(null);
+  const [scanNotice, setScanNotice] = useState({ severity: 'info', text: '' });
+  const [scannedGarmentKeys, setScannedGarmentKeys] = useState([]);
+  const [barcodePreviewEntry, setBarcodePreviewEntry] = useState(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [barcodesLoading, setBarcodesLoading] = useState(false);
+  const [barcodesError, setBarcodesError] = useState('');
+  const barcodeLoadTokenRef = useRef(0);
+  const barcodeVideoRef = useRef(null);
+  const barcodeImageInputRef = useRef(null);
+  const cameraControlsRef = useRef(null);
+  const barcodeReaderRef = useRef(null);
+  const barcodePreviewSvgRef = useRef(null);
 
-  // Dynamic Stepper stages calculation for Laundry Processing
-  const processingStages = useMemo(() => {
-    const st = (status || '').toLowerCase();
-    let currentIdx = 5; // default Delivered for ORD00060
-    if (st.includes('receive')) currentIdx = 0;
-    else if (st.includes('wash') || st.includes('progress')) currentIdx = 1;
-    else if (st.includes('iron') || st.includes('press') || st.includes('qc')) currentIdx = 2;
-    else if (st.includes('pack')) currentIdx = 3;
-    else if (st.includes('dispatch') || st.includes('out') || st.includes('ready')) currentIdx = 4;
-    else if (st.includes('deliver')) currentIdx = 5;
+  const processingStages = useMemo(() => getProcessingTimeline(order, status), [order, status]);
+  const garmentBarcodeEntries = useMemo(
+    () => getGarmentBarcodeEntries({ cart: cartItems, inspections }),
+    [cartItems, inspections]
+  );
+  const scanTotalGarments = cartItems.reduce(
+    (sum, item) => sum + Math.max(1, parseInt(item.qty ?? item.quantity ?? item.count, 10) || 1),
+    0
+  );
+  const scanScannedGarments = Math.min(scannedGarmentKeys.length, scanTotalGarments);
+  const scanRemainingGarments = Math.max(0, scanTotalGarments - scanScannedGarments);
 
-    return [
-      { name: 'Order Received', time: '28 Oct, 10:15 AM', statusTarget: 'Order Received' },
-      { name: 'Washing', time: '28 Oct, 11:30 AM', statusTarget: 'In Progress' },
-      { name: 'Steam Press & Quality Check', time: '28 Oct, 02:00 PM', statusTarget: 'In Progress' },
-      { name: 'Packaging', time: '28 Oct, 03:30 PM', statusTarget: 'Ready' },
-      { name: 'Dispatched', time: '28 Oct, 04:15 PM', statusTarget: 'Ready' },
-      { name: 'Delivered', time: 'Delivered', statusTarget: 'Delivered' },
-    ].map((step, idx) => ({
-      ...step,
-      isCompleted: idx <= currentIdx,
-      isActive: idx === currentIdx,
-    }));
-  }, [status]);
+  useEffect(() => {
+    const identifier = order?.order_number || order?.id || order?.work_number;
+    if (!identifier) return undefined;
+    const sourceCart = Array.isArray(order?.items) && order.items.length > 0
+      ? order.items.map((item, index) => ({
+          id: item.id || index + 1,
+          qty: Number(item.qty ?? item.quantity ?? 1),
+        }))
+      : [];
+    const token = ++barcodeLoadTokenRef.current;
+    let active = true;
+    setBarcodesLoading(true);
+    setBarcodesError('');
+    fetchOrderGarmentBarcodes(identifier, sourceCart)
+      .then(({ data, error }) => {
+        if (!active || token !== barcodeLoadTokenRef.current) return;
+        if (data?.inspections) {
+          setInspections((prev) => mergeGarmentBarcodePatch(prev, data.inspections));
+        }
+        setBarcodesError(error || '');
+        setBarcodesLoading(false);
+      })
+      .catch((err) => {
+        if (!active || token !== barcodeLoadTokenRef.current) return;
+        setBarcodesError(err?.message || 'Unable to load garment barcodes.');
+        setBarcodesLoading(false);
+      });
+    return () => {
+      active = false;
+      barcodeLoadTokenRef.current += 1;
+    };
+  }, [order?.order_number, order?.id, order?.work_number]);
+
+  const selectedPickupMaster = pickupMasterList.find(
+    (option) => String(option.uniqueId) === String(assignedPickupPersonId)
+  ) || pickupMasterList.find(
+    (option) => String(option.name).toLowerCase() === String(assignedPickupPerson).trim().toLowerCase()
+  ) || null;
+  const logisticsSource = {
+    ...(order || {}),
+    assigned_pickup_person_city: selectedPickupMaster?.city || assignedPickupPersonCity,
+    assigned_pickup_person_zone: selectedPickupMaster?.zone || assignedPickupPersonZone,
+  };
+  const logisticsDisplay = formatLogisticsDeliveryInfo(logisticsSource, selectedPickupMaster);
+
+  const getOrderScanCodes = (sourceOrder) => [
+    sourceOrder?.order_number,
+    sourceOrder?.work_number,
+    sourceOrder?.id,
+    sourceOrder?.bag_barcode,
+    sourceOrder?.dispatch_bag_tag,
+    sourceOrder?.barcode,
+    sourceOrder?.qr_code,
+  ].filter(Boolean).map(normalizeBarcodeValue);
+
+  const getGarmentScanEntries = () => {
+    const entries = [];
+    Object.entries(inspections || {}).forEach(([key, detail]) => {
+      const cartItem = (cartItems || []).find((item) => String(item.id) === String(detail?.cartItemId || detail?.productId || key));
+      entries.push({
+        key,
+        detail,
+        cartItem,
+        codes: [detail?.tagNumber, detail?.barcode, detail?.garment_barcode, detail?.qr_code, detail?.garmentTag, key, detail?.id]
+          .filter(Boolean)
+          .map(normalizeBarcodeValue),
+      });
+    });
+    (cartItems || []).forEach((cartItem) => {
+      if (entries.some((entry) => String(entry.cartItem?.id) === String(cartItem.id))) return;
+      entries.push({
+        key: `cart-${cartItem.id}`,
+        detail: null,
+        cartItem,
+        codes: [cartItem.barcode, cartItem.tagNumber, cartItem.qr_code, cartItem.id]
+          .filter(Boolean)
+          .map(normalizeBarcodeValue),
+      });
+    });
+    return entries;
+  };
+
+  const handleScanModeChange = (event, nextMode) => {
+    if (!nextMode) return;
+    setScanMode(nextMode);
+    setScanInput('');
+    setScanResult(null);
+    setScanNotice({ severity: 'info', text: '' });
+  };
+
+  const hydrateScanResultFromSupabase = async (result, orderIdentifier) => {
+    try {
+      if (result.kind === 'garment') {
+        const { data: details } = await getGarmentBarcodeDetails(result.code);
+        if (!details) return;
+        const currentKeys = [order?.order_number, order?.work_number, order?.id]
+          .filter(Boolean)
+          .map(normalizeBarcodeValue);
+        const detailOrderId = normalizeBarcodeValue(details.orderId || details.workId || details.order?.order_number);
+        if (detailOrderId && currentKeys.length > 0 && !currentKeys.includes(detailOrderId)) {
+          setScanResult(null);
+          setScanNotice({
+            severity: 'warning',
+            text: `This barcode belongs to order ${details.orderId || details.workId || detailOrderId}, not ${initialOrderNum}.`,
+          });
+          return;
+        }
+        setScanResult((prev) => {
+          if (!prev || prev.code !== result.code) return prev;
+          return {
+            ...prev,
+            order: details.order || prev.order,
+            entry: {
+              ...(prev.entry || {}),
+              key: details.barcode || prev.entry?.key,
+              detail: {
+                ...(prev.entry?.detail || {}),
+                name: details.garmentName || prev.entry?.detail?.name,
+                barcode: details.barcode || prev.entry?.detail?.barcode,
+                color: details.color || prev.entry?.detail?.color,
+                fabric: details.fabric || prev.entry?.detail?.fabric,
+                brand: details.brand || prev.entry?.detail?.brand,
+                condition: details.condition || prev.entry?.detail?.condition,
+                actionPlan: details.treatmentAction || prev.entry?.detail?.actionPlan,
+                notes: details.inspectionNotes || prev.entry?.detail?.notes,
+                processingStage: details.processingStage || prev.entry?.detail?.processingStage,
+                assignedStaff: details.assignedStaff || prev.entry?.detail?.assignedStaff,
+              },
+              cartItem: prev.entry?.cartItem,
+            },
+            barcodeDetails: details,
+            source: 'Supabase',
+          };
+        });
+        return;
+      }
+
+      const { data } = await getOrderById(orderIdentifier);
+      if (!data) return;
+      setScanResult((prev) => {
+        if (!prev || prev.code !== result.code) return prev;
+        return { ...prev, order: data, source: 'Supabase' };
+      });
+    } catch {}
+  };
+
+  const processBarcodeValue = async (rawCode, source = 'manual') => {
+    const code = normalizeBarcodeValue(rawCode);
+    if (!code) {
+      setScanResult(null);
+      setScanNotice({ severity: 'warning', text: 'Enter or scan a barcode/QR code before pressing Scan.' });
+      return;
+    }
+
+    const currentOrder = order || { order_number: initialOrderNum, id: initialOrderNum };
+    const currentKeys = [currentOrder.order_number, currentOrder.work_number, currentOrder.id]
+      .filter(Boolean)
+      .map(normalizeBarcodeValue);
+    const currentOrderLabel = currentOrder.order_number || currentOrder.id || initialOrderNum;
+    const barcodeOrderId = normalizeBarcodeValue(getOrderIdFromBarcode(code));
+    const looksLikeGarmentBarcode = scanMode === 'garment' || /-G\d+$/.test(code);
+    let dbGarment = null;
+
+    if (looksLikeGarmentBarcode) {
+      try {
+        const { data } = await getGarmentBarcodeDetails(code);
+        dbGarment = data || null;
+      } catch {}
+    }
+
+    if (dbGarment) {
+      const dbOrderKeys = [
+        dbGarment.workId,
+        dbGarment.workNumber,
+        dbGarment.orderId,
+        dbGarment.order?.order_number,
+        dbGarment.order?.id,
+        dbGarment.barcodeOrderId,
+      ].filter(Boolean).map(normalizeBarcodeValue);
+      const orderMismatch = currentKeys.length > 0 && dbOrderKeys.length > 0
+        && !dbOrderKeys.some((key) => currentKeys.includes(key));
+
+      if (orderMismatch) {
+        setScanResult(null);
+        setScanNotice({
+          severity: 'warning',
+          text: `This barcode belongs to order ${dbGarment.orderId || dbGarment.workNumber || dbOrderKeys[0]}, not ${currentOrderLabel}.`,
+        });
+        return;
+      }
+
+      if (scanMode === 'order') {
+        setScanResult(null);
+        setScanNotice({ severity: 'info', text: 'This is a garment barcode. Select Scan Garment to count it.' });
+        return;
+      }
+
+      const duplicateKey = dbGarment.barcode || code;
+      const duplicate = scannedGarmentKeys.includes(duplicateKey);
+      if (!duplicate) {
+        setScannedGarmentKeys((prev) => [...prev, duplicateKey]);
+      }
+      const detail = {
+        name: dbGarment.garmentName || 'Garment',
+        barcode: dbGarment.barcode || code,
+        garment_barcode: dbGarment.barcode || code,
+        unitIndex: dbGarment.unitIndex || 1,
+        tagNumber: dbGarment.garmentTagNumber || '',
+        service: dbGarment.service || '',
+        serviceType: dbGarment.service || '',
+        quantity: dbGarment.quantity || 1,
+        color: dbGarment.color || '',
+        fabric: dbGarment.fabric || '',
+        brand: dbGarment.brand || '',
+        condition: dbGarment.condition || '',
+        defectLocation: dbGarment.defectLocation || '',
+        severity: dbGarment.severity || '',
+        actionPlan: dbGarment.treatmentAction || '',
+        notes: dbGarment.inspectionNotes || '',
+        processingStage: dbGarment.processingStage || '',
+        assignedStaff: dbGarment.assignedStaff || '',
+        processingInstructions: dbGarment.processingInstructions || '',
+      };
+      const result = {
+        kind: 'garment',
+        code,
+        order: dbGarment.order || currentOrder,
+        entry: {
+          key: duplicateKey,
+          detail,
+          cartItem: {
+            id: dbGarment.orderItemId || dbGarment.garmentId || '',
+            name: detail.name,
+            qty: dbGarment.quantity || 1,
+            quantity: dbGarment.quantity || 1,
+            serviceType: detail.serviceType,
+          },
+        },
+        barcodeDetails: dbGarment,
+        duplicate,
+        source: 'Supabase',
+      };
+      setScanNotice({
+        severity: duplicate ? 'warning' : 'success',
+        text: duplicate
+          ? `Barcode ${duplicateKey} was already scanned and was not counted again.`
+          : `Garment ${detail.name} verified from Supabase and counted.`,
+      });
+      setScanResult(result);
+      setScanInput('');
+      return;
+    }
+
+    const belongsToCurrentOrder = !barcodeOrderId || currentKeys.includes(barcodeOrderId);
+    let scannedOrder = currentOrder;
+    if (!belongsToCurrentOrder) {
+      try {
+        const { data } = await getOrderById(barcodeOrderId);
+        if (data) scannedOrder = data;
+      } catch {}
+      setScanResult(null);
+      setScanNotice({
+        severity: 'warning',
+        text: `This barcode belongs to order ${scannedOrder.order_number || scannedOrder.id || barcodeOrderId}, not ${currentOrderLabel}.`,
+      });
+      return;
+    }
+
+    const orderMatch = getOrderScanCodes(scannedOrder).includes(code);
+    const garmentMatch = getGarmentScanEntries().find((entry) => entry.codes.includes(code));
+
+    if (orderMatch) {
+      if (scanMode === 'garment') {
+        setScanResult(null);
+        setScanNotice({ severity: 'info', text: 'This is an order barcode. Select Scan Order to verify it.' });
+        return;
+      }
+      const result = { kind: 'order', code, order: scannedOrder, source };
+      setScanNotice({ severity: 'success', text: `Order ${currentOrderLabel} verified from ${source === 'manual' ? 'manual entry' : source}.` });
+      setScanResult(result);
+      setScanInput('');
+      void hydrateScanResultFromSupabase(result, currentOrder.order_number || currentOrder.id);
+      return;
+    }
+
+    if (garmentMatch) {
+      if (scanMode === 'order') {
+        setScanResult(null);
+        setScanNotice({ severity: 'info', text: 'This is a garment barcode. Select Scan Garment to count it.' });
+        return;
+      }
+      const duplicateKey = code;
+      const duplicate = scannedGarmentKeys.includes(duplicateKey);
+      if (!duplicate) {
+        setScannedGarmentKeys((prev) => [...prev, duplicateKey]);
+      }
+      const result = { kind: 'garment', code, order: scannedOrder, entry: garmentMatch, duplicate, source };
+      setScanNotice({
+        severity: duplicate ? 'warning' : 'success',
+        text: duplicate ? 'This garment was already scanned and was not counted again.' : `Garment ${garmentMatch.detail?.name || garmentMatch.key} matched and counted.`,
+      });
+      setScanResult(result);
+      setScanInput('');
+      void hydrateScanResultFromSupabase(result, currentOrder.order_number || currentOrder.id);
+      return;
+    }
+
+    setScanResult(null);
+    setScanNotice({
+      severity: 'warning',
+      text: looksLikeGarmentBarcode
+        ? `No garment record found for barcode ${code}. Print the latest tag or save this order again.`
+        : 'No matching order or garment barcode was found for the selected order.',
+    });
+  };
+
+  const handleScannerScan = () => processBarcodeValue(scanInput, 'manual');
+
+  const scanResultDetails = scanResult ? (() => {
+    const detail = scanResult.entry?.detail || {};
+    const db = scanResult.barcodeDetails || {};
+    const sourceOrder = db.order || scanResult.order || order || {};
+    const isOrderScan = scanResult.kind === 'order';
+    const orderServices = [...new Set(cartItems.map((item) => item.serviceType || item.service).filter(Boolean))].join(', ');
+    const inspectionDetails = [
+      (db.color || detail.color) && `Color: ${db.color || detail.color}`,
+      (db.fabric || detail.fabric) && `Fabric: ${db.fabric || detail.fabric}`,
+      (db.brand || detail.brand) && `Brand: ${db.brand || detail.brand}`,
+      (db.condition || detail.condition) && `Condition: ${db.condition || detail.condition}`,
+      (db.treatmentAction || detail.actionPlan) && `Treatment: ${db.treatmentAction || detail.actionPlan}`,
+      (db.inspectionNotes || detail.notes) && `Notes: ${db.inspectionNotes || detail.notes}`,
+      (db.defectLocation || detail.defectLocation) && `Defect: ${db.defectLocation || detail.defectLocation}`,
+      (db.severity || detail.severity) && `Severity: ${db.severity || detail.severity}`,
+      detail.stains && `Stains: ${detail.stains}`,
+      detail.damage && `Damage: ${detail.damage}`,
+      (db.inspectedBy || detail.inspectedBy) && `Inspected By: ${db.inspectedBy || detail.inspectedBy}`,
+      (db.inspectedAt || detail.inspectedAt) && `Inspected At: ${formatDeliveryDateTimeForDisplay({ target_delivery_date: db.inspectedAt || detail.inspectedAt })}`,
+      detail.qcPassed ? 'QC Passed' : '',
+    ].filter(Boolean).join(' • ');
+    const totalGarments = Number(db.totalGarments) || Number(sourceOrder.total_pieces) || scanTotalGarments;
+    return {
+      orderId: db.orderId || db.workNumber || sourceOrder.order_number || sourceOrder.id || initialOrderNum,
+      customer: db.customerName || sourceOrder.customer_name || '-',
+      customerPhone: db.mobileNumber || sourceOrder.mobile_number || '-',
+      customerAddress: sanitizeAddress(db.deliveryAddress || sourceOrder.address || sourceOrder.delivery_address) || '-',
+      garment: isOrderScan ? 'Order-level (all garments)' : (db.garmentName || detail.name || scanResult.entry?.cartItem?.name || 'Garment'),
+      garmentTag: isOrderScan
+        ? (sourceOrder.bag_barcode || sourceOrder.dispatch_bag_tag || 'Not Assigned')
+        : (db.barcode || detail.barcode || detail.garment_barcode || detail.tagNumber || scanResult.entry?.key || 'Not Assigned'),
+      garmentQuantity: Number(db.quantity) || Number(scanResult.entry?.cartItem?.qty ?? scanResult.entry?.cartItem?.quantity) || 1,
+      service: isOrderScan
+        ? (orderServices || sourceOrder.service_category || '-')
+        : (db.service || detail.service || detail.serviceType || scanResult.entry?.cartItem?.serviceType || scanResult.entry?.cartItem?.service || '-'),
+      inspection: inspectionDetails || (isOrderScan ? sourceOrder.comments || '-' : 'No additional inspection notes'),
+      orderStatus: db.orderStatus || sourceOrder.order_status || sourceOrder.status || '-',
+      processingStage: db.processingStage || detail.processingStage || sourceOrder.processing_stage || '-',
+      expectedDelivery: db.expectedDeliveryDate
+        ? formatDeliveryDateTimeForDisplay({ target_delivery_date: db.expectedDeliveryDate, expected_delivery: db.expectedDeliveryDate })
+        : formatDeliveryDateTimeForDisplay(sourceOrder),
+      assignedStaff: db.assignedStaff || sourceOrder.assigned_staff || sourceOrder.attend_staff_name || 'Not Assigned',
+      processingInstructions: db.processingInstructions || sourceOrder.processing_instructions || '-',
+      totalGarments,
+      scannedGarments: Math.min(scanScannedGarments, totalGarments),
+      remainingGarments: Math.max(0, totalGarments - Math.min(scanScannedGarments, totalGarments)),
+    };
+  })() : null;
+
+  const createBarcodeSvgElement = (value) => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    JsBarcode(svg, value, BARCODE_RENDER_OPTIONS);
+    return svg;
+  };
+
+  const handlePrintBarcode = (entry) => {
+    if (!entry?.barcode) return;
+    let svg;
+    try {
+      svg = createBarcodeSvgElement(entry.barcode);
+    } catch {
+      showToast?.('This barcode cannot be encoded as Code 128. Save the order to regenerate it.');
+      return;
+    }
+    const printWindow = window.open('', '_blank', 'width=720,height=420');
+    if (!printWindow) {
+      showToast?.('Allow pop-ups to print garment barcodes.');
+      return;
+    }
+    printWindow.document.write('<!doctype html><html><head><meta charset="utf-8" /><title>Garment Barcode</title></head><body></body></html>');
+    printWindow.document.close();
+
+    const orderLine = printWindow.document.createElement('div');
+    orderLine.style.cssText = 'font:600 14px Arial,sans-serif;margin-bottom:4px;';
+    orderLine.textContent = `Order: ${initialOrderNum}`;
+
+    const garmentLine = printWindow.document.createElement('div');
+    garmentLine.style.cssText = 'font:600 13px Arial,sans-serif;margin-bottom:12px;';
+    garmentLine.textContent = `${entry.garmentName} • Piece ${entry.piece}`;
+
+    const barcodeHolder = printWindow.document.createElement('div');
+    barcodeHolder.appendChild(printWindow.document.importNode(svg, true));
+
+    const instructionLine = printWindow.document.createElement('div');
+    instructionLine.style.cssText = 'font:11px Arial,sans-serif;margin-top:10px;color:#475569;';
+    instructionLine.textContent = 'Print at 100% scale and attach securely to the individual garment.';
+
+    printWindow.document.body.style.cssText = 'margin:24px;text-align:center;';
+    printWindow.document.body.append(orderLine, garmentLine, barcodeHolder, instructionLine);
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 200);
+  };
+
+  const stopCameraScanner = useCallback(() => {
+    cameraControlsRef.current?.stop?.();
+    cameraControlsRef.current = null;
+    barcodeReaderRef.current = null;
+    setCameraActive(false);
+  }, []);
+
+  useEffect(() => () => {
+    cameraControlsRef.current?.stop?.();
+  }, []);
+
+  const startCameraScanner = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setScanNotice({ severity: 'warning', text: 'Camera scanning is not available in this browser. Use USB, image upload or manual entry.' });
+      return;
+    }
+    stopCameraScanner();
+    try {
+      const reader = new BrowserMultiFormatReader(CODE_128_HINTS, { delayBetweenScanAttempts: 120 });
+      barcodeReaderRef.current = reader;
+      const controls = await reader.decodeFromVideoDevice(
+        undefined,
+        barcodeVideoRef.current,
+        (result) => {
+          if (!result) return;
+          const code = result.getText();
+          setScanInput(code);
+          processBarcodeValue(code, 'camera');
+          stopCameraScanner();
+        }
+      );
+      cameraControlsRef.current = controls;
+      setCameraActive(true);
+      setScanNotice({ severity: 'info', text: 'Camera scanner active. Point it at a garment barcode.' });
+    } catch {
+      stopCameraScanner();
+      setScanNotice({ severity: 'warning', text: 'Camera could not be started. Check browser permission or use image upload/manual entry.' });
+    }
+  };
+
+  const handleBarcodeImageUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const imageUrl = URL.createObjectURL(file);
+    try {
+      const reader = new BrowserMultiFormatReader(CODE_128_HINTS);
+      const result = await reader.decodeFromImageUrl(imageUrl);
+      const code = result.getText();
+      setScanInput(code);
+      processBarcodeValue(code, 'image upload');
+    } catch {
+      setScanNotice({ severity: 'warning', text: 'No barcode detected in the uploaded image. Use a sharp, straight-on Code 128 image.' });
+    } finally {
+      URL.revokeObjectURL(imageUrl);
+      event.target.value = '';
+    }
+  };
 
   // 7. Payments & Billing Fields
   const [paymentStatus, setPaymentStatus] = useState(order?.payment_status || order?.payment?.status || 'Paid in Full');
@@ -493,7 +1011,7 @@ export default function OrdersV2SideEditPanel({
       title: 'Ready for Delivery',
       time: '03:20 PM',
       date: '28 Oct 2026',
-      text: `Your garments are ready for delivery on ${expectedDelivery || '30 Oct 2026, 05:00 PM'}.`,
+      text: `Your garments are ready for delivery on ${expectedDelivery}.`,
     },
     {
       id: 'msg_3',
@@ -574,13 +1092,14 @@ export default function OrdersV2SideEditPanel({
       setAddress(order.address || order.delivery_address || order.customer?.address || 'No.16, Anna Nagar, Ranipet - 632401');
       setStatus(normalizeOrdersV2Status(order.status || order.order_status || 'Delivered'));
       setOrderType(order.order_type || 'Walk-in');
-      setExpectedDelivery(order.expected_delivery || order.delivery_date || '30 Oct 2026, 05:00 PM');
+      deliveryTouchedRef.current = false;
+      setExpectedDelivery(formatDeliveryDateTimeForDisplay(order));
       const pSplit = splitIsoToLocalDateAndTime(order.scheduled_pickup_at);
-      const dSplit = splitIsoToLocalDateAndTime(order.scheduled_delivery_at);
+      const dSplit = splitIsoToLocalDateAndTime(resolveDisplayScheduledDelivery(order));
       setScheduledPickupDate(pSplit.date || '2026-10-28');
       setScheduledPickupTime(pSplit.time || '10:15');
-      setScheduledDeliveryDate(dSplit.date || '2026-10-30');
-      setScheduledDeliveryTime(dSplit.time || '17:00');
+      setScheduledDeliveryDate(dSplit.date || '');
+      setScheduledDeliveryTime(dSplit.time || '');
       setScheduleErrors({});
       setComments(order.comments || order.order_notes || order.special_instructions || '');
       if (order.items && Array.isArray(order.items) && order.items.length > 0) {
@@ -598,12 +1117,56 @@ export default function OrdersV2SideEditPanel({
       setPaymentMode(order.payment_method || order.payment?.mode || 'UPI');
       setAdvancePaid(Number(order.advance_paid !== undefined ? order.advance_paid : (order.payment?.advancePaid || 25.65)));
       setDiscountAmount(Number(order.discount_amount !== undefined ? order.discount_amount : (order.discount || order.payment?.discount || 2.70)));
-      if (order.assigned_driver) setAssignedRider(order.assigned_driver);
-      if (order.assigned_driver_full) setVehicleNo(order.assigned_driver_full);
-      if (order.pickup_status) setLogisticsStatus(order.pickup_status);
+      processingTouchedRef.current = false;
+      const nextProcessing = getProcessingFieldValues(order);
+      setProcessingPriority(nextProcessing.processingPriority);
+      setFactoryPlant(nextProcessing.factoryPlant);
+      setBagTag(nextProcessing.bagTag);
+      setPackagingType(nextProcessing.packagingType);
+      setAssignedMachine(nextProcessing.assignedMachine);
+      setProcessingStage(nextProcessing.processingStage);
+      setProcessingInstructions(nextProcessing.processingInstructions);
+      setAssignedPickupPerson(order.assigned_pickup_delivery_person || order.assigned_driver || '');
+      setAssignedPickupPersonId(order.assigned_pickup_person_id || '');
+      setAssignedPickupPersonCity(order.assigned_pickup_person_city || '');
+      setAssignedPickupPersonZone(order.assigned_pickup_person_zone || '');
+      setAssignedRider(order.assigned_pickup_delivery_person || order.assigned_driver || order.logistics?.assignedRider || '');
+      setRiderPhone(order.rider_phone || order.logistics?.riderPhone || '');
+      setVehicleNo(order.assigned_driver_full || order.vehicle_name || order.logistics?.vehicleNo || '');
+      setRouteZone(order.route_from_to || order.logistics?.routeZone || '');
+      setQcInspector(order.qc_inspector || order.workflow?.qcInspector || '');
+      setLogisticsStatus(order.pickup_status || '');
       setAuditLogs(getInitialAuditLogs());
     }
   }, [order]);
+
+  const savedOrderKey = order?.order_number || order?.work_number || order?.order_id || order?.id;
+  useEffect(() => {
+    if (!savedOrderKey) return undefined;
+    let cancelled = false;
+    getOrderById(savedOrderKey)
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        if (!deliveryTouchedRef.current) {
+          setExpectedDelivery(formatDeliveryDateTimeForDisplay(data));
+          const dSplit = splitIsoToLocalDateAndTime(resolveDisplayScheduledDelivery(data));
+          setScheduledDeliveryDate(dSplit.date || '');
+          setScheduledDeliveryTime(dSplit.time || '');
+        }
+        if (!processingTouchedRef.current) {
+          const nextProcessing = getProcessingFieldValues(data);
+          setProcessingPriority(nextProcessing.processingPriority);
+          setFactoryPlant(nextProcessing.factoryPlant);
+          setBagTag(nextProcessing.bagTag);
+          setPackagingType(nextProcessing.packagingType);
+          setAssignedMachine(nextProcessing.assignedMachine);
+          setProcessingStage(nextProcessing.processingStage);
+          setProcessingInstructions(nextProcessing.processingInstructions);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [savedOrderKey]);
 
   // Sync selected product rate
   useEffect(() => {
@@ -819,6 +1382,9 @@ export default function OrdersV2SideEditPanel({
     }
 
     const totalPieces = cartItems.reduce((sum, c) => sum + Number(c.qty || 0), 0);
+    const barcodeAssignment = assignGarmentBarcodes({ orderId: initialOrderNum, inspections });
+    const inspectionsWithBarcodes = barcodeAssignment.inspections;
+    setInspections(inspectionsWithBarcodes);
     const resolvedStatus = normalizeOrdersV2Status(status);
     const nowIso = new Date().toISOString();
     const staffActor = attendStaffName.trim() || order?.attend_staff_name || order?.assigned_staff || 'Counter Staff';
@@ -879,6 +1445,15 @@ export default function OrdersV2SideEditPanel({
     const resolvedCollectedBy = resolvedStatus === 'Delivered'
       ? (order?.collected_by_person || pickupPerson || customerName || 'Customer')
       : (order?.collected_by_person || '');
+    const processingPayload = buildProcessingPayload({
+      processingPriority,
+      factoryPlant,
+      bagTag,
+      packagingType,
+      assignedMachine,
+      processingStage,
+      processingInstructions,
+    });
 
     const updatedOrder = {
       ...(order || {}),
@@ -893,12 +1468,13 @@ export default function OrdersV2SideEditPanel({
       status: resolvedStatus,
       order_status: resolvedStatus,
       order_type: orderType,
-      expected_delivery: expectedDelivery,
+      expected_delivery: expectedDelivery === NOT_SCHEDULED_LABEL ? '' : expectedDelivery,
       scheduled_pickup_at: isOnCallOrderType(orderType) ? resolvedScheduledPickupAt : (order?.scheduled_pickup_at || null),
       scheduled_delivery_at: resolvedScheduledDeliveryAt,
       comments: comments,
       special_instructions: comments,
       order_notes: comments,
+      ...processingPayload,
       items: cartItems.map((c) => ({
         id: c.id,
         name: c.name,
@@ -909,7 +1485,7 @@ export default function OrdersV2SideEditPanel({
         quantity: c.qty,
         total: c.rate * c.qty,
         icon: c.icon || '👕',
-        inspections: Object.values(inspections).filter((p) => p.cartItemId === c.id || p.productId === c.id || String(p.id).startsWith(`${c.id}-`)),
+        inspections: Object.values(inspectionsWithBarcodes).filter((p) => p.cartItemId === c.id || p.productId === c.id || String(p.id).startsWith(`${c.id}-`)),
       })),
       services_allocated: cartItems.map((c) => ({
         name: c.name,
@@ -921,18 +1497,18 @@ export default function OrdersV2SideEditPanel({
       item_count: totalPieces,
       total_pieces: totalPieces,
       cart: cartItems,
-      garment_inspections: inspections,
-      inspections: inspections,
-      photos: Object.values(inspections).flatMap((p) => p.photos || []),
+      garment_inspections: inspectionsWithBarcodes,
+      inspections: inspectionsWithBarcodes,
+      photos: Object.values(inspectionsWithBarcodes).flatMap((p) => p.photos || []),
       inspection: {
-        garment: Object.values(inspections)[0]?.name || 'T-Shirt',
-        color: Object.values(inspections)[0]?.color || 'White',
-        stains: Object.values(inspections)[0]?.stains || '',
-        make: Object.values(inspections)[0]?.make || '',
-        brand: Object.values(inspections)[0]?.brand || 'Nike',
-        fabric: Object.values(inspections)[0]?.fabric || 'Cotton',
-        notes: Object.values(inspections)[0]?.notes || '',
-        photos: Object.values(inspections).flatMap((p) => p.photos || []),
+        garment: Object.values(inspectionsWithBarcodes)[0]?.name || 'T-Shirt',
+        color: Object.values(inspectionsWithBarcodes)[0]?.color || 'White',
+        stains: Object.values(inspectionsWithBarcodes)[0]?.stains || '',
+        make: Object.values(inspectionsWithBarcodes)[0]?.make || '',
+        brand: Object.values(inspectionsWithBarcodes)[0]?.brand || 'Nike',
+        fabric: Object.values(inspectionsWithBarcodes)[0]?.fabric || 'Cotton',
+        notes: Object.values(inspectionsWithBarcodes)[0]?.notes || '',
+        photos: Object.values(inspectionsWithBarcodes).flatMap((p) => p.photos || []),
       },
       logistics: {
         factoryPlant,
@@ -940,7 +1516,7 @@ export default function OrdersV2SideEditPanel({
         riderPhone,
         vehicleNo,
         routeZone,
-        pickupTime: '28 Oct 2026, 11:30 AM',
+        pickupTime: formatDeliveryInputsForDisplay(scheduledPickupDate, scheduledPickupTime),
         deliverySlot: expectedDelivery,
         dispatchBagTag: bagTag,
         logisticsStatus,
@@ -974,6 +1550,8 @@ export default function OrdersV2SideEditPanel({
       attend_staff_name: staffActor,
       assigned_staff: staffActor,
       assigned_pickup_person_id: assignedPickupPersonId || null,
+      assigned_pickup_person_city: assignedPickupPersonCity,
+      assigned_pickup_person_zone: assignedPickupPersonZone,
       assigned_pickup_delivery_person: pickupPerson,
       assigned_driver: pickupPerson || assignedRider,
       assigned_driver_full: pickupPerson ? `${pickupPerson} (${vehicleNo})` : `${assignedRider} (${vehicleNo})`,
@@ -1014,7 +1592,7 @@ export default function OrdersV2SideEditPanel({
           ? { scheduled_pickup_at: updatedOrder.scheduled_pickup_at }
           : {}),
         scheduled_delivery_at: updatedOrder.scheduled_delivery_at,
-        priority: updatedOrder.priority || processingPriority,
+        ...processingPayload,
         orderNotes: updatedOrder.comments,
         subtotal: subtotal,
         discountAmount: Number(discountAmount || 0),
@@ -1028,6 +1606,8 @@ export default function OrdersV2SideEditPanel({
         attend_staff_id: attendStaffId || null,
         attend_staff_name: staffActor,
         assigned_pickup_person_id: assignedPickupPersonId || null,
+        assigned_pickup_person_city: assignedPickupPersonCity,
+        assigned_pickup_person_zone: assignedPickupPersonZone,
         assigned_pickup_delivery_person: pickupPerson,
         assigned_driver: pickupPerson || assignedRider,
         assigned_driver_full: pickupPerson ? `${pickupPerson} (${vehicleNo})` : `${assignedRider} (${vehicleNo})`,
@@ -1041,7 +1621,7 @@ export default function OrdersV2SideEditPanel({
         staff_notes: staffNote,
         flags: flags,
         items: updatedOrder.items,
-        garment_inspections: inspections,
+        garment_inspections: inspectionsWithBarcodes,
       }).catch((e) => console.warn('Supabase SideEdit update note:', e));
     }
 
@@ -1248,14 +1828,22 @@ export default function OrdersV2SideEditPanel({
                         type="date"
                         className="side-edit-input"
                         value={scheduledDeliveryDate}
-                        onChange={(e) => setScheduledDeliveryDate(e.target.value)}
+                        onChange={(e) => {
+                          deliveryTouchedRef.current = true;
+                          setScheduledDeliveryDate(e.target.value);
+                          setExpectedDelivery(formatDeliveryInputsForDisplay(e.target.value, scheduledDeliveryTime));
+                        }}
                         aria-label="Delivery Date"
                       />
                       <input
                         type="time"
                         className="side-edit-input"
                         value={scheduledDeliveryTime}
-                        onChange={(e) => setScheduledDeliveryTime(e.target.value)}
+                        onChange={(e) => {
+                          deliveryTouchedRef.current = true;
+                          setScheduledDeliveryTime(e.target.value);
+                          setExpectedDelivery(formatDeliveryInputsForDisplay(scheduledDeliveryDate, e.target.value));
+                        }}
                         aria-label="Delivery Time"
                       />
                     </div>
@@ -1320,12 +1908,14 @@ export default function OrdersV2SideEditPanel({
                       options={pickupMasterList}
                       value={assignedPickupPersonId}
                       fallbackName={assignedPickupPerson}
-                      onChange={(selected) => {
-                        const nextName = selected ? selected.name : '';
-                        setAssignedPickupPersonId(selected ? selected.uniqueId : '');
-                        setAssignedPickupPerson(nextName);
-                        setAssignedRider(nextName);
-                      }}
+                        onChange={(selected) => {
+                          const nextName = selected ? selected.name : '';
+                          setAssignedPickupPersonId(selected ? selected.uniqueId : '');
+                          setAssignedPickupPerson(nextName);
+                          setAssignedPickupPersonCity(selected ? selected.city || '' : '');
+                          setAssignedPickupPersonZone(selected ? selected.zone || '' : '');
+                          setAssignedRider(nextName);
+                        }}
                       loading={pickupMasterLoading}
                       error={pickupMasterError}
                       onRetry={loadStaffAndPickupMasters}
@@ -1587,11 +2177,14 @@ export default function OrdersV2SideEditPanel({
                       <select
                         className="side-edit-select"
                         value={processingPriority}
-                        onChange={(e) => setProcessingPriority(e.target.value)}
+                        onChange={(e) => {
+                          processingTouchedRef.current = true;
+                          setProcessingPriority(e.target.value);
+                        }}
                       >
-                        <option value="Normal">Normal</option>
-                        <option value="Express">Express (24 Hours)</option>
-                        <option value="Urgent">Urgent (Same Day)</option>
+                        {withCurrentOption(PROCESSING_PRIORITIES, processingPriority).map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
                       </select>
                     </div>
 
@@ -1602,11 +2195,14 @@ export default function OrdersV2SideEditPanel({
                       <select
                         className="side-edit-select"
                         value={factoryPlant}
-                        onChange={(e) => setFactoryPlant(e.target.value)}
+                        onChange={(e) => {
+                          processingTouchedRef.current = true;
+                          setFactoryPlant(e.target.value);
+                        }}
                       >
-                        <option value="Main Central Laundry Plant - Ranipet #1">Main Central Laundry Plant - Ranipet #1</option>
-                        <option value="Vellore Branch Plant #2">Vellore Branch Plant #2</option>
-                        <option value="Express Unit Katpadi">Express Unit Katpadi</option>
+                        {withCurrentOption(FACTORY_PLANTS, factoryPlant).map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
                       </select>
                     </div>
 
@@ -1616,8 +2212,11 @@ export default function OrdersV2SideEditPanel({
                         type="text"
                         className="side-edit-input"
                         value={bagTag}
-                        onChange={(e) => setBagTag(e.target.value)}
-                        placeholder="BAG-RANIPET-7821"
+                        onChange={(e) => {
+                          processingTouchedRef.current = true;
+                          setBagTag(e.target.value);
+                        }}
+                        placeholder="Not Assigned"
                       />
                     </div>
                   </div>
@@ -1628,12 +2227,14 @@ export default function OrdersV2SideEditPanel({
                       <select
                         className="side-edit-select"
                         value={packagingType}
-                        onChange={(e) => setPackagingType(e.target.value)}
+                        onChange={(e) => {
+                          processingTouchedRef.current = true;
+                          setPackagingType(e.target.value);
+                        }}
                       >
-                        <option value="Hanger Pack">Hanger Pack</option>
-                        <option value="Folded & Packed">Folded &amp; Packed</option>
-                        <option value="Garment Cover Bag">Garment Cover Bag</option>
-                        <option value="Box Packing">Box Packing</option>
+                        {withCurrentOption(PACKAGING_TYPES, packagingType).map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
                       </select>
                     </div>
 
@@ -1645,8 +2246,8 @@ export default function OrdersV2SideEditPanel({
                         type="text"
                         className="side-edit-input"
                         value={expectedDelivery}
-                        onChange={(e) => setExpectedDelivery(e.target.value)}
-                        placeholder="30 Oct 2026, 05:00 PM"
+                        readOnly
+                        placeholder="Not Scheduled"
                       />
                     </div>
                   </div>
@@ -1657,25 +2258,43 @@ export default function OrdersV2SideEditPanel({
                       <select
                         className="side-edit-select"
                         value={assignedMachine}
-                        onChange={(e) => setAssignedMachine(e.target.value)}
+                        onChange={(e) => {
+                          processingTouchedRef.current = true;
+                          setAssignedMachine(e.target.value);
+                        }}
                       >
-                        <option value="Washer Extractor #3">Washer Extractor #3</option>
-                        <option value="Industrial Dryer #2">Industrial Dryer #2</option>
-                        <option value="Steam Press Unit 4">Steam Press Unit 4</option>
-                        <option value="None">None</option>
+                        {withCurrentOption(ASSIGNED_MACHINES, assignedMachine).map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
                       </select>
                     </div>
 
                     <div className="side-edit-field">
-                      <label className="side-edit-label">Logistics &amp; Delivery Information</label>
-                      <input
-                        type="text"
-                        className="side-edit-input"
-                        value={vehicleNo}
-                        onChange={(e) => setVehicleNo(e.target.value)}
-                        placeholder="TN 23 BK 4092 (Van 01)"
-                      />
+                      <label className="side-edit-label">Current Processing Stage</label>
+                      <select
+                        className="side-edit-select"
+                        value={processingStage}
+                        onChange={(e) => {
+                          processingTouchedRef.current = true;
+                          setProcessingStage(e.target.value);
+                        }}
+                      >
+                        {withCurrentOption(PROCESSING_STAGES, processingStage).map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
                     </div>
+                  </div>
+
+                  <div className="side-edit-field">
+                    <label className="side-edit-label">Logistics &amp; Delivery Information</label>
+                    <input
+                      type="text"
+                      className="side-edit-input"
+                      value={logisticsDisplay}
+                      readOnly
+                      placeholder="Not Assigned"
+                    />
                   </div>
 
                   <div className="side-edit-field">
@@ -1684,7 +2303,10 @@ export default function OrdersV2SideEditPanel({
                       rows={2}
                       className="side-edit-textarea"
                       value={processingInstructions}
-                      onChange={(e) => setProcessingInstructions(e.target.value)}
+                      onChange={(e) => {
+                        processingTouchedRef.current = true;
+                        setProcessingInstructions(e.target.value);
+                      }}
                       placeholder="Special care directions, stain notes, or customer delivery requests..."
                     />
                   </div>
@@ -1720,6 +2342,194 @@ export default function OrdersV2SideEditPanel({
                         <span className="side-edit-stepper-time">{step.time}</span>
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                <div className="side-edit-card side-edit-barcode-card">
+                  <div className="side-edit-card-head">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="3" width="7" height="7"></rect>
+                      <rect x="3" y="14" width="7" height="7"></rect>
+                      <line x1="14" y1="14" x2="14" y2="21"></line>
+                      <line x1="21" y1="14" x2="21" y2="21"></line>
+                      <line x1="14" y1="17.5" x2="21" y2="17.5"></line>
+                    </svg>
+                    <span>Order &amp; Garment Scanner</span>
+                  </div>
+
+                  <div className="side-edit-scan-modes">
+                    <button
+                      type="button"
+                      className={`side-edit-scan-mode-btn ${scanMode === 'order' ? 'active' : ''}`}
+                      onClick={() => handleScanModeChange(null, 'order')}
+                    >
+                      Scan Order
+                    </button>
+                    <button
+                      type="button"
+                      className={`side-edit-scan-mode-btn ${scanMode === 'garment' ? 'active' : ''}`}
+                      onClick={() => handleScanModeChange(null, 'garment')}
+                    >
+                      Scan Garment
+                    </button>
+                  </div>
+
+                  <div className="side-edit-scan-row">
+                    <input
+                      type="text"
+                      className="side-edit-scan-input"
+                      value={scanInput}
+                      onChange={(e) => {
+                        setScanInput(e.target.value);
+                        setScanNotice({ severity: 'info', text: '' });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleScannerScan();
+                        }
+                      }}
+                      placeholder={scanMode === 'order' ? 'Scan or enter order barcode / ID' : 'Scan or enter garment tag / barcode'}
+                    />
+                    <button type="button" className="side-edit-scan-btn" onClick={handleScannerScan}>
+                      Scan
+                    </button>
+                  </div>
+
+                  <div className="side-edit-scan-tools">
+                    <button
+                      type="button"
+                      className="side-edit-scan-tool-btn"
+                      onClick={cameraActive ? stopCameraScanner : startCameraScanner}
+                    >
+                      {cameraActive ? 'Stop Camera' : 'Scan with Camera'}
+                    </button>
+                    <button
+                      type="button"
+                      className="side-edit-scan-tool-btn"
+                      onClick={() => barcodeImageInputRef.current?.click()}
+                    >
+                      Upload Barcode Image
+                    </button>
+                    <input
+                      ref={barcodeImageInputRef}
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={handleBarcodeImageUpload}
+                    />
+                  </div>
+
+                  <video
+                    ref={barcodeVideoRef}
+                    playsInline
+                    muted
+                    className={`side-edit-scan-video ${cameraActive ? 'active' : ''}`}
+                  />
+
+                  <div className={`side-edit-scan-notice ${scanNotice.severity || 'info'}`}>
+                    {scanNotice.text || 'Use camera, uploaded image, USB scanner or manual entry. Codes are verified against live Supabase order and garment records.'}
+                  </div>
+
+                  <div className="side-edit-scan-counts">
+                    <span className="side-edit-scan-count blue">Total: {scanTotalGarments}</span>
+                    <span className="side-edit-scan-count green">Scanned: {scanScannedGarments}</span>
+                    <span className="side-edit-scan-count grey">Remaining: {scanRemainingGarments}</span>
+                  </div>
+
+                  {scanResultDetails && (
+                    <div className="side-edit-scan-details">
+                      <div className="side-edit-scan-details-head">
+                        <span>✓</span>
+                        <strong>Barcode matched successfully</strong>
+                      </div>
+                      <div className="side-edit-detail-grid">
+                        <div className="side-edit-detail-item"><span>Order ID</span><strong>{scanResultDetails.orderId}</strong></div>
+                        <div className="side-edit-detail-item"><span>Customer</span><strong>{scanResultDetails.customer}</strong></div>
+                        <div className="side-edit-detail-item"><span>Phone</span><strong>{scanResultDetails.customerPhone}</strong></div>
+                        <div className="side-edit-detail-item"><span>Expected Delivery</span><strong>{scanResultDetails.expectedDelivery}</strong></div>
+                        <div className="side-edit-detail-item wide"><span>Customer Address</span><strong>{scanResultDetails.customerAddress}</strong></div>
+                        <div className="side-edit-detail-item"><span>Garment</span><strong>{scanResultDetails.garment} • Qty: {scanResultDetails.garmentQuantity}</strong></div>
+                        <div className="side-edit-detail-item"><span>Unique Barcode</span><strong>{scanResultDetails.garmentTag}</strong></div>
+                        <div className="side-edit-detail-item"><span>Service</span><strong>{scanResultDetails.service}</strong></div>
+                        <div className="side-edit-detail-item"><span>Order Status</span><strong>{scanResultDetails.orderStatus}</strong></div>
+                        <div className="side-edit-detail-item"><span>Processing Stage</span><strong>{scanResultDetails.processingStage}</strong></div>
+                        <div className="side-edit-detail-item"><span>Assigned Staff</span><strong>{scanResultDetails.assignedStaff}</strong></div>
+                        <div className="side-edit-detail-item wide"><span>Inspection Details</span><strong>{scanResultDetails.inspection}</strong></div>
+                        <div className="side-edit-detail-item wide"><span>Processing Instructions</span><strong>{scanResultDetails.processingInstructions}</strong></div>
+                        <div className="side-edit-detail-item wide">
+                          <span>Garment Counts</span>
+                          <strong>
+                            Total: {scanResultDetails.totalGarments} • Scanned: {scanResultDetails.scannedGarments} • Remaining: {scanResultDetails.remainingGarments}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="side-edit-card side-edit-barcode-card">
+                  <div className="side-edit-card-head">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="4" y1="5" x2="4" y2="19"></line>
+                      <line x1="8" y1="5" x2="8" y2="19"></line>
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="16" y1="5" x2="16" y2="19"></line>
+                      <line x1="20" y1="5" x2="20" y2="19"></line>
+                    </svg>
+                    <span>Individual Garment Barcodes</span>
+                  </div>
+                  <div className="side-edit-barcode-caption">
+                    Save order → generate unique Code 128 garment tags → print &amp; attach → scan garment → view live order details.
+                  </div>
+                  {barcodesLoading && (
+                    <div className="side-edit-barcode-loading">
+                      <span className="side-edit-barcode-spinner" />
+                      Loading garment barcodes…
+                    </div>
+                  )}
+                  {!barcodesLoading && barcodesError && (
+                    <div className="side-edit-barcode-error">{barcodesError}</div>
+                  )}
+                  <div className="side-edit-barcode-cards-scroll">
+                    <div className="side-edit-barcode-grid">
+                      {garmentBarcodeEntries.map((entry) => (
+                        <div className="side-edit-barcode-card-item" key={entry.key}>
+                          <div className="side-edit-barcode-card-inner">
+                            <div className="side-edit-barcode-card-title">
+                              <strong>{entry.garmentName} – Piece {entry.piece}</strong>
+                              <span>{entry.cartItem?.serviceType || entry.cartItem?.service || 'Laundry service'}</span>
+                            </div>
+                            {entry.barcode
+                              ? <GarmentBarcodeSvg value={entry.barcode} label={entry.barcode} />
+                              : (
+                                <div className="side-edit-barcode-pending">
+                                  Generated when order is saved
+                                </div>
+                              )}
+                            <div className="side-edit-barcode-value">{entry.barcode || 'Pending generation'}</div>
+                            <div className="side-edit-barcode-actions">
+                              <button
+                                type="button"
+                                disabled={!entry.barcode}
+                                onClick={() => setBarcodePreviewEntry(entry)}
+                              >
+                                View Barcode
+                              </button>
+                              <button
+                                type="button"
+                                className="primary"
+                                disabled={!entry.barcode}
+                                onClick={() => handlePrintBarcode(entry)}
+                              >
+                                Print Barcode
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </>
@@ -2339,6 +3149,35 @@ export default function OrdersV2SideEditPanel({
                 onClick={() => setPreviewPhoto(null)}
               >
                 Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {barcodePreviewEntry && (
+        <div className="side-edit-barcode-preview-overlay" onClick={() => setBarcodePreviewEntry(null)}>
+          <div className="side-edit-barcode-preview-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="side-edit-barcode-preview-head">
+              <div>
+                <strong>{barcodePreviewEntry.garmentName} – Piece {barcodePreviewEntry.piece}</strong>
+                <span>{barcodePreviewEntry.barcode}</span>
+              </div>
+              <button type="button" onClick={() => setBarcodePreviewEntry(null)}>✕</button>
+            </div>
+            <div className="side-edit-barcode-preview-body">
+              <GarmentBarcodeSvg
+                value={barcodePreviewEntry.barcode}
+                label={barcodePreviewEntry.barcode}
+                svgRef={barcodePreviewSvgRef}
+              />
+            </div>
+            <div className="side-edit-barcode-preview-actions">
+              <button type="button" className="side-edit-barcode-preview-close" onClick={() => setBarcodePreviewEntry(null)}>
+                Close
+              </button>
+              <button type="button" className="side-edit-barcode-preview-print" onClick={() => handlePrintBarcode(barcodePreviewEntry)}>
+                Print Barcode
               </button>
             </div>
           </div>

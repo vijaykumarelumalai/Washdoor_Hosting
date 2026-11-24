@@ -1062,7 +1062,7 @@ export function OrdersV2({
           showToast={showToast}
         />
       )}
-a
+
       {/* 5. Fast Slide Drawer */}
       {isDrawerOpen && (
         <OrdersV2EditDrawer
