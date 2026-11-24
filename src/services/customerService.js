@@ -8,6 +8,11 @@ import { supabase, isSupabaseConfigured } from '../lib/supabaseClient.js';
 import { triggerNotification } from './notificationTemplateService.js';
 import { logAuditEvent, logWorkflowStep, getActiveStaffProfile } from './auditService.js';
 import { normalizeOrderStatus } from '../config/businessRules.js';
+import {
+  buildGarmentBarcode as buildFallbackBarcode,
+  buildGarmentTagNumber,
+  buildGarmentUnitSuffix,
+} from '../utils/garmentBarcodes.js';
 
 // Default fallback products matching the database seed
 export const DEFAULT_PRODUCTS = [
@@ -719,7 +724,7 @@ export async function syncGarmentCardsAndInspections(workIdentifier, workNumber,
     // Fetch existing cards & photos to perform non-destructive upsert without cascading photo loss
     const { data: existingCards } = await supabase
       .from('washdoor_garment_cards')
-      .select('card_id, unit_index')
+      .select('card_id, unit_index, garment_tag_number, barcode, barcode_order_id, barcode_generated_at')
       .eq('work_id', workId);
 
     const { data: existingPhotos } = await supabase
@@ -743,6 +748,18 @@ export async function syncGarmentCardsAndInspections(workIdentifier, workNumber,
       }
     });
 
+    const existingCardByUnit = new Map();
+    const usedTags = new Set();
+    const usedBarcodes = new Set();
+    (existingCards || []).forEach((card) => {
+      const unit = Number(card.unit_index);
+      if (Number.isFinite(unit)) existingCardByUnit.set(unit, card);
+      const tag = String(card.garment_tag_number || '').trim();
+      const barcode = String(card.barcode || '').trim();
+      if (tag) usedTags.add(tag);
+      if (barcode) usedBarcodes.add(barcode);
+    });
+
     // Build 1-based discrete garment cards with complete garment-level fields
     const cardsToUpsert = [];
     const cardPieceLookup = [];
@@ -756,7 +773,14 @@ export async function syncGarmentCardsAndInspections(workIdentifier, workNumber,
         const pieceKey = `${item.id}-piece-${pieceNum}`;
         const altSlug = String(item.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
         const insp = inspections[pieceKey] || inspections[`${altSlug}-piece-${pieceNum}`] || {};
-        const tagNum = (insp.tagNumber || insp.garment_tag_number || '').trim() || `${cleanNum}-TAG-${String(globalUnitIndex).padStart(2, '0')}`;
+        const existingCard = existingCardByUnit.get(globalUnitIndex);
+        const existingTag = String(existingCard?.garment_tag_number || '').trim();
+        const suppliedTag = String(insp.tagNumber || insp.garment_tag_number || '').trim();
+        const fallbackBarcode = buildFallbackBarcode(cleanNum, globalUnitIndex);
+        const suppliedBarcode = String(insp.barcode || insp.garment_barcode || '').trim();
+        const existingBarcode = String(existingCard?.barcode || '').trim();
+        const barcode = existingBarcode || uniqueGarmentBarcode(suppliedBarcode || fallbackBarcode, usedBarcodes);
+        const tagNum = existingTag || uniqueGarmentTag(suppliedTag || buildGarmentTagNumber(cleanNum, globalUnitIndex), usedTags);
         const stageVal = VALID_STAGES.has(insp.processingStage || insp.processing_stage)
           ? (insp.processingStage || insp.processing_stage)
           : 'Received';
@@ -768,8 +792,10 @@ export async function syncGarmentCardsAndInspections(workIdentifier, workNumber,
           unit_index: globalUnitIndex,
           order_item_id: exactOrderItem?.item_id || null,
           garment_tag_number: tagNum,
-          barcode: insp.barcode || insp.garment_barcode || null,
+          barcode,
           barcode_format: insp.barcode_format || 'CODE128',
+          barcode_order_id: String(insp.barcode_order_id || cleanNum || '').trim().toUpperCase().replace(/\s+/g, '').slice(0, 30),
+          barcode_generated_at: insp.barcode_generated_at || existingCard?.barcode_generated_at || new Date().toISOString(),
           garment_name: insp.name || item.name || item.product_name || 'Garment',
           service_type: item.serviceType || item.service_type || item.service || 'Wash & Steam Press',
           color: insp.color || null,
@@ -816,7 +842,7 @@ export async function syncGarmentCardsAndInspections(workIdentifier, workNumber,
       cardErr = res.error;
 
       if (cardErr && (cardErr.code === 'PGRST204' || String(cardErr.message).includes('column'))) {
-        const baseCards = cardsToUpsert.map(({ make, stains, damage, finish_preference, size, assigned_staff, qc_passed, customer_ack, customer_ack_at, barcode, barcode_format, order_item_id, ...rest }) => rest);
+        const baseCards = cardsToUpsert.map(({ make, stains, damage, finish_preference, size, assigned_staff, qc_passed, customer_ack, customer_ack_at, barcode, barcode_format, barcode_order_id, barcode_generated_at, order_item_id, ...rest }) => rest);
         const fbRes = await supabase.from('washdoor_garment_cards').upsert(baseCards, { onConflict: 'work_id,unit_index' }).select();
         syncedCards = fbRes.data;
         cardErr = fbRes.error;
@@ -4470,10 +4496,35 @@ function isSupabaseMissingColumnError(error) {
   return code === '42703' || code === 'PGRST204' || /column\s+.*\s+does not exist/i.test(message);
 }
 
-function buildFallbackBarcode(workNumber, unitIndex) {
-  const prefix = String(workNumber || '').trim().toUpperCase().replace(/\s+/g, '') || 'WORK';
-  const piece = Math.max(1, Number(unitIndex) || 1);
-  return `${prefix}-G${String(piece).padStart(3, '0')}`;
+function uniqueGarmentBarcode(base, usedBarcodes) {
+  const normalized = String(base || '').trim().toUpperCase().replace(/\s+/g, '') || 'WORK-G001';
+  const root = normalized.replace(/-G\d+$/, '') || normalized;
+  let candidate = normalized;
+  let suffix = 1;
+  while (usedBarcodes.has(candidate)) {
+    candidate = `${root}-G${buildGarmentUnitSuffix(suffix)}`;
+    suffix += 1;
+  }
+  usedBarcodes.add(candidate);
+  return candidate;
+}
+
+function uniqueGarmentTag(base, usedTags) {
+  const normalized = String(base || '').trim().toUpperCase().replace(/\s+/g, '') || 'GARMENT';
+  const safeBase = normalized.slice(0, 50);
+  if (!usedTags.has(safeBase)) {
+    usedTags.add(safeBase);
+    return safeBase;
+  }
+  for (let suffix = 1; suffix < 1000; suffix += 1) {
+    const tail = `-${suffix}`;
+    const candidate = `${safeBase.slice(0, 50 - tail.length)}${tail}`;
+    if (!usedTags.has(candidate)) {
+      usedTags.add(candidate);
+      return candidate;
+    }
+  }
+  return safeBase;
 }
 
 export async function fetchOrderGarmentBarcodes(identifier, cartItems = []) {
@@ -4565,9 +4616,10 @@ export async function fetchOrderGarmentBarcodes(identifier, cartItems = []) {
           order_item_id: item.item_id || null,
           garment_name: item.product_name || 'Garment',
           service_type: item.service_type || null,
-          barcode: null,
+          garment_tag_number: buildGarmentTagNumber(workNumber, unitIndex),
+          barcode: buildFallbackBarcode(workNumber, unitIndex),
           barcode_format: 'CODE128',
-          barcode_order_id: workNumber,
+          barcode_order_id: String(workNumber || '').trim().toUpperCase().replace(/\s+/g, '').slice(0, 30) || workNumber,
         });
         unitIndex += 1;
       }
@@ -4583,12 +4635,13 @@ export async function fetchOrderGarmentBarcodes(identifier, cartItems = []) {
           unit_index: card.unit_index,
           garment_name: card.garment_name,
           service_type: card.service_type,
+          garment_tag_number: card.garment_tag_number,
         };
         if (hasOrderItemColumn) row.order_item_id = card.order_item_id;
         if (hasBarcodeColumns) {
-          row.barcode = null;
+          row.barcode = card.barcode;
           row.barcode_format = 'CODE128';
-          row.barcode_order_id = workNumber;
+          row.barcode_order_id = card.barcode_order_id;
         }
         return row;
       });

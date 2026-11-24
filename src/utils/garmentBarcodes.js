@@ -16,6 +16,18 @@ const stringValue = (value) => String(value ?? '').trim();
 
 export const normalizeBarcodeValue = (value) => stringValue(value).toUpperCase().replace(/\s+/g, '');
 
+export const buildGarmentUnitSuffix = (unitIndex) => {
+  const piece = Math.max(1, Number(unitIndex) || 1);
+  return String(piece).padStart(3, '0');
+};
+
+export const buildGarmentBarcode = (workNumber, unitIndex) => {
+  const prefix = normalizeBarcodeValue(workNumber) || 'WORK';
+  return `${prefix}-G${buildGarmentUnitSuffix(unitIndex)}`;
+};
+
+export const buildGarmentTagNumber = (workNumber, unitIndex) => buildGarmentBarcode(workNumber, unitIndex).slice(0, 50);
+
 export const getOrderIdFromBarcode = (value) => {
   const normalized = normalizeBarcodeValue(value);
   if (!normalized) return '';
@@ -39,14 +51,14 @@ export function assignGarmentBarcodes({ orderId, inspections = {} }) {
     const existing = normalizeBarcodeValue(detail.barcode || detail.garment_barcode);
     const garmentDbId = stringValue(detail.card_id || detail.garment_id || detail.barcode_garment_id || detail.id || key);
     const unitIndex = Number(detail.unit_index ?? detail.piece ?? index + 1) || index + 1;
-    const preferred = `${prefix}${String(unitIndex).padStart(3, '0')}`;
+    const preferred = `${prefix}${buildGarmentUnitSuffix(unitIndex)}`;
 
     let barcode = existing && existing.startsWith(prefix) ? existing : preferred;
     if (used.has(barcode)) {
       let candidate = unitIndex;
       do {
         candidate += 1;
-        barcode = `${prefix}${String(candidate).padStart(3, '0')}`;
+        barcode = `${prefix}${buildGarmentUnitSuffix(candidate)}`;
       } while (used.has(barcode));
     }
     used.add(barcode);
