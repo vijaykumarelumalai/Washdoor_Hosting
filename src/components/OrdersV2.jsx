@@ -20,7 +20,7 @@ import {
   getServiceFilterKeys,
 } from './OrdersV2List';
 import { OrdersV2EditDrawer } from './OrdersV2EditDrawer';
-import SideEditPanel from './SideEditPanel';
+import OrdersV2SideEditPanel from './OrdersV2SideEditPanel';
 import OrderStatusSidePanel from './pos/OrderStatusDrawer';
 import ThermalReceiptModal from './ThermalReceiptModal';
 import OrdersV2CreateOrder from './OrdersV2CreateOrder';
@@ -314,6 +314,7 @@ export function OrdersV2({
 
   return (
     <Box
+      className="orders-v2-container"
       sx={{
         width: '100%',
         maxWidth: 'none',
@@ -321,6 +322,11 @@ export function OrdersV2({
         boxSizing: 'border-box',
         bgcolor: '#f8fafc',
         color: '#0f172a',
+        display: 'flex',
+        flexDirection: 'column',
+        flex: '1 1 auto',
+        minHeight: 0,
+        height: '100%',
       }}
     >
       <Snackbar
@@ -335,6 +341,7 @@ export function OrdersV2({
       </Snackbar>
 
       <Box
+        className="orders-v2-content"
         sx={{
           width: '100%',
           maxWidth: 'none',
@@ -343,10 +350,16 @@ export function OrdersV2({
           pt: { xs: 1.25, sm: 1.5 },
           pb: 0,
           px: { xs: 1.5, sm: 2, md: 3 },
+          display: 'flex',
+          flexDirection: 'column',
+          flex: '1 1 auto',
+          minHeight: 0,
+          height: '100%',
         }}
       >
         {/* ── Top Header ── */}
         <Box
+          className="orders-v2-header-section"
           sx={{
             display: 'flex',
             alignItems: 'center',
@@ -356,6 +369,7 @@ export function OrdersV2({
             mb: { xs: 1, sm: 1.25 },
             gap: { xs: 0.75, sm: 1.25, md: 1.5 },
             flexWrap: { xs: 'wrap', md: 'nowrap' },
+            flexShrink: 0,
           }}
         >
           {/* Left: Blue Cart Icon + Title + Subtitle */}
@@ -468,6 +482,7 @@ export function OrdersV2({
         {/* ── Search and Filter Toolbar Bar ── */}
         <Paper
           elevation={0}
+          className="orders-v2-filter-section"
           sx={{
             width: '100%',
             maxWidth: 'none',
@@ -479,6 +494,7 @@ export function OrdersV2({
             border: '1px solid #dbeafe',
             bgcolor: '#ffffff',
             boxShadow: '0 1px 3px rgba(37, 99, 235, 0.05)',
+            flexShrink: 0,
           }}
         >
           <Box
@@ -637,6 +653,7 @@ export function OrdersV2({
 
         {/* ── Status Filter Pills ── */}
         <Box
+          className="orders-v2-status-section"
           sx={{
             display: 'flex',
             alignItems: 'center',
@@ -649,6 +666,7 @@ export function OrdersV2({
             boxSizing: 'border-box',
             minHeight: 28,
             mb: 1,
+            flexShrink: 0,
           }}
         >
           {[
@@ -694,6 +712,7 @@ export function OrdersV2({
 
         {/* ── 4 KPI Summary Cards ── */}
         <Box
+          className="orders-v2-kpi-section"
           sx={{
             display: 'grid',
             width: '100%',
@@ -707,6 +726,7 @@ export function OrdersV2({
             },
             gap: { xs: 0.75, sm: 1 },
             mb: 1.25,
+            flexShrink: 0,
           }}
         >
           {/* 1. Total Orders */}
@@ -934,45 +954,57 @@ export function OrdersV2({
         {loadingOrders ? (
           <LoadingState text="Syncing Orders..." />
         ) : (
-          <OrdersV2List
-            orders={filteredOrders}
-            page={page}
-            pageSize={pageSize}
-            statusFilter={statusFilter}
-            serviceFilter={serviceFilter}
-            serviceFilterKeys={serviceFilterKeys}
-            serviceTypes={serviceTypes}
-            isLoadingServiceTypes={isLoadingServiceTypes}
-            dateFilter={dateFilter}
-            topSearch={topSearch}
-            currencySymbol={currencySymbol}
+          <Box
+            className="orders-v2-table-wrapper"
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              flex: '1 1 auto',
+              minHeight: 0,
+              width: '100%',
+              overflow: 'hidden',
+            }}
+          >
+            <OrdersV2List
+              orders={filteredOrders}
+              page={page}
+              pageSize={pageSize}
+              statusFilter={statusFilter}
+              serviceFilter={serviceFilter}
+              serviceFilterKeys={serviceFilterKeys}
+              serviceTypes={serviceTypes}
+              isLoadingServiceTypes={isLoadingServiceTypes}
+              dateFilter={dateFilter}
+              topSearch={topSearch}
+              currencySymbol={currencySymbol}
               onOpenSideEdit={(order) => setSideEditOrder(order)}
               onOpenViewOrder={(order) => { setViewOrderTab('details'); setViewOrderModal(order); }}
               onOpenReceipt={(order) => setReceiptOrderModal(order)}
-            onEditInDrawer={(order) => {
-              setDrawerOrder(order);
-              setIsDrawerOpen(true);
-            }}
-            onDelete={handleDelete}
-            onUpdateOrder={(updated) => {
-              onUpdateOrder?.(updated);
-              showSnack('Order updated successfully', 'success');
-              onRefreshOrders?.();
-            }}
-            onPageChange={setPage}
-            onPageSizeChange={setPageSize}
-            t={t}
-            language={language}
-            formatDateFn={formatDate}
-            showToast={showSnack}
-          />
+              onEditInDrawer={(order) => {
+                setDrawerOrder(order);
+                setIsDrawerOpen(true);
+              }}
+              onDelete={handleDelete}
+              onUpdateOrder={(updated) => {
+                onUpdateOrder?.(updated);
+                showSnack('Order updated successfully', 'success');
+                onRefreshOrders?.();
+              }}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              t={t}
+              language={language}
+              formatDateFn={formatDate}
+              showToast={showSnack}
+            />
+          </Box>
         )}
       </Box>
 
       {/* ── Standalone Child Modals & Panels ── */}
-      {/* 1. Side Edit Panel */}
+      {/* 1. Orders V2 Redesigned Side Edit Panel */}
       {sideEditOrder && (
-        <SideEditPanel
+        <OrdersV2SideEditPanel
           isOpen={Boolean(sideEditOrder)}
           order={sideEditOrder}
           onClose={() => setSideEditOrder(null)}
@@ -1030,7 +1062,7 @@ export function OrdersV2({
           showToast={showToast}
         />
       )}
-
+a
       {/* 5. Fast Slide Drawer */}
       {isDrawerOpen && (
         <OrdersV2EditDrawer

@@ -1448,6 +1448,7 @@ export function OrdersV2List({
     <>
       <Paper
         elevation={0}
+        className={`orders-v2-table-card ${isInlineEditing ? 'is-inline-editing' : ''}`}
         sx={{
           width: '100%',
           maxWidth: 'none',
@@ -1459,9 +1460,14 @@ export function OrdersV2List({
           background: '#ffffff',
           boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
           mb: '15px',
+          display: 'flex',
+          flexDirection: 'column',
+          flex: '1 1 auto',
+          minHeight: 0,
         }}
       >
         <TableContainer
+          className={`orders-v2-table-container ${isInlineEditing ? 'is-inline-editing' : ''}`}
           sx={{
             width: '100%',
             height: ORDERS_TABLE_VIEWPORT_HEIGHT,
@@ -1470,6 +1476,7 @@ export function OrdersV2List({
             overflowX: 'auto',
             overflowY: 'auto',
             overscrollBehavior: 'contain',
+            flex: '1 1 auto',
             ...ORDER_SCROLLBAR_SX,
             ...ORDERS_TABLE_SCROLLBAR_SX,
             ...(isInlineEditing

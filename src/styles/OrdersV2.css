@@ -2,13 +2,169 @@
 
 .orders-v2-container {
   width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
   background-color: #f8fafc;
   color: #0f172a;
+  box-sizing: border-box;
 }
 
 .main.orders-v2-main {
   min-height: 0 !important;
+  min-width: 0 !important;
+  padding: 0 !important;
   padding-bottom: 0 !important;
+  height: calc(100vh - 62px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+  overscroll-behavior-y: contain !important;
+  scroll-behavior: smooth !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: #94a3b8 #f1f5f9 !important;
+  -ms-overflow-style: auto !important;
+}
+
+.main.orders-v2-main::-webkit-scrollbar {
+  display: block !important;
+  width: 9px !important;
+  height: 9px !important;
+}
+
+.main.orders-v2-main::-webkit-scrollbar-track {
+  display: block !important;
+  background: #f1f5f9 !important;
+}
+
+.main.orders-v2-main::-webkit-scrollbar-thumb {
+  display: block !important;
+  background: #cbd5e1 !important;
+  border-radius: 4px !important;
+  border: 2px solid #f1f5f9 !important;
+}
+
+.main.orders-v2-main::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8 !important;
+}
+
+body:not(.light-theme):not([data-theme="light"]) .main.orders-v2-main {
+  scrollbar-color: #475569 #0f172a !important;
+}
+
+body:not(.light-theme):not([data-theme="light"]) .main.orders-v2-main::-webkit-scrollbar-track {
+  background: #0f172a !important;
+}
+
+body:not(.light-theme):not([data-theme="light"]) .main.orders-v2-main::-webkit-scrollbar-thumb {
+  background: #475569 !important;
+  border: 2px solid #0f172a !important;
+}
+
+.orders-v2-content {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  box-sizing: border-box;
+}
+
+.orders-v2-table-wrapper {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  overflow: visible !important;
+}
+
+.orders-v2-table-card {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  margin-bottom: 8px !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.orders-v2-table-card.is-inline-editing {
+  flex: 0 0 auto !important;
+  overflow: visible !important;
+  height: auto !important;
+  max-height: none !important;
+}
+
+/* Let inline-edit content expand the page so the outer scrollbar owns scrolling */
+.main.orders-v2-main:has(.orders-v2-table-container.is-inline-editing) .orders-v2-container,
+.main.orders-v2-main:has(.orders-v2-table-container.is-inline-editing) .orders-v2-content,
+.main.orders-v2-main:has(.orders-v2-table-container.is-inline-editing) .orders-v2-table-wrapper {
+  flex: 0 0 auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.orders-v2-table-container:not(.is-inline-editing) {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  min-height: 200px !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+  scrollbar-width: thin !important;
+  scrollbar-color: #cbd5e1 transparent !important;
+  -ms-overflow-style: auto !important;
+}
+
+.orders-v2-table-container::-webkit-scrollbar {
+  display: block !important;
+  width: 6px !important;
+  height: 6px !important;
+}
+
+.orders-v2-table-container::-webkit-scrollbar-track {
+  display: block !important;
+  background: transparent !important;
+}
+
+.orders-v2-table-container::-webkit-scrollbar-thumb {
+  display: block !important;
+  background: #cbd5e1 !important;
+  border-radius: 6px !important;
+  border: 1px solid #ffffff !important;
+}
+
+.orders-v2-table-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8 !important;
+}
+
+.orders-v2-table-container.is-inline-editing {
+  flex: 0 0 auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-y: hidden !important;
+  overflow-x: auto !important;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.orders-v2-table-container.is-inline-editing::-webkit-scrollbar:vertical {
+  display: none !important;
+  width: 0 !important;
 }
 
 /* Header & Action Bar */
@@ -230,6 +386,9 @@ body:not(.light-theme):not([data-theme="light"]) .pos-status-garment-list::-webk
 }
 
 .orders-v2-pagination-footer {
+  flex-shrink: 0 !important;
+  margin-top: auto !important;
+  padding-bottom: 8px !important;
   row-gap: 8px;
   column-gap: 8px;
 }
@@ -248,7 +407,28 @@ body:not(.light-theme):not([data-theme="light"]) .pos-status-garment-list::-webk
   margin: 0;
 }
 
+@media (max-width: 1024px) {
+  .orders-v2-table-container:not(.is-inline-editing) {
+    min-height: 180px !important;
+  }
+}
+
 @media (max-width: 599.95px) {
+  .main.orders-v2-main {
+    height: auto !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+  }
+  .orders-v2-container,
+  .orders-v2-content,
+  .orders-v2-table-wrapper {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .orders-v2-table-container:not(.is-inline-editing) {
+    min-height: 280px !important;
+    max-height: 480px !important;
+  }
   .orders-v2-pagination-footer {
     row-gap: 6px;
   }

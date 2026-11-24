@@ -188,10 +188,16 @@
 
 /* ── Panel Scrollable Body with Visible Permanent Scroller ── */
 .side-edit-body {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0 !important;
+  min-width: 0 !important;
   overflow-y: scroll !important;
-  scrollbar-width: thin;
-  scrollbar-color: #94a3b8 #f1f5f9;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+  scrollbar-width: thin !important;
+  scrollbar-color: #94a3b8 #f1f5f9 !important;
+  -ms-overflow-style: auto !important;
   padding: 16px 20px 40px;
   background: #f8fafc;
   display: flex;
@@ -201,22 +207,40 @@
 
 /* Visible Scroller for Chrome, Edge, Safari */
 .side-edit-body::-webkit-scrollbar {
-  width: 9px;
+  display: block !important;
+  width: 9px !important;
+  height: 9px !important;
 }
 
 .side-edit-body::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 6px;
+  display: block !important;
+  background: #f1f5f9 !important;
+  border-radius: 6px !important;
 }
 
 .side-edit-body::-webkit-scrollbar-thumb {
-  background: #94a3b8;
-  border-radius: 6px;
-  border: 2px solid #f1f5f9;
+  display: block !important;
+  background: #94a3b8 !important;
+  border-radius: 6px !important;
+  border: 2px solid #f1f5f9 !important;
 }
 
 .side-edit-body::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: #64748b !important;
+}
+
+.side-edit-body .inspection-wrap {
+  flex-shrink: 0 !important;
+}
+
+/* Header, tab navigation and footer actions stay fixed while the body scrolls */
+.side-edit-header,
+.side-edit-footer {
+  flex-shrink: 0 !important;
+}
+
+.side-edit-nav-tabs {
+  flex-shrink: 0;
 }
 
 /* Specific resets overriding global washdoor.css 40px rule */
@@ -506,12 +530,13 @@
 }
 
 .side-edit-catalog-grid::-webkit-scrollbar {
-  width: 6px;
+  display: block !important;
+  width: 6px !important;
 }
 
 .side-edit-catalog-grid::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+  background: #cbd5e1 !important;
+  border-radius: 4px !important;
 }
 
 /* 3-Column Garment Card Layout for Desktop */
@@ -779,23 +804,23 @@
 }
 
 .side-edit-cart-list::-webkit-scrollbar {
-  width: 6px;
-  display: block;
+  width: 6px !important;
+  display: block !important;
 }
 
 .side-edit-cart-list::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 4px;
+  background: #f1f5f9 !important;
+  border-radius: 4px !important;
 }
 
 .side-edit-cart-list::-webkit-scrollbar-thumb {
-  background: #94a3b8;
-  border-radius: 4px;
+  background: #94a3b8 !important;
+  border-radius: 4px !important;
   transition: background 0.15s ease;
 }
 
 .side-edit-cart-list::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: #64748b !important;
 }
 
 .side-edit-cart-item {
@@ -1458,6 +1483,23 @@ body:not(.light-theme) .side-edit-footer {
 [data-theme="dark"] .side-edit-body,
 body:not(.light-theme) .side-edit-body {
   background: #040c18;
+  scrollbar-color: #475569 #091322 !important;
+}
+
+[data-theme="dark"] .side-edit-body::-webkit-scrollbar-track,
+body:not(.light-theme) .side-edit-body::-webkit-scrollbar-track {
+  background: #091322 !important;
+}
+
+[data-theme="dark"] .side-edit-body::-webkit-scrollbar-thumb,
+body:not(.light-theme) .side-edit-body::-webkit-scrollbar-thumb {
+  background: #475569 !important;
+  border: 2px solid #091322 !important;
+}
+
+[data-theme="dark"] .side-edit-body::-webkit-scrollbar-thumb:hover,
+body:not(.light-theme) .side-edit-body::-webkit-scrollbar-thumb:hover {
+  background: #64748b !important;
 }
 
 [data-theme="dark"] .side-edit-card,
