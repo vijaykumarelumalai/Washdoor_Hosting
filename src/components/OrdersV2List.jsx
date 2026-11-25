@@ -74,6 +74,10 @@ import {
   getGarmentBarcodeEntries,
   mergeGarmentBarcodePatch,
 } from '../utils/garmentBarcodes';
+import {
+  ORDERS_V2_DEFAULT_COLUMN_IDS,
+  enforceOrdersV2RequiredColumns,
+} from '../config/ordersV2ColumnsConfig';
 
 const normalizePaymentStatusOption = (status, balance = 0, advance = 0, total = 0) => {
   const adv = Number(advance) || 0;
@@ -443,11 +447,22 @@ const ORDERS_PAGINATION_ICON_SX = {
 const TABLE_COLUMN_CONFIG = {
   orderId: { default: 200, min: 150, max: 320 },
   customer: { default: 170, min: 130, max: 300 },
+  address: { default: 220, min: 180, max: 320 },
   services: { default: 190, min: 150, max: 280 },
   total: { default: 140, min: 110, max: 220 },
-  status: { default: 140, min: 110, max: 220 },
+  status: { default: 180, min: 170, max: 220 },
   date: { default: 160, min: 130, max: 260 },
-  actions: { default: 130, min: 110, max: 200 },
+  order_details: { default: 170, min: 130, max: 260 },
+  pickup_delivery: { default: 200, min: 160, max: 300 },
+  driver: { default: 150, min: 120, max: 240 },
+  comments: { default: 230, min: 180, max: 360 },
+  pincode: { default: 120, min: 100, max: 200 },
+  email: { default: 190, min: 150, max: 300 },
+  business_name: { default: 170, min: 140, max: 280 },
+  communication_pref: { default: 180, min: 150, max: 280 },
+  dob: { default: 150, min: 130, max: 240 },
+  tax_exemption: { default: 130, min: 110, max: 220 },
+  actions: { default: 200, min: 180, max: 260 },
 };
 
 const SERVICE_ICON_OPTIONS = [
@@ -549,6 +564,7 @@ export function OrdersV2List({
   dateFilter = 'All Time',
   topSearch = '',
   currencySymbol = '₹',
+  visibleColumnIds = ORDERS_V2_DEFAULT_COLUMN_IDS,
   onEditInDrawer,
   onOpenSideEdit,
   onOpenViewOrder,
@@ -568,9 +584,11 @@ export function OrdersV2List({
 
   // Inline Edit State
   const [inlineEditingOrderId, setInlineEditingOrderId] = useState(null);
+  const [inlineViewportWidth, setInlineViewportWidth] = useState(0);
   const [activeTab, setActiveTab] = useState('customer');
   const tabHeaderRef = useRef(null);
   const activeTabRef = useRef(null);
+  const tableContainerRef = useRef(null);
   useEffect(() => {
     const container = tabHeaderRef.current;
     const tab = activeTabRef.current;
@@ -583,6 +601,28 @@ export function OrdersV2List({
       container.scrollTo({ left: targetLeft, behavior: 'smooth' });
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    const container = tableContainerRef.current;
+    if (!container) return undefined;
+    const updateWidth = () => setInlineViewportWidth(container.clientWidth);
+    updateWidth();
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(updateWidth);
+      observer.observe(container);
+      return () => observer.disconnect();
+    }
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, [inlineEditingOrderId, orders.length]);
+
+  useEffect(() => {
+    if (!inlineEditingOrderId) return;
+    const container = tableContainerRef.current;
+    if (!container) return;
+    container.scrollLeft = 0;
+  }, [inlineEditingOrderId]);
+
   const [inlineDraft, setInlineDraft] = useState(null);
   const [inlineCart, setInlineCart] = useState([]);
   const [inspections, setInspections] = useState({});
@@ -1138,6 +1178,12 @@ export function OrdersV2List({
       return acc;
     }, {})
   );
+  const resolvedVisibleColumnIds = useMemo(
+    () => enforceOrdersV2RequiredColumns(visibleColumnIds),
+    [visibleColumnIds]
+  );
+  const visibleColumnIdSet = useMemo(() => new Set(resolvedVisibleColumnIds), [resolvedVisibleColumnIds]);
+  const isColumnVisible = useCallback((columnId) => visibleColumnIdSet.has(columnId), [visibleColumnIdSet]);
   const resizeCleanupRef = useRef(null);
 
   useEffect(() => () => {
@@ -1197,7 +1243,7 @@ export function OrdersV2List({
   }, [tableColumnWidths]);
 
   const getColumnWidthSx = useCallback((key) => {
-    const width = tableColumnWidths[key];
+    const width = tableColumnWidths[key] || TABLE_COLUMN_CONFIG[key]?.default || 160;
     return { boxSizing: 'border-box', width, minWidth: width, maxWidth: width, whiteSpace: 'nowrap', overflow: 'hidden' };
   }, [tableColumnWidths]);
 
@@ -1234,8 +1280,11 @@ export function OrdersV2List({
   ), []);
 
   const tableWidth = useMemo(
-    () => Object.keys(TABLE_COLUMN_CONFIG).reduce((total, key) => total + tableColumnWidths[key], 0),
-    [tableColumnWidths]
+    () => resolvedVisibleColumnIds.reduce(
+      (total, key) => total + (tableColumnWidths[key] || TABLE_COLUMN_CONFIG[key]?.default || 0),
+      0
+    ),
+    [resolvedVisibleColumnIds, tableColumnWidths]
   );
 
   const renderTableHeader = useCallback((key, label, extraSx = {}) => {
@@ -1243,6 +1292,7 @@ export function OrdersV2List({
     return (
       <TableCell
         className="orders-v2-header-cell"
+        data-column={key}
         sx={{
           position: 'sticky',
           top: 0,
@@ -1257,6 +1307,7 @@ export function OrdersV2List({
           py: 1.25,
           ...getColumnWidthSx(key),
           ...extraSx,
+          ...(key === 'actions' ? { minWidth: config.min, overflow: 'visible' } : {}),
         }}
       >
         {label}
@@ -1264,6 +1315,29 @@ export function OrdersV2List({
       </TableCell>
     );
   }, [beginResize, getColumnWidthSx, renderResizeHandle]);
+
+  const renderDynamicTableHeader = useCallback(() => (
+    <>
+      {isColumnVisible('orderId') && renderTableHeader('orderId', 'Order ID')}
+      {isColumnVisible('customer') && renderTableHeader('customer', 'Customer')}
+      {isColumnVisible('address') && renderTableHeader('address', 'Address')}
+      {isColumnVisible('services') && renderTableHeader('services', 'Services')}
+      {isColumnVisible('total') && renderTableHeader('total', 'Total Amount')}
+      {isColumnVisible('status') && renderTableHeader('status', 'Status')}
+      {isColumnVisible('date') && renderTableHeader('date', 'Order Date')}
+      {isColumnVisible('order_details') && renderTableHeader('order_details', 'Order Details')}
+      {isColumnVisible('pickup_delivery') && renderTableHeader('pickup_delivery', 'Pickup & Delivery')}
+      {isColumnVisible('driver') && renderTableHeader('driver', 'Driver')}
+      {isColumnVisible('comments') && renderTableHeader('comments', 'Comments')}
+      {isColumnVisible('pincode') && renderTableHeader('pincode', 'PIN Code')}
+      {isColumnVisible('email') && renderTableHeader('email', 'Email')}
+      {isColumnVisible('business_name') && renderTableHeader('business_name', 'Business Name')}
+      {isColumnVisible('communication_pref') && renderTableHeader('communication_pref', 'Communication Preference')}
+      {isColumnVisible('dob') && renderTableHeader('dob', 'Date of Birth')}
+      {isColumnVisible('tax_exemption') && renderTableHeader('tax_exemption', 'Tax Exemption')}
+      {isColumnVisible('actions') && renderTableHeader('actions', 'Actions', { textAlign: 'center' })}
+    </>
+  ), [isColumnVisible, renderTableHeader]);
 
   // Tab 2 (Catalog & Selection) state
   const [catalogCategory, setCatalogCategory] = useState('All');
@@ -1659,6 +1733,10 @@ export function OrdersV2List({
     setPaymentHistory(orderPaymentHistory);
 
     setActiveTab('customer');
+    if (tableContainerRef.current) {
+      tableContainerRef.current.scrollLeft = 0;
+      setInlineViewportWidth(tableContainerRef.current.clientWidth);
+    }
     setInlineEditingOrderId(oid);
   };
 
@@ -2185,9 +2263,11 @@ export function OrdersV2List({
         }}
       >
         <TableContainer
+          ref={tableContainerRef}
           className={`orders-v2-table-container ${isInlineEditing ? 'is-inline-editing' : ''}`}
           sx={{
             width: '100%',
+            maxWidth: '100%',
             height: ORDERS_TABLE_VIEWPORT_HEIGHT,
             minHeight: ORDERS_TABLE_VIEWPORT_HEIGHT,
             maxHeight: ORDERS_TABLE_VIEWPORT_HEIGHT,
@@ -2233,13 +2313,7 @@ export function OrdersV2List({
           {/* Table Head */}
           <TableHead sx={{ bgcolor: '#f8fafc', position: 'sticky', top: 0, zIndex: 5 }}>
             <TableRow>
-              {renderTableHeader('orderId', 'Order ID')}
-              {renderTableHeader('customer', 'Customer')}
-              {renderTableHeader('services', 'Services')}
-              {renderTableHeader('total', 'Total Amount')}
-              {renderTableHeader('status', 'Status')}
-              {renderTableHeader('date', 'Order Date')}
-              {renderTableHeader('actions', 'Actions', { textAlign: 'center' })}
+              {renderDynamicTableHeader()}
             </TableRow>
           </TableHead>
 
@@ -2265,7 +2339,7 @@ export function OrdersV2List({
                       '& td': { borderBottom: isInlineOpen ? 'none' : '1px solid #f1f5f9' },
                     }}
                   >
-                    {/* Order ID & Avatar */}
+                    {isColumnVisible('orderId') && (
                     <TableCell sx={{ py: 1.2, ...getColumnWidthSx('orderId') }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <IconButton
@@ -2300,8 +2374,10 @@ export function OrdersV2List({
                         </Box>
                       </Box>
                     </TableCell>
+                    )}
 
                     {/* Customer */}
+                    {isColumnVisible('customer') && (
                     <TableCell sx={{ py: 1.2, ...getColumnWidthSx('customer') }}>
                       <Typography noWrap variant="body2" fontWeight={600} color="#0f172a">
                         {order.customer_name || '—'}
@@ -2310,8 +2386,21 @@ export function OrdersV2List({
                         {order.mobile_number || '—'}
                       </Typography>
                     </TableCell>
+                    )}
+
+                    {/* Address */}
+                    {isColumnVisible('address') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('address') }}>
+                      <Tooltip title={sanitizeAddress(order.address || order.delivery_address || order.customer_address) || ''}>
+                        <Typography noWrap variant="body2" color="#475569" fontSize="0.82rem">
+                          {sanitizeAddress(order.address || order.delivery_address || order.customer_address) || '—'}
+                        </Typography>
+                      </Tooltip>
+                    </TableCell>
+                    )}
 
                     {/* Services */}
+                    {isColumnVisible('services') && (
                     <TableCell sx={{ py: 1.2, ...getColumnWidthSx('services') }}>
                       {!firstService ? (
                         <Typography variant="body2" color="#94a3b8">—</Typography>
@@ -2374,8 +2463,10 @@ export function OrdersV2List({
                         </Box>
                       )}
                     </TableCell>
+                    )}
 
                     {/* Total Amount & Balance */}
+                    {isColumnVisible('total') && (
                     <TableCell sx={{ py: 1.2, ...getColumnWidthSx('total') }}>
                       <Typography noWrap variant="body2" fontWeight={800} color="#0f172a">
                         {currencySymbol}{MONEY(order.total_amount ?? 0)}
@@ -2384,9 +2475,14 @@ export function OrdersV2List({
                         Bal: {currencySymbol}{MONEY(order.balance_due ?? 0)}
                       </Typography>
                     </TableCell>
+                    )}
 
                     {/* Status Pill Badge with Dot */}
-                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('status') }}>
+                    {isColumnVisible('status') && (
+                    <TableCell
+                      className="orders-v2-status-cell"
+                      sx={{ py: 1.2, ...getColumnWidthSx('status'), minWidth: 170, overflow: 'visible' }}
+                    >
                       <Box
                         sx={{
                           display: 'inline-flex',
@@ -2400,7 +2496,10 @@ export function OrdersV2List({
                           color: stStyle.text,
                           fontSize: '0.78rem',
                           fontWeight: 700,
+                          lineHeight: 1.2,
                           whiteSpace: 'nowrap',
+                          flexShrink: 0,
+                          maxWidth: 'none',
                         }}
                       >
                         <Box
@@ -2414,8 +2513,10 @@ export function OrdersV2List({
                         {status}
                       </Box>
                     </TableCell>
+                    )}
 
                     {/* Order Date */}
+                    {isColumnVisible('date') && (
                     <TableCell sx={{ py: 1.2, ...getColumnWidthSx('date') }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, color: '#334155' }}>
                         <CalendarTodayOutlined sx={{ fontSize: 15, color: '#64748b' }} />
@@ -2424,18 +2525,152 @@ export function OrdersV2List({
                         </Typography>
                       </Box>
                     </TableCell>
+                    )}
+
+                    {/* Order Details */}
+                    {isColumnVisible('order_details') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('order_details') }}>
+                      <Typography noWrap variant="body2" color="#334155" fontSize="0.82rem" fontWeight={600}>
+                        {order.work_number || order.order_source || '—'}
+                      </Typography>
+                      <Typography noWrap variant="caption" color="#64748b" display="block">
+                        {order.order_type || '—'}
+                      </Typography>
+                    </TableCell>
+                    )}
+
+                    {/* Pickup & Delivery */}
+                    {isColumnVisible('pickup_delivery') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('pickup_delivery') }}>
+                      <Tooltip title={formatDeliveryDateTimeForDisplay(order) || ''}>
+                        <Typography noWrap variant="body2" color="#334155" fontSize="0.82rem">
+                          {formatDeliveryDateTimeForDisplay(order) || '—'}
+                        </Typography>
+                      </Tooltip>
+                      <Typography noWrap variant="caption" color="#64748b" display="block">
+                        {order.delivery_type || order.order_type || '—'}
+                      </Typography>
+                    </TableCell>
+                    )}
+
+                    {/* Driver */}
+                    {isColumnVisible('driver') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('driver') }}>
+                      <Typography noWrap variant="body2" color="#334155" fontSize="0.82rem" fontWeight={600}>
+                        {order.assigned_pickup_delivery_person || order.assigned_driver || order.assigned_rider || '—'}
+                      </Typography>
+                    </TableCell>
+                    )}
+
+                    {/* Comments */}
+                    {isColumnVisible('comments') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('comments') }}>
+                      <Tooltip title={order.comments || order.notes || order.special_instructions || ''}>
+                        <Typography noWrap variant="body2" color="#475569" fontSize="0.82rem">
+                          {order.comments || order.notes || order.special_instructions || '—'}
+                        </Typography>
+                      </Tooltip>
+                    </TableCell>
+                    )}
+
+                    {/* PIN Code */}
+                    {isColumnVisible('pincode') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('pincode') }}>
+                      <Typography noWrap variant="body2" color="#334155" fontSize="0.82rem">
+                        {order.pincode || order.delivery_pincode || order.customer_pincode || '—'}
+                      </Typography>
+                    </TableCell>
+                    )}
+
+                    {/* Email */}
+                    {isColumnVisible('email') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('email') }}>
+                      <Tooltip title={order.email || order.customer_email || ''}>
+                        <Typography noWrap variant="body2" color="#334155" fontSize="0.82rem">
+                          {order.email || order.customer_email || '—'}
+                        </Typography>
+                      </Tooltip>
+                    </TableCell>
+                    )}
+
+                    {/* Business Name */}
+                    {isColumnVisible('business_name') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('business_name') }}>
+                      <Tooltip title={order.business_name || order.company_name || order.customer?.business_name || ''}>
+                        <Typography noWrap variant="body2" color="#334155" fontSize="0.82rem" fontWeight={600}>
+                          {order.business_name || order.company_name || order.customer?.business_name || '—'}
+                        </Typography>
+                      </Tooltip>
+                    </TableCell>
+                    )}
+
+                    {/* Communication Preference */}
+                    {isColumnVisible('communication_pref') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('communication_pref') }}>
+                      <Typography noWrap variant="body2" color="#334155" fontSize="0.82rem">
+                        {order.communication_pref || order.communicationPreference || '—'}
+                      </Typography>
+                    </TableCell>
+                    )}
+
+                    {/* Date of Birth */}
+                    {isColumnVisible('dob') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('dob') }}>
+                      <Typography noWrap variant="body2" color="#334155" fontSize="0.82rem">
+                        {formatDateOnly(order.dob || order.date_of_birth) || '—'}
+                      </Typography>
+                    </TableCell>
+                    )}
+
+                    {/* Tax Exemption */}
+                    {isColumnVisible('tax_exemption') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('tax_exemption') }}>
+                      <Chip
+                        size="small"
+                        label={order.tax_exemption ? 'Yes' : 'No'}
+                        sx={{
+                          height: 22,
+                          fontWeight: 700,
+                          fontSize: '0.72rem',
+                          bgcolor: order.tax_exemption ? '#dbeafe' : '#f1f5f9',
+                          color: order.tax_exemption ? '#1d4ed8' : '#64748b',
+                        }}
+                      />
+                    </TableCell>
+                    )}
 
                     {/* Actions */}
-                    <TableCell sx={{ py: 1.2, textAlign: 'center', ...getColumnWidthSx('actions') }}>
-                      <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                    {isColumnVisible('actions') && (
+                    <TableCell
+                      className={`orders-v2-actions-cell${isInlineOpen ? ' is-inline-open' : ''}`}
+                      sx={{
+                        py: 1.2,
+                        textAlign: 'center',
+                        ...getColumnWidthSx('actions'),
+                        minWidth: 180,
+                        overflow: 'visible',
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexWrap: 'nowrap',
+                          flexShrink: 0,
+                          gap: 1.5,
+                          minWidth: 0,
+                          overflow: 'visible',
+                        }}
+                      >
                         {/* Edit Action */}
                         <Tooltip title="Inline Edit Order">
                           <IconButton
                             size="small"
                             onClick={() => handleToggleInlineEdit(order)}
-                            sx={{ color: '#2563eb', p: 0.7 }}
+                            sx={{ color: '#2563eb', p: 0.7, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                           >
-                            <EditOutlined fontSize="small" />
+                            <EditOutlined sx={{ fontSize: 18 }} />
                           </IconButton>
                         </Tooltip>
 
@@ -2445,22 +2680,22 @@ export function OrdersV2List({
                             <IconButton
                               size="small"
                               onClick={() => onOpenViewOrder(order)}
-                              sx={{ color: '#475569', p: 0.7 }}
+                              sx={{ color: '#475569', p: 0.7, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                             >
-                              <VisibilityOutlined fontSize="small" />
+                              <VisibilityOutlined sx={{ fontSize: 18 }} />
                             </IconButton>
                           </Tooltip>
                         )}
 
-                        {/* Thermal Receipt Action */}
+                        {/* Invoice Action */}
                         {onOpenReceipt && (
-                          <Tooltip title="Print Receipt">
+                          <Tooltip title="Invoice">
                             <IconButton
                               size="small"
                               onClick={() => onOpenReceipt(order)}
-                              sx={{ color: '#2563eb', p: 0.7 }}
+                              sx={{ color: '#2563eb', p: 0.7, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                             >
-                              <ReceiptLongOutlined fontSize="small" />
+                              <ReceiptLongOutlined sx={{ fontSize: 18 }} />
                             </IconButton>
                           </Tooltip>
                         )}
@@ -2471,22 +2706,40 @@ export function OrdersV2List({
                             <IconButton
                               size="small"
                               onClick={() => onDelete(orderId)}
-                              sx={{ color: '#dc2626', p: 0.7 }}
+                              sx={{ color: '#dc2626', p: 0.7, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                             >
-                              <DeleteOutlined fontSize="small" />
+                              <DeleteOutlined sx={{ fontSize: 18 }} />
                             </IconButton>
                           </Tooltip>
                         )}
                       </Box>
                     </TableCell>
+                    )}
+
                   </TableRow>
 
                   {/* ── EXPANDED INLINE EDIT PANEL (WITH HORIZONTAL STEPPER TABS) ── */}
                   {isInlineOpen && inlineDraft && (
                     <TableRow>
-                      <TableCell colSpan={7} sx={{ p: 0, bgcolor: '#eff6ff', borderBottom: '2px solid #2563eb' }}>
+                      <TableCell
+                        colSpan={resolvedVisibleColumnIds.length}
+                        className="orders-v2-inline-edit-cell"
+                        sx={{ p: 0, width: '100%', minWidth: 0, maxWidth: 'none', overflow: 'visible', bgcolor: '#eff6ff', borderBottom: '2px solid #2563eb' }}
+                      >
                         <Collapse in timeout="auto" unmountOnExit>
-                          <Box sx={{ borderTop: '1px solid #bfdbfe', overflow: 'visible', minWidth: 0 }}>
+                          <Box
+                            className="orders-v2-inline-edit-sticky"
+                            sx={{
+                              position: 'sticky',
+                              left: 0,
+                              width: inlineViewportWidth ? `${inlineViewportWidth}px` : '100%',
+                              maxWidth: '100%',
+                              minWidth: 0,
+                              boxSizing: 'border-box',
+                              borderTop: '1px solid #bfdbfe',
+                              overflow: 'visible',
+                            }}
+                          >
                             {/* 1. Header Bar: Edit Order Title + Pipeline Status Pills + Buttons */}
                             <Box
                               sx={{
