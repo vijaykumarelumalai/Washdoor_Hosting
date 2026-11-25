@@ -8,6 +8,7 @@ import {
   Add, Refresh, Search, ShoppingCartRounded, FilterAltOutlined,
   Inventory2Outlined, TrendingUp, AccessTime, LocalShippingOutlined,
   Storefront, OpenInNew, ViewColumnRounded, KeyboardArrowDown, CloseRounded,
+  LockOutlined,
 } from '@mui/icons-material';
 import { useLanguage } from '../context/LanguageContext';
 import { normalizeOrder } from '../utils/normalizeOrder';
@@ -30,6 +31,7 @@ import {
   ORDERS_V2_ALL_COLUMN_IDS,
   ORDERS_V2_COLUMN_GROUPS,
   ORDERS_V2_DEFAULT_COLUMN_IDS,
+  ORDERS_V2_REQUIRED_COLUMN_IDS,
   enforceOrdersV2RequiredColumns,
 } from '../config/ordersV2ColumnsConfig';
 import {
@@ -172,6 +174,13 @@ export function OrdersV2({
     setDraftColumnIds((current) => (
       current.includes(columnId) ? current.filter((id) => id !== columnId) : [...current, columnId]
     ));
+  };
+
+  const allColumnsSelected = ORDERS_V2_ALL_COLUMN_IDS.every((id) => draftColumnIds.includes(id));
+  const handleToggleAllColumns = () => {
+    setDraftColumnIds(allColumnsSelected
+      ? [...ORDERS_V2_REQUIRED_COLUMN_IDS]
+      : [...ORDERS_V2_ALL_COLUMN_IDS]);
   };
 
   const handleApplyColumns = async () => {
@@ -808,48 +817,82 @@ export function OrdersV2({
             >
               <Box className="orders-v2-column-popover">
                 <Box className="orders-v2-column-popover-header">
-                  <Box>
+                  <Box className="orders-v2-column-popover-heading">
                     <Typography className="orders-v2-column-popover-title">Manage Columns</Typography>
                     <Typography className="orders-v2-column-popover-count">
-                      {draftColumnIds.length} of {ORDERS_V2_ALL_COLUMN_IDS.length} columns selected
+                      <span className="orders-v2-column-count-badge">
+                        {draftColumnIds.length} of {ORDERS_V2_ALL_COLUMN_IDS.length}
+                      </span>
+                      <span>columns selected</span>
                     </Typography>
                   </Box>
-                  <IconButton size="small" onClick={handleCloseColumnMenu} aria-label="Close column manager">
-                    <CloseRounded sx={{ fontSize: 18 }} />
-                  </IconButton>
+                  <Box className="orders-v2-column-header-actions">
+                    <Button
+                      size="small"
+                      className="orders-v2-column-select-all"
+                      onClick={handleToggleAllColumns}
+                    >
+                      {allColumnsSelected ? 'Clear' : 'All'}
+                    </Button>
+                    <IconButton size="small" onClick={handleCloseColumnMenu} aria-label="Close column manager">
+                      <CloseRounded sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  </Box>
                 </Box>
 
                 <Box className="orders-v2-column-groups">
                   {ORDERS_V2_COLUMN_GROUPS.map((group) => (
                     <Box className="orders-v2-column-group" key={group.id}>
                       <Typography className="orders-v2-column-group-label">{group.label}</Typography>
-                      {group.columns.map((column) => (
-                        <Box className="orders-v2-column-option" key={column.id}>
-                          <Checkbox
-                            size="small"
-                            checked={draftColumnIds.includes(column.id)}
-                            disabled={column.required}
-                            onChange={() => handleToggleDraftColumn(column.id, column.required)}
-                            inputProps={{ 'aria-label': column.label }}
-                          />
-                          <Box className="orders-v2-column-option-text">
-                            <Typography variant="body2" sx={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a' }}>
-                              {column.label}
-                            </Typography>
-                            <Typography variant="caption" sx={{ fontSize: '0.7rem', color: '#64748b' }}>
-                              {column.purpose}
-                            </Typography>
+                      {group.columns.map((column) => {
+                        const isSelected = draftColumnIds.includes(column.id);
+                        const badgeLabel = column.required
+                          ? 'Required'
+                          : (column.default && !column.required ? 'Default' : null);
+                        return (
+                          <Box
+                            className={`orders-v2-column-option${isSelected ? ' is-selected' : ''}`}
+                            key={column.id}
+                          >
+                            <Checkbox
+                              size="small"
+                              checked={isSelected}
+                              disabled={column.required}
+                              onChange={() => handleToggleDraftColumn(column.id, column.required)}
+                              inputProps={{ 'aria-label': column.label }}
+                            />
+                            <Box className="orders-v2-column-option-text">
+                              <Typography
+                                variant="body2"
+                                className="orders-v2-column-option-name"
+                                sx={{ fontSize: '12px', fontWeight: 500, lineHeight: 1.35, fontFamily: 'inherit', color: '#0f172a' }}
+                              >
+                                {column.label}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                className="orders-v2-column-option-description"
+                                sx={{ fontSize: '11px', fontWeight: 400, lineHeight: 1.35, fontFamily: 'inherit', color: '#64748b' }}
+                              >
+                                {column.purpose}
+                              </Typography>
+                            </Box>
+                            {badgeLabel && (
+                              <span className={`orders-v2-column-badge${column.required ? ' is-required' : ''}`}>
+                                {column.required && <LockOutlined className="orders-v2-column-badge-icon" />}
+                                {badgeLabel}
+                              </span>
+                            )}
                           </Box>
-                        </Box>
-                      ))}
+                        );
+                      })}
                     </Box>
                   ))}
                 </Box>
 
                 <Box className="orders-v2-column-popover-footer">
-                  <Button size="small" onClick={() => setDraftColumnIds([...ORDERS_V2_ALL_COLUMN_IDS])}>All</Button>
                   <Button size="small" onClick={() => setDraftColumnIds([...ORDERS_V2_DEFAULT_COLUMN_IDS])}>Reset</Button>
-                  <Button size="small" variant="contained" onClick={handleApplyColumns}>Apply</Button>
+                  <Button size="small" variant="contained" onClick={handleApplyColumns}>Apply Columns</Button>
                 </Box>
               </Box>
             </Popover>
