@@ -371,13 +371,13 @@ const STATUS_CONFIG = {
 
 // 7 Horizontal Stepper Tabs as requested by user and matching reference screenshots
 const HORIZONTAL_TABS = [
-  { id: 'customer', label: 'Customer Details', icon: <PersonOutlined sx={{ fontSize: 18 }} /> },
-  { id: 'order', label: 'Order Details', icon: <Inventory2Outlined sx={{ fontSize: 18 }} /> },
-  { id: 'inspection', label: 'Garment Inspection', icon: <LayersOutlined sx={{ fontSize: 18 }} /> },
-  { id: 'processing', label: 'Laundry Processing', icon: <FactoryOutlined sx={{ fontSize: 18 }} /> },
-  { id: 'payment', label: 'Payments & Billing', icon: <CreditCardOutlined sx={{ fontSize: 18 }} /> },
-  { id: 'messages', label: 'Customer Messages', icon: <ChatOutlined sx={{ fontSize: 18 }} /> },
-  { id: 'review', label: 'Review & Messages', icon: <FactCheckOutlined sx={{ fontSize: 18 }} /> },
+  { id: 'customer', label: 'Customer Details', icon: <PersonOutlined sx={{ fontSize: 16 }} /> },
+  { id: 'order', label: 'Order Details', icon: <Inventory2Outlined sx={{ fontSize: 16 }} /> },
+  { id: 'inspection', label: 'Garment Inspection', icon: <LayersOutlined sx={{ fontSize: 16 }} /> },
+  { id: 'processing', label: 'Laundry Processing', icon: <FactoryOutlined sx={{ fontSize: 16 }} /> },
+  { id: 'payment', label: 'Payments & Billing', icon: <CreditCardOutlined sx={{ fontSize: 16 }} /> },
+  { id: 'messages', label: 'Customer Messages', icon: <ChatOutlined sx={{ fontSize: 16 }} /> },
+  { id: 'review', label: 'Review & Messages', icon: <FactCheckOutlined sx={{ fontSize: 16 }} /> },
 ];
 
 const CLOTH_CATEGORIES = ['All', 'Men', 'Women', 'Home Linen', 'Accessories'];
@@ -449,8 +449,6 @@ const TABLE_COLUMN_CONFIG = {
   date: { default: 160, min: 130, max: 260 },
   actions: { default: 130, min: 110, max: 200 },
 };
-
-const TAB_RESIZE_CONFIG = { min: 130, max: 280, default: 170 };
 
 const SERVICE_ICON_OPTIONS = [
   { value: 'laundry', label: 'Laundry' },
@@ -571,6 +569,20 @@ export function OrdersV2List({
   // Inline Edit State
   const [inlineEditingOrderId, setInlineEditingOrderId] = useState(null);
   const [activeTab, setActiveTab] = useState('customer');
+  const tabHeaderRef = useRef(null);
+  const activeTabRef = useRef(null);
+  useEffect(() => {
+    const container = tabHeaderRef.current;
+    const tab = activeTabRef.current;
+    if (!container || !tab) return;
+    const containerRect = container.getBoundingClientRect();
+    const tabRect = tab.getBoundingClientRect();
+    const tabLeft = tabRect.left - containerRect.left + container.scrollLeft;
+    const targetLeft = Math.max(0, tabLeft - (container.clientWidth - tabRect.width) / 2);
+    if (Math.abs(container.scrollLeft - targetLeft) > 1) {
+      container.scrollTo({ left: targetLeft, behavior: 'smooth' });
+    }
+  }, [activeTab]);
   const [inlineDraft, setInlineDraft] = useState(null);
   const [inlineCart, setInlineCart] = useState([]);
   const [inspections, setInspections] = useState({});
@@ -1126,12 +1138,6 @@ export function OrdersV2List({
       return acc;
     }, {})
   );
-  const [tabWidths, setTabWidths] = useState(() =>
-    HORIZONTAL_TABS.reduce((acc, tab) => {
-      acc[tab.id] = TAB_RESIZE_CONFIG.default;
-      return acc;
-    }, {})
-  );
   const resizeCleanupRef = useRef(null);
 
   useEffect(() => () => {
@@ -1160,13 +1166,13 @@ export function OrdersV2List({
     }
   }, [servicesPopup.anchorEl]);
 
-  const beginResize = useCallback((event, target, key, min, max) => {
+  const beginResize = useCallback((event, key, min, max) => {
     event.preventDefault();
     event.stopPropagation();
 
     const startX = event.clientX;
-    const setWidths = target === 'table' ? setTableColumnWidths : setTabWidths;
-    const startWidth = target === 'table' ? tableColumnWidths[key] : tabWidths[key];
+    const setWidths = setTableColumnWidths;
+    const startWidth = tableColumnWidths[key];
 
     const onMove = (moveEvent) => {
       const nextWidth = Math.min(max, Math.max(min, startWidth + moveEvent.clientX - startX));
@@ -1188,17 +1194,12 @@ export function OrdersV2List({
     window.addEventListener('pointercancel', cleanup);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
-  }, [tableColumnWidths, tabWidths]);
+  }, [tableColumnWidths]);
 
   const getColumnWidthSx = useCallback((key) => {
     const width = tableColumnWidths[key];
     return { boxSizing: 'border-box', width, minWidth: width, maxWidth: width, whiteSpace: 'nowrap', overflow: 'hidden' };
   }, [tableColumnWidths]);
-
-  const getTabWidthSx = useCallback((key) => {
-    const width = tabWidths[key];
-    return { boxSizing: 'border-box', flex: `0 0 ${width}px`, width, minWidth: width, maxWidth: width };
-  }, [tabWidths]);
 
   const renderResizeHandle = useCallback((onPointerDown) => (
     <Box
@@ -1259,7 +1260,7 @@ export function OrdersV2List({
         }}
       >
         {label}
-        {renderResizeHandle((event) => beginResize(event, 'table', key, config.min, config.max))}
+        {renderResizeHandle((event) => beginResize(event, key, config.min, config.max))}
       </TableCell>
     );
   }, [beginResize, getColumnWidthSx, renderResizeHandle]);
@@ -2599,71 +2600,34 @@ export function OrdersV2List({
                             </Box>
 
                             {/* 2. Horizontal Stepper Tabs Navigation Bar */}
-                            <Box
-                              sx={{
-                                bgcolor: '#ffffff',
-                                borderBottom: '1px solid #e2e8f0',
-                                px: { xs: 1.5, md: 3 },
-                                overflowX: 'auto',
-                                overflowY: 'hidden',
-                                scrollbarWidth: 'thin',
-                                '&::-webkit-scrollbar': { height: 6 },
-                                '&::-webkit-scrollbar-thumb': { bgcolor: '#cbd5e1', borderRadius: '6px' },
-                                '&::-webkit-scrollbar-track': { bgcolor: 'transparent' },
-                              }}
-                            >
-                              <Box sx={{ display: 'flex', alignItems: 'center', width: 'max-content', minWidth: '100%' }}>
+                            <Box ref={tabHeaderRef} className="orders-v2-inline-tabs">
+                              <Box className="orders-v2-inline-tabs-track">
                                 {HORIZONTAL_TABS.map((tab) => {
                                   const isSelected = activeTab === tab.id;
                                   return (
-                                      <Box
-                                        key={tab.id}
-                                        onClick={() => setActiveTab(tab.id)}
-                                        sx={{
-                                          position: 'relative',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          gap: 1,
-                                          ...getTabWidthSx(tab.id),
-                                          flexShrink: 0,
-                                          pl: 1.5,
-                                          pr: 2.5,
-                                          py: 1.6,
-                                          cursor: 'pointer',
-                                          whiteSpace: 'nowrap',
-                                          overflow: 'hidden',
-                                          color: isSelected ? '#2563eb' : '#64748b',
-                                          fontWeight: isSelected ? 800 : 500,
-                                          fontSize: '0.86rem',
-                                          borderBottom: isSelected ? '3px solid #2563eb' : '3px solid transparent',
-                                          transition: 'color 0.15s ease, background-color 0.15s ease',
-                                          '& > span': { overflow: 'hidden', textOverflow: 'ellipsis' },
-                                          '&:hover': {
-                                            color: isSelected ? '#2563eb' : '#0f172a',
-                                            bgcolor: isSelected ? 'transparent' : '#f8fafc',
-                                          },
-                                        }}
-                                      >
-                                        <Box sx={{ display: 'flex', color: isSelected ? '#2563eb' : '#64748b' }}>
-                                          {tab.icon}
-                                        </Box>
+                                    <Box
+                                      key={tab.id}
+                                      ref={isSelected ? activeTabRef : null}
+                                      role="tab"
+                                      aria-selected={isSelected}
+                                      className={`orders-v2-inline-tab${isSelected ? ' orders-v2-inline-tab-active' : ''}`}
+                                      onClick={() => setActiveTab(tab.id)}
+                                    >
+                                      <Box className="orders-v2-inline-tab-icon">{tab.icon}</Box>
+                                      <span className="orders-v2-inline-tab-label" data-label={tab.label}>
                                         <span>{tab.label}</span>
-                                        {renderResizeHandle((event) => beginResize(
-                                          event,
-                                          'tab',
-                                          tab.id,
-                                          TAB_RESIZE_CONFIG.min,
-                                          TAB_RESIZE_CONFIG.max
-                                        ))}
-                                      </Box>
+                                      </span>
+                                    </Box>
                                   );
                                 })}
                               </Box>
                             </Box>
 
                             {/* 3. Main Tab Contents Area */}
-                            <Box sx={{ p: { xs: 1.5, md: 2 }, bgcolor: '#f8fafc', minWidth: 0 }}>
+                            <Box
+                              className={activeTab === 'review' ? 'orders-v2-review-content' : undefined}
+                              sx={{ p: { xs: 1.5, md: 2 }, bgcolor: '#f8fafc', minWidth: 0 }}
+                            >
                               {/* ══════════════════════════════════════════════════════════
                                   TAB 1: CUSTOMER DETAILS
                                   (Customer name*, Phone no*, Address (optional),
@@ -5262,9 +5226,9 @@ export function OrdersV2List({
                                   TAB 7: REVIEW & CONFIRM CHANGES (Matching Image 4)
                                  ══════════════════════════════════════════════════════════ */}
                               {activeTab === 'review' && (
-                                <Box>
+                                <Box className="orders-v2-review">
                                   {/* Section Header: Blue icon box + Title + Subtitle */}
-                                  <Paper elevation={0} sx={{ p: 2, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', mb: 2.5 }}>
+                                  <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', border: '1px solid #D8E2EF', bgcolor: '#ffffff', mb: 2 }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                                       <Box
                                         sx={{
@@ -5292,377 +5256,353 @@ export function OrdersV2List({
                                     </Box>
                                   </Paper>
 
-                                  {/* Top 5 Cards Grid */}
-                                  <Grid container spacing={2} mb={2.5}>
-                                    {/* 1. Customer Information Card */}
-                                    <Grid item xs={12} sm={6} md={2.4}>
-                                      <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                        <Box>
-                                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                                            <Typography variant="subtitle2" fontWeight={800} color="#0f172a" display="flex" alignItems="center" gap={0.6} fontSize="0.82rem">
-                                              <PersonOutlined sx={{ color: '#2563eb', fontSize: 17 }} />
-                                              Customer Information
-                                            </Typography>
-                                            <IconButton size="small" onClick={() => setActiveTab('customer')} sx={{ p: 0.3, color: '#64748b' }}>
-                                              <EditOutlined sx={{ fontSize: 15 }} />
-                                            </IconButton>
+                                  <Box className="orders-v2-review-grid-three orders-v2-review-row-one">
+                                    <Paper elevation={0} className="orders-v2-review-card orders-v2-review-row-one-card">
+                                      <Box className="orders-v2-review-card-header">
+                                        <Typography variant="subtitle2" className="orders-v2-review-card-title">
+                                          <PersonOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
+                                          Customer Information
+                                        </Typography>
+                                        <IconButton size="small" onClick={() => setActiveTab('customer')} sx={{ p: 0.3, color: '#64748b' }}>
+                                          <EditOutlined sx={{ fontSize: 14 }} />
+                                        </IconButton>
+                                      </Box>
+                                      <Box className="orders-v2-review-card-body">
+                                        <Box className="orders-v2-review-rows">
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Name</Typography>
+                                            <Typography variant="caption" className="orders-v2-review-row-value">{inlineDraft.customer_name || '—'}</Typography>
                                           </Box>
-                                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8, fontSize: '0.78rem' }}>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Name</Typography>
-                                              <Typography variant="caption" fontWeight={700} color="#0f172a">{inlineDraft.customer_name || '—'}</Typography>
-                                            </Box>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Mobile Number</Typography>
-                                              <Typography variant="caption" fontWeight={700} color="#0f172a">{inlineDraft.mobile_number ? `+91 ${inlineDraft.mobile_number}` : '—'}</Typography>
-                                            </Box>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Address</Typography>
-                                              <Typography variant="caption" fontWeight={600} color="#0f172a" sx={{ textAlign: 'right', maxWidth: 110 }}>
-                                                {inlineDraft.address || '—'}
-                                              </Typography>
-                                            </Box>
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Mobile Number</Typography>
+                                            <Typography variant="caption" className="orders-v2-review-row-value">{inlineDraft.mobile_number ? `+91 ${inlineDraft.mobile_number}` : '—'}</Typography>
+                                          </Box>
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Address</Typography>
+                                            <Typography variant="caption" className="orders-v2-review-row-value">{inlineDraft.address || '—'}</Typography>
+                                          </Box>
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Order Type</Typography>
+                                            <Chip label={inlineDraft.order_type || '—'} size="small" className="orders-v2-review-row-value" sx={{ bgcolor: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: '0.68rem', height: 20, maxWidth: '100%' }} />
                                           </Box>
                                         </Box>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1.2, pt: 1, borderTop: '1px solid #f1f5f9' }}>
-                                          <Typography variant="caption" color="#64748b">Order Type</Typography>
-                                          <Chip label={inlineDraft.order_type || '—'} size="small" sx={{ bgcolor: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: '0.68rem', height: 20 }} />
-                                        </Box>
-                                      </Paper>
-                                    </Grid>
+                                      </Box>
+                                    </Paper>
 
-                                    {/* 2. Garments Table Card */}
-                                    <Grid item xs={12} sm={6} md={2.4}>
-                                      <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                        <Box>
-                                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.2 }}>
-                                            <Typography variant="subtitle2" fontWeight={800} color="#0f172a" display="flex" alignItems="center" gap={0.6} fontSize="0.82rem">
-                                              <CheckroomOutlined sx={{ color: '#2563eb', fontSize: 17 }} />
-                                              Garments ({inlineCart.length} Items)
-                                            </Typography>
-                                            <IconButton size="small" onClick={() => setActiveTab('order')} sx={{ p: 0.3, color: '#64748b' }}>
-                                              <EditOutlined sx={{ fontSize: 15 }} />
-                                            </IconButton>
-                                          </Box>
-                                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.74rem' }}>
-                                            <thead>
-                                              <tr style={{ color: '#64748b', borderBottom: '1px solid #f1f5f9', textAlign: 'left' }}>
-                                                <th style={{ padding: '2px 4px' }}>#</th>
-                                                <th style={{ padding: '2px 4px' }}>Garment</th>
-                                                <th style={{ padding: '2px 4px' }}>Qty</th>
-                                                <th style={{ padding: '2px 4px' }}>Rate</th>
-                                                <th style={{ padding: '2px 4px', textAlign: 'right' }}>Amount</th>
+                                    <Paper elevation={0} className="orders-v2-review-card orders-v2-review-row-one-card">
+                                      <Box className="orders-v2-review-card-header">
+                                        <Typography variant="subtitle2" className="orders-v2-review-card-title">
+                                          <CheckroomOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
+                                          Garments ({inlineCart.length} Items)
+                                        </Typography>
+                                        <IconButton size="small" onClick={() => setActiveTab('order')} sx={{ p: 0.3, color: '#64748b' }}>
+                                          <EditOutlined sx={{ fontSize: 14 }} />
+                                        </IconButton>
+                                      </Box>
+                                      <Box className="orders-v2-review-card-body">
+                                        <table className="orders-v2-review-table">
+                                          <thead>
+                                            <tr>
+                                              <th>#</th>
+                                              <th>Garment</th>
+                                              <th>Qty</th>
+                                              <th>Rate</th>
+                                              <th>Amount</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {inlineCart.length === 0 ? (
+                                              <tr>
+                                                <td colSpan={5} style={{ textAlign: 'center', color: '#94a3b8' }}>
+                                                  No garments added yet.
+                                                </td>
                                               </tr>
-                                            </thead>
-                                            <tbody>
-                                              {inlineCart.length === 0 ? (
-                                                <tr>
-                                                  <td colSpan={5} style={{ padding: '12px 4px', textAlign: 'center', color: '#94a3b8' }}>
-                                                    No garments added yet.
+                                            ) : (
+                                              inlineCart.map((item, idx) => (
+                                                <tr key={idx}>
+                                                  <td style={{ color: '#64748b' }}>{idx + 1}</td>
+                                                  <td style={{ fontWeight: 600 }}>{item.name}</td>
+                                                  <td>{item.qty ?? item.quantity ?? 0}</td>
+                                                  <td>{currencySymbol}{toFiniteNumber(item.rate ?? item.price, 0).toFixed(2)}</td>
+                                                  <td style={{ fontWeight: 700 }}>
+                                                    {currencySymbol}{(toFiniteNumber(item.qty ?? item.quantity, 0) * toFiniteNumber(item.rate ?? item.price, 0)).toFixed(2)}
                                                   </td>
                                                 </tr>
-                                              ) : (
-                                                inlineCart.slice(0, 4).map((item, idx) => (
-                                                  <tr key={idx} style={{ borderBottom: '1px solid #f8fafc' }}>
-                                                    <td style={{ padding: '3px 4px', color: '#64748b' }}>{idx + 1}</td>
-                                                    <td style={{ padding: '3px 4px', fontWeight: 600 }}>{item.name}</td>
-                                                    <td style={{ padding: '3px 4px' }}>{item.qty ?? item.quantity ?? 0}</td>
-                                                    <td style={{ padding: '3px 4px' }}>{currencySymbol}{toFiniteNumber(item.rate ?? item.price, 0).toFixed(2)}</td>
-                                                    <td style={{ padding: '3px 4px', textAlign: 'right', fontWeight: 700 }}>
-                                                      {currencySymbol}{(toFiniteNumber(item.qty ?? item.quantity, 0) * toFiniteNumber(item.rate ?? item.price, 0)).toFixed(2)}
-                                                    </td>
-                                                  </tr>
-                                                ))
-                                              )}
-                                            </tbody>
-                                          </table>
-                                        </Box>
-                                      </Paper>
-                                    </Grid>
-
-                                    {/* 3. Services Card */}
-                                    <Grid item xs={12} sm={6} md={2.4}>
-                                      <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                        <Box>
-                                          <Typography variant="subtitle2" fontWeight={800} color="#0f172a" mb={1.2} display="flex" alignItems="center" gap={0.6} fontSize="0.82rem">
-                                            <LayersOutlined sx={{ color: '#2563eb', fontSize: 17 }} />
-                                            Services
-                                          </Typography>
-                                          <Box sx={{ p: 1.2, bgcolor: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
-                                              <Box sx={{ width: 28, height: 28, borderRadius: '6px', bgcolor: '#2563eb', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                <LocalShippingOutlined sx={{ fontSize: 16 }} />
-                                              </Box>
-                                              <Box>
-                                                <Typography variant="body2" fontWeight={700} color="#1d4ed8" fontSize="0.8rem">
-                                                  {inlineCart.length > 0 && inlineDraft.service_category ? inlineDraft.service_category : '—'}
-                                                </Typography>
-                                                <Typography variant="caption" color="#64748b" fontSize="0.7rem">
-                                                  {inlineCart.length > 0 && inlineDraft.service_category ? 'Wash, Dry & Fold' : 'No service selected'}
-                                                </Typography>
-                                              </Box>
-                                            </Box>
-                                            <Typography variant="body2" fontWeight={800} color="#0f172a">
-                                              {currencySymbol}{MONEY(inlineSubtotal)}
-                                            </Typography>
-                                          </Box>
-                                        </Box>
-                                      </Paper>
-                                    </Grid>
-
-                                    {/* 4. Scheduling Card */}
-                                    <Grid item xs={12} sm={6} md={2.4}>
-                                      <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                        <Box>
-                                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.2 }}>
-                                            <Typography variant="subtitle2" fontWeight={800} color="#0f172a" display="flex" alignItems="center" gap={0.6} fontSize="0.82rem">
-                                              <CalendarTodayOutlined sx={{ color: '#2563eb', fontSize: 17 }} />
-                                              Scheduling
-                                            </Typography>
-                                            <IconButton size="small" onClick={() => setActiveTab('customer')} sx={{ p: 0.3, color: '#64748b' }}>
-                                              <EditOutlined sx={{ fontSize: 15 }} />
-                                            </IconButton>
-                                          </Box>
-                                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8, fontSize: '0.78rem' }}>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Pickup / Delivery</Typography>
-                                              <Typography variant="caption" fontWeight={700} color="#1d4ed8">
-                                                {inlineDraft.order_type === 'Walk-In' ? 'In-Store (Walk-In)' : 'On-Call (Pickup)'}
-                                              </Typography>
-                                            </Box>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Received Date &amp; Time</Typography>
-                                              <Typography variant="caption" fontWeight={600} color="#0f172a">
-                                                📅 {formatDateTime(inlineDraft.created_at)}
-                                              </Typography>
-                                            </Box>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Expected Delivery</Typography>
-                                              <Typography variant="caption" fontWeight={600} color="#0f172a">
-                                                📅 {inlineDraft.scheduled_delivery_date ? `${formatDateOnly(inlineDraft.scheduled_delivery_date)}${inlineDraft.scheduled_delivery_time ? `, ${inlineDraft.scheduled_delivery_time}` : ''}` : '—'}
-                                              </Typography>
-                                            </Box>
-                                          </Box>
-                                        </Box>
-                                      </Paper>
-                                    </Grid>
-
-                                    {/* 5. Payment Status Card */}
-                                    <Grid item xs={12} sm={6} md={2.4}>
-                                      <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                        <Box>
-                                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.2 }}>
-                                            <Typography variant="subtitle2" fontWeight={800} color="#0f172a" display="flex" alignItems="center" gap={0.6} fontSize="0.82rem">
-                                              <CreditCardOutlined sx={{ color: '#2563eb', fontSize: 17 }} />
-                                              Payment Status
-                                            </Typography>
-                                            <IconButton size="small" onClick={() => setActiveTab('payment')} sx={{ p: 0.3, color: '#64748b' }}>
-                                              <EditOutlined sx={{ fontSize: 15 }} />
-                                            </IconButton>
-                                          </Box>
-                                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8, fontSize: '0.78rem' }}>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                              <Typography variant="caption" color="#64748b">Status</Typography>
-                                              <Chip label={inlineDraft.payment_status || '—'} size="small" sx={{ bgcolor: '#fef3c7', color: '#b45309', fontWeight: 700, height: 20, fontSize: '0.7rem' }} />
-                                            </Box>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Advance Paid</Typography>
-                                              <Typography variant="caption" fontWeight={700} color="#0f172a">{currencySymbol}{MONEY(inlineAdvance)}</Typography>
-                                            </Box>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Balance Due</Typography>
-                                              <Typography variant="caption" fontWeight={800} color={inlineBalance > 0 ? '#b45309' : '#1d4ed8'}>
-                                                {currencySymbol}{MONEY(inlineBalance)}
-                                              </Typography>
-                                            </Box>
-                                          </Box>
-                                        </Box>
-                                      </Paper>
-                                    </Grid>
-                                  </Grid>
-
-                                  {/* Bottom Section: Customer Messages & Notes/Summary */}
-                                  <Grid container spacing={2.5}>
-                                    {/* ── LEFT: CUSTOMER MESSAGES (WhatsApp & SMS) ── */}
-                                    <Grid item xs={12} md={7}>
-                                      <Paper elevation={0} sx={{ p: 2.5, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                        <Box>
-                                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.4 }}>
-                                            <ChatOutlined sx={{ color: '#2563eb', fontSize: 20 }} />
-                                            <Typography variant="subtitle2" fontWeight={800} color="#0f172a">
-                                              Customer Messages
-                                            </Typography>
-                                          </Box>
-                                          <Typography variant="caption" color="#64748b" display="block" mb={2}>
-                                            Send WhatsApp or SMS updates to the customer.
-                                          </Typography>
-
-                                          {/* Template selection pills */}
-                                          <Box sx={{ display: 'flex', gap: 0.8, flexWrap: 'wrap', mb: 2 }}>
-                                            {[
-                                              ['order_received', '✓ 1. Order Received'],
-                                              ['in_progress', '2. Processing Update'],
-                                              ['ready', '3. Ready for Pickup'],
-                                              ['delivered', '4. Order Delivered'],
-                                            ].map(([key, lbl]) => {
-                                              const isActive = selectedMessageTemplate === key;
-                                              return (
-                                                <Chip
-                                                  key={key}
-                                                  label={lbl}
-                                                  size="small"
-                                                  clickable
-                                                  onClick={() => setSelectedMessageTemplate(key)}
-                                                  sx={{
-                                                    fontWeight: isActive ? 700 : 500,
-                                                    bgcolor: isActive ? '#2563eb' : '#ffffff',
-                                                    color: isActive ? '#ffffff' : '#334155',
-                                                    border: '1px solid',
-                                                    borderColor: isActive ? '#2563eb' : '#cbd5e1',
-                                                    borderRadius: '20px',
-                                                    fontSize: '0.78rem',
-                                                    px: 0.5,
-                                                    '&:hover': { bgcolor: isActive ? '#1d4ed8' : '#f8fafc' },
-                                                  }}
-                                                />
-                                              );
-                                            })}
-                                          </Box>
-
-                                          {/* Message Textarea */}
-                                          <Box sx={{ position: 'relative', mb: 2 }}>
-                                            <TextField
-                                              fullWidth
-                                              multiline
-                                              rows={4}
-                                              value={messagePreviewText}
-                                              variant="outlined"
-                                              InputProps={{ sx: { borderRadius: '8px', fontSize: '0.84rem', bgcolor: '#f8fafc' } }}
-                                            />
-                                            <Typography variant="caption" color="#94a3b8" sx={{ position: 'absolute', bottom: 8, right: 12 }}>
-                                              {messagePreviewText.length} / 500
-                                            </Typography>
-                                          </Box>
-                                        </Box>
-
-                                        {/* Action Buttons Row */}
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pt: 1.5, borderTop: '1px solid #f1f5f9', flexWrap: 'wrap', gap: 1 }}>
-                                          <Box sx={{ display: 'flex', gap: 1 }}>
-                                            <Button
-                                              size="small"
-                                              variant="contained"
-                                              startIcon={<WhatsApp />}
-                                              onClick={() => {
-                                                setMessageSentToast('WhatsApp alert prepared and dispatched!');
-                                                setTimeout(() => setMessageSentToast(''), 3000);
-                                              }}
-                                              sx={{ bgcolor: '#2563eb', color: '#ffffff', textTransform: 'none', fontWeight: 700, borderRadius: '8px', px: 2, '&:hover': { bgcolor: '#1d4ed8' } }}
-                                            >
-                                              Send WhatsApp Alert
-                                            </Button>
-                                            <Button
-                                              size="small"
-                                              variant="outlined"
-                                              startIcon={<ChatOutlined />}
-                                              onClick={() => {
-                                                setMessageSentToast('SMS alert queued successfully!');
-                                                setTimeout(() => setMessageSentToast(''), 3000);
-                                              }}
-                                              sx={{ textTransform: 'none', borderColor: '#cbd5e1', color: '#334155', borderRadius: '8px', px: 1.8 }}
-                                            >
-                                              Send SMS
-                                            </Button>
-                                          </Box>
-
-                                          <Button
-                                            size="small"
-                                            variant="outlined"
-                                            startIcon={<DescriptionOutlined />}
-                                            sx={{ textTransform: 'none', borderColor: '#cbd5e1', color: '#334155', borderRadius: '8px' }}
-                                          >
-                                            Use Template
-                                          </Button>
-
-                                          {messageSentToast && (
-                                            <Typography variant="caption" fontWeight={700} color="#2563eb" width="100%">
-                                              ✓ {messageSentToast}
-                                            </Typography>
-                                          )}
-                                        </Box>
-                                      </Paper>
-                                    </Grid>
-
-                                    {/* ── RIGHT: NOTES & ORDER SUMMARY ── */}
-                                    <Grid item xs={12} md={5}>
-                                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                        {/* Card 1: Notes & Instructions */}
-                                        <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
-                                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                                            <Typography variant="subtitle2" fontWeight={800} color="#0f172a" display="flex" alignItems="center" gap={0.8}>
-                                              <DescriptionOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
-                                              Notes &amp; Instructions
-                                            </Typography>
-                                            <IconButton size="small" onClick={() => setActiveTab('customer')} sx={{ p: 0.3, color: '#64748b' }}>
-                                              <EditOutlined sx={{ fontSize: 15 }} />
-                                            </IconButton>
-                                          </Box>
-                                          <Typography variant="caption" color="#475569" sx={{ display: 'block', lineHeight: 1.5 }}>
-                                            {inlineDraft.comments || '—'}
-                                          </Typography>
-                                        </Paper>
-
-                                        {/* Card 2: Order Summary */}
-                                        <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
-                                          <Typography variant="subtitle2" fontWeight={800} color="#0f172a" mb={1.5} display="flex" alignItems="center" gap={0.8}>
-                                            <ReceiptLongOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
-                                            Order Summary
-                                          </Typography>
-
-                                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, fontSize: '0.85rem' }}>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Subtotal</Typography>
-                                              <Typography variant="body2" fontWeight={600} color="#0f172a">{currencySymbol}{MONEY(inlineSubtotal)}</Typography>
-                                            </Box>
-
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">GST / Tax (5%)</Typography>
-                                              <Typography variant="body2" fontWeight={600} color="#0f172a">{currencySymbol}{MONEY(inlineTax)}</Typography>
-                                            </Box>
-
-                                            {discountAmount > 0 && (
-                                              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                <Typography variant="caption" color="#2563eb">Discount</Typography>
-                                                <Typography variant="body2" fontWeight={600} color="#2563eb">- {currencySymbol}{MONEY(discountAmount)}</Typography>
-                                              </Box>
+                                              ))
                                             )}
+                                          </tbody>
+                                        </table>
+                                      </Box>
+                                    </Paper>
 
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', bgcolor: '#eff6ff', p: '8px 10px', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
-                                              <Typography variant="body2" fontWeight={800} color="#1e40af">Grand Total</Typography>
-                                              <Typography variant="body1" fontWeight={800} color="#1d4ed8">{currencySymbol}{MONEY(inlineGrandTotal)}</Typography>
+                                    <Paper elevation={0} className="orders-v2-review-card orders-v2-review-row-one-card">
+                                      <Box className="orders-v2-review-card-header">
+                                        <Typography variant="subtitle2" className="orders-v2-review-card-title">
+                                          <LayersOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
+                                          Services
+                                        </Typography>
+                                      </Box>
+                                      <Box className="orders-v2-review-card-body">
+                                        <Box className="orders-v2-review-service-box">
+                                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, minWidth: 0 }}>
+                                            <Box className="orders-v2-review-service-icon">
+                                              <LocalShippingOutlined sx={{ fontSize: 18 }} />
                                             </Box>
-
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Advance Paid</Typography>
-                                              <Typography variant="body2" fontWeight={600} color="#0f172a">{currencySymbol}{MONEY(inlineAdvance)}</Typography>
-                                            </Box>
-
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                              <Typography variant="caption" color="#64748b">Payment Method</Typography>
-                                              <Chip label={inlineDraft.payment_method || '—'} size="small" sx={{ bgcolor: '#eff6ff', color: '#1d4ed8', fontWeight: 700, height: 20 }} />
-                                            </Box>
-
-                                            {/* Highlighted Yellow Balance Due Box */}
-                                            <Box sx={{ bgcolor: '#fef9c3', p: '10px 12px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5, border: '1px solid #fef08a' }}>
-                                              <Typography variant="body2" fontWeight={800} color="#0f172a">Balance Due</Typography>
-                                              <Typography variant="h6" fontWeight={800} color="#0f172a" fontSize="1.15rem">
-                                                {currencySymbol}{MONEY(inlineBalance)}
+                                            <Box className="orders-v2-review-service-copy">
+                                              <Typography variant="body2" fontWeight={700} color="#1d4ed8" fontSize="0.8rem" sx={{ overflowWrap: 'anywhere' }}>
+                                                {inlineCart.length > 0 && inlineDraft.service_category ? inlineDraft.service_category : '—'}
+                                              </Typography>
+                                              <Typography variant="caption" color="#64748b" fontSize="0.7rem">
+                                                {inlineCart.length > 0 && inlineDraft.service_category ? 'Wash, Dry & Fold' : 'No service selected'}
                                               </Typography>
                                             </Box>
                                           </Box>
-                                        </Paper>
+                                          <Typography variant="body2" fontWeight={800} color="#0f172a" sx={{ whiteSpace: 'nowrap' }}>
+                                            {currencySymbol}{MONEY(inlineSubtotal)}
+                                          </Typography>
+                                        </Box>
                                       </Box>
-                                    </Grid>
-                                  </Grid>
+                                    </Paper>
+                                  </Box>
+
+                                  <Box className="orders-v2-review-grid-three orders-v2-review-row-two">
+                                    <Paper elevation={0} className="orders-v2-review-card orders-v2-review-row-two-card">
+                                      <Box className="orders-v2-review-card-header">
+                                        <Typography variant="subtitle2" className="orders-v2-review-card-title">
+                                          <CalendarTodayOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
+                                          Scheduling
+                                        </Typography>
+                                        <IconButton size="small" onClick={() => setActiveTab('customer')} sx={{ p: 0.3, color: '#64748b' }}>
+                                          <EditOutlined sx={{ fontSize: 14 }} />
+                                        </IconButton>
+                                      </Box>
+                                      <Box className="orders-v2-review-card-body">
+                                        <Box className="orders-v2-review-rows">
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Pickup / Delivery</Typography>
+                                            <Typography variant="caption" className="orders-v2-review-row-value" style={{ color: '#1d4ed8' }}>
+                                              {inlineDraft.order_type === 'Walk-In' ? 'In-Store (Walk-In)' : 'On-Call (Pickup)'}
+                                            </Typography>
+                                          </Box>
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Received Date &amp; Time</Typography>
+                                            <Typography variant="caption" className="orders-v2-review-row-value">
+                                              📅 {formatDateTime(inlineDraft.created_at)}
+                                            </Typography>
+                                          </Box>
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Expected Delivery</Typography>
+                                            <Typography variant="caption" className="orders-v2-review-row-value">
+                                              📅 {inlineDraft.scheduled_delivery_date ? `${formatDateOnly(inlineDraft.scheduled_delivery_date)}${inlineDraft.scheduled_delivery_time ? `, ${inlineDraft.scheduled_delivery_time}` : ''}` : '—'}
+                                            </Typography>
+                                          </Box>
+                                        </Box>
+                                      </Box>
+                                    </Paper>
+
+                                    <Paper elevation={0} className="orders-v2-review-card orders-v2-review-row-two-card">
+                                      <Box className="orders-v2-review-card-header">
+                                        <Typography variant="subtitle2" className="orders-v2-review-card-title">
+                                          <CreditCardOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
+                                          Payment Status
+                                        </Typography>
+                                        <IconButton size="small" onClick={() => setActiveTab('payment')} sx={{ p: 0.3, color: '#64748b' }}>
+                                          <EditOutlined sx={{ fontSize: 14 }} />
+                                        </IconButton>
+                                      </Box>
+                                      <Box className="orders-v2-review-card-body">
+                                        <Box className="orders-v2-review-rows">
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Status</Typography>
+                                            <Chip label={inlineDraft.payment_status || '—'} size="small" className="orders-v2-review-row-value" sx={{ bgcolor: '#fef3c7', color: '#b45309', fontWeight: 700, height: 20, fontSize: '0.7rem' }} />
+                                          </Box>
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Advance Paid</Typography>
+                                            <Typography variant="caption" className="orders-v2-review-row-value">{currencySymbol}{MONEY(inlineAdvance)}</Typography>
+                                          </Box>
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Balance Due</Typography>
+                                            <Typography
+                                              variant="caption"
+                                              className="orders-v2-review-row-value"
+                                              style={{ color: inlineBalance > 0 ? '#b45309' : '#1d4ed8' }}
+                                              sx={{ bgcolor: '#fef9c3', px: 1, py: 0.25, borderRadius: '6px', whiteSpace: 'nowrap' }}
+                                            >
+                                              {currencySymbol}{MONEY(inlineBalance)}
+                                            </Typography>
+                                          </Box>
+                                        </Box>
+                                      </Box>
+                                    </Paper>
+
+                                    <Paper elevation={0} className="orders-v2-review-card orders-v2-review-row-two-card">
+                                      <Box className="orders-v2-review-card-header">
+                                        <Typography variant="subtitle2" className="orders-v2-review-card-title">
+                                          <DescriptionOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
+                                          Notes &amp; Instructions
+                                        </Typography>
+                                        <IconButton size="small" onClick={() => setActiveTab('customer')} sx={{ p: 0.3, color: '#64748b' }}>
+                                          <EditOutlined sx={{ fontSize: 14 }} />
+                                        </IconButton>
+                                      </Box>
+                                      <Box className="orders-v2-review-card-body">
+                                        <Typography variant="caption" color="#475569" sx={{ display: 'block', lineHeight: 1.5, overflowWrap: 'anywhere' }}>
+                                          {inlineDraft.comments || '—'}
+                                        </Typography>
+                                      </Box>
+                                    </Paper>
+                                  </Box>
+
+                                  <Box className="orders-v2-review-grid-two orders-v2-review-row-three">
+                                    <Paper elevation={0} className="orders-v2-review-card orders-v2-review-row-three-card">
+                                      <Box className="orders-v2-review-card-header">
+                                        <Typography variant="subtitle2" className="orders-v2-review-card-title">
+                                          <ChatOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
+                                          Customer Messages
+                                        </Typography>
+                                      </Box>
+                                      <Box className="orders-v2-review-card-body">
+                                        <Typography variant="caption" color="#64748b" sx={{ display: 'block', mb: 2 }}>
+                                          Send WhatsApp or SMS updates to the customer.
+                                        </Typography>
+                                        <Box className="orders-v2-review-templates">
+                                          {[
+                                            ['order_received', '✓ 1. Order Received'],
+                                            ['in_progress', '2. Processing Update'],
+                                            ['ready', '3. Ready for Pickup'],
+                                            ['delivered', '4. Order Delivered'],
+                                          ].map(([key, lbl]) => {
+                                            const isActive = selectedMessageTemplate === key;
+                                            return (
+                                              <Chip
+                                                key={key}
+                                                label={lbl}
+                                                size="small"
+                                                clickable
+                                                onClick={() => setSelectedMessageTemplate(key)}
+                                                sx={{
+                                                  fontWeight: isActive ? 700 : 500,
+                                                  bgcolor: isActive ? '#2563eb' : '#ffffff',
+                                                  color: isActive ? '#ffffff' : '#334155',
+                                                  border: '1px solid',
+                                                  borderColor: isActive ? '#2563eb' : '#cbd5e1',
+                                                  borderRadius: '20px',
+                                                  fontSize: '0.78rem',
+                                                  px: 0.5,
+                                                  '&:hover': { bgcolor: isActive ? '#1d4ed8' : '#f8fafc' },
+                                                }}
+                                              />
+                                            );
+                                          })}
+                                        </Box>
+                                        <Box className="orders-v2-review-message-box">
+                                          <TextField
+                                            fullWidth
+                                            multiline
+                                            rows={4}
+                                            value={messagePreviewText}
+                                            variant="outlined"
+                                            inputProps={{ maxLength: 500 }}
+                                            InputProps={{ sx: { borderRadius: '8px', fontSize: '0.84rem', bgcolor: '#f8fafc' } }}
+                                            sx={{
+                                              '& .MuiOutlinedInput-notchedOutline': { borderColor: '#D8E2EF' },
+                                              '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#94a3b8' },
+                                              '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#2563eb', borderWidth: 1 },
+                                            }}
+                                          />
+                                          <Typography variant="caption" color="#94a3b8" className="orders-v2-review-char-count">
+                                            {messagePreviewText.length} / 500
+                                          </Typography>
+                                        </Box>
+                                      </Box>
+                                      <Box className="orders-v2-review-actions">
+                                        <Button
+                                          size="small"
+                                          variant="contained"
+                                          startIcon={<WhatsApp />}
+                                          onClick={() => {
+                                            setMessageSentToast('WhatsApp alert prepared and dispatched!');
+                                            setTimeout(() => setMessageSentToast(''), 3000);
+                                          }}
+                                          sx={{ bgcolor: '#2563eb', color: '#ffffff', textTransform: 'none', fontWeight: 700, borderRadius: '8px', px: 2, '&:hover': { bgcolor: '#1d4ed8' } }}
+                                        >
+                                          Send WhatsApp Alert
+                                        </Button>
+                                        <Button
+                                          size="small"
+                                          variant="outlined"
+                                          startIcon={<ChatOutlined />}
+                                          onClick={() => {
+                                            setMessageSentToast('SMS alert queued successfully!');
+                                            setTimeout(() => setMessageSentToast(''), 3000);
+                                          }}
+                                          sx={{ textTransform: 'none', borderColor: '#cbd5e1', color: '#334155', borderRadius: '8px', px: 1.8 }}
+                                        >
+                                          Send SMS
+                                        </Button>
+                                        <Button
+                                          size="small"
+                                          variant="outlined"
+                                          startIcon={<DescriptionOutlined />}
+                                          sx={{ textTransform: 'none', borderColor: '#cbd5e1', color: '#334155', borderRadius: '8px' }}
+                                        >
+                                          Use Template
+                                        </Button>
+                                        {messageSentToast && (
+                                          <Typography variant="caption" fontWeight={700} color="#2563eb" width="100%">
+                                            ✓ {messageSentToast}
+                                          </Typography>
+                                        )}
+                                      </Box>
+                                    </Paper>
+
+                                    <Paper elevation={0} className="orders-v2-review-card orders-v2-review-row-three-card">
+                                      <Box className="orders-v2-review-card-header">
+                                        <Typography variant="subtitle2" className="orders-v2-review-card-title">
+                                          <ReceiptLongOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
+                                          Order Summary
+                                        </Typography>
+                                      </Box>
+                                      <Box className="orders-v2-review-card-body">
+                                        <Box className="orders-v2-review-rows">
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Subtotal</Typography>
+                                            <Typography variant="body2" className="orders-v2-review-row-value">{currencySymbol}{MONEY(inlineSubtotal)}</Typography>
+                                          </Box>
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">GST / Tax (5%)</Typography>
+                                            <Typography variant="body2" className="orders-v2-review-row-value">{currencySymbol}{MONEY(inlineTax)}</Typography>
+                                          </Box>
+                                          {discountAmount > 0 && (
+                                            <Box className="orders-v2-review-row">
+                                              <Typography variant="caption" className="orders-v2-review-row-label" style={{ color: '#2563eb' }}>Discount</Typography>
+                                              <Typography variant="body2" className="orders-v2-review-row-value" style={{ color: '#2563eb' }}>- {currencySymbol}{MONEY(discountAmount)}</Typography>
+                                            </Box>
+                                          )}
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Advance Paid</Typography>
+                                            <Typography variant="body2" className="orders-v2-review-row-value">{currencySymbol}{MONEY(inlineAdvance)}</Typography>
+                                          </Box>
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Payment Method</Typography>
+                                            <Chip label={inlineDraft.payment_method || '—'} size="small" className="orders-v2-review-row-value" style={{ backgroundColor: '#eff6ff', color: '#1d4ed8' }} sx={{ height: 20, fontSize: '0.7rem' }} />
+                                          </Box>
+                                        </Box>
+                                      </Box>
+                                      <Box className="orders-v2-review-summary-footer">
+                                        <Box className="orders-v2-review-total-row orders-v2-review-grand-total">
+                                          <Typography variant="body2" fontWeight={800} color="#1e40af">Grand Total</Typography>
+                                          <Typography variant="body1" fontWeight={800} color="#1d4ed8">{currencySymbol}{MONEY(inlineGrandTotal)}</Typography>
+                                        </Box>
+                                        <Box className="orders-v2-review-total-row orders-v2-review-balance-due">
+                                          <Typography variant="body2" fontWeight={800} color="#0f172a">Balance Due</Typography>
+                                          <Typography variant="body1" fontWeight={800} color="#0f172a" fontSize="0.95rem">
+                                            {currencySymbol}{MONEY(inlineBalance)}
+                                          </Typography>
+                                        </Box>
+                                      </Box>
+                                    </Paper>
+                                  </Box>
 
                                   {/* Final Confirm Changes Bar */}
                                   <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5, pt: 3, mt: 3, borderTop: '1px solid #e2e8f0' }}>

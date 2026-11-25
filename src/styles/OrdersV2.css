@@ -293,6 +293,138 @@ body:not(.light-theme):not([data-theme="light"]) .main.orders-v2-main::-webkit-s
   flex-wrap: wrap;
 }
 
+.orders-v2-inline-tabs {
+  width: 100%;
+  max-width: 100%;
+  height: 44px;
+  box-sizing: border-box;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.orders-v2-inline-tabs::-webkit-scrollbar {
+  height: 6px;
+}
+
+.orders-v2-inline-tabs::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 6px;
+}
+
+.orders-v2-inline-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.orders-v2-inline-tabs-track {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: max-content;
+  height: 44px;
+}
+
+.orders-v2-inline-tab {
+  position: relative;
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-width: max-content;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: visible;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.orders-v2-inline-tab:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 1px;
+  background: #e2e8f0;
+  pointer-events: none;
+}
+
+.orders-v2-inline-tab:hover {
+  color: #0f172a;
+  background: #f8fafc;
+}
+
+.orders-v2-inline-tab-active,
+.orders-v2-inline-tab-active:hover {
+  color: #2563eb;
+  font-weight: 600;
+  background: transparent;
+  border-bottom-color: #2563eb;
+}
+
+.orders-v2-inline-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: inherit;
+}
+
+.orders-v2-inline-tab-icon svg {
+  font-size: 16px !important;
+}
+
+.orders-v2-inline-tab-label {
+  display: grid;
+  align-items: center;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.orders-v2-inline-tab-label::before {
+  content: attr(data-label);
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.orders-v2-inline-tab-label > span {
+  grid-area: 1 / 1;
+}
+
+@media (min-width: 1200px) {
+  .orders-v2-inline-tab {
+    gap: 8px;
+    padding: 0 12px;
+  }
+}
+
+@media (max-width: 1199px) {
+  .orders-v2-inline-tab {
+    gap: 6px;
+    padding: 0 10px;
+  }
+}
+
 /* Mobile Responsiveness adjustments */
 @media (max-width: 768px) {
   .orders-v2-header {
@@ -436,6 +568,544 @@ body:not(.light-theme):not([data-theme="light"]) .pos-status-garment-list::-webk
   .orders-v2-pagination-nav {
     width: 100%;
     justify-content: flex-end;
+  }
+}
+
+.orders-v2-review-content {
+  padding: 16px !important;
+}
+
+.orders-v2-review {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  font-size: 13px;
+}
+
+.orders-v2-review-grid-three {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 16px;
+}
+
+.orders-v2-review-grid-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+}
+
+.orders-v2-review-row-one-card {
+  height: 180px;
+}
+
+.orders-v2-review-row-two-card {
+  height: 150px;
+}
+
+.orders-v2-review-row-three-card {
+  height: 340px;
+}
+
+.orders-v2-review-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #d8e2ef;
+  border-radius: 10px;
+}
+
+.orders-v2-review-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-height: 20px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.orders-v2-review .orders-v2-review-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #0f172a;
+}
+
+.orders-v2-review .orders-v2-review-card-title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orders-v2-review-card-title > svg {
+  flex-shrink: 0;
+  font-size: 18px !important;
+}
+
+.orders-v2-review-card-header .MuiIconButton-root {
+  width: 24px;
+  height: 24px;
+  padding: 3px;
+}
+
+.orders-v2-review-card-header .MuiIconButton-root svg {
+  font-size: 14px !important;
+}
+
+.orders-v2-review-card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  padding-right: 2px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.orders-v2-review-card-body::-webkit-scrollbar {
+  width: 5px;
+  height: 0;
+}
+
+.orders-v2-review-card-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.orders-v2-review-card-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 5px;
+}
+
+.orders-v2-review-card-body::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.orders-v2-review-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.orders-v2-review-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  align-items: start;
+  column-gap: 8px;
+}
+
+.orders-v2-review .orders-v2-review-row-label {
+  min-width: 0;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.orders-v2-review .orders-v2-review-row-value {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.orders-v2-review-row > .MuiChip-root {
+  justify-self: end;
+  height: 20px;
+  max-width: 100%;
+}
+
+.orders-v2-review-row > .MuiChip-root .MuiChip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orders-v2-review-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+.orders-v2-review-card-body .MuiTableContainer-root {
+  overflow: visible !important;
+}
+
+.orders-v2-review-table th,
+.orders-v2-review-table td {
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.orders-v2-review-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 2px 4px 6px;
+  background: #ffffff;
+  border-bottom: 1px solid #edf2f7;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.orders-v2-review-table td {
+  padding: 5px 4px;
+  border-bottom: 1px solid #f8fafc;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.orders-v2-review-table tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: #ffffff;
+  font-weight: 800;
+}
+
+.orders-v2-review-table th:nth-child(1),
+.orders-v2-review-table td:nth-child(1) {
+  width: 6%;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.orders-v2-review-table th:nth-child(2),
+.orders-v2-review-table td:nth-child(2) {
+  width: 40%;
+}
+
+.orders-v2-review-table th:nth-child(3),
+.orders-v2-review-table td:nth-child(3) {
+  width: 10%;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.orders-v2-review-table th:nth-child(4),
+.orders-v2-review-table td:nth-child(4) {
+  width: 21%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.orders-v2-review-table th:nth-child(5),
+.orders-v2-review-table td:nth-child(5) {
+  width: 23%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.orders-v2-review-service-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+  min-width: 0;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+}
+
+.orders-v2-review-service-icon {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: #dbeafe;
+  color: #2563eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.orders-v2-review-service-icon svg {
+  font-size: 18px !important;
+}
+
+.orders-v2-review-service-copy {
+  min-width: 0;
+}
+
+.orders-v2-review-service-box > .MuiTypography-root {
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.orders-v2-review-templates {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 12px;
+}
+
+.orders-v2-review-templates .MuiChip-root {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  font-size: 11px;
+}
+
+.orders-v2-review-templates .MuiChip-root .MuiChip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orders-v2-review-message-box {
+  position: relative;
+  min-width: 0;
+}
+
+.orders-v2-review-message-box .MuiInputBase-root {
+  background: #f8fafc;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.orders-v2-review-message-box textarea {
+  min-height: 100px;
+  padding-right: 64px !important;
+  resize: none;
+}
+
+.orders-v2-review-row-three-card .orders-v2-review-card-header {
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+}
+
+.orders-v2-review-row-three-card .orders-v2-review-card-body > .MuiTypography-root {
+  margin-bottom: 8px !important;
+}
+
+.orders-v2-review-row-three-card .orders-v2-review-templates {
+  margin-bottom: 8px;
+}
+
+.orders-v2-review-row-three-card .orders-v2-review-message-box textarea {
+  height: 150px;
+  min-height: 150px;
+  padding-right: 64px !important;
+  padding-bottom: 22px !important;
+  resize: none;
+}
+
+.orders-v2-review-row-three-card .orders-v2-review-actions {
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.orders-v2-review .orders-v2-review-char-count {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  padding-left: 4px;
+  pointer-events: none;
+  background: #f8fafc;
+}
+
+.orders-v2-review-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid #edf2f7;
+}
+
+.orders-v2-review-actions .MuiButton-root {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 34px;
+  padding: 4px 6px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.orders-v2-review-actions .MuiButton-root svg {
+  font-size: 14px !important;
+}
+
+.orders-v2-review-actions .MuiTypography-root {
+  flex-basis: 100%;
+}
+
+.orders-v2-review-summary-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding-top: 10px;
+}
+
+.orders-v2-review-row-three-card .orders-v2-review-summary-footer {
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.orders-v2-review-total-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  height: 40px;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.orders-v2-review-total-row .MuiTypography-root {
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.orders-v2-review-grand-total {
+  background: #eaf2ff;
+  border: 1px solid #bfdbfe;
+}
+
+.orders-v2-review-balance-due {
+  background: #fef9c3;
+  border: 1px solid #fde047;
+}
+
+@media (min-width: 1200px) {
+  .orders-v2-review-grid-three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .orders-v2-review-grid-two {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+
+  .orders-v2-review-row-three-card {
+    height: 340px;
+  }
+
+  .orders-v2-review-row-three-card .orders-v2-review-message-box textarea {
+    height: 150px;
+    min-height: 150px;
+  }
+
+  .orders-v2-review-templates {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .orders-v2-review-actions {
+    flex-wrap: nowrap;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1199px) {
+  .orders-v2-review-grid-three {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .orders-v2-review-row-one .orders-v2-review-card:last-child,
+  .orders-v2-review-row-two .orders-v2-review-card:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .orders-v2-review-grid-two {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+
+  .orders-v2-review-row-three-card {
+    height: 380px;
+  }
+
+  .orders-v2-review-row-three-card .orders-v2-review-card-body {
+    overflow-y: auto;
+  }
+
+  .orders-v2-review-row-three-card .orders-v2-review-message-box textarea {
+    height: 150px;
+    min-height: 150px;
+  }
+
+  .orders-v2-review-templates {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .orders-v2-review-actions {
+    flex-wrap: wrap;
+  }
+
+  .orders-v2-review-actions .MuiButton-root {
+    flex: 1 1 calc(50% - 8px);
+  }
+}
+
+@media (max-width: 767px) {
+  .orders-v2-review-grid-three,
+  .orders-v2-review-grid-two {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .orders-v2-review-row-one .orders-v2-review-card:last-child,
+  .orders-v2-review-row-two .orders-v2-review-card:last-child {
+    grid-column: auto;
+  }
+
+  .orders-v2-review-row-three-card {
+    height: 380px;
+  }
+
+  .orders-v2-review-row-three-card .orders-v2-review-card-body {
+    overflow-y: auto;
+  }
+
+  .orders-v2-review-row-three-card .orders-v2-review-message-box textarea {
+    height: 150px;
+    min-height: 150px;
+  }
+
+  .orders-v2-review-templates {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .orders-v2-review-actions {
+    flex-wrap: wrap;
+  }
+
+  .orders-v2-review-actions .MuiButton-root {
+    flex: 1 1 calc(50% - 8px);
   }
 }
 
