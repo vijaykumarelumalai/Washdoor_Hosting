@@ -40,8 +40,10 @@ import {
 } from '../services/serviceTypeService';
 import {
   updateOrderInSupabase,
+  updateCustomer,
   fetchActiveStaffMaster,
   fetchActivePickupDeliveryMaster,
+  fetchCustomerAddresses,
   getOrderById,
   getGarmentBarcodeDetails,
   fetchOrderGarmentBarcodes,
@@ -78,6 +80,13 @@ import {
   ORDERS_V2_DEFAULT_COLUMN_IDS,
   enforceOrdersV2RequiredColumns,
 } from '../config/ordersV2ColumnsConfig';
+import OrdersV2AddressManager, {
+  MAX_ADDITIONAL_ADDRESSES,
+  formatAddressForOrder,
+  normalizeAdditionalAddresses,
+  toStoredAdditionalAddresses,
+  validateAdditionalAddresses,
+} from './OrdersV2AddressManager';
 
 const normalizePaymentStatusOption = (status, balance = 0, advance = 0, total = 0) => {
   const adv = Number(advance) || 0;
@@ -628,6 +637,10 @@ export function OrdersV2List({
   const [inspections, setInspections] = useState({});
   const [inlineScheduleErrors, setInlineScheduleErrors] = useState({});
   const [inlineAddressError, setInlineAddressError] = useState('');
+  const [inlineAddresses, setInlineAddresses] = useState([]);
+  const [inlineSelectedAddressId, setInlineSelectedAddressId] = useState(null);
+  const [showInlineAddressErrors, setShowInlineAddressErrors] = useState(false);
+  const inlineAddressTokenRef = useRef(0);
   const [isSavingInline, setIsSavingInline] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [scanMode, setScanMode] = useState('order');
@@ -645,6 +658,52 @@ export function OrdersV2List({
   const cameraControlsRef = useRef(null);
   const barcodeReaderRef = useRef(null);
   const barcodeImageInputRef = useRef(null);
+
+  const normalizedInlineAddresses = useMemo(
+    () => normalizeAdditionalAddresses(inlineAddresses),
+    [inlineAddresses],
+  );
+  const selectedInlineAddress = normalizedInlineAddresses.find(
+    (address) => address.id === inlineSelectedAddressId,
+  ) || null;
+  const inlineEffectiveAddress = selectedInlineAddress
+    ? formatAddressForOrder(selectedInlineAddress)
+    : sanitizeAddress(inlineDraft?.address || '');
+
+  const inlineCustomerValidation = useMemo(() => {
+    if (!inlineDraft) return { isValid: false, message: 'Please enter Customer Name and Phone Number.' };
+    if (!inlineDraft.customer_name?.trim() || !inlineDraft.mobile_number?.trim()) {
+      return { isValid: false, message: 'Please enter Customer Name and Phone Number.' };
+    }
+    if (Object.keys(validateAdditionalAddresses(inlineAddresses)).length > 0) {
+      return { isValid: false, message: 'Review the highlighted additional addresses.' };
+    }
+    if (isOnCallOrderType(inlineDraft.order_type) && !inlineEffectiveAddress) {
+      return { isValid: false, message: 'Address is required for On-Call orders.' };
+    }
+    if (isOnCallOrderType(inlineDraft.order_type)) {
+      const schedule = validateOnCallSchedule({
+        pickupDate: inlineDraft.scheduled_pickup_date,
+        pickupTime: inlineDraft.scheduled_pickup_time,
+        deliveryDate: inlineDraft.scheduled_delivery_date,
+        deliveryTime: inlineDraft.scheduled_delivery_time,
+        isNewOrder: false,
+        initialPickupIso: inlineDraft.scheduled_pickup_at || null,
+      });
+      if (!schedule.isValid) {
+        return { isValid: false, message: Object.values(schedule.errors)[0] || 'Review the on-call schedule.' };
+      }
+    } else {
+      const delivery = resolveOptionalDelivery({
+        deliveryDate: inlineDraft.scheduled_delivery_date,
+        deliveryTime: inlineDraft.scheduled_delivery_time,
+      });
+      if (!delivery.isValid) {
+        return { isValid: false, message: Object.values(delivery.errors)[0] || 'Review the delivery schedule.' };
+      }
+    }
+    return { isValid: true, message: 'All required customer details are valid.' };
+  }, [inlineDraft, inlineAddresses, inlineEffectiveAddress]);
 
   const inlineSelectedPickup = driverList.find(
     (option) => String(option.uniqueId) === String(inlineDraft?.assigned_pickup_person_id)
@@ -1557,6 +1616,10 @@ export function OrdersV2List({
       setInlineCart([]);
       setInspections({});
       setPaymentHistory([]);
+      setInlineAddresses([]);
+      setInlineSelectedAddressId(null);
+      setShowInlineAddressErrors(false);
+      inlineAddressTokenRef.current += 1;
       setActiveTab('customer');
       return;
     }
@@ -1650,10 +1713,30 @@ export function OrdersV2List({
     setScannedGarmentKeys([]);
     setBarcodePreviewEntry(null);
     stopCameraScanner();
-    setInlineScheduleErrors({});
-    setInlineAddressError('');
+      setInlineScheduleErrors({});
+      setInlineAddressError('');
 
-    void fetchOrderGarmentBarcodes(oid, items)
+      const addressToken = inlineAddressTokenRef.current + 1;
+      inlineAddressTokenRef.current = addressToken;
+      const addressSeed = normalizeAdditionalAddresses(
+        order.additional_addresses || order.customer?.additional_addresses || [],
+      );
+      setInlineAddresses(addressSeed);
+      setInlineSelectedAddressId(order.selected_customer_address_id || null);
+      setShowInlineAddressErrors(false);
+
+      const customerId = order.customer_id || order.customer?.customer_id;
+      if (customerId) {
+        fetchCustomerAddresses(customerId)
+          .then(({ data }) => {
+            if (inlineAddressTokenRef.current !== addressToken) return;
+            setInlineAddresses(data?.length ? normalizeAdditionalAddresses(data) : addressSeed);
+          })
+          .catch(() => {});
+      }
+
+      void fetchOrderGarmentBarcodes(oid, items)
+
       .then(({ data, error }) => {
         if (barcodeLoadTokenRef.current !== barcodeToken) return;
         if (data?.inspections) {
@@ -1894,7 +1977,19 @@ export function OrdersV2List({
   const handleSaveInlineEdit = async () => {
     if (!inlineDraft) return;
 
-    if (isOnCallOrderType(inlineDraft.order_type) && !sanitizeAddress(inlineDraft.address)) {
+    const addressValidationErrors = validateAdditionalAddresses(inlineAddresses);
+    if (Object.keys(addressValidationErrors).length > 0) {
+      setShowInlineAddressErrors(true);
+      alert('Review the highlighted additional addresses before saving.');
+      return;
+    }
+    setShowInlineAddressErrors(false);
+
+    const addressForOrder = selectedInlineAddress
+      ? formatAddressForOrder(selectedInlineAddress)
+      : sanitizeAddress(inlineDraft.address);
+
+    if (isOnCallOrderType(inlineDraft.order_type) && !sanitizeAddress(inlineDraft.address) && !selectedInlineAddress) {
       setInlineAddressError('Address is required for On-Call orders.');
       alert('Address is required for On-Call orders.');
       return;
@@ -2028,7 +2123,7 @@ export function OrdersV2List({
 
       const baseHistory = prevHistory.length > 0 ? prevHistory : initialHistory;
       const combinedHistory = [...addedEvents, ...baseHistory];
-      const cleanAddress = sanitizeAddress(inlineDraft.address);
+      const cleanAddress = addressForOrder;
       const processingPayload = buildProcessingPayload(inlineDraft);
       const barcodeResult = assignGarmentBarcodes({
         orderId: inlineDraft.order_number || inlineDraft.id,
@@ -2042,6 +2137,9 @@ export function OrdersV2List({
         customer_name: inlineDraft.customer_name,
         mobile_number: inlineDraft.mobile_number,
         address: cleanAddress,
+        additional_addresses: toStoredAdditionalAddresses(inlineAddresses),
+        selected_customer_address_id: selectedInlineAddress?.id || null,
+        selected_address: cleanAddress,
         order_type: inlineDraft.order_type,
         service_category: resolvedServiceCategory,
         order_status: newStatus,
@@ -2084,10 +2182,25 @@ export function OrdersV2List({
         status_updated_by: staffActor,
       };
 
+      const inlineCustomerId = inlineDraft.customer_id
+        || inlineDraft.customer?.customer_id
+        || inlineDraft.customer?.customerId
+        || null;
+      if (inlineCustomerId) {
+        const { error: customerUpdateError } = await updateCustomer(inlineCustomerId, {
+          customer_id: inlineCustomerId,
+          additional_addresses: toStoredAdditionalAddresses(inlineAddresses),
+        });
+        if (customerUpdateError) throw customerUpdateError;
+      }
+
       await updateOrderInSupabase(updatedRecord.order_number, {
         customerName: updatedRecord.customer_name,
         mobileNumber: updatedRecord.mobile_number,
         address: cleanAddress,
+        additional_addresses: toStoredAdditionalAddresses(inlineAddresses),
+        selected_customer_address_id: selectedInlineAddress?.id || null,
+        selected_address: cleanAddress,
         serviceCategory: resolvedServiceCategory,
         orderType: updatedRecord.order_type,
         status: newStatus,
@@ -2282,7 +2395,8 @@ export function OrdersV2List({
                   height: 'auto',
                   minHeight: 0,
                   maxHeight: 'none',
-                  overflowY: 'hidden',
+                  overflowX: 'visible',
+                  overflowY: 'visible',
                   overscrollBehavior: 'auto',
                   ...INLINE_EDIT_TABLE_SCROLLBAR_SX,
                 }
@@ -2720,13 +2834,13 @@ export function OrdersV2List({
 
                   {/* ── EXPANDED INLINE EDIT PANEL (WITH HORIZONTAL STEPPER TABS) ── */}
                   {isInlineOpen && inlineDraft && (
-                    <TableRow>
+                    <TableRow className="orders-v2-inline-edit-row">
                       <TableCell
                         colSpan={resolvedVisibleColumnIds.length}
                         className="orders-v2-inline-edit-cell"
                         sx={{ p: 0, width: '100%', minWidth: 0, maxWidth: 'none', overflow: 'visible', bgcolor: '#eff6ff', borderBottom: '2px solid #2563eb' }}
                       >
-                        <Collapse in timeout="auto" unmountOnExit>
+                        <Collapse className="orders-v2-inline-edit-collapse" in timeout="auto" unmountOnExit>
                           <Box
                             className="orders-v2-inline-edit-sticky"
                             sx={{
@@ -2889,83 +3003,140 @@ export function OrdersV2List({
                                    Attending staff name, Driver/Pickup person)
                                  ══════════════════════════════════════════════════════════ */}
                               {activeTab === 'customer' && (
-                                <Paper elevation={0} sx={{ p: { xs: 2, sm: 3 }, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, mb: 2.5 }}>
-                                    <Box sx={{ width: 34, height: 34, borderRadius: '50%', bgcolor: '#2563eb', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                      <PersonOutlined fontSize="small" />
+                                <Paper
+                                  elevation={0}
+                                  className="orders-v2-inline-customer-layout"
+                                  data-inspect="inline-customer-layout"
+                                  sx={{ p: 2, borderRadius: '10px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}
+                                >
+                                  <Box className="orders-v2-inline-customer-header" data-inspect="inline-customer-header">
+                                    <Box className="orders-v2-inline-customer-header-icon">
+                                      <PersonOutlined sx={{ fontSize: 18 }} />
                                     </Box>
-                                    <Box>
-                                      <Typography variant="subtitle1" fontWeight={800} color="#0f172a">
+                                    <Box sx={{ minWidth: 0 }}>
+                                      <Typography className="orders-v2-inline-customer-section-title" sx={{ mb: 0 }}>
                                         Customer & Intake Details
                                       </Typography>
-                                      <Typography variant="caption" color="#64748b">
-                                        Enter or update customer information, intake method, and assignment.
+                                      <Typography className="orders-v2-inline-customer-header-caption">
+                                        Update customer information, intake method, scheduling, and assignment.
                                       </Typography>
                                     </Box>
                                   </Box>
 
-                                  {/* Walk-in vs On-Call Customer Selection */}
-                                  <Box sx={{ mb: 2.5 }}>
-                                    <Typography variant="caption" fontWeight={700} color="#475569" display="block" mb={1}>
+                                  <Box className="orders-v2-inline-customer-section" data-inspect="inline-customer-info">
+                                    <Typography className="orders-v2-inline-customer-section-title">
+                                      Customer Information
+                                    </Typography>
+                                    <Grid container spacing={2} className="orders-v2-inline-customer-pair-grid">
+                                      <Grid item xs={12} sm={6}>
+                                        <Typography className="orders-v2-inline-customer-field-label">
+                                          Customer Name *
+                                        </Typography>
+                                        <TextField
+                                          className="orders-v2-inline-customer-input"
+                                          fullWidth
+                                          size="small"
+                                          value={inlineDraft.customer_name || ''}
+                                          onChange={(e) => setInlineDraft({ ...inlineDraft, customer_name: e.target.value })}
+                                          InputProps={{
+                                            startAdornment: (
+                                              <InputAdornment position="start">
+                                                <PersonOutlined fontSize="small" sx={{ color: '#64748b' }} />
+                                              </InputAdornment>
+                                            ),
+                                            endAdornment: inlineDraft.customer_name?.trim() ? (
+                                              <InputAdornment position="end">
+                                                <CheckCircle fontSize="small" sx={{ color: '#2563eb' }} />
+                                              </InputAdornment>
+                                            ) : null,
+                                          }}
+                                        />
+                                      </Grid>
+                                      <Grid item xs={12} sm={6}>
+                                        <Typography className="orders-v2-inline-customer-field-label">
+                                          Phone No *
+                                        </Typography>
+                                        <TextField
+                                          className="orders-v2-inline-customer-input"
+                                          fullWidth
+                                          size="small"
+                                          value={inlineDraft.mobile_number || ''}
+                                          onChange={(e) => setInlineDraft({ ...inlineDraft, mobile_number: e.target.value })}
+                                          InputProps={{
+                                            startAdornment: (
+                                              <InputAdornment position="start">
+                                                <PhoneOutlined fontSize="small" sx={{ color: '#64748b' }} />
+                                              </InputAdornment>
+                                            ),
+                                            endAdornment: inlineDraft.mobile_number?.trim() ? (
+                                              <InputAdornment position="end">
+                                                <CheckCircle fontSize="small" sx={{ color: '#2563eb' }} />
+                                              </InputAdornment>
+                                            ) : null,
+                                          }}
+                                        />
+                                      </Grid>
+                                    </Grid>
+                                  </Box>
+
+                                  <Box className="orders-v2-inline-customer-section" data-inspect="inline-customer-intake">
+                                    <Typography className="orders-v2-inline-customer-section-title">
                                       Customer Intake Method
                                     </Typography>
-                                    <Grid container spacing={2}>
+                                    <Grid container spacing={2} className="orders-v2-inline-customer-pair-grid">
                                       <Grid item xs={12} sm={6}>
                                         <Box
+                                          className="orders-v2-inline-customer-intake-card"
+                                          data-inspect="inline-intake-walk-in"
                                           onClick={() => {
                                             setInlineDraft({ ...inlineDraft, order_type: 'Walk-In' });
                                             setInlineAddressError('');
                                           }}
                                           sx={{
-                                            p: 1.8,
-                                            border: '2px solid',
+                                            border: '1px solid',
                                             borderColor: inlineDraft.order_type === 'Walk-In' ? '#2563eb' : '#e2e8f0',
                                             bgcolor: inlineDraft.order_type === 'Walk-In' ? '#eff6ff' : '#ffffff',
-                                            borderRadius: '10px',
                                             cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 1.5,
-                                            transition: 'all 0.15s ease',
                                           }}
                                         >
-                                          <DirectionsWalkOutlined sx={{ color: inlineDraft.order_type === 'Walk-In' ? '#2563eb' : '#64748b', fontSize: 26 }} />
-                                          <Box>
-                                            <Typography variant="body2" fontWeight={800} color={inlineDraft.order_type === 'Walk-In' ? '#1d4ed8' : '#0f172a'}>
+                                          <DirectionsWalkOutlined
+                                            className="orders-v2-inline-customer-intake-icon"
+                                            sx={{ color: inlineDraft.order_type === 'Walk-In' ? '#2563eb' : '#64748b' }}
+                                          />
+                                          <Box sx={{ minWidth: 0 }}>
+                                            <Typography className="orders-v2-inline-customer-intake-title" color={inlineDraft.order_type === 'Walk-In' ? '#1d4ed8' : '#0f172a'}>
                                               Walk-In Customer
                                             </Typography>
-                                            <Typography variant="caption" color="#64748b">
+                                            <Typography className="orders-v2-inline-customer-intake-caption">
                                               Direct counter drop & store pickup
                                             </Typography>
                                           </Box>
                                         </Box>
                                       </Grid>
-
                                       <Grid item xs={12} sm={6}>
                                         <Box
+                                          className="orders-v2-inline-customer-intake-card"
+                                          data-inspect="inline-intake-on-call"
                                           onClick={() => {
                                             setInlineDraft({ ...inlineDraft, order_type: 'On-Call (Pickup)' });
                                             setInlineAddressError('');
                                           }}
                                           sx={{
-                                            p: 1.8,
-                                            border: '2px solid',
+                                            border: '1px solid',
                                             borderColor: isOnCallOrderType(inlineDraft.order_type) ? '#2563eb' : '#e2e8f0',
                                             bgcolor: isOnCallOrderType(inlineDraft.order_type) ? '#eff6ff' : '#ffffff',
-                                            borderRadius: '10px',
                                             cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 1.5,
-                                            transition: 'all 0.15s ease',
                                           }}
                                         >
-                                          <CallOutlined sx={{ color: isOnCallOrderType(inlineDraft.order_type) ? '#2563eb' : '#64748b', fontSize: 26 }} />
-                                          <Box>
-                                            <Typography variant="body2" fontWeight={800} color={isOnCallOrderType(inlineDraft.order_type) ? '#1d4ed8' : '#0f172a'}>
+                                          <CallOutlined
+                                            className="orders-v2-inline-customer-intake-icon"
+                                            sx={{ color: isOnCallOrderType(inlineDraft.order_type) ? '#2563eb' : '#64748b' }}
+                                          />
+                                          <Box sx={{ minWidth: 0 }}>
+                                            <Typography className="orders-v2-inline-customer-intake-title" color={isOnCallOrderType(inlineDraft.order_type) ? '#1d4ed8' : '#0f172a'}>
                                               On-Call Customer
                                             </Typography>
-                                            <Typography variant="caption" color="#64748b">
+                                            <Typography className="orders-v2-inline-customer-intake-caption">
                                               Requires scheduled pickup & doorstep delivery
                                             </Typography>
                                           </Box>
@@ -2974,65 +3145,17 @@ export function OrdersV2List({
                                     </Grid>
                                   </Box>
 
-                                  <Grid container spacing={2}>
-                                    {/* Customer Name* */}
-                                    <Grid item xs={12} sm={6}>
-                                      <Typography variant="caption" fontWeight={700} color="#334155" display="block" mb={0.5}>
-                                        Customer Name *
-                                      </Typography>
-                                      <TextField
-                                        fullWidth
-                                        size="small"
-                                        value={inlineDraft.customer_name || ''}
-                                        onChange={(e) => setInlineDraft({ ...inlineDraft, customer_name: e.target.value })}
-                                        InputProps={{
-                                          startAdornment: (
-                                            <InputAdornment position="start">
-                                              <PersonOutlined fontSize="small" sx={{ color: '#64748b' }} />
-                                            </InputAdornment>
-                                          ),
-                                          endAdornment: inlineDraft.customer_name?.trim() ? (
-                                            <InputAdornment position="end">
-                                              <CheckCircle fontSize="small" sx={{ color: '#2563eb' }} />
-                                            </InputAdornment>
-                                          ) : null,
-                                          sx: { borderRadius: '8px', fontSize: '0.88rem' },
-                                        }}
-                                      />
-                                    </Grid>
+                                  <Grid container className="orders-v2-inline-customer-fields" data-inspect="inline-customer-address-scheduling-staff">
 
-                                    {/* Phone No* */}
-                                    <Grid item xs={12} sm={6}>
-                                      <Typography variant="caption" fontWeight={700} color="#334155" display="block" mb={0.5}>
-                                        Phone No *
+                                    <Grid item xs={12} className="orders-v2-inline-customer-address" data-inspect="inline-customer-address">
+                                      <Typography className="orders-v2-inline-customer-section-title">
+                                        Address Information
                                       </Typography>
-                                      <TextField
-                                        fullWidth
-                                        size="small"
-                                        value={inlineDraft.mobile_number || ''}
-                                        onChange={(e) => setInlineDraft({ ...inlineDraft, mobile_number: e.target.value })}
-                                        InputProps={{
-                                          startAdornment: (
-                                            <InputAdornment position="start">
-                                              <PhoneOutlined fontSize="small" sx={{ color: '#64748b' }} />
-                                            </InputAdornment>
-                                          ),
-                                          endAdornment: inlineDraft.mobile_number?.trim() ? (
-                                            <InputAdornment position="end">
-                                              <CheckCircle fontSize="small" sx={{ color: '#2563eb' }} />
-                                            </InputAdornment>
-                                          ) : null,
-                                          sx: { borderRadius: '8px', fontSize: '0.88rem' },
-                                        }}
-                                      />
-                                    </Grid>
-
-                                    {/* Address (required for On-Call, optional for Walk-In) */}
-                                    <Grid item xs={12}>
-                                      <Typography variant="caption" fontWeight={700} color="#334155" display="block" mb={0.5}>
+                                      <Typography className="orders-v2-inline-customer-field-label">
                                         Address {isOnCallOrderType(inlineDraft.order_type) ? '* required' : '(optional)'}
                                       </Typography>
                                       <TextField
+                                        className="orders-v2-inline-customer-input"
                                         fullWidth
                                         size="small"
                                         placeholder="Enter customer address or landmark..."
@@ -3054,104 +3177,124 @@ export function OrdersV2List({
                                               <CheckCircle fontSize="small" sx={{ color: '#2563eb' }} />
                                             </InputAdornment>
                                           ) : null,
-                                          sx: { borderRadius: '8px', fontSize: '0.88rem' },
                                         }}
+                                      />
+                                      <OrdersV2AddressManager
+                                        value={inlineAddresses}
+                                        onChange={(next) => setInlineAddresses(normalizeAdditionalAddresses(next))}
+                                        selectedId={inlineSelectedAddressId}
+                                        onSelect={(id) => {
+                                          setInlineSelectedAddressId(id);
+                                          if (id) setInlineAddressError('');
+                                        }}
+                                        showErrors={showInlineAddressErrors}
+                                        compact
+                                        showAddIcon={false}
+                                        addLabel={`Add Additional Address (${normalizedInlineAddresses.length}/${MAX_ADDITIONAL_ADDRESSES})`}
+                                        savedLabel={`Show Saved Addresses (${normalizedInlineAddresses.length})`}
+                                        hideSavedLabel="Hide Saved Addresses"
+                                        inspectId="inline-customer-address-manager"
                                       />
                                     </Grid>
 
-                                    {/* Pickup (On-Call) and delivery scheduling fields */}
-                                    <Grid item xs={12}>
-                                      <Box sx={{ p: 2, bgcolor: '#eff6ff', borderRadius: '10px', border: '1.5px solid #bfdbfe' }}>
-                                        <Typography variant="subtitle2" fontWeight={800} color="#1d4ed8" mb={1.5} display="flex" alignItems="center" gap={1}>
-                                          {isOnCallOrderType(inlineDraft.order_type) ? <CallOutlined fontSize="small" /> : <LocalShippingOutlined fontSize="small" />}
-                                          {isOnCallOrderType(inlineDraft.order_type) ? 'On-Call Scheduling Requirements' : 'Delivery Date & Time (optional)'}
+                                    <Grid item xs={12} className="orders-v2-inline-customer-scheduling" data-inspect="inline-customer-scheduling">
+                                      <Box className="orders-v2-inline-customer-scheduling-panel">
+                                        <Typography className="orders-v2-inline-customer-section-title" sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1 }}>
+                                          {isOnCallOrderType(inlineDraft.order_type) ? <CallOutlined sx={{ fontSize: 16 }} /> : <LocalShippingOutlined sx={{ fontSize: 16 }} />}
+                                          Scheduling Requirements
                                         </Typography>
-                                        <Grid container spacing={2}>
-                                          {isOnCallOrderType(inlineDraft.order_type) && (
-                                            <Grid item xs={12} sm={6}>
-                                              <Typography variant="caption" fontWeight={700} color="#1d4ed8" display="block" mb={0.5}>
-                                                Schedule Pickup Date &amp; Time *
-                                              </Typography>
-                                              <Grid container spacing={1}>
-                                                <Grid item xs={6}>
-                                                  <TextField
-                                                    fullWidth
-                                                    type="date"
-                                                    size="small"
-                                                    value={inlineDraft.scheduled_pickup_date || ''}
-                                                    onChange={(e) => setInlineDraft({ ...inlineDraft, scheduled_pickup_date: e.target.value })}
-                                                    InputProps={{ sx: { bgcolor: '#ffffff', borderRadius: '8px' } }}
-                                                  />
-                                                </Grid>
-                                                <Grid item xs={6}>
-                                                  <TextField
-                                                    fullWidth
-                                                    type="time"
-                                                    size="small"
-                                                    value={inlineDraft.scheduled_pickup_time || ''}
-                                                    onChange={(e) => setInlineDraft({ ...inlineDraft, scheduled_pickup_time: e.target.value })}
-                                                    InputProps={{ sx: { bgcolor: '#ffffff', borderRadius: '8px' } }}
-                                                  />
-                                                </Grid>
-                                              </Grid>
-                                            </Grid>
-                                          )}
-
-                                          <Grid item xs={12} sm={isOnCallOrderType(inlineDraft.order_type) ? 6 : 12}>
-                                            <Typography variant="caption" fontWeight={700} color="#1d4ed8" display="block" mb={0.5}>
-                                              Schedule Delivery Date &amp; Time (optional)
+                                        {isOnCallOrderType(inlineDraft.order_type) && (
+                                          <Grid item xs={12} className="orders-v2-inline-customer-schedule-row" data-inspect="inline-pickup-row">
+                                            <Typography className="orders-v2-inline-customer-field-label">
+                                              Pickup Date &amp; Time *
                                             </Typography>
-                                            <Grid container spacing={1}>
+                                            <Grid container spacing={1} className="orders-v2-inline-customer-pair-grid">
                                               <Grid item xs={6}>
                                                 <TextField
+                                                  className="orders-v2-inline-customer-input"
                                                   fullWidth
                                                   type="date"
                                                   size="small"
-                                                  value={inlineDraft.scheduled_delivery_date || ''}
-                                                  onChange={(e) => {
-                                                    setInlineDraft({ ...inlineDraft, scheduled_delivery_date: e.target.value });
-                                                    if (inlineScheduleErrors.scheduled_delivery_at) {
-                                                      setInlineScheduleErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
-                                                    }
-                                                  }}
-                                                  error={Boolean(inlineScheduleErrors.scheduled_delivery_at)}
-                                                  helperText={inlineScheduleErrors.scheduled_delivery_at}
-                                                  InputProps={{ sx: { bgcolor: '#ffffff', borderRadius: '8px' } }}
+                                                  value={inlineDraft.scheduled_pickup_date || ''}
+                                                  onChange={(e) => setInlineDraft({ ...inlineDraft, scheduled_pickup_date: e.target.value })}
+                                                  slotProps={{ htmlInput: { 'aria-label': 'Pickup Date', style: { fontSize: '13px' } } }}
                                                 />
                                               </Grid>
                                               <Grid item xs={6}>
                                                 <TextField
+                                                  className="orders-v2-inline-customer-input"
                                                   fullWidth
                                                   type="time"
                                                   size="small"
-                                                  value={inlineDraft.scheduled_delivery_time || ''}
-                                                  onChange={(e) => {
-                                                    setInlineDraft({ ...inlineDraft, scheduled_delivery_time: e.target.value });
-                                                    if (inlineScheduleErrors.scheduled_delivery_at) {
-                                                      setInlineScheduleErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
-                                                    }
-                                                  }}
-                                                  error={Boolean(inlineScheduleErrors.scheduled_delivery_at)}
-                                                  helperText={inlineScheduleErrors.scheduled_delivery_at}
-                                                  InputProps={{ sx: { bgcolor: '#ffffff', borderRadius: '8px' } }}
+                                                  value={inlineDraft.scheduled_pickup_time || ''}
+                                                  onChange={(e) => setInlineDraft({ ...inlineDraft, scheduled_pickup_time: e.target.value })}
+                                                  slotProps={{ htmlInput: { 'aria-label': 'Pickup Time', style: { fontSize: '13px' } } }}
                                                 />
                                               </Grid>
+                                            </Grid>
+                                          </Grid>
+                                        )}
+                                        <Grid item xs={12} className="orders-v2-inline-customer-schedule-row" data-inspect="inline-delivery-row">
+                                          <Typography className="orders-v2-inline-customer-field-label">
+                                            Delivery Date &amp; Time (optional)
+                                          </Typography>
+                                          <Grid container spacing={1} className="orders-v2-inline-customer-pair-grid">
+                                            <Grid item xs={6}>
+                                              <TextField
+                                                className="orders-v2-inline-customer-input"
+                                                fullWidth
+                                                type="date"
+                                                size="small"
+                                                value={inlineDraft.scheduled_delivery_date || ''}
+                                                onChange={(e) => {
+                                                  setInlineDraft({ ...inlineDraft, scheduled_delivery_date: e.target.value });
+                                                  if (inlineScheduleErrors.scheduled_delivery_at) {
+                                                    setInlineScheduleErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
+                                                  }
+                                                }}
+                                                error={Boolean(inlineScheduleErrors.scheduled_delivery_at)}
+                                                helperText={inlineScheduleErrors.scheduled_delivery_at}
+                                                slotProps={{ htmlInput: { 'aria-label': 'Delivery Date', style: { fontSize: '13px' } } }}
+                                              />
+                                            </Grid>
+                                            <Grid item xs={6}>
+                                              <TextField
+                                                className="orders-v2-inline-customer-input"
+                                                fullWidth
+                                                type="time"
+                                                size="small"
+                                                value={inlineDraft.scheduled_delivery_time || ''}
+                                                onChange={(e) => {
+                                                  setInlineDraft({ ...inlineDraft, scheduled_delivery_time: e.target.value });
+                                                  if (inlineScheduleErrors.scheduled_delivery_at) {
+                                                    setInlineScheduleErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
+                                                  }
+                                                }}
+                                                error={Boolean(inlineScheduleErrors.scheduled_delivery_at)}
+                                                helperText={inlineScheduleErrors.scheduled_delivery_at}
+                                                slotProps={{ htmlInput: { 'aria-label': 'Delivery Time', style: { fontSize: '13px' } } }}
+                                              />
                                             </Grid>
                                           </Grid>
                                         </Grid>
                                       </Box>
                                     </Grid>
 
-                                    {/* Attending Staff Name */}
-                                    <Grid item xs={12} sm={6}>
+                                    <Grid item xs={12} className="orders-v2-inline-customer-staff" data-inspect="inline-customer-staff">
+                                      <Typography className="orders-v2-inline-customer-section-title">
+                                        Staff Assignment
+                                      </Typography>
+                                      <Grid container spacing={2} className="orders-v2-inline-customer-pair-grid">
+                                        <Grid item xs={12} sm={6} className="orders-v2-inline-customer-staff-field" data-inspect="inline-attend-staff">
                                       <Typography variant="caption" fontWeight={700} color="#334155" display="block" mb={0.5}>
                                         Attend Staff Name
                                       </Typography>
-                                      <TextField
-                                        select
-                                        fullWidth
-                                        size="small"
-                                        value={inlineDraft.assigned_staff || inlineDraft.attend_staff_name || 'Counter Staff'}
+                                        <TextField
+                                          className="orders-v2-inline-customer-input"
+                                          select
+                                          fullWidth
+                                          size="small"
+                                          value={inlineDraft.assigned_staff || inlineDraft.attend_staff_name || 'Counter Staff'}
                                         onChange={(e) => {
                                           const chosenStaff = e.target.value;
                                           const matched = staffList.find((s) => s.name === chosenStaff);
@@ -3267,16 +3410,16 @@ export function OrdersV2List({
                                       </TextField>
                                     </Grid>
 
-                                    {/* Order Pickup & Delivery Person Name */}
-                                    <Grid item xs={12} sm={6}>
+                                        <Grid item xs={12} sm={6} className="orders-v2-inline-customer-staff-field" data-inspect="inline-pickup-delivery-staff">
                                       <Typography variant="caption" fontWeight={700} color="#334155" display="block" mb={0.5}>
                                         Order Pickup &amp; Delivery Person Name
                                       </Typography>
-                                      <TextField
-                                        select
-                                        fullWidth
-                                        size="small"
-                                        value={inlineDraft.assigned_driver || inlineDraft.assigned_pickup_delivery_person || ''}
+                                        <TextField
+                                          className="orders-v2-inline-customer-input"
+                                          select
+                                          fullWidth
+                                          size="small"
+                                          value={inlineDraft.assigned_driver || inlineDraft.assigned_pickup_delivery_person || ''}
                                         onChange={(e) => {
                                           const chosenDriver = e.target.value;
                                           const matched = driverList.find((d) => d.name === chosenDriver);
@@ -3375,44 +3518,47 @@ export function OrdersV2List({
                                             </Box>
                                           </MenuItem>
                                         )}
-                                      </TextField>
+                                        </TextField>
+                                        </Grid>
+                                      </Grid>
                                     </Grid>
                                   </Grid>
 
-                                  {/* Tab 1 Footer Actions */}
-                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pt: 3, mt: 3, borderTop: '1px solid #f1f5f9' }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
-                                      {inlineDraft.customer_name?.trim() && inlineDraft.mobile_number?.trim() ? (
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, color: '#2563eb' }}>
-                                          <CheckCircle sx={{ fontSize: 18 }} />
-                                          <Typography variant="caption" fontWeight={700} color="#2563eb">
-                                            Customer details are valid.
+                                  <Box className="orders-v2-inline-customer-footer" data-inspect="inline-customer-footer">
+                                    <Box className="orders-v2-inline-customer-status">
+                                      {inlineCustomerValidation.isValid ? (
+                                        <>
+                                          <CheckCircle sx={{ fontSize: 16 }} />
+                                          <Typography variant="caption" fontWeight={700}>
+                                            {inlineCustomerValidation.message}
                                           </Typography>
-                                        </Box>
+                                        </>
                                       ) : (
                                         <Typography variant="caption" color="#dc2626">
-                                          Please enter Customer Name and Phone Number.
+                                          {inlineCustomerValidation.message}
                                         </Typography>
                                       )}
                                     </Box>
 
-                                    <Box sx={{ display: 'flex', gap: 1 }}>
+                                    <Box className="orders-v2-inline-customer-actions">
                                       <Button
+                                        className="orders-v2-inline-customer-footer-button"
                                         variant="outlined"
                                         size="small"
                                         onClick={handleNextTab}
                                         endIcon={<ArrowForward />}
-                                        sx={{ textTransform: 'none', fontWeight: 600, borderColor: '#cbd5e1', color: '#0f172a', borderRadius: '8px', px: 2 }}
+                                        sx={{ textTransform: 'none', fontWeight: 600, borderColor: '#cbd5e1', color: '#0f172a' }}
                                       >
                                         Next: Order Details
                                       </Button>
                                       <Button
+                                        className="orders-v2-inline-customer-footer-button"
                                         variant="contained"
                                         size="small"
                                         onClick={handleSaveInlineEdit}
                                         disabled={isSavingInline}
                                         startIcon={<Check />}
-                                        sx={{ textTransform: 'none', fontWeight: 700, bgcolor: '#2563eb', color: '#ffffff', borderRadius: '8px', px: 2 }}
+                                        sx={{ textTransform: 'none', fontWeight: 700, bgcolor: '#2563eb', color: '#ffffff' }}
                                       >
                                         Confirm Changes
                                       </Button>

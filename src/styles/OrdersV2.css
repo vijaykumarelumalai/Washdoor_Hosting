@@ -156,8 +156,9 @@ body:not(.light-theme):not([data-theme="light"]) .main.orders-v2-main::-webkit-s
   height: auto !important;
   min-height: 0 !important;
   max-height: none !important;
-  overflow-y: hidden !important;
-  overflow-x: auto !important;
+  overflow: visible !important;
+  overflow-x: visible !important;
+  overflow-y: visible !important;
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
 }
@@ -165,6 +166,18 @@ body:not(.light-theme):not([data-theme="light"]) .main.orders-v2-main::-webkit-s
 .orders-v2-table-container.is-inline-editing::-webkit-scrollbar:vertical {
   display: none !important;
   width: 0 !important;
+}
+
+.orders-v2-inline-edit-row,
+.orders-v2-inline-edit-row > .MuiTableCell-root {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.orders-v2-inline-edit-collapse.MuiCollapse-root {
+  overflow: visible !important;
 }
 
 .orders-v2-table-container .orders-v2-actions-cell {
@@ -484,6 +497,269 @@ body:not(.light-theme):not([data-theme="light"]) .main.orders-v2-main::-webkit-s
   .orders-v2-inline-tab {
     gap: 6px;
     padding: 0 10px;
+  }
+}
+
+.orders-v2-inline-customer-layout {
+  box-sizing: border-box;
+  width: 100%;
+  height: auto !important;
+  min-width: 0;
+  min-height: 0 !important;
+  max-width: 100%;
+  max-height: none !important;
+  padding: 16px;
+  overflow: visible !important;
+}
+
+.orders-v2-inline-customer-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin-bottom: 12px;
+}
+
+.orders-v2-inline-customer-header-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.orders-v2-inline-customer-header-caption {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #64748b;
+}
+
+.orders-v2-inline-customer-section {
+  min-width: 0;
+  margin-top: 12px;
+}
+
+.orders-v2-inline-customer-section-title {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px !important;
+  line-height: 20px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.orders-v2-inline-customer-field-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px !important;
+  line-height: 16px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.orders-v2-inline-customer-layout .MuiOutlinedInput-root,
+.orders-v2-inline-customer-layout .MuiInputBase-root {
+  height: 40px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.orders-v2-inline-customer-layout .MuiInputBase-input,
+.orders-v2-inline-customer-layout .MuiSelect-select {
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+.orders-v2-inline-customer-layout .MuiInputLabel-root {
+  font-size: 12px;
+}
+
+.orders-v2-inline-customer-pair-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.orders-v2-inline-customer-pair-grid > .MuiGrid-item {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.orders-v2-inline-customer-layout input[type="date"],
+.orders-v2-inline-customer-layout input[type="time"] {
+  box-sizing: border-box;
+  width: 100% !important;
+  min-width: 0;
+  height: 100%;
+  font-size: 13px !important;
+}
+
+.orders-v2-inline-customer-intake-card {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  min-height: 64px;
+  padding: 10px;
+  border-radius: 10px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.orders-v2-inline-customer-intake-card:hover {
+  border-color: #93c5fd;
+}
+
+.orders-v2-inline-customer-intake-icon {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  font-size: 18px !important;
+}
+
+.orders-v2-inline-customer-intake-title {
+  font-size: 13px !important;
+  line-height: 18px;
+  font-weight: 700;
+}
+
+.orders-v2-inline-customer-intake-caption {
+  display: block;
+  overflow: hidden;
+  font-size: 11px !important;
+  line-height: 15px;
+  color: #64748b;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.orders-v2-inline-customer-intake-card > div {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.orders-v2-inline-customer-fields {
+  display: grid !important;
+  grid-template-columns: minmax(0, 65fr) minmax(0, 35fr);
+  align-items: start !important;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  margin: 16px 0 0 !important;
+  padding: 0 !important;
+}
+
+.orders-v2-inline-customer-fields > .MuiGrid-item {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.orders-v2-inline-customer-address {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.orders-v2-inline-customer-scheduling {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.orders-v2-inline-customer-staff {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.orders-v2-inline-customer-scheduling-panel {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #eff6ff;
+}
+
+.orders-v2-inline-customer-scheduling-panel .orders-v2-inline-customer-field-label {
+  color: #1d4ed8;
+}
+
+.orders-v2-inline-customer-schedule-row {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.orders-v2-inline-customer-schedule-row + .orders-v2-inline-customer-schedule-row {
+  margin-top: 16px;
+}
+
+.orders-v2-inline-customer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+}
+
+.orders-v2-inline-customer-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #2563eb;
+}
+
+.orders-v2-inline-customer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.orders-v2-inline-customer-footer-button {
+  height: 34px;
+  min-height: 34px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+@media (max-width: 650px) {
+  .orders-v2-inline-customer-pair-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 1099px) {
+  .orders-v2-inline-customer-fields {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .orders-v2-inline-customer-address,
+  .orders-v2-inline-customer-scheduling,
+  .orders-v2-inline-customer-staff {
+    grid-column: 1 !important;
+    grid-row: auto !important;
   }
 }
 
