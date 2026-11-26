@@ -1,75 +1,57 @@
-// src/services/columnPreferenceService.js
-// Washdoor User-Specific Column Preference Persistence via Supabase and LocalStorage
-
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient.js';
 import {
-  DEFAULT_COLUMN_IDS,
-  ALL_COLUMN_IDS,
-  COLUMN_STORAGE_KEY,
-  sanitizeAndOrderColumns,
-} from '../config/orderColumnsConfig.js';
+  ORDERS_V2_COLUMN_STORAGE_KEY,
+  sanitizeOrdersV2Columns,
+  enforceOrdersV2RequiredColumns,
+} from '../config/ordersV2ColumnsConfig.js';
 
-/**
- * Loads user column preferences from Supabase or localStorage fallback.
- * @param {string} [userId] Current staff/admin user ID
- * @returns {Promise<string[]>} List of active column IDs
- */
-export async function loadColumnPreferences(userId) {
-  const storageKey = userId ? `${COLUMN_STORAGE_KEY}_${userId}` : COLUMN_STORAGE_KEY;
+const REMOTE_METADATA_KEY = 'orders_v2_table_columns';
 
-  // 1. Try Supabase Auth metadata or profiles table if available
+const getLocalStorage = () => {
+  if (typeof window !== 'undefined' && window.localStorage) return window.localStorage;
+  if (typeof localStorage !== 'undefined') return localStorage;
+  return null;
+};
+
+const getStorageKey = (userId) => (
+  userId ? `${ORDERS_V2_COLUMN_STORAGE_KEY}_${userId}` : ORDERS_V2_COLUMN_STORAGE_KEY
+);
+
+export async function loadOrdersV2ColumnPreferences(userId) {
+  const storageKey = getStorageKey(userId);
+
   if (isSupabaseConfigured()) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user && user.user_metadata?.order_table_columns) {
-        const remoteCols = user.user_metadata.order_table_columns;
-        if (Array.isArray(remoteCols) && remoteCols.length > 0) {
-          return sanitizeAndOrderColumns(remoteCols);
-        }
+      const remoteColumns = user?.user_metadata?.[REMOTE_METADATA_KEY];
+      if (Array.isArray(remoteColumns) && remoteColumns.length > 0) {
+        return enforceOrdersV2RequiredColumns(remoteColumns);
       }
-    } catch (e) {
-      // Gracefully fall back to local storage
-    }
+    } catch {}
   }
 
-  // 2. Try localStorage
   try {
-    const ls = (typeof window !== 'undefined' && window.localStorage) ? window.localStorage : (typeof localStorage !== 'undefined' ? localStorage : null);
-    if (ls) {
-      const stored = ls.getItem(storageKey) || ls.getItem(COLUMN_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return sanitizeAndOrderColumns(parsed);
-        }
+    const storage = getLocalStorage();
+    const stored = storage?.getItem(storageKey);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return enforceOrdersV2RequiredColumns(parsed);
       }
     }
-  } catch (err) {}
+  } catch {}
 
-  // 3. Fallback to 9 default columns
-  return [...DEFAULT_COLUMN_IDS];
+  return enforceOrdersV2RequiredColumns(sanitizeOrdersV2Columns(null));
 }
 
-/**
- * Saves user column preferences to localStorage and Supabase.
- * @param {string[]} selectedColumns
- * @param {string} [userId] Current staff/admin user ID
- * @returns {Promise<string[]>} Sanitized ordered columns
- */
-export async function saveColumnPreferences(selectedColumns, userId) {
-  const sanitized = sanitizeAndOrderColumns(selectedColumns);
-  const storageKey = userId ? `${COLUMN_STORAGE_KEY}_${userId}` : COLUMN_STORAGE_KEY;
+export async function saveOrdersV2ColumnPreferences(selectedColumns, userId) {
+  const sanitized = enforceOrdersV2RequiredColumns(selectedColumns);
+  const storageKey = getStorageKey(userId);
 
-  // 1. Save to localStorage immediately
   try {
-    const ls = (typeof window !== 'undefined' && window.localStorage) ? window.localStorage : (typeof localStorage !== 'undefined' ? localStorage : null);
-    if (ls) {
-      ls.setItem(storageKey, JSON.stringify(sanitized));
-      ls.setItem(COLUMN_STORAGE_KEY, JSON.stringify(sanitized));
-    }
-  } catch (err) {}
+    getLocalStorage()?.setItem(storageKey, JSON.stringify(sanitized));
+  } catch {}
 
-  // 2. Persist to Supabase if connected
   if (isSupabaseConfigured()) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -77,13 +59,11 @@ export async function saveColumnPreferences(selectedColumns, userId) {
         await supabase.auth.updateUser({
           data: {
             ...user.user_metadata,
-            order_table_columns: sanitized,
+            [REMOTE_METADATA_KEY]: sanitized,
           },
         });
       }
-    } catch (e) {
-      // Ignore background persistence errors
-    }
+    } catch {}
   }
 
   return sanitized;
