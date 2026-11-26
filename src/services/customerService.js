@@ -1048,33 +1048,67 @@ export async function recordPickupDeliverySchedule(workIdentifier, schedulePaylo
 }
 
 /**
+ * Reads customer additional addresses from washdoor_customer_addresses.
+ */
+export async function fetchCustomerAddresses(customerId) {
+  if (!isSupabaseConfigured() || !customerId) return { data: [], error: null };
+  try {
+    const cleanCustId = formatCustomerId(customerId);
+    const { data, error } = await supabase
+      .from('washdoor_customer_addresses')
+      .select('*')
+      .eq('customer_id', cleanCustId);
+    return { data: !error && Array.isArray(data) ? data : [], error: error || null };
+  } catch (err) {
+    return { data: [], error: err };
+  }
+}
+
+/**
  * Persists customer additional addresses (1-5) into washdoor_customer_addresses.
  */
 export async function saveCustomerAddresses(customerId, addresses = []) {
-  if (!isSupabaseConfigured() || !customerId || !Array.isArray(addresses) || addresses.length === 0) {
+  if (!isSupabaseConfigured() || !customerId || !Array.isArray(addresses)) {
     return { success: false };
   }
   try {
     const cleanCustId = formatCustomerId(customerId);
-    await supabase.from('washdoor_customer_addresses').delete().eq('customer_id', cleanCustId);
+    const { error: deleteError } = await supabase
+      .from('washdoor_customer_addresses')
+      .delete()
+      .eq('customer_id', cleanCustId);
 
+    if (deleteError) return { success: false, error: deleteError.message };
+
+    const allowedLabels = ['Home', 'Office', 'Other'];
     const rows = addresses
-      .filter((a) => a && (a.addressLine || a.address_line || a.city))
-      .map((a, idx) => ({
-        customer_id: cleanCustId,
-        address_label: `Additional ${idx + 1}`,
-        address_line: a.addressLine || a.address_line || '',
-        city: a.city || null,
-        pincode: a.pincode && /^[0-9]{6}$/.test(String(a.pincode)) ? String(a.pincode) : null,
-        map_link: a.mapLink || a.map_link || null,
-        alternate_phone: a.altPhone || a.alternate_phone || null,
-        email: a.email || null,
-        is_default: idx === 0,
-      }));
+      .slice(0, 5)
+      .filter((address) => address && (
+        String(address.addressLine || address.address_line || '').trim()
+        || String(address.city || '').trim()
+        || String(address.pincode || '').trim()
+      ))
+      .map((address, idx) => {
+        const rawLabel = String(address.label || address.address_label || '').trim();
+        const label = allowedLabels.includes(rawLabel) ? rawLabel : `Additional ${idx + 1}`;
+        return {
+          customer_id: cleanCustId,
+          address_label: label,
+          address_line: String(address.addressLine || address.address_line || '').trim(),
+          city: String(address.city || '').trim() || null,
+          pincode: /^[0-9]{6}$/.test(String(address.pincode || '').trim())
+            ? String(address.pincode).trim()
+            : null,
+          map_link: String(address.mapLink || address.map_link || '').trim() || null,
+          alternate_phone: String(address.altPhone || address.alternate_phone || '').replace(/\D/g, '').slice(-10) || null,
+          email: String(address.email || '').trim() || null,
+          is_default: idx === 0,
+        };
+      });
 
-    if (rows.length === 0) return { success: true };
-    const { error } = await supabase.from('washdoor_customer_addresses').insert(rows);
-    return { success: !error, error: error?.message || null };
+    if (rows.length === 0) return { success: true, data: [] };
+    const { data, error } = await supabase.from('washdoor_customer_addresses').insert(rows).select();
+    return { success: !error, data: data || [], error: error?.message || null };
   } catch (err) {
     return { success: false, error: err.message };
   }
@@ -2276,6 +2310,9 @@ function mapCustomerWorkRowToOrder(row, factoryRow = null, scheduleRow = null, g
     email: row.email || '',
     address: row.delivery_address || '',
     delivery_address: row.delivery_address || '',
+    additional_addresses: Array.isArray(internalNotesObj.additional_addresses) ? internalNotesObj.additional_addresses : [],
+    selected_customer_address_id: internalNotesObj.selected_customer_address_id || null,
+    selected_address: internalNotesObj.selected_address || null,
     service_category: row.service_type || 'Wash & Steam Press',
     service_type: row.service_type || 'Wash & Steam Press',
     preference: row.service_type || 'Wash & Steam Press',
@@ -2465,6 +2502,9 @@ function mapCustomerWorkRowToOrder(row, factoryRow = null, scheduleRow = null, g
       email: row.email || null,
       address: row.delivery_address || '',
       streetArea: row.delivery_address || '',
+      additional_addresses: Array.isArray(internalNotesObj.additional_addresses) ? internalNotesObj.additional_addresses : [],
+      selected_customer_address_id: internalNotesObj.selected_customer_address_id || null,
+      selected_address: internalNotesObj.selected_address || null,
       area_service_zone: 'Zone 1',
       tier: 'SILVER',
       service_category: row.service_type || 'Wash & Steam Press',
@@ -2791,8 +2831,8 @@ export async function createCustomer(payload) {
       .select()
       .single();
 
-    if (Array.isArray(clean.additional_addresses) && clean.additional_addresses.length > 0) {
-      saveCustomerAddresses(custId, clean.additional_addresses).catch(() => {});
+    if (Array.isArray(clean.additional_addresses)) {
+      await saveCustomerAddresses(custId, clean.additional_addresses);
     }
 
     if (workError && !createdCustRow) {
@@ -2953,8 +2993,10 @@ export async function updateCustomer(id, payload) {
       }
     }
 
+    let addressSaveError = null;
     if (Array.isArray(clean.additional_addresses) && targetCustId) {
-      saveCustomerAddresses(targetCustId, clean.additional_addresses).catch(() => {});
+      const addressResult = await saveCustomerAddresses(targetCustId, clean.additional_addresses);
+      if (!addressResult.success) addressSaveError = addressResult.error || new Error('Could not save additional addresses.');
     }
 
     // 3. Best-effort sync to washdoor_orders_master if present
@@ -2999,6 +3041,10 @@ export async function updateCustomer(id, payload) {
 
     if (custUpdateErr && workError) {
       return { data: null, error: custUpdateErr || workError };
+    }
+
+    if (addressSaveError) {
+      return { data: updatedCustRow || workData, error: addressSaveError };
     }
 
     await recordAuditLogEntry({
@@ -3220,11 +3266,14 @@ export async function createOrderWithCustomer({
       order_type: orderType || 'walk-in',
       order_status: 'Received',
       total_amount: Number(totalAmount) || 0.00,
-      customer_history: {
-        items: items || [],
-        additional_addresses: Array.isArray(cleanCust.additional_addresses) ? cleanCust.additional_addresses : [],
-        created_at: new Date().toISOString(),
-      },
+        customer_history: {
+          items: items || [],
+          additional_addresses: Array.isArray(cleanCust.additional_addresses) ? cleanCust.additional_addresses : [],
+          selected_customer_address_id: cleanCust.selected_customer_address_id || cleanCust.selected_address_id || null,
+          selected_address: cleanCust.selected_address || null,
+          created_at: new Date().toISOString(),
+        },
+
     };
 
     // 1. Primary: Insert into customer_works table
@@ -3342,6 +3391,9 @@ export async function createOrderWithCustomer({
         collected_by_person: cleanCust.collected_by_person || '',
         staff_notes: cleanCust.internal_comments || cleanCust.notes || '',
         flags: cleanCust.flags || {},
+        additional_addresses: Array.isArray(cleanCust.additional_addresses) ? cleanCust.additional_addresses : [],
+        selected_customer_address_id: cleanCust.selected_customer_address_id || cleanCust.selected_address_id || null,
+        selected_address: cleanCust.selected_address || null,
         order_status: cleanCust.order_status || 'order recived',
         property_status: cleanCust.property_status || (cleanCust.priority === 'Yes' ? 'Yes' : 'No') || 'No',
       };
@@ -3488,7 +3540,7 @@ export async function createOrderWithCustomer({
       });
     } catch {}
 
-    if (Array.isArray(cleanCust.additional_addresses) && cleanCust.additional_addresses.length > 0) {
+    if (Array.isArray(cleanCust.additional_addresses)) {
       try {
         await saveCustomerAddresses(finalCustId, cleanCust.additional_addresses);
       } catch {}
@@ -4137,6 +4189,15 @@ export async function updateOrder(orderIdentifier, updatePayload = {}) {
       assigned_pickup_person_city: updatePayload.assigned_pickup_person_city ?? prevNotesObj.assigned_pickup_person_city ?? '',
       assigned_pickup_person_zone: updatePayload.assigned_pickup_person_zone ?? prevNotesObj.assigned_pickup_person_zone ?? '',
       flags: updatePayload.flags ?? prevNotesObj.flags ?? {},
+      additional_addresses: Array.isArray(updatePayload.additional_addresses)
+        ? updatePayload.additional_addresses
+        : (Array.isArray(prevNotesObj.additional_addresses) ? prevNotesObj.additional_addresses : []),
+      selected_customer_address_id: updatePayload.selected_customer_address_id !== undefined
+        ? updatePayload.selected_customer_address_id
+        : (prevNotesObj.selected_customer_address_id ?? null),
+      selected_address: updatePayload.selected_address !== undefined
+        ? updatePayload.selected_address
+        : (prevNotesObj.selected_address ?? null),
       order_status: targetStatus ? normalizeOrderStatus(targetStatus) : prevNotesObj.order_status,
       property_status: targetPropertyStatus,
     };

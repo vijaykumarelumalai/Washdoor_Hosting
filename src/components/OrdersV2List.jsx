@@ -40,8 +40,10 @@ import {
 } from '../services/serviceTypeService';
 import {
   updateOrderInSupabase,
+  updateCustomer,
   fetchActiveStaffMaster,
   fetchActivePickupDeliveryMaster,
+  fetchCustomerAddresses,
   getOrderById,
   getGarmentBarcodeDetails,
   fetchOrderGarmentBarcodes,
@@ -74,6 +76,17 @@ import {
   getGarmentBarcodeEntries,
   mergeGarmentBarcodePatch,
 } from '../utils/garmentBarcodes';
+import {
+  ORDERS_V2_DEFAULT_COLUMN_IDS,
+  enforceOrdersV2RequiredColumns,
+} from '../config/ordersV2ColumnsConfig';
+import OrdersV2AddressManager, {
+  MAX_ADDITIONAL_ADDRESSES,
+  formatAddressForOrder,
+  normalizeAdditionalAddresses,
+  toStoredAdditionalAddresses,
+  validateAdditionalAddresses,
+} from './OrdersV2AddressManager';
 
 const normalizePaymentStatusOption = (status, balance = 0, advance = 0, total = 0) => {
   const adv = Number(advance) || 0;
@@ -371,13 +384,13 @@ const STATUS_CONFIG = {
 
 // 7 Horizontal Stepper Tabs as requested by user and matching reference screenshots
 const HORIZONTAL_TABS = [
-  { id: 'customer', label: 'Customer Details', icon: <PersonOutlined sx={{ fontSize: 18 }} /> },
-  { id: 'order', label: 'Order Details', icon: <Inventory2Outlined sx={{ fontSize: 18 }} /> },
-  { id: 'inspection', label: 'Garment Inspection', icon: <LayersOutlined sx={{ fontSize: 18 }} /> },
-  { id: 'processing', label: 'Laundry Processing', icon: <FactoryOutlined sx={{ fontSize: 18 }} /> },
-  { id: 'payment', label: 'Payments & Billing', icon: <CreditCardOutlined sx={{ fontSize: 18 }} /> },
-  { id: 'messages', label: 'Customer Messages', icon: <ChatOutlined sx={{ fontSize: 18 }} /> },
-  { id: 'review', label: 'Review & Messages', icon: <FactCheckOutlined sx={{ fontSize: 18 }} /> },
+  { id: 'customer', label: 'Customer Details', icon: <PersonOutlined sx={{ fontSize: 16 }} /> },
+  { id: 'order', label: 'Order Details', icon: <Inventory2Outlined sx={{ fontSize: 16 }} /> },
+  { id: 'inspection', label: 'Garment Inspection', icon: <LayersOutlined sx={{ fontSize: 16 }} /> },
+  { id: 'processing', label: 'Laundry Processing', icon: <FactoryOutlined sx={{ fontSize: 16 }} /> },
+  { id: 'payment', label: 'Payments & Billing', icon: <CreditCardOutlined sx={{ fontSize: 16 }} /> },
+  { id: 'messages', label: 'Customer Messages', icon: <ChatOutlined sx={{ fontSize: 16 }} /> },
+  { id: 'review', label: 'Review & Messages', icon: <FactCheckOutlined sx={{ fontSize: 16 }} /> },
 ];
 
 const CLOTH_CATEGORIES = ['All', 'Men', 'Women', 'Home Linen', 'Accessories'];
@@ -443,14 +456,23 @@ const ORDERS_PAGINATION_ICON_SX = {
 const TABLE_COLUMN_CONFIG = {
   orderId: { default: 200, min: 150, max: 320 },
   customer: { default: 170, min: 130, max: 300 },
+  address: { default: 220, min: 180, max: 320 },
   services: { default: 190, min: 150, max: 280 },
   total: { default: 140, min: 110, max: 220 },
-  status: { default: 140, min: 110, max: 220 },
+  status: { default: 180, min: 170, max: 220 },
   date: { default: 160, min: 130, max: 260 },
-  actions: { default: 130, min: 110, max: 200 },
+  order_details: { default: 170, min: 130, max: 260 },
+  pickup_delivery: { default: 200, min: 160, max: 300 },
+  driver: { default: 150, min: 120, max: 240 },
+  comments: { default: 230, min: 180, max: 360 },
+  pincode: { default: 120, min: 100, max: 200 },
+  email: { default: 190, min: 150, max: 300 },
+  business_name: { default: 170, min: 140, max: 280 },
+  communication_pref: { default: 180, min: 150, max: 280 },
+  dob: { default: 150, min: 130, max: 240 },
+  tax_exemption: { default: 130, min: 110, max: 220 },
+  actions: { default: 200, min: 180, max: 260 },
 };
-
-const TAB_RESIZE_CONFIG = { min: 130, max: 280, default: 170 };
 
 const SERVICE_ICON_OPTIONS = [
   { value: 'laundry', label: 'Laundry' },
@@ -551,6 +573,7 @@ export function OrdersV2List({
   dateFilter = 'All Time',
   topSearch = '',
   currencySymbol = '₹',
+  visibleColumnIds = ORDERS_V2_DEFAULT_COLUMN_IDS,
   onEditInDrawer,
   onOpenSideEdit,
   onOpenViewOrder,
@@ -570,12 +593,54 @@ export function OrdersV2List({
 
   // Inline Edit State
   const [inlineEditingOrderId, setInlineEditingOrderId] = useState(null);
+  const [inlineViewportWidth, setInlineViewportWidth] = useState(0);
   const [activeTab, setActiveTab] = useState('customer');
+  const tabHeaderRef = useRef(null);
+  const activeTabRef = useRef(null);
+  const tableContainerRef = useRef(null);
+  useEffect(() => {
+    const container = tabHeaderRef.current;
+    const tab = activeTabRef.current;
+    if (!container || !tab) return;
+    const containerRect = container.getBoundingClientRect();
+    const tabRect = tab.getBoundingClientRect();
+    const tabLeft = tabRect.left - containerRect.left + container.scrollLeft;
+    const targetLeft = Math.max(0, tabLeft - (container.clientWidth - tabRect.width) / 2);
+    if (Math.abs(container.scrollLeft - targetLeft) > 1) {
+      container.scrollTo({ left: targetLeft, behavior: 'smooth' });
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    const container = tableContainerRef.current;
+    if (!container) return undefined;
+    const updateWidth = () => setInlineViewportWidth(container.clientWidth);
+    updateWidth();
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(updateWidth);
+      observer.observe(container);
+      return () => observer.disconnect();
+    }
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, [inlineEditingOrderId, orders.length]);
+
+  useEffect(() => {
+    if (!inlineEditingOrderId) return;
+    const container = tableContainerRef.current;
+    if (!container) return;
+    container.scrollLeft = 0;
+  }, [inlineEditingOrderId]);
+
   const [inlineDraft, setInlineDraft] = useState(null);
   const [inlineCart, setInlineCart] = useState([]);
   const [inspections, setInspections] = useState({});
   const [inlineScheduleErrors, setInlineScheduleErrors] = useState({});
   const [inlineAddressError, setInlineAddressError] = useState('');
+  const [inlineAddresses, setInlineAddresses] = useState([]);
+  const [inlineSelectedAddressId, setInlineSelectedAddressId] = useState(null);
+  const [showInlineAddressErrors, setShowInlineAddressErrors] = useState(false);
+  const inlineAddressTokenRef = useRef(0);
   const [isSavingInline, setIsSavingInline] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [scanMode, setScanMode] = useState('order');
@@ -593,6 +658,52 @@ export function OrdersV2List({
   const cameraControlsRef = useRef(null);
   const barcodeReaderRef = useRef(null);
   const barcodeImageInputRef = useRef(null);
+
+  const normalizedInlineAddresses = useMemo(
+    () => normalizeAdditionalAddresses(inlineAddresses),
+    [inlineAddresses],
+  );
+  const selectedInlineAddress = normalizedInlineAddresses.find(
+    (address) => address.id === inlineSelectedAddressId,
+  ) || null;
+  const inlineEffectiveAddress = selectedInlineAddress
+    ? formatAddressForOrder(selectedInlineAddress)
+    : sanitizeAddress(inlineDraft?.address || '');
+
+  const inlineCustomerValidation = useMemo(() => {
+    if (!inlineDraft) return { isValid: false, message: 'Please enter Customer Name and Phone Number.' };
+    if (!inlineDraft.customer_name?.trim() || !inlineDraft.mobile_number?.trim()) {
+      return { isValid: false, message: 'Please enter Customer Name and Phone Number.' };
+    }
+    if (Object.keys(validateAdditionalAddresses(inlineAddresses)).length > 0) {
+      return { isValid: false, message: 'Review the highlighted additional addresses.' };
+    }
+    if (isOnCallOrderType(inlineDraft.order_type) && !inlineEffectiveAddress) {
+      return { isValid: false, message: 'Address is required for On-Call orders.' };
+    }
+    if (isOnCallOrderType(inlineDraft.order_type)) {
+      const schedule = validateOnCallSchedule({
+        pickupDate: inlineDraft.scheduled_pickup_date,
+        pickupTime: inlineDraft.scheduled_pickup_time,
+        deliveryDate: inlineDraft.scheduled_delivery_date,
+        deliveryTime: inlineDraft.scheduled_delivery_time,
+        isNewOrder: false,
+        initialPickupIso: inlineDraft.scheduled_pickup_at || null,
+      });
+      if (!schedule.isValid) {
+        return { isValid: false, message: Object.values(schedule.errors)[0] || 'Review the on-call schedule.' };
+      }
+    } else {
+      const delivery = resolveOptionalDelivery({
+        deliveryDate: inlineDraft.scheduled_delivery_date,
+        deliveryTime: inlineDraft.scheduled_delivery_time,
+      });
+      if (!delivery.isValid) {
+        return { isValid: false, message: Object.values(delivery.errors)[0] || 'Review the delivery schedule.' };
+      }
+    }
+    return { isValid: true, message: 'All required customer details are valid.' };
+  }, [inlineDraft, inlineAddresses, inlineEffectiveAddress]);
 
   const inlineSelectedPickup = driverList.find(
     (option) => String(option.uniqueId) === String(inlineDraft?.assigned_pickup_person_id)
@@ -1126,12 +1237,12 @@ export function OrdersV2List({
       return acc;
     }, {})
   );
-  const [tabWidths, setTabWidths] = useState(() =>
-    HORIZONTAL_TABS.reduce((acc, tab) => {
-      acc[tab.id] = TAB_RESIZE_CONFIG.default;
-      return acc;
-    }, {})
+  const resolvedVisibleColumnIds = useMemo(
+    () => enforceOrdersV2RequiredColumns(visibleColumnIds),
+    [visibleColumnIds]
   );
+  const visibleColumnIdSet = useMemo(() => new Set(resolvedVisibleColumnIds), [resolvedVisibleColumnIds]);
+  const isColumnVisible = useCallback((columnId) => visibleColumnIdSet.has(columnId), [visibleColumnIdSet]);
   const resizeCleanupRef = useRef(null);
 
   useEffect(() => () => {
@@ -1160,13 +1271,13 @@ export function OrdersV2List({
     }
   }, [servicesPopup.anchorEl]);
 
-  const beginResize = useCallback((event, target, key, min, max) => {
+  const beginResize = useCallback((event, key, min, max) => {
     event.preventDefault();
     event.stopPropagation();
 
     const startX = event.clientX;
-    const setWidths = target === 'table' ? setTableColumnWidths : setTabWidths;
-    const startWidth = target === 'table' ? tableColumnWidths[key] : tabWidths[key];
+    const setWidths = setTableColumnWidths;
+    const startWidth = tableColumnWidths[key];
 
     const onMove = (moveEvent) => {
       const nextWidth = Math.min(max, Math.max(min, startWidth + moveEvent.clientX - startX));
@@ -1188,17 +1299,12 @@ export function OrdersV2List({
     window.addEventListener('pointercancel', cleanup);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
-  }, [tableColumnWidths, tabWidths]);
-
-  const getColumnWidthSx = useCallback((key) => {
-    const width = tableColumnWidths[key];
-    return { boxSizing: 'border-box', width, minWidth: width, maxWidth: width, whiteSpace: 'nowrap', overflow: 'hidden' };
   }, [tableColumnWidths]);
 
-  const getTabWidthSx = useCallback((key) => {
-    const width = tabWidths[key];
-    return { boxSizing: 'border-box', flex: `0 0 ${width}px`, width, minWidth: width, maxWidth: width };
-  }, [tabWidths]);
+  const getColumnWidthSx = useCallback((key) => {
+    const width = tableColumnWidths[key] || TABLE_COLUMN_CONFIG[key]?.default || 160;
+    return { boxSizing: 'border-box', width, minWidth: width, maxWidth: width, whiteSpace: 'nowrap', overflow: 'hidden' };
+  }, [tableColumnWidths]);
 
   const renderResizeHandle = useCallback((onPointerDown) => (
     <Box
@@ -1233,8 +1339,11 @@ export function OrdersV2List({
   ), []);
 
   const tableWidth = useMemo(
-    () => Object.keys(TABLE_COLUMN_CONFIG).reduce((total, key) => total + tableColumnWidths[key], 0),
-    [tableColumnWidths]
+    () => resolvedVisibleColumnIds.reduce(
+      (total, key) => total + (tableColumnWidths[key] || TABLE_COLUMN_CONFIG[key]?.default || 0),
+      0
+    ),
+    [resolvedVisibleColumnIds, tableColumnWidths]
   );
 
   const renderTableHeader = useCallback((key, label, extraSx = {}) => {
@@ -1242,6 +1351,7 @@ export function OrdersV2List({
     return (
       <TableCell
         className="orders-v2-header-cell"
+        data-column={key}
         sx={{
           position: 'sticky',
           top: 0,
@@ -1256,13 +1366,37 @@ export function OrdersV2List({
           py: 1.25,
           ...getColumnWidthSx(key),
           ...extraSx,
+          ...(key === 'actions' ? { minWidth: config.min, overflow: 'visible' } : {}),
         }}
       >
         {label}
-        {renderResizeHandle((event) => beginResize(event, 'table', key, config.min, config.max))}
+        {renderResizeHandle((event) => beginResize(event, key, config.min, config.max))}
       </TableCell>
     );
   }, [beginResize, getColumnWidthSx, renderResizeHandle]);
+
+  const renderDynamicTableHeader = useCallback(() => (
+    <>
+      {isColumnVisible('orderId') && renderTableHeader('orderId', 'Order ID')}
+      {isColumnVisible('customer') && renderTableHeader('customer', 'Customer')}
+      {isColumnVisible('address') && renderTableHeader('address', 'Address')}
+      {isColumnVisible('services') && renderTableHeader('services', 'Services')}
+      {isColumnVisible('total') && renderTableHeader('total', 'Total Amount')}
+      {isColumnVisible('status') && renderTableHeader('status', 'Status')}
+      {isColumnVisible('date') && renderTableHeader('date', 'Order Date')}
+      {isColumnVisible('order_details') && renderTableHeader('order_details', 'Order Details')}
+      {isColumnVisible('pickup_delivery') && renderTableHeader('pickup_delivery', 'Pickup & Delivery')}
+      {isColumnVisible('driver') && renderTableHeader('driver', 'Driver')}
+      {isColumnVisible('comments') && renderTableHeader('comments', 'Comments')}
+      {isColumnVisible('pincode') && renderTableHeader('pincode', 'PIN Code')}
+      {isColumnVisible('email') && renderTableHeader('email', 'Email')}
+      {isColumnVisible('business_name') && renderTableHeader('business_name', 'Business Name')}
+      {isColumnVisible('communication_pref') && renderTableHeader('communication_pref', 'Communication Preference')}
+      {isColumnVisible('dob') && renderTableHeader('dob', 'Date of Birth')}
+      {isColumnVisible('tax_exemption') && renderTableHeader('tax_exemption', 'Tax Exemption')}
+      {isColumnVisible('actions') && renderTableHeader('actions', 'Actions', { textAlign: 'center' })}
+    </>
+  ), [isColumnVisible, renderTableHeader]);
 
   // Tab 2 (Catalog & Selection) state
   const [catalogCategory, setCatalogCategory] = useState('All');
@@ -1482,6 +1616,10 @@ export function OrdersV2List({
       setInlineCart([]);
       setInspections({});
       setPaymentHistory([]);
+      setInlineAddresses([]);
+      setInlineSelectedAddressId(null);
+      setShowInlineAddressErrors(false);
+      inlineAddressTokenRef.current += 1;
       setActiveTab('customer');
       return;
     }
@@ -1575,10 +1713,30 @@ export function OrdersV2List({
     setScannedGarmentKeys([]);
     setBarcodePreviewEntry(null);
     stopCameraScanner();
-    setInlineScheduleErrors({});
-    setInlineAddressError('');
+      setInlineScheduleErrors({});
+      setInlineAddressError('');
 
-    void fetchOrderGarmentBarcodes(oid, items)
+      const addressToken = inlineAddressTokenRef.current + 1;
+      inlineAddressTokenRef.current = addressToken;
+      const addressSeed = normalizeAdditionalAddresses(
+        order.additional_addresses || order.customer?.additional_addresses || [],
+      );
+      setInlineAddresses(addressSeed);
+      setInlineSelectedAddressId(order.selected_customer_address_id || null);
+      setShowInlineAddressErrors(false);
+
+      const customerId = order.customer_id || order.customer?.customer_id;
+      if (customerId) {
+        fetchCustomerAddresses(customerId)
+          .then(({ data }) => {
+            if (inlineAddressTokenRef.current !== addressToken) return;
+            setInlineAddresses(data?.length ? normalizeAdditionalAddresses(data) : addressSeed);
+          })
+          .catch(() => {});
+      }
+
+      void fetchOrderGarmentBarcodes(oid, items)
+
       .then(({ data, error }) => {
         if (barcodeLoadTokenRef.current !== barcodeToken) return;
         if (data?.inspections) {
@@ -1658,6 +1816,10 @@ export function OrdersV2List({
     setPaymentHistory(orderPaymentHistory);
 
     setActiveTab('customer');
+    if (tableContainerRef.current) {
+      tableContainerRef.current.scrollLeft = 0;
+      setInlineViewportWidth(tableContainerRef.current.clientWidth);
+    }
     setInlineEditingOrderId(oid);
   };
 
@@ -1815,7 +1977,19 @@ export function OrdersV2List({
   const handleSaveInlineEdit = async () => {
     if (!inlineDraft) return;
 
-    if (isOnCallOrderType(inlineDraft.order_type) && !sanitizeAddress(inlineDraft.address)) {
+    const addressValidationErrors = validateAdditionalAddresses(inlineAddresses);
+    if (Object.keys(addressValidationErrors).length > 0) {
+      setShowInlineAddressErrors(true);
+      alert('Review the highlighted additional addresses before saving.');
+      return;
+    }
+    setShowInlineAddressErrors(false);
+
+    const addressForOrder = selectedInlineAddress
+      ? formatAddressForOrder(selectedInlineAddress)
+      : sanitizeAddress(inlineDraft.address);
+
+    if (isOnCallOrderType(inlineDraft.order_type) && !sanitizeAddress(inlineDraft.address) && !selectedInlineAddress) {
       setInlineAddressError('Address is required for On-Call orders.');
       alert('Address is required for On-Call orders.');
       return;
@@ -1949,7 +2123,7 @@ export function OrdersV2List({
 
       const baseHistory = prevHistory.length > 0 ? prevHistory : initialHistory;
       const combinedHistory = [...addedEvents, ...baseHistory];
-      const cleanAddress = sanitizeAddress(inlineDraft.address);
+      const cleanAddress = addressForOrder;
       const processingPayload = buildProcessingPayload(inlineDraft);
       const barcodeResult = assignGarmentBarcodes({
         orderId: inlineDraft.order_number || inlineDraft.id,
@@ -1963,6 +2137,9 @@ export function OrdersV2List({
         customer_name: inlineDraft.customer_name,
         mobile_number: inlineDraft.mobile_number,
         address: cleanAddress,
+        additional_addresses: toStoredAdditionalAddresses(inlineAddresses),
+        selected_customer_address_id: selectedInlineAddress?.id || null,
+        selected_address: cleanAddress,
         order_type: inlineDraft.order_type,
         service_category: resolvedServiceCategory,
         order_status: newStatus,
@@ -2005,10 +2182,25 @@ export function OrdersV2List({
         status_updated_by: staffActor,
       };
 
+      const inlineCustomerId = inlineDraft.customer_id
+        || inlineDraft.customer?.customer_id
+        || inlineDraft.customer?.customerId
+        || null;
+      if (inlineCustomerId) {
+        const { error: customerUpdateError } = await updateCustomer(inlineCustomerId, {
+          customer_id: inlineCustomerId,
+          additional_addresses: toStoredAdditionalAddresses(inlineAddresses),
+        });
+        if (customerUpdateError) throw customerUpdateError;
+      }
+
       await updateOrderInSupabase(updatedRecord.order_number, {
         customerName: updatedRecord.customer_name,
         mobileNumber: updatedRecord.mobile_number,
         address: cleanAddress,
+        additional_addresses: toStoredAdditionalAddresses(inlineAddresses),
+        selected_customer_address_id: selectedInlineAddress?.id || null,
+        selected_address: cleanAddress,
         serviceCategory: resolvedServiceCategory,
         orderType: updatedRecord.order_type,
         status: newStatus,
@@ -2184,9 +2376,11 @@ export function OrdersV2List({
         }}
       >
         <TableContainer
+          ref={tableContainerRef}
           className={`orders-v2-table-container ${isInlineEditing ? 'is-inline-editing' : ''}`}
           sx={{
             width: '100%',
+            maxWidth: '100%',
             height: ORDERS_TABLE_VIEWPORT_HEIGHT,
             minHeight: ORDERS_TABLE_VIEWPORT_HEIGHT,
             maxHeight: ORDERS_TABLE_VIEWPORT_HEIGHT,
@@ -2201,7 +2395,8 @@ export function OrdersV2List({
                   height: 'auto',
                   minHeight: 0,
                   maxHeight: 'none',
-                  overflowY: 'hidden',
+                  overflowX: 'visible',
+                  overflowY: 'visible',
                   overscrollBehavior: 'auto',
                   ...INLINE_EDIT_TABLE_SCROLLBAR_SX,
                 }
@@ -2232,13 +2427,7 @@ export function OrdersV2List({
           {/* Table Head */}
           <TableHead sx={{ bgcolor: '#f8fafc', position: 'sticky', top: 0, zIndex: 5 }}>
             <TableRow>
-              {renderTableHeader('orderId', 'Order ID')}
-              {renderTableHeader('customer', 'Customer')}
-              {renderTableHeader('services', 'Services')}
-              {renderTableHeader('total', 'Total Amount')}
-              {renderTableHeader('status', 'Status')}
-              {renderTableHeader('date', 'Order Date')}
-              {renderTableHeader('actions', 'Actions', { textAlign: 'center' })}
+              {renderDynamicTableHeader()}
             </TableRow>
           </TableHead>
 
@@ -2264,7 +2453,7 @@ export function OrdersV2List({
                       '& td': { borderBottom: isInlineOpen ? 'none' : '1px solid #f1f5f9' },
                     }}
                   >
-                    {/* Order ID & Avatar */}
+                    {isColumnVisible('orderId') && (
                     <TableCell sx={{ py: 1.2, ...getColumnWidthSx('orderId') }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <IconButton
@@ -2299,8 +2488,10 @@ export function OrdersV2List({
                         </Box>
                       </Box>
                     </TableCell>
+                    )}
 
                     {/* Customer */}
+                    {isColumnVisible('customer') && (
                     <TableCell sx={{ py: 1.2, ...getColumnWidthSx('customer') }}>
                       <Typography noWrap variant="body2" fontWeight={600} color="#0f172a">
                         {order.customer_name || '—'}
@@ -2309,8 +2500,21 @@ export function OrdersV2List({
                         {order.mobile_number || '—'}
                       </Typography>
                     </TableCell>
+                    )}
+
+                    {/* Address */}
+                    {isColumnVisible('address') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('address') }}>
+                      <Tooltip title={sanitizeAddress(order.address || order.delivery_address || order.customer_address) || ''}>
+                        <Typography noWrap variant="body2" color="#475569" fontSize="0.82rem">
+                          {sanitizeAddress(order.address || order.delivery_address || order.customer_address) || '—'}
+                        </Typography>
+                      </Tooltip>
+                    </TableCell>
+                    )}
 
                     {/* Services */}
+                    {isColumnVisible('services') && (
                     <TableCell sx={{ py: 1.2, ...getColumnWidthSx('services') }}>
                       {!firstService ? (
                         <Typography variant="body2" color="#94a3b8">—</Typography>
@@ -2373,8 +2577,10 @@ export function OrdersV2List({
                         </Box>
                       )}
                     </TableCell>
+                    )}
 
                     {/* Total Amount & Balance */}
+                    {isColumnVisible('total') && (
                     <TableCell sx={{ py: 1.2, ...getColumnWidthSx('total') }}>
                       <Typography noWrap variant="body2" fontWeight={800} color="#0f172a">
                         {currencySymbol}{MONEY(order.total_amount ?? 0)}
@@ -2383,9 +2589,14 @@ export function OrdersV2List({
                         Bal: {currencySymbol}{MONEY(order.balance_due ?? 0)}
                       </Typography>
                     </TableCell>
+                    )}
 
                     {/* Status Pill Badge with Dot */}
-                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('status') }}>
+                    {isColumnVisible('status') && (
+                    <TableCell
+                      className="orders-v2-status-cell"
+                      sx={{ py: 1.2, ...getColumnWidthSx('status'), minWidth: 170, overflow: 'visible' }}
+                    >
                       <Box
                         sx={{
                           display: 'inline-flex',
@@ -2399,7 +2610,10 @@ export function OrdersV2List({
                           color: stStyle.text,
                           fontSize: '0.78rem',
                           fontWeight: 700,
+                          lineHeight: 1.2,
                           whiteSpace: 'nowrap',
+                          flexShrink: 0,
+                          maxWidth: 'none',
                         }}
                       >
                         <Box
@@ -2413,8 +2627,10 @@ export function OrdersV2List({
                         {status}
                       </Box>
                     </TableCell>
+                    )}
 
                     {/* Order Date */}
+                    {isColumnVisible('date') && (
                     <TableCell sx={{ py: 1.2, ...getColumnWidthSx('date') }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, color: '#334155' }}>
                         <CalendarTodayOutlined sx={{ fontSize: 15, color: '#64748b' }} />
@@ -2423,18 +2639,152 @@ export function OrdersV2List({
                         </Typography>
                       </Box>
                     </TableCell>
+                    )}
+
+                    {/* Order Details */}
+                    {isColumnVisible('order_details') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('order_details') }}>
+                      <Typography noWrap variant="body2" color="#334155" fontSize="0.82rem" fontWeight={600}>
+                        {order.work_number || order.order_source || '—'}
+                      </Typography>
+                      <Typography noWrap variant="caption" color="#64748b" display="block">
+                        {order.order_type || '—'}
+                      </Typography>
+                    </TableCell>
+                    )}
+
+                    {/* Pickup & Delivery */}
+                    {isColumnVisible('pickup_delivery') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('pickup_delivery') }}>
+                      <Tooltip title={formatDeliveryDateTimeForDisplay(order) || ''}>
+                        <Typography noWrap variant="body2" color="#334155" fontSize="0.82rem">
+                          {formatDeliveryDateTimeForDisplay(order) || '—'}
+                        </Typography>
+                      </Tooltip>
+                      <Typography noWrap variant="caption" color="#64748b" display="block">
+                        {order.delivery_type || order.order_type || '—'}
+                      </Typography>
+                    </TableCell>
+                    )}
+
+                    {/* Driver */}
+                    {isColumnVisible('driver') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('driver') }}>
+                      <Typography noWrap variant="body2" color="#334155" fontSize="0.82rem" fontWeight={600}>
+                        {order.assigned_pickup_delivery_person || order.assigned_driver || order.assigned_rider || '—'}
+                      </Typography>
+                    </TableCell>
+                    )}
+
+                    {/* Comments */}
+                    {isColumnVisible('comments') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('comments') }}>
+                      <Tooltip title={order.comments || order.notes || order.special_instructions || ''}>
+                        <Typography noWrap variant="body2" color="#475569" fontSize="0.82rem">
+                          {order.comments || order.notes || order.special_instructions || '—'}
+                        </Typography>
+                      </Tooltip>
+                    </TableCell>
+                    )}
+
+                    {/* PIN Code */}
+                    {isColumnVisible('pincode') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('pincode') }}>
+                      <Typography noWrap variant="body2" color="#334155" fontSize="0.82rem">
+                        {order.pincode || order.delivery_pincode || order.customer_pincode || '—'}
+                      </Typography>
+                    </TableCell>
+                    )}
+
+                    {/* Email */}
+                    {isColumnVisible('email') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('email') }}>
+                      <Tooltip title={order.email || order.customer_email || ''}>
+                        <Typography noWrap variant="body2" color="#334155" fontSize="0.82rem">
+                          {order.email || order.customer_email || '—'}
+                        </Typography>
+                      </Tooltip>
+                    </TableCell>
+                    )}
+
+                    {/* Business Name */}
+                    {isColumnVisible('business_name') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('business_name') }}>
+                      <Tooltip title={order.business_name || order.company_name || order.customer?.business_name || ''}>
+                        <Typography noWrap variant="body2" color="#334155" fontSize="0.82rem" fontWeight={600}>
+                          {order.business_name || order.company_name || order.customer?.business_name || '—'}
+                        </Typography>
+                      </Tooltip>
+                    </TableCell>
+                    )}
+
+                    {/* Communication Preference */}
+                    {isColumnVisible('communication_pref') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('communication_pref') }}>
+                      <Typography noWrap variant="body2" color="#334155" fontSize="0.82rem">
+                        {order.communication_pref || order.communicationPreference || '—'}
+                      </Typography>
+                    </TableCell>
+                    )}
+
+                    {/* Date of Birth */}
+                    {isColumnVisible('dob') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('dob') }}>
+                      <Typography noWrap variant="body2" color="#334155" fontSize="0.82rem">
+                        {formatDateOnly(order.dob || order.date_of_birth) || '—'}
+                      </Typography>
+                    </TableCell>
+                    )}
+
+                    {/* Tax Exemption */}
+                    {isColumnVisible('tax_exemption') && (
+                    <TableCell sx={{ py: 1.2, ...getColumnWidthSx('tax_exemption') }}>
+                      <Chip
+                        size="small"
+                        label={order.tax_exemption ? 'Yes' : 'No'}
+                        sx={{
+                          height: 22,
+                          fontWeight: 700,
+                          fontSize: '0.72rem',
+                          bgcolor: order.tax_exemption ? '#dbeafe' : '#f1f5f9',
+                          color: order.tax_exemption ? '#1d4ed8' : '#64748b',
+                        }}
+                      />
+                    </TableCell>
+                    )}
 
                     {/* Actions */}
-                    <TableCell sx={{ py: 1.2, textAlign: 'center', ...getColumnWidthSx('actions') }}>
-                      <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                    {isColumnVisible('actions') && (
+                    <TableCell
+                      className={`orders-v2-actions-cell${isInlineOpen ? ' is-inline-open' : ''}`}
+                      sx={{
+                        py: 1.2,
+                        textAlign: 'center',
+                        ...getColumnWidthSx('actions'),
+                        minWidth: 180,
+                        overflow: 'visible',
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexWrap: 'nowrap',
+                          flexShrink: 0,
+                          gap: 1.5,
+                          minWidth: 0,
+                          overflow: 'visible',
+                        }}
+                      >
                         {/* Edit Action */}
                         <Tooltip title="Inline Edit Order">
                           <IconButton
                             size="small"
                             onClick={() => handleToggleInlineEdit(order)}
-                            sx={{ color: '#2563eb', p: 0.7 }}
+                            sx={{ color: '#2563eb', p: 0.7, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                           >
-                            <EditOutlined fontSize="small" />
+                            <EditOutlined sx={{ fontSize: 18 }} />
                           </IconButton>
                         </Tooltip>
 
@@ -2444,22 +2794,22 @@ export function OrdersV2List({
                             <IconButton
                               size="small"
                               onClick={() => onOpenViewOrder(order)}
-                              sx={{ color: '#475569', p: 0.7 }}
+                              sx={{ color: '#475569', p: 0.7, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                             >
-                              <VisibilityOutlined fontSize="small" />
+                              <VisibilityOutlined sx={{ fontSize: 18 }} />
                             </IconButton>
                           </Tooltip>
                         )}
 
-                        {/* Thermal Receipt Action */}
+                        {/* Invoice Action */}
                         {onOpenReceipt && (
-                          <Tooltip title="Print Receipt">
+                          <Tooltip title="Invoice">
                             <IconButton
                               size="small"
                               onClick={() => onOpenReceipt(order)}
-                              sx={{ color: '#2563eb', p: 0.7 }}
+                              sx={{ color: '#2563eb', p: 0.7, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                             >
-                              <ReceiptLongOutlined fontSize="small" />
+                              <ReceiptLongOutlined sx={{ fontSize: 18 }} />
                             </IconButton>
                           </Tooltip>
                         )}
@@ -2470,22 +2820,40 @@ export function OrdersV2List({
                             <IconButton
                               size="small"
                               onClick={() => onDelete(orderId)}
-                              sx={{ color: '#dc2626', p: 0.7 }}
+                              sx={{ color: '#dc2626', p: 0.7, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                             >
-                              <DeleteOutlined fontSize="small" />
+                              <DeleteOutlined sx={{ fontSize: 18 }} />
                             </IconButton>
                           </Tooltip>
                         )}
                       </Box>
                     </TableCell>
+                    )}
+
                   </TableRow>
 
                   {/* ── EXPANDED INLINE EDIT PANEL (WITH HORIZONTAL STEPPER TABS) ── */}
                   {isInlineOpen && inlineDraft && (
-                    <TableRow>
-                      <TableCell colSpan={7} sx={{ p: 0, bgcolor: '#eff6ff', borderBottom: '2px solid #2563eb' }}>
-                        <Collapse in timeout="auto" unmountOnExit>
-                          <Box sx={{ borderTop: '1px solid #bfdbfe', overflow: 'visible', minWidth: 0 }}>
+                    <TableRow className="orders-v2-inline-edit-row">
+                      <TableCell
+                        colSpan={resolvedVisibleColumnIds.length}
+                        className="orders-v2-inline-edit-cell"
+                        sx={{ p: 0, width: '100%', minWidth: 0, maxWidth: 'none', overflow: 'visible', bgcolor: '#eff6ff', borderBottom: '2px solid #2563eb' }}
+                      >
+                        <Collapse className="orders-v2-inline-edit-collapse" in timeout="auto" unmountOnExit>
+                          <Box
+                            className="orders-v2-inline-edit-sticky"
+                            sx={{
+                              position: 'sticky',
+                              left: 0,
+                              width: inlineViewportWidth ? `${inlineViewportWidth}px` : '100%',
+                              maxWidth: '100%',
+                              minWidth: 0,
+                              boxSizing: 'border-box',
+                              borderTop: '1px solid #bfdbfe',
+                              overflow: 'visible',
+                            }}
+                          >
                             {/* 1. Header Bar: Edit Order Title + Pipeline Status Pills + Buttons */}
                             <Box
                               sx={{
@@ -2599,71 +2967,34 @@ export function OrdersV2List({
                             </Box>
 
                             {/* 2. Horizontal Stepper Tabs Navigation Bar */}
-                            <Box
-                              sx={{
-                                bgcolor: '#ffffff',
-                                borderBottom: '1px solid #e2e8f0',
-                                px: { xs: 1.5, md: 3 },
-                                overflowX: 'auto',
-                                overflowY: 'hidden',
-                                scrollbarWidth: 'thin',
-                                '&::-webkit-scrollbar': { height: 6 },
-                                '&::-webkit-scrollbar-thumb': { bgcolor: '#cbd5e1', borderRadius: '6px' },
-                                '&::-webkit-scrollbar-track': { bgcolor: 'transparent' },
-                              }}
-                            >
-                              <Box sx={{ display: 'flex', alignItems: 'center', width: 'max-content', minWidth: '100%' }}>
+                            <Box ref={tabHeaderRef} className="orders-v2-inline-tabs">
+                              <Box className="orders-v2-inline-tabs-track">
                                 {HORIZONTAL_TABS.map((tab) => {
                                   const isSelected = activeTab === tab.id;
                                   return (
-                                      <Box
-                                        key={tab.id}
-                                        onClick={() => setActiveTab(tab.id)}
-                                        sx={{
-                                          position: 'relative',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          gap: 1,
-                                          ...getTabWidthSx(tab.id),
-                                          flexShrink: 0,
-                                          pl: 1.5,
-                                          pr: 2.5,
-                                          py: 1.6,
-                                          cursor: 'pointer',
-                                          whiteSpace: 'nowrap',
-                                          overflow: 'hidden',
-                                          color: isSelected ? '#2563eb' : '#64748b',
-                                          fontWeight: isSelected ? 800 : 500,
-                                          fontSize: '0.86rem',
-                                          borderBottom: isSelected ? '3px solid #2563eb' : '3px solid transparent',
-                                          transition: 'color 0.15s ease, background-color 0.15s ease',
-                                          '& > span': { overflow: 'hidden', textOverflow: 'ellipsis' },
-                                          '&:hover': {
-                                            color: isSelected ? '#2563eb' : '#0f172a',
-                                            bgcolor: isSelected ? 'transparent' : '#f8fafc',
-                                          },
-                                        }}
-                                      >
-                                        <Box sx={{ display: 'flex', color: isSelected ? '#2563eb' : '#64748b' }}>
-                                          {tab.icon}
-                                        </Box>
+                                    <Box
+                                      key={tab.id}
+                                      ref={isSelected ? activeTabRef : null}
+                                      role="tab"
+                                      aria-selected={isSelected}
+                                      className={`orders-v2-inline-tab${isSelected ? ' orders-v2-inline-tab-active' : ''}`}
+                                      onClick={() => setActiveTab(tab.id)}
+                                    >
+                                      <Box className="orders-v2-inline-tab-icon">{tab.icon}</Box>
+                                      <span className="orders-v2-inline-tab-label" data-label={tab.label}>
                                         <span>{tab.label}</span>
-                                        {renderResizeHandle((event) => beginResize(
-                                          event,
-                                          'tab',
-                                          tab.id,
-                                          TAB_RESIZE_CONFIG.min,
-                                          TAB_RESIZE_CONFIG.max
-                                        ))}
-                                      </Box>
+                                      </span>
+                                    </Box>
                                   );
                                 })}
                               </Box>
                             </Box>
 
                             {/* 3. Main Tab Contents Area */}
-                            <Box sx={{ p: { xs: 1.5, md: 2 }, bgcolor: '#f8fafc', minWidth: 0 }}>
+                            <Box
+                              className={activeTab === 'review' ? 'orders-v2-review-content' : undefined}
+                              sx={{ p: { xs: 1.5, md: 2 }, bgcolor: '#f8fafc', minWidth: 0 }}
+                            >
                               {/* ══════════════════════════════════════════════════════════
                                   TAB 1: CUSTOMER DETAILS
                                   (Customer name*, Phone no*, Address (optional),
@@ -2672,83 +3003,140 @@ export function OrdersV2List({
                                    Attending staff name, Driver/Pickup person)
                                  ══════════════════════════════════════════════════════════ */}
                               {activeTab === 'customer' && (
-                                <Paper elevation={0} sx={{ p: { xs: 2, sm: 3 }, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, mb: 2.5 }}>
-                                    <Box sx={{ width: 34, height: 34, borderRadius: '50%', bgcolor: '#2563eb', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                      <PersonOutlined fontSize="small" />
+                                <Paper
+                                  elevation={0}
+                                  className="orders-v2-inline-customer-layout"
+                                  data-inspect="inline-customer-layout"
+                                  sx={{ p: 2, borderRadius: '10px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}
+                                >
+                                  <Box className="orders-v2-inline-customer-header" data-inspect="inline-customer-header">
+                                    <Box className="orders-v2-inline-customer-header-icon">
+                                      <PersonOutlined sx={{ fontSize: 18 }} />
                                     </Box>
-                                    <Box>
-                                      <Typography variant="subtitle1" fontWeight={800} color="#0f172a">
+                                    <Box sx={{ minWidth: 0 }}>
+                                      <Typography className="orders-v2-inline-customer-section-title" sx={{ mb: 0 }}>
                                         Customer & Intake Details
                                       </Typography>
-                                      <Typography variant="caption" color="#64748b">
-                                        Enter or update customer information, intake method, and assignment.
+                                      <Typography className="orders-v2-inline-customer-header-caption">
+                                        Update customer information, intake method, scheduling, and assignment.
                                       </Typography>
                                     </Box>
                                   </Box>
 
-                                  {/* Walk-in vs On-Call Customer Selection */}
-                                  <Box sx={{ mb: 2.5 }}>
-                                    <Typography variant="caption" fontWeight={700} color="#475569" display="block" mb={1}>
+                                  <Box className="orders-v2-inline-customer-section" data-inspect="inline-customer-info">
+                                    <Typography className="orders-v2-inline-customer-section-title">
+                                      Customer Information
+                                    </Typography>
+                                    <Grid container spacing={2} className="orders-v2-inline-customer-pair-grid">
+                                      <Grid item xs={12} sm={6}>
+                                        <Typography className="orders-v2-inline-customer-field-label">
+                                          Customer Name *
+                                        </Typography>
+                                        <TextField
+                                          className="orders-v2-inline-customer-input"
+                                          fullWidth
+                                          size="small"
+                                          value={inlineDraft.customer_name || ''}
+                                          onChange={(e) => setInlineDraft({ ...inlineDraft, customer_name: e.target.value })}
+                                          InputProps={{
+                                            startAdornment: (
+                                              <InputAdornment position="start">
+                                                <PersonOutlined fontSize="small" sx={{ color: '#64748b' }} />
+                                              </InputAdornment>
+                                            ),
+                                            endAdornment: inlineDraft.customer_name?.trim() ? (
+                                              <InputAdornment position="end">
+                                                <CheckCircle fontSize="small" sx={{ color: '#2563eb' }} />
+                                              </InputAdornment>
+                                            ) : null,
+                                          }}
+                                        />
+                                      </Grid>
+                                      <Grid item xs={12} sm={6}>
+                                        <Typography className="orders-v2-inline-customer-field-label">
+                                          Phone No *
+                                        </Typography>
+                                        <TextField
+                                          className="orders-v2-inline-customer-input"
+                                          fullWidth
+                                          size="small"
+                                          value={inlineDraft.mobile_number || ''}
+                                          onChange={(e) => setInlineDraft({ ...inlineDraft, mobile_number: e.target.value })}
+                                          InputProps={{
+                                            startAdornment: (
+                                              <InputAdornment position="start">
+                                                <PhoneOutlined fontSize="small" sx={{ color: '#64748b' }} />
+                                              </InputAdornment>
+                                            ),
+                                            endAdornment: inlineDraft.mobile_number?.trim() ? (
+                                              <InputAdornment position="end">
+                                                <CheckCircle fontSize="small" sx={{ color: '#2563eb' }} />
+                                              </InputAdornment>
+                                            ) : null,
+                                          }}
+                                        />
+                                      </Grid>
+                                    </Grid>
+                                  </Box>
+
+                                  <Box className="orders-v2-inline-customer-section" data-inspect="inline-customer-intake">
+                                    <Typography className="orders-v2-inline-customer-section-title">
                                       Customer Intake Method
                                     </Typography>
-                                    <Grid container spacing={2}>
+                                    <Grid container spacing={2} className="orders-v2-inline-customer-pair-grid">
                                       <Grid item xs={12} sm={6}>
                                         <Box
+                                          className="orders-v2-inline-customer-intake-card"
+                                          data-inspect="inline-intake-walk-in"
                                           onClick={() => {
                                             setInlineDraft({ ...inlineDraft, order_type: 'Walk-In' });
                                             setInlineAddressError('');
                                           }}
                                           sx={{
-                                            p: 1.8,
-                                            border: '2px solid',
+                                            border: '1px solid',
                                             borderColor: inlineDraft.order_type === 'Walk-In' ? '#2563eb' : '#e2e8f0',
                                             bgcolor: inlineDraft.order_type === 'Walk-In' ? '#eff6ff' : '#ffffff',
-                                            borderRadius: '10px',
                                             cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 1.5,
-                                            transition: 'all 0.15s ease',
                                           }}
                                         >
-                                          <DirectionsWalkOutlined sx={{ color: inlineDraft.order_type === 'Walk-In' ? '#2563eb' : '#64748b', fontSize: 26 }} />
-                                          <Box>
-                                            <Typography variant="body2" fontWeight={800} color={inlineDraft.order_type === 'Walk-In' ? '#1d4ed8' : '#0f172a'}>
+                                          <DirectionsWalkOutlined
+                                            className="orders-v2-inline-customer-intake-icon"
+                                            sx={{ color: inlineDraft.order_type === 'Walk-In' ? '#2563eb' : '#64748b' }}
+                                          />
+                                          <Box sx={{ minWidth: 0 }}>
+                                            <Typography className="orders-v2-inline-customer-intake-title" color={inlineDraft.order_type === 'Walk-In' ? '#1d4ed8' : '#0f172a'}>
                                               Walk-In Customer
                                             </Typography>
-                                            <Typography variant="caption" color="#64748b">
+                                            <Typography className="orders-v2-inline-customer-intake-caption">
                                               Direct counter drop & store pickup
                                             </Typography>
                                           </Box>
                                         </Box>
                                       </Grid>
-
                                       <Grid item xs={12} sm={6}>
                                         <Box
+                                          className="orders-v2-inline-customer-intake-card"
+                                          data-inspect="inline-intake-on-call"
                                           onClick={() => {
                                             setInlineDraft({ ...inlineDraft, order_type: 'On-Call (Pickup)' });
                                             setInlineAddressError('');
                                           }}
                                           sx={{
-                                            p: 1.8,
-                                            border: '2px solid',
+                                            border: '1px solid',
                                             borderColor: isOnCallOrderType(inlineDraft.order_type) ? '#2563eb' : '#e2e8f0',
                                             bgcolor: isOnCallOrderType(inlineDraft.order_type) ? '#eff6ff' : '#ffffff',
-                                            borderRadius: '10px',
                                             cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 1.5,
-                                            transition: 'all 0.15s ease',
                                           }}
                                         >
-                                          <CallOutlined sx={{ color: isOnCallOrderType(inlineDraft.order_type) ? '#2563eb' : '#64748b', fontSize: 26 }} />
-                                          <Box>
-                                            <Typography variant="body2" fontWeight={800} color={isOnCallOrderType(inlineDraft.order_type) ? '#1d4ed8' : '#0f172a'}>
+                                          <CallOutlined
+                                            className="orders-v2-inline-customer-intake-icon"
+                                            sx={{ color: isOnCallOrderType(inlineDraft.order_type) ? '#2563eb' : '#64748b' }}
+                                          />
+                                          <Box sx={{ minWidth: 0 }}>
+                                            <Typography className="orders-v2-inline-customer-intake-title" color={isOnCallOrderType(inlineDraft.order_type) ? '#1d4ed8' : '#0f172a'}>
                                               On-Call Customer
                                             </Typography>
-                                            <Typography variant="caption" color="#64748b">
+                                            <Typography className="orders-v2-inline-customer-intake-caption">
                                               Requires scheduled pickup & doorstep delivery
                                             </Typography>
                                           </Box>
@@ -2757,65 +3145,17 @@ export function OrdersV2List({
                                     </Grid>
                                   </Box>
 
-                                  <Grid container spacing={2}>
-                                    {/* Customer Name* */}
-                                    <Grid item xs={12} sm={6}>
-                                      <Typography variant="caption" fontWeight={700} color="#334155" display="block" mb={0.5}>
-                                        Customer Name *
-                                      </Typography>
-                                      <TextField
-                                        fullWidth
-                                        size="small"
-                                        value={inlineDraft.customer_name || ''}
-                                        onChange={(e) => setInlineDraft({ ...inlineDraft, customer_name: e.target.value })}
-                                        InputProps={{
-                                          startAdornment: (
-                                            <InputAdornment position="start">
-                                              <PersonOutlined fontSize="small" sx={{ color: '#64748b' }} />
-                                            </InputAdornment>
-                                          ),
-                                          endAdornment: inlineDraft.customer_name?.trim() ? (
-                                            <InputAdornment position="end">
-                                              <CheckCircle fontSize="small" sx={{ color: '#2563eb' }} />
-                                            </InputAdornment>
-                                          ) : null,
-                                          sx: { borderRadius: '8px', fontSize: '0.88rem' },
-                                        }}
-                                      />
-                                    </Grid>
+                                  <div className="orders-v2-inline-customer-fields" data-inspect="inline-customer-address-scheduling-staff">
 
-                                    {/* Phone No* */}
-                                    <Grid item xs={12} sm={6}>
-                                      <Typography variant="caption" fontWeight={700} color="#334155" display="block" mb={0.5}>
-                                        Phone No *
+                                    <div className="orders-v2-inline-customer-address" data-inspect="inline-customer-address">
+                                      <Typography className="orders-v2-inline-customer-section-title">
+                                        Address Information
                                       </Typography>
-                                      <TextField
-                                        fullWidth
-                                        size="small"
-                                        value={inlineDraft.mobile_number || ''}
-                                        onChange={(e) => setInlineDraft({ ...inlineDraft, mobile_number: e.target.value })}
-                                        InputProps={{
-                                          startAdornment: (
-                                            <InputAdornment position="start">
-                                              <PhoneOutlined fontSize="small" sx={{ color: '#64748b' }} />
-                                            </InputAdornment>
-                                          ),
-                                          endAdornment: inlineDraft.mobile_number?.trim() ? (
-                                            <InputAdornment position="end">
-                                              <CheckCircle fontSize="small" sx={{ color: '#2563eb' }} />
-                                            </InputAdornment>
-                                          ) : null,
-                                          sx: { borderRadius: '8px', fontSize: '0.88rem' },
-                                        }}
-                                      />
-                                    </Grid>
-
-                                    {/* Address (required for On-Call, optional for Walk-In) */}
-                                    <Grid item xs={12}>
-                                      <Typography variant="caption" fontWeight={700} color="#334155" display="block" mb={0.5}>
+                                      <Typography className="orders-v2-inline-customer-field-label">
                                         Address {isOnCallOrderType(inlineDraft.order_type) ? '* required' : '(optional)'}
                                       </Typography>
                                       <TextField
+                                        className="orders-v2-inline-customer-input"
                                         fullWidth
                                         size="small"
                                         placeholder="Enter customer address or landmark..."
@@ -2837,104 +3177,124 @@ export function OrdersV2List({
                                               <CheckCircle fontSize="small" sx={{ color: '#2563eb' }} />
                                             </InputAdornment>
                                           ) : null,
-                                          sx: { borderRadius: '8px', fontSize: '0.88rem' },
                                         }}
                                       />
-                                    </Grid>
+                                      <OrdersV2AddressManager
+                                        value={inlineAddresses}
+                                        onChange={(next) => setInlineAddresses(normalizeAdditionalAddresses(next))}
+                                        selectedId={inlineSelectedAddressId}
+                                        onSelect={(id) => {
+                                          setInlineSelectedAddressId(id);
+                                          if (id) setInlineAddressError('');
+                                        }}
+                                        showErrors={showInlineAddressErrors}
+                                        compact
+                                        showAddIcon={false}
+                                        addLabel={`Add Additional Address (${normalizedInlineAddresses.length}/${MAX_ADDITIONAL_ADDRESSES})`}
+                                        savedLabel={`Show Saved Addresses (${normalizedInlineAddresses.length})`}
+                                        hideSavedLabel="Hide Saved Addresses"
+                                        inspectId="inline-customer-address-manager"
+                                      />
+                                    </div>
 
-                                    {/* Pickup (On-Call) and delivery scheduling fields */}
-                                    <Grid item xs={12}>
-                                      <Box sx={{ p: 2, bgcolor: '#eff6ff', borderRadius: '10px', border: '1.5px solid #bfdbfe' }}>
-                                        <Typography variant="subtitle2" fontWeight={800} color="#1d4ed8" mb={1.5} display="flex" alignItems="center" gap={1}>
-                                          {isOnCallOrderType(inlineDraft.order_type) ? <CallOutlined fontSize="small" /> : <LocalShippingOutlined fontSize="small" />}
-                                          {isOnCallOrderType(inlineDraft.order_type) ? 'On-Call Scheduling Requirements' : 'Delivery Date & Time (optional)'}
+                                    <div className="orders-v2-inline-customer-scheduling" data-inspect="inline-customer-scheduling">
+                                      <Box className="orders-v2-inline-customer-scheduling-panel">
+                                        <Typography className="orders-v2-inline-customer-section-title" sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1 }}>
+                                          {isOnCallOrderType(inlineDraft.order_type) ? <CallOutlined sx={{ fontSize: 16 }} /> : <LocalShippingOutlined sx={{ fontSize: 16 }} />}
+                                          Scheduling Requirements
                                         </Typography>
-                                        <Grid container spacing={2}>
-                                          {isOnCallOrderType(inlineDraft.order_type) && (
-                                            <Grid item xs={12} sm={6}>
-                                              <Typography variant="caption" fontWeight={700} color="#1d4ed8" display="block" mb={0.5}>
-                                                Schedule Pickup Date &amp; Time *
-                                              </Typography>
-                                              <Grid container spacing={1}>
-                                                <Grid item xs={6}>
-                                                  <TextField
-                                                    fullWidth
-                                                    type="date"
-                                                    size="small"
-                                                    value={inlineDraft.scheduled_pickup_date || ''}
-                                                    onChange={(e) => setInlineDraft({ ...inlineDraft, scheduled_pickup_date: e.target.value })}
-                                                    InputProps={{ sx: { bgcolor: '#ffffff', borderRadius: '8px' } }}
-                                                  />
-                                                </Grid>
-                                                <Grid item xs={6}>
-                                                  <TextField
-                                                    fullWidth
-                                                    type="time"
-                                                    size="small"
-                                                    value={inlineDraft.scheduled_pickup_time || ''}
-                                                    onChange={(e) => setInlineDraft({ ...inlineDraft, scheduled_pickup_time: e.target.value })}
-                                                    InputProps={{ sx: { bgcolor: '#ffffff', borderRadius: '8px' } }}
-                                                  />
-                                                </Grid>
-                                              </Grid>
-                                            </Grid>
-                                          )}
-
-                                          <Grid item xs={12} sm={isOnCallOrderType(inlineDraft.order_type) ? 6 : 12}>
-                                            <Typography variant="caption" fontWeight={700} color="#1d4ed8" display="block" mb={0.5}>
-                                              Schedule Delivery Date &amp; Time (optional)
+                                        {isOnCallOrderType(inlineDraft.order_type) && (
+                                          <Grid item xs={12} className="orders-v2-inline-customer-schedule-row" data-inspect="inline-pickup-row">
+                                            <Typography className="orders-v2-inline-customer-field-label">
+                                              Pickup Date &amp; Time *
                                             </Typography>
-                                            <Grid container spacing={1}>
+                                            <Grid container spacing={1} className="orders-v2-inline-customer-pair-grid">
                                               <Grid item xs={6}>
                                                 <TextField
+                                                  className="orders-v2-inline-customer-input"
                                                   fullWidth
                                                   type="date"
                                                   size="small"
-                                                  value={inlineDraft.scheduled_delivery_date || ''}
-                                                  onChange={(e) => {
-                                                    setInlineDraft({ ...inlineDraft, scheduled_delivery_date: e.target.value });
-                                                    if (inlineScheduleErrors.scheduled_delivery_at) {
-                                                      setInlineScheduleErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
-                                                    }
-                                                  }}
-                                                  error={Boolean(inlineScheduleErrors.scheduled_delivery_at)}
-                                                  helperText={inlineScheduleErrors.scheduled_delivery_at}
-                                                  InputProps={{ sx: { bgcolor: '#ffffff', borderRadius: '8px' } }}
+                                                  value={inlineDraft.scheduled_pickup_date || ''}
+                                                  onChange={(e) => setInlineDraft({ ...inlineDraft, scheduled_pickup_date: e.target.value })}
+                                                  slotProps={{ htmlInput: { 'aria-label': 'Pickup Date', style: { fontSize: '13px' } } }}
                                                 />
                                               </Grid>
                                               <Grid item xs={6}>
                                                 <TextField
+                                                  className="orders-v2-inline-customer-input"
                                                   fullWidth
                                                   type="time"
                                                   size="small"
-                                                  value={inlineDraft.scheduled_delivery_time || ''}
-                                                  onChange={(e) => {
-                                                    setInlineDraft({ ...inlineDraft, scheduled_delivery_time: e.target.value });
-                                                    if (inlineScheduleErrors.scheduled_delivery_at) {
-                                                      setInlineScheduleErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
-                                                    }
-                                                  }}
-                                                  error={Boolean(inlineScheduleErrors.scheduled_delivery_at)}
-                                                  helperText={inlineScheduleErrors.scheduled_delivery_at}
-                                                  InputProps={{ sx: { bgcolor: '#ffffff', borderRadius: '8px' } }}
+                                                  value={inlineDraft.scheduled_pickup_time || ''}
+                                                  onChange={(e) => setInlineDraft({ ...inlineDraft, scheduled_pickup_time: e.target.value })}
+                                                  slotProps={{ htmlInput: { 'aria-label': 'Pickup Time', style: { fontSize: '13px' } } }}
                                                 />
                                               </Grid>
                                             </Grid>
                                           </Grid>
+                                        )}
+                                        <Grid item xs={12} className="orders-v2-inline-customer-schedule-row" data-inspect="inline-delivery-row">
+                                          <Typography className="orders-v2-inline-customer-field-label">
+                                            Delivery Date &amp; Time (optional)
+                                          </Typography>
+                                          <Grid container spacing={1} className="orders-v2-inline-customer-pair-grid">
+                                            <Grid item xs={6}>
+                                              <TextField
+                                                className="orders-v2-inline-customer-input"
+                                                fullWidth
+                                                type="date"
+                                                size="small"
+                                                value={inlineDraft.scheduled_delivery_date || ''}
+                                                onChange={(e) => {
+                                                  setInlineDraft({ ...inlineDraft, scheduled_delivery_date: e.target.value });
+                                                  if (inlineScheduleErrors.scheduled_delivery_at) {
+                                                    setInlineScheduleErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
+                                                  }
+                                                }}
+                                                error={Boolean(inlineScheduleErrors.scheduled_delivery_at)}
+                                                helperText={inlineScheduleErrors.scheduled_delivery_at}
+                                                slotProps={{ htmlInput: { 'aria-label': 'Delivery Date', style: { fontSize: '13px' } } }}
+                                              />
+                                            </Grid>
+                                            <Grid item xs={6}>
+                                              <TextField
+                                                className="orders-v2-inline-customer-input"
+                                                fullWidth
+                                                type="time"
+                                                size="small"
+                                                value={inlineDraft.scheduled_delivery_time || ''}
+                                                onChange={(e) => {
+                                                  setInlineDraft({ ...inlineDraft, scheduled_delivery_time: e.target.value });
+                                                  if (inlineScheduleErrors.scheduled_delivery_at) {
+                                                    setInlineScheduleErrors((prev) => ({ ...prev, scheduled_delivery_at: '' }));
+                                                  }
+                                                }}
+                                                error={Boolean(inlineScheduleErrors.scheduled_delivery_at)}
+                                                helperText={inlineScheduleErrors.scheduled_delivery_at}
+                                                slotProps={{ htmlInput: { 'aria-label': 'Delivery Time', style: { fontSize: '13px' } } }}
+                                              />
+                                            </Grid>
+                                          </Grid>
                                         </Grid>
                                       </Box>
-                                    </Grid>
+                                    </div>
 
-                                    {/* Attending Staff Name */}
-                                    <Grid item xs={12} sm={6}>
+                                    <div className="orders-v2-inline-customer-staff" data-inspect="inline-customer-staff">
+                                      <Typography className="orders-v2-inline-customer-section-title">
+                                        Staff Assignment
+                                      </Typography>
+                                      <Grid container spacing={2} className="orders-v2-inline-customer-pair-grid">
+                                        <Grid item xs={12} sm={6} className="orders-v2-inline-customer-staff-field" data-inspect="inline-attend-staff">
                                       <Typography variant="caption" fontWeight={700} color="#334155" display="block" mb={0.5}>
                                         Attend Staff Name
                                       </Typography>
-                                      <TextField
-                                        select
-                                        fullWidth
-                                        size="small"
-                                        value={inlineDraft.assigned_staff || inlineDraft.attend_staff_name || 'Counter Staff'}
+                                        <TextField
+                                          className="orders-v2-inline-customer-input"
+                                          select
+                                          fullWidth
+                                          size="small"
+                                          value={inlineDraft.assigned_staff || inlineDraft.attend_staff_name || 'Counter Staff'}
                                         onChange={(e) => {
                                           const chosenStaff = e.target.value;
                                           const matched = staffList.find((s) => s.name === chosenStaff);
@@ -3050,16 +3410,16 @@ export function OrdersV2List({
                                       </TextField>
                                     </Grid>
 
-                                    {/* Order Pickup & Delivery Person Name */}
-                                    <Grid item xs={12} sm={6}>
+                                        <Grid item xs={12} sm={6} className="orders-v2-inline-customer-staff-field" data-inspect="inline-pickup-delivery-staff">
                                       <Typography variant="caption" fontWeight={700} color="#334155" display="block" mb={0.5}>
                                         Order Pickup &amp; Delivery Person Name
                                       </Typography>
-                                      <TextField
-                                        select
-                                        fullWidth
-                                        size="small"
-                                        value={inlineDraft.assigned_driver || inlineDraft.assigned_pickup_delivery_person || ''}
+                                        <TextField
+                                          className="orders-v2-inline-customer-input"
+                                          select
+                                          fullWidth
+                                          size="small"
+                                          value={inlineDraft.assigned_driver || inlineDraft.assigned_pickup_delivery_person || ''}
                                         onChange={(e) => {
                                           const chosenDriver = e.target.value;
                                           const matched = driverList.find((d) => d.name === chosenDriver);
@@ -3158,44 +3518,47 @@ export function OrdersV2List({
                                             </Box>
                                           </MenuItem>
                                         )}
-                                      </TextField>
-                                    </Grid>
-                                  </Grid>
+                                        </TextField>
+                                        </Grid>
+                                      </Grid>
+                                    </div>
+                                  </div>
 
-                                  {/* Tab 1 Footer Actions */}
-                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pt: 3, mt: 3, borderTop: '1px solid #f1f5f9' }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
-                                      {inlineDraft.customer_name?.trim() && inlineDraft.mobile_number?.trim() ? (
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, color: '#2563eb' }}>
-                                          <CheckCircle sx={{ fontSize: 18 }} />
-                                          <Typography variant="caption" fontWeight={700} color="#2563eb">
-                                            Customer details are valid.
+                                  <Box className="orders-v2-inline-customer-footer" data-inspect="inline-customer-footer">
+                                    <Box className="orders-v2-inline-customer-status">
+                                      {inlineCustomerValidation.isValid ? (
+                                        <>
+                                          <CheckCircle sx={{ fontSize: 16 }} />
+                                          <Typography variant="caption" fontWeight={700}>
+                                            {inlineCustomerValidation.message}
                                           </Typography>
-                                        </Box>
+                                        </>
                                       ) : (
                                         <Typography variant="caption" color="#dc2626">
-                                          Please enter Customer Name and Phone Number.
+                                          {inlineCustomerValidation.message}
                                         </Typography>
                                       )}
                                     </Box>
 
-                                    <Box sx={{ display: 'flex', gap: 1 }}>
+                                    <Box className="orders-v2-inline-customer-actions">
                                       <Button
+                                        className="orders-v2-inline-customer-footer-button"
                                         variant="outlined"
                                         size="small"
                                         onClick={handleNextTab}
                                         endIcon={<ArrowForward />}
-                                        sx={{ textTransform: 'none', fontWeight: 600, borderColor: '#cbd5e1', color: '#0f172a', borderRadius: '8px', px: 2 }}
+                                        sx={{ textTransform: 'none', fontWeight: 600, borderColor: '#cbd5e1', color: '#0f172a' }}
                                       >
                                         Next: Order Details
                                       </Button>
                                       <Button
+                                        className="orders-v2-inline-customer-footer-button"
                                         variant="contained"
                                         size="small"
                                         onClick={handleSaveInlineEdit}
                                         disabled={isSavingInline}
                                         startIcon={<Check />}
-                                        sx={{ textTransform: 'none', fontWeight: 700, bgcolor: '#2563eb', color: '#ffffff', borderRadius: '8px', px: 2 }}
+                                        sx={{ textTransform: 'none', fontWeight: 700, bgcolor: '#2563eb', color: '#ffffff' }}
                                       >
                                         Confirm Changes
                                       </Button>
@@ -5262,9 +5625,9 @@ export function OrdersV2List({
                                   TAB 7: REVIEW & CONFIRM CHANGES (Matching Image 4)
                                  ══════════════════════════════════════════════════════════ */}
                               {activeTab === 'review' && (
-                                <Box>
+                                <Box className="orders-v2-review">
                                   {/* Section Header: Blue icon box + Title + Subtitle */}
-                                  <Paper elevation={0} sx={{ p: 2, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', mb: 2.5 }}>
+                                  <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', border: '1px solid #D8E2EF', bgcolor: '#ffffff', mb: 2 }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                                       <Box
                                         sx={{
@@ -5292,377 +5655,353 @@ export function OrdersV2List({
                                     </Box>
                                   </Paper>
 
-                                  {/* Top 5 Cards Grid */}
-                                  <Grid container spacing={2} mb={2.5}>
-                                    {/* 1. Customer Information Card */}
-                                    <Grid item xs={12} sm={6} md={2.4}>
-                                      <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                        <Box>
-                                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                                            <Typography variant="subtitle2" fontWeight={800} color="#0f172a" display="flex" alignItems="center" gap={0.6} fontSize="0.82rem">
-                                              <PersonOutlined sx={{ color: '#2563eb', fontSize: 17 }} />
-                                              Customer Information
-                                            </Typography>
-                                            <IconButton size="small" onClick={() => setActiveTab('customer')} sx={{ p: 0.3, color: '#64748b' }}>
-                                              <EditOutlined sx={{ fontSize: 15 }} />
-                                            </IconButton>
+                                  <Box className="orders-v2-review-grid-three orders-v2-review-row-one">
+                                    <Paper elevation={0} className="orders-v2-review-card orders-v2-review-row-one-card">
+                                      <Box className="orders-v2-review-card-header">
+                                        <Typography variant="subtitle2" className="orders-v2-review-card-title">
+                                          <PersonOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
+                                          Customer Information
+                                        </Typography>
+                                        <IconButton size="small" onClick={() => setActiveTab('customer')} sx={{ p: 0.3, color: '#64748b' }}>
+                                          <EditOutlined sx={{ fontSize: 14 }} />
+                                        </IconButton>
+                                      </Box>
+                                      <Box className="orders-v2-review-card-body">
+                                        <Box className="orders-v2-review-rows">
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Name</Typography>
+                                            <Typography variant="caption" className="orders-v2-review-row-value">{inlineDraft.customer_name || '—'}</Typography>
                                           </Box>
-                                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8, fontSize: '0.78rem' }}>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Name</Typography>
-                                              <Typography variant="caption" fontWeight={700} color="#0f172a">{inlineDraft.customer_name || '—'}</Typography>
-                                            </Box>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Mobile Number</Typography>
-                                              <Typography variant="caption" fontWeight={700} color="#0f172a">{inlineDraft.mobile_number ? `+91 ${inlineDraft.mobile_number}` : '—'}</Typography>
-                                            </Box>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Address</Typography>
-                                              <Typography variant="caption" fontWeight={600} color="#0f172a" sx={{ textAlign: 'right', maxWidth: 110 }}>
-                                                {inlineDraft.address || '—'}
-                                              </Typography>
-                                            </Box>
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Mobile Number</Typography>
+                                            <Typography variant="caption" className="orders-v2-review-row-value">{inlineDraft.mobile_number ? `+91 ${inlineDraft.mobile_number}` : '—'}</Typography>
+                                          </Box>
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Address</Typography>
+                                            <Typography variant="caption" className="orders-v2-review-row-value">{inlineDraft.address || '—'}</Typography>
+                                          </Box>
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Order Type</Typography>
+                                            <Chip label={inlineDraft.order_type || '—'} size="small" className="orders-v2-review-row-value" sx={{ bgcolor: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: '0.68rem', height: 20, maxWidth: '100%' }} />
                                           </Box>
                                         </Box>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1.2, pt: 1, borderTop: '1px solid #f1f5f9' }}>
-                                          <Typography variant="caption" color="#64748b">Order Type</Typography>
-                                          <Chip label={inlineDraft.order_type || '—'} size="small" sx={{ bgcolor: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: '0.68rem', height: 20 }} />
-                                        </Box>
-                                      </Paper>
-                                    </Grid>
+                                      </Box>
+                                    </Paper>
 
-                                    {/* 2. Garments Table Card */}
-                                    <Grid item xs={12} sm={6} md={2.4}>
-                                      <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                        <Box>
-                                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.2 }}>
-                                            <Typography variant="subtitle2" fontWeight={800} color="#0f172a" display="flex" alignItems="center" gap={0.6} fontSize="0.82rem">
-                                              <CheckroomOutlined sx={{ color: '#2563eb', fontSize: 17 }} />
-                                              Garments ({inlineCart.length} Items)
-                                            </Typography>
-                                            <IconButton size="small" onClick={() => setActiveTab('order')} sx={{ p: 0.3, color: '#64748b' }}>
-                                              <EditOutlined sx={{ fontSize: 15 }} />
-                                            </IconButton>
-                                          </Box>
-                                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.74rem' }}>
-                                            <thead>
-                                              <tr style={{ color: '#64748b', borderBottom: '1px solid #f1f5f9', textAlign: 'left' }}>
-                                                <th style={{ padding: '2px 4px' }}>#</th>
-                                                <th style={{ padding: '2px 4px' }}>Garment</th>
-                                                <th style={{ padding: '2px 4px' }}>Qty</th>
-                                                <th style={{ padding: '2px 4px' }}>Rate</th>
-                                                <th style={{ padding: '2px 4px', textAlign: 'right' }}>Amount</th>
+                                    <Paper elevation={0} className="orders-v2-review-card orders-v2-review-row-one-card">
+                                      <Box className="orders-v2-review-card-header">
+                                        <Typography variant="subtitle2" className="orders-v2-review-card-title">
+                                          <CheckroomOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
+                                          Garments ({inlineCart.length} Items)
+                                        </Typography>
+                                        <IconButton size="small" onClick={() => setActiveTab('order')} sx={{ p: 0.3, color: '#64748b' }}>
+                                          <EditOutlined sx={{ fontSize: 14 }} />
+                                        </IconButton>
+                                      </Box>
+                                      <Box className="orders-v2-review-card-body">
+                                        <table className="orders-v2-review-table">
+                                          <thead>
+                                            <tr>
+                                              <th>#</th>
+                                              <th>Garment</th>
+                                              <th>Qty</th>
+                                              <th>Rate</th>
+                                              <th>Amount</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {inlineCart.length === 0 ? (
+                                              <tr>
+                                                <td colSpan={5} style={{ textAlign: 'center', color: '#94a3b8' }}>
+                                                  No garments added yet.
+                                                </td>
                                               </tr>
-                                            </thead>
-                                            <tbody>
-                                              {inlineCart.length === 0 ? (
-                                                <tr>
-                                                  <td colSpan={5} style={{ padding: '12px 4px', textAlign: 'center', color: '#94a3b8' }}>
-                                                    No garments added yet.
+                                            ) : (
+                                              inlineCart.map((item, idx) => (
+                                                <tr key={idx}>
+                                                  <td style={{ color: '#64748b' }}>{idx + 1}</td>
+                                                  <td style={{ fontWeight: 600 }}>{item.name}</td>
+                                                  <td>{item.qty ?? item.quantity ?? 0}</td>
+                                                  <td>{currencySymbol}{toFiniteNumber(item.rate ?? item.price, 0).toFixed(2)}</td>
+                                                  <td style={{ fontWeight: 700 }}>
+                                                    {currencySymbol}{(toFiniteNumber(item.qty ?? item.quantity, 0) * toFiniteNumber(item.rate ?? item.price, 0)).toFixed(2)}
                                                   </td>
                                                 </tr>
-                                              ) : (
-                                                inlineCart.slice(0, 4).map((item, idx) => (
-                                                  <tr key={idx} style={{ borderBottom: '1px solid #f8fafc' }}>
-                                                    <td style={{ padding: '3px 4px', color: '#64748b' }}>{idx + 1}</td>
-                                                    <td style={{ padding: '3px 4px', fontWeight: 600 }}>{item.name}</td>
-                                                    <td style={{ padding: '3px 4px' }}>{item.qty ?? item.quantity ?? 0}</td>
-                                                    <td style={{ padding: '3px 4px' }}>{currencySymbol}{toFiniteNumber(item.rate ?? item.price, 0).toFixed(2)}</td>
-                                                    <td style={{ padding: '3px 4px', textAlign: 'right', fontWeight: 700 }}>
-                                                      {currencySymbol}{(toFiniteNumber(item.qty ?? item.quantity, 0) * toFiniteNumber(item.rate ?? item.price, 0)).toFixed(2)}
-                                                    </td>
-                                                  </tr>
-                                                ))
-                                              )}
-                                            </tbody>
-                                          </table>
-                                        </Box>
-                                      </Paper>
-                                    </Grid>
-
-                                    {/* 3. Services Card */}
-                                    <Grid item xs={12} sm={6} md={2.4}>
-                                      <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                        <Box>
-                                          <Typography variant="subtitle2" fontWeight={800} color="#0f172a" mb={1.2} display="flex" alignItems="center" gap={0.6} fontSize="0.82rem">
-                                            <LayersOutlined sx={{ color: '#2563eb', fontSize: 17 }} />
-                                            Services
-                                          </Typography>
-                                          <Box sx={{ p: 1.2, bgcolor: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
-                                              <Box sx={{ width: 28, height: 28, borderRadius: '6px', bgcolor: '#2563eb', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                <LocalShippingOutlined sx={{ fontSize: 16 }} />
-                                              </Box>
-                                              <Box>
-                                                <Typography variant="body2" fontWeight={700} color="#1d4ed8" fontSize="0.8rem">
-                                                  {inlineCart.length > 0 && inlineDraft.service_category ? inlineDraft.service_category : '—'}
-                                                </Typography>
-                                                <Typography variant="caption" color="#64748b" fontSize="0.7rem">
-                                                  {inlineCart.length > 0 && inlineDraft.service_category ? 'Wash, Dry & Fold' : 'No service selected'}
-                                                </Typography>
-                                              </Box>
-                                            </Box>
-                                            <Typography variant="body2" fontWeight={800} color="#0f172a">
-                                              {currencySymbol}{MONEY(inlineSubtotal)}
-                                            </Typography>
-                                          </Box>
-                                        </Box>
-                                      </Paper>
-                                    </Grid>
-
-                                    {/* 4. Scheduling Card */}
-                                    <Grid item xs={12} sm={6} md={2.4}>
-                                      <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                        <Box>
-                                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.2 }}>
-                                            <Typography variant="subtitle2" fontWeight={800} color="#0f172a" display="flex" alignItems="center" gap={0.6} fontSize="0.82rem">
-                                              <CalendarTodayOutlined sx={{ color: '#2563eb', fontSize: 17 }} />
-                                              Scheduling
-                                            </Typography>
-                                            <IconButton size="small" onClick={() => setActiveTab('customer')} sx={{ p: 0.3, color: '#64748b' }}>
-                                              <EditOutlined sx={{ fontSize: 15 }} />
-                                            </IconButton>
-                                          </Box>
-                                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8, fontSize: '0.78rem' }}>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Pickup / Delivery</Typography>
-                                              <Typography variant="caption" fontWeight={700} color="#1d4ed8">
-                                                {inlineDraft.order_type === 'Walk-In' ? 'In-Store (Walk-In)' : 'On-Call (Pickup)'}
-                                              </Typography>
-                                            </Box>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Received Date &amp; Time</Typography>
-                                              <Typography variant="caption" fontWeight={600} color="#0f172a">
-                                                📅 {formatDateTime(inlineDraft.created_at)}
-                                              </Typography>
-                                            </Box>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Expected Delivery</Typography>
-                                              <Typography variant="caption" fontWeight={600} color="#0f172a">
-                                                📅 {inlineDraft.scheduled_delivery_date ? `${formatDateOnly(inlineDraft.scheduled_delivery_date)}${inlineDraft.scheduled_delivery_time ? `, ${inlineDraft.scheduled_delivery_time}` : ''}` : '—'}
-                                              </Typography>
-                                            </Box>
-                                          </Box>
-                                        </Box>
-                                      </Paper>
-                                    </Grid>
-
-                                    {/* 5. Payment Status Card */}
-                                    <Grid item xs={12} sm={6} md={2.4}>
-                                      <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                        <Box>
-                                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.2 }}>
-                                            <Typography variant="subtitle2" fontWeight={800} color="#0f172a" display="flex" alignItems="center" gap={0.6} fontSize="0.82rem">
-                                              <CreditCardOutlined sx={{ color: '#2563eb', fontSize: 17 }} />
-                                              Payment Status
-                                            </Typography>
-                                            <IconButton size="small" onClick={() => setActiveTab('payment')} sx={{ p: 0.3, color: '#64748b' }}>
-                                              <EditOutlined sx={{ fontSize: 15 }} />
-                                            </IconButton>
-                                          </Box>
-                                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8, fontSize: '0.78rem' }}>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                              <Typography variant="caption" color="#64748b">Status</Typography>
-                                              <Chip label={inlineDraft.payment_status || '—'} size="small" sx={{ bgcolor: '#fef3c7', color: '#b45309', fontWeight: 700, height: 20, fontSize: '0.7rem' }} />
-                                            </Box>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Advance Paid</Typography>
-                                              <Typography variant="caption" fontWeight={700} color="#0f172a">{currencySymbol}{MONEY(inlineAdvance)}</Typography>
-                                            </Box>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Balance Due</Typography>
-                                              <Typography variant="caption" fontWeight={800} color={inlineBalance > 0 ? '#b45309' : '#1d4ed8'}>
-                                                {currencySymbol}{MONEY(inlineBalance)}
-                                              </Typography>
-                                            </Box>
-                                          </Box>
-                                        </Box>
-                                      </Paper>
-                                    </Grid>
-                                  </Grid>
-
-                                  {/* Bottom Section: Customer Messages & Notes/Summary */}
-                                  <Grid container spacing={2.5}>
-                                    {/* ── LEFT: CUSTOMER MESSAGES (WhatsApp & SMS) ── */}
-                                    <Grid item xs={12} md={7}>
-                                      <Paper elevation={0} sx={{ p: 2.5, borderRadius: '12px', border: '1px solid #e2e8f0', bgcolor: '#ffffff', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                        <Box>
-                                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.4 }}>
-                                            <ChatOutlined sx={{ color: '#2563eb', fontSize: 20 }} />
-                                            <Typography variant="subtitle2" fontWeight={800} color="#0f172a">
-                                              Customer Messages
-                                            </Typography>
-                                          </Box>
-                                          <Typography variant="caption" color="#64748b" display="block" mb={2}>
-                                            Send WhatsApp or SMS updates to the customer.
-                                          </Typography>
-
-                                          {/* Template selection pills */}
-                                          <Box sx={{ display: 'flex', gap: 0.8, flexWrap: 'wrap', mb: 2 }}>
-                                            {[
-                                              ['order_received', '✓ 1. Order Received'],
-                                              ['in_progress', '2. Processing Update'],
-                                              ['ready', '3. Ready for Pickup'],
-                                              ['delivered', '4. Order Delivered'],
-                                            ].map(([key, lbl]) => {
-                                              const isActive = selectedMessageTemplate === key;
-                                              return (
-                                                <Chip
-                                                  key={key}
-                                                  label={lbl}
-                                                  size="small"
-                                                  clickable
-                                                  onClick={() => setSelectedMessageTemplate(key)}
-                                                  sx={{
-                                                    fontWeight: isActive ? 700 : 500,
-                                                    bgcolor: isActive ? '#2563eb' : '#ffffff',
-                                                    color: isActive ? '#ffffff' : '#334155',
-                                                    border: '1px solid',
-                                                    borderColor: isActive ? '#2563eb' : '#cbd5e1',
-                                                    borderRadius: '20px',
-                                                    fontSize: '0.78rem',
-                                                    px: 0.5,
-                                                    '&:hover': { bgcolor: isActive ? '#1d4ed8' : '#f8fafc' },
-                                                  }}
-                                                />
-                                              );
-                                            })}
-                                          </Box>
-
-                                          {/* Message Textarea */}
-                                          <Box sx={{ position: 'relative', mb: 2 }}>
-                                            <TextField
-                                              fullWidth
-                                              multiline
-                                              rows={4}
-                                              value={messagePreviewText}
-                                              variant="outlined"
-                                              InputProps={{ sx: { borderRadius: '8px', fontSize: '0.84rem', bgcolor: '#f8fafc' } }}
-                                            />
-                                            <Typography variant="caption" color="#94a3b8" sx={{ position: 'absolute', bottom: 8, right: 12 }}>
-                                              {messagePreviewText.length} / 500
-                                            </Typography>
-                                          </Box>
-                                        </Box>
-
-                                        {/* Action Buttons Row */}
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pt: 1.5, borderTop: '1px solid #f1f5f9', flexWrap: 'wrap', gap: 1 }}>
-                                          <Box sx={{ display: 'flex', gap: 1 }}>
-                                            <Button
-                                              size="small"
-                                              variant="contained"
-                                              startIcon={<WhatsApp />}
-                                              onClick={() => {
-                                                setMessageSentToast('WhatsApp alert prepared and dispatched!');
-                                                setTimeout(() => setMessageSentToast(''), 3000);
-                                              }}
-                                              sx={{ bgcolor: '#2563eb', color: '#ffffff', textTransform: 'none', fontWeight: 700, borderRadius: '8px', px: 2, '&:hover': { bgcolor: '#1d4ed8' } }}
-                                            >
-                                              Send WhatsApp Alert
-                                            </Button>
-                                            <Button
-                                              size="small"
-                                              variant="outlined"
-                                              startIcon={<ChatOutlined />}
-                                              onClick={() => {
-                                                setMessageSentToast('SMS alert queued successfully!');
-                                                setTimeout(() => setMessageSentToast(''), 3000);
-                                              }}
-                                              sx={{ textTransform: 'none', borderColor: '#cbd5e1', color: '#334155', borderRadius: '8px', px: 1.8 }}
-                                            >
-                                              Send SMS
-                                            </Button>
-                                          </Box>
-
-                                          <Button
-                                            size="small"
-                                            variant="outlined"
-                                            startIcon={<DescriptionOutlined />}
-                                            sx={{ textTransform: 'none', borderColor: '#cbd5e1', color: '#334155', borderRadius: '8px' }}
-                                          >
-                                            Use Template
-                                          </Button>
-
-                                          {messageSentToast && (
-                                            <Typography variant="caption" fontWeight={700} color="#2563eb" width="100%">
-                                              ✓ {messageSentToast}
-                                            </Typography>
-                                          )}
-                                        </Box>
-                                      </Paper>
-                                    </Grid>
-
-                                    {/* ── RIGHT: NOTES & ORDER SUMMARY ── */}
-                                    <Grid item xs={12} md={5}>
-                                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                        {/* Card 1: Notes & Instructions */}
-                                        <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
-                                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                                            <Typography variant="subtitle2" fontWeight={800} color="#0f172a" display="flex" alignItems="center" gap={0.8}>
-                                              <DescriptionOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
-                                              Notes &amp; Instructions
-                                            </Typography>
-                                            <IconButton size="small" onClick={() => setActiveTab('customer')} sx={{ p: 0.3, color: '#64748b' }}>
-                                              <EditOutlined sx={{ fontSize: 15 }} />
-                                            </IconButton>
-                                          </Box>
-                                          <Typography variant="caption" color="#475569" sx={{ display: 'block', lineHeight: 1.5 }}>
-                                            {inlineDraft.comments || '—'}
-                                          </Typography>
-                                        </Paper>
-
-                                        {/* Card 2: Order Summary */}
-                                        <Paper elevation={0} sx={{ p: 2, borderRadius: '10px', border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
-                                          <Typography variant="subtitle2" fontWeight={800} color="#0f172a" mb={1.5} display="flex" alignItems="center" gap={0.8}>
-                                            <ReceiptLongOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
-                                            Order Summary
-                                          </Typography>
-
-                                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, fontSize: '0.85rem' }}>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Subtotal</Typography>
-                                              <Typography variant="body2" fontWeight={600} color="#0f172a">{currencySymbol}{MONEY(inlineSubtotal)}</Typography>
-                                            </Box>
-
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">GST / Tax (5%)</Typography>
-                                              <Typography variant="body2" fontWeight={600} color="#0f172a">{currencySymbol}{MONEY(inlineTax)}</Typography>
-                                            </Box>
-
-                                            {discountAmount > 0 && (
-                                              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                <Typography variant="caption" color="#2563eb">Discount</Typography>
-                                                <Typography variant="body2" fontWeight={600} color="#2563eb">- {currencySymbol}{MONEY(discountAmount)}</Typography>
-                                              </Box>
+                                              ))
                                             )}
+                                          </tbody>
+                                        </table>
+                                      </Box>
+                                    </Paper>
 
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', bgcolor: '#eff6ff', p: '8px 10px', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
-                                              <Typography variant="body2" fontWeight={800} color="#1e40af">Grand Total</Typography>
-                                              <Typography variant="body1" fontWeight={800} color="#1d4ed8">{currencySymbol}{MONEY(inlineGrandTotal)}</Typography>
+                                    <Paper elevation={0} className="orders-v2-review-card orders-v2-review-row-one-card">
+                                      <Box className="orders-v2-review-card-header">
+                                        <Typography variant="subtitle2" className="orders-v2-review-card-title">
+                                          <LayersOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
+                                          Services
+                                        </Typography>
+                                      </Box>
+                                      <Box className="orders-v2-review-card-body">
+                                        <Box className="orders-v2-review-service-box">
+                                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, minWidth: 0 }}>
+                                            <Box className="orders-v2-review-service-icon">
+                                              <LocalShippingOutlined sx={{ fontSize: 18 }} />
                                             </Box>
-
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <Typography variant="caption" color="#64748b">Advance Paid</Typography>
-                                              <Typography variant="body2" fontWeight={600} color="#0f172a">{currencySymbol}{MONEY(inlineAdvance)}</Typography>
-                                            </Box>
-
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                              <Typography variant="caption" color="#64748b">Payment Method</Typography>
-                                              <Chip label={inlineDraft.payment_method || '—'} size="small" sx={{ bgcolor: '#eff6ff', color: '#1d4ed8', fontWeight: 700, height: 20 }} />
-                                            </Box>
-
-                                            {/* Highlighted Yellow Balance Due Box */}
-                                            <Box sx={{ bgcolor: '#fef9c3', p: '10px 12px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5, border: '1px solid #fef08a' }}>
-                                              <Typography variant="body2" fontWeight={800} color="#0f172a">Balance Due</Typography>
-                                              <Typography variant="h6" fontWeight={800} color="#0f172a" fontSize="1.15rem">
-                                                {currencySymbol}{MONEY(inlineBalance)}
+                                            <Box className="orders-v2-review-service-copy">
+                                              <Typography variant="body2" fontWeight={700} color="#1d4ed8" fontSize="0.8rem" sx={{ overflowWrap: 'anywhere' }}>
+                                                {inlineCart.length > 0 && inlineDraft.service_category ? inlineDraft.service_category : '—'}
+                                              </Typography>
+                                              <Typography variant="caption" color="#64748b" fontSize="0.7rem">
+                                                {inlineCart.length > 0 && inlineDraft.service_category ? 'Wash, Dry & Fold' : 'No service selected'}
                                               </Typography>
                                             </Box>
                                           </Box>
-                                        </Paper>
+                                          <Typography variant="body2" fontWeight={800} color="#0f172a" sx={{ whiteSpace: 'nowrap' }}>
+                                            {currencySymbol}{MONEY(inlineSubtotal)}
+                                          </Typography>
+                                        </Box>
                                       </Box>
-                                    </Grid>
-                                  </Grid>
+                                    </Paper>
+                                  </Box>
+
+                                  <Box className="orders-v2-review-grid-three orders-v2-review-row-two">
+                                    <Paper elevation={0} className="orders-v2-review-card orders-v2-review-row-two-card">
+                                      <Box className="orders-v2-review-card-header">
+                                        <Typography variant="subtitle2" className="orders-v2-review-card-title">
+                                          <CalendarTodayOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
+                                          Scheduling
+                                        </Typography>
+                                        <IconButton size="small" onClick={() => setActiveTab('customer')} sx={{ p: 0.3, color: '#64748b' }}>
+                                          <EditOutlined sx={{ fontSize: 14 }} />
+                                        </IconButton>
+                                      </Box>
+                                      <Box className="orders-v2-review-card-body">
+                                        <Box className="orders-v2-review-rows">
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Pickup / Delivery</Typography>
+                                            <Typography variant="caption" className="orders-v2-review-row-value" style={{ color: '#1d4ed8' }}>
+                                              {inlineDraft.order_type === 'Walk-In' ? 'In-Store (Walk-In)' : 'On-Call (Pickup)'}
+                                            </Typography>
+                                          </Box>
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Received Date &amp; Time</Typography>
+                                            <Typography variant="caption" className="orders-v2-review-row-value">
+                                              📅 {formatDateTime(inlineDraft.created_at)}
+                                            </Typography>
+                                          </Box>
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Expected Delivery</Typography>
+                                            <Typography variant="caption" className="orders-v2-review-row-value">
+                                              📅 {inlineDraft.scheduled_delivery_date ? `${formatDateOnly(inlineDraft.scheduled_delivery_date)}${inlineDraft.scheduled_delivery_time ? `, ${inlineDraft.scheduled_delivery_time}` : ''}` : '—'}
+                                            </Typography>
+                                          </Box>
+                                        </Box>
+                                      </Box>
+                                    </Paper>
+
+                                    <Paper elevation={0} className="orders-v2-review-card orders-v2-review-row-two-card">
+                                      <Box className="orders-v2-review-card-header">
+                                        <Typography variant="subtitle2" className="orders-v2-review-card-title">
+                                          <CreditCardOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
+                                          Payment Status
+                                        </Typography>
+                                        <IconButton size="small" onClick={() => setActiveTab('payment')} sx={{ p: 0.3, color: '#64748b' }}>
+                                          <EditOutlined sx={{ fontSize: 14 }} />
+                                        </IconButton>
+                                      </Box>
+                                      <Box className="orders-v2-review-card-body">
+                                        <Box className="orders-v2-review-rows">
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Status</Typography>
+                                            <Chip label={inlineDraft.payment_status || '—'} size="small" className="orders-v2-review-row-value" sx={{ bgcolor: '#fef3c7', color: '#b45309', fontWeight: 700, height: 20, fontSize: '0.7rem' }} />
+                                          </Box>
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Advance Paid</Typography>
+                                            <Typography variant="caption" className="orders-v2-review-row-value">{currencySymbol}{MONEY(inlineAdvance)}</Typography>
+                                          </Box>
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Balance Due</Typography>
+                                            <Typography
+                                              variant="caption"
+                                              className="orders-v2-review-row-value"
+                                              style={{ color: inlineBalance > 0 ? '#b45309' : '#1d4ed8' }}
+                                              sx={{ bgcolor: '#fef9c3', px: 1, py: 0.25, borderRadius: '6px', whiteSpace: 'nowrap' }}
+                                            >
+                                              {currencySymbol}{MONEY(inlineBalance)}
+                                            </Typography>
+                                          </Box>
+                                        </Box>
+                                      </Box>
+                                    </Paper>
+
+                                    <Paper elevation={0} className="orders-v2-review-card orders-v2-review-row-two-card">
+                                      <Box className="orders-v2-review-card-header">
+                                        <Typography variant="subtitle2" className="orders-v2-review-card-title">
+                                          <DescriptionOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
+                                          Notes &amp; Instructions
+                                        </Typography>
+                                        <IconButton size="small" onClick={() => setActiveTab('customer')} sx={{ p: 0.3, color: '#64748b' }}>
+                                          <EditOutlined sx={{ fontSize: 14 }} />
+                                        </IconButton>
+                                      </Box>
+                                      <Box className="orders-v2-review-card-body">
+                                        <Typography variant="caption" color="#475569" sx={{ display: 'block', lineHeight: 1.5, overflowWrap: 'anywhere' }}>
+                                          {inlineDraft.comments || '—'}
+                                        </Typography>
+                                      </Box>
+                                    </Paper>
+                                  </Box>
+
+                                  <Box className="orders-v2-review-grid-two orders-v2-review-row-three">
+                                    <Paper elevation={0} className="orders-v2-review-card orders-v2-review-row-three-card">
+                                      <Box className="orders-v2-review-card-header">
+                                        <Typography variant="subtitle2" className="orders-v2-review-card-title">
+                                          <ChatOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
+                                          Customer Messages
+                                        </Typography>
+                                      </Box>
+                                      <Box className="orders-v2-review-card-body">
+                                        <Typography variant="caption" color="#64748b" sx={{ display: 'block', mb: 2 }}>
+                                          Send WhatsApp or SMS updates to the customer.
+                                        </Typography>
+                                        <Box className="orders-v2-review-templates">
+                                          {[
+                                            ['order_received', '✓ 1. Order Received'],
+                                            ['in_progress', '2. Processing Update'],
+                                            ['ready', '3. Ready for Pickup'],
+                                            ['delivered', '4. Order Delivered'],
+                                          ].map(([key, lbl]) => {
+                                            const isActive = selectedMessageTemplate === key;
+                                            return (
+                                              <Chip
+                                                key={key}
+                                                label={lbl}
+                                                size="small"
+                                                clickable
+                                                onClick={() => setSelectedMessageTemplate(key)}
+                                                sx={{
+                                                  fontWeight: isActive ? 700 : 500,
+                                                  bgcolor: isActive ? '#2563eb' : '#ffffff',
+                                                  color: isActive ? '#ffffff' : '#334155',
+                                                  border: '1px solid',
+                                                  borderColor: isActive ? '#2563eb' : '#cbd5e1',
+                                                  borderRadius: '20px',
+                                                  fontSize: '0.78rem',
+                                                  px: 0.5,
+                                                  '&:hover': { bgcolor: isActive ? '#1d4ed8' : '#f8fafc' },
+                                                }}
+                                              />
+                                            );
+                                          })}
+                                        </Box>
+                                        <Box className="orders-v2-review-message-box">
+                                          <TextField
+                                            fullWidth
+                                            multiline
+                                            rows={4}
+                                            value={messagePreviewText}
+                                            variant="outlined"
+                                            inputProps={{ maxLength: 500 }}
+                                            InputProps={{ sx: { borderRadius: '8px', fontSize: '0.84rem', bgcolor: '#f8fafc' } }}
+                                            sx={{
+                                              '& .MuiOutlinedInput-notchedOutline': { borderColor: '#D8E2EF' },
+                                              '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#94a3b8' },
+                                              '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#2563eb', borderWidth: 1 },
+                                            }}
+                                          />
+                                          <Typography variant="caption" color="#94a3b8" className="orders-v2-review-char-count">
+                                            {messagePreviewText.length} / 500
+                                          </Typography>
+                                        </Box>
+                                      </Box>
+                                      <Box className="orders-v2-review-actions">
+                                        <Button
+                                          size="small"
+                                          variant="contained"
+                                          startIcon={<WhatsApp />}
+                                          onClick={() => {
+                                            setMessageSentToast('WhatsApp alert prepared and dispatched!');
+                                            setTimeout(() => setMessageSentToast(''), 3000);
+                                          }}
+                                          sx={{ bgcolor: '#2563eb', color: '#ffffff', textTransform: 'none', fontWeight: 700, borderRadius: '8px', px: 2, '&:hover': { bgcolor: '#1d4ed8' } }}
+                                        >
+                                          Send WhatsApp Alert
+                                        </Button>
+                                        <Button
+                                          size="small"
+                                          variant="outlined"
+                                          startIcon={<ChatOutlined />}
+                                          onClick={() => {
+                                            setMessageSentToast('SMS alert queued successfully!');
+                                            setTimeout(() => setMessageSentToast(''), 3000);
+                                          }}
+                                          sx={{ textTransform: 'none', borderColor: '#cbd5e1', color: '#334155', borderRadius: '8px', px: 1.8 }}
+                                        >
+                                          Send SMS
+                                        </Button>
+                                        <Button
+                                          size="small"
+                                          variant="outlined"
+                                          startIcon={<DescriptionOutlined />}
+                                          sx={{ textTransform: 'none', borderColor: '#cbd5e1', color: '#334155', borderRadius: '8px' }}
+                                        >
+                                          Use Template
+                                        </Button>
+                                        {messageSentToast && (
+                                          <Typography variant="caption" fontWeight={700} color="#2563eb" width="100%">
+                                            ✓ {messageSentToast}
+                                          </Typography>
+                                        )}
+                                      </Box>
+                                    </Paper>
+
+                                    <Paper elevation={0} className="orders-v2-review-card orders-v2-review-row-three-card">
+                                      <Box className="orders-v2-review-card-header">
+                                        <Typography variant="subtitle2" className="orders-v2-review-card-title">
+                                          <ReceiptLongOutlined sx={{ color: '#2563eb', fontSize: 18 }} />
+                                          Order Summary
+                                        </Typography>
+                                      </Box>
+                                      <Box className="orders-v2-review-card-body">
+                                        <Box className="orders-v2-review-rows">
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Subtotal</Typography>
+                                            <Typography variant="body2" className="orders-v2-review-row-value">{currencySymbol}{MONEY(inlineSubtotal)}</Typography>
+                                          </Box>
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">GST / Tax (5%)</Typography>
+                                            <Typography variant="body2" className="orders-v2-review-row-value">{currencySymbol}{MONEY(inlineTax)}</Typography>
+                                          </Box>
+                                          {discountAmount > 0 && (
+                                            <Box className="orders-v2-review-row">
+                                              <Typography variant="caption" className="orders-v2-review-row-label" style={{ color: '#2563eb' }}>Discount</Typography>
+                                              <Typography variant="body2" className="orders-v2-review-row-value" style={{ color: '#2563eb' }}>- {currencySymbol}{MONEY(discountAmount)}</Typography>
+                                            </Box>
+                                          )}
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Advance Paid</Typography>
+                                            <Typography variant="body2" className="orders-v2-review-row-value">{currencySymbol}{MONEY(inlineAdvance)}</Typography>
+                                          </Box>
+                                          <Box className="orders-v2-review-row">
+                                            <Typography variant="caption" className="orders-v2-review-row-label">Payment Method</Typography>
+                                            <Chip label={inlineDraft.payment_method || '—'} size="small" className="orders-v2-review-row-value" style={{ backgroundColor: '#eff6ff', color: '#1d4ed8' }} sx={{ height: 20, fontSize: '0.7rem' }} />
+                                          </Box>
+                                        </Box>
+                                      </Box>
+                                      <Box className="orders-v2-review-summary-footer">
+                                        <Box className="orders-v2-review-total-row orders-v2-review-grand-total">
+                                          <Typography variant="body2" fontWeight={800} color="#1e40af">Grand Total</Typography>
+                                          <Typography variant="body1" fontWeight={800} color="#1d4ed8">{currencySymbol}{MONEY(inlineGrandTotal)}</Typography>
+                                        </Box>
+                                        <Box className="orders-v2-review-total-row orders-v2-review-balance-due">
+                                          <Typography variant="body2" fontWeight={800} color="#0f172a">Balance Due</Typography>
+                                          <Typography variant="body1" fontWeight={800} color="#0f172a" fontSize="0.95rem">
+                                            {currencySymbol}{MONEY(inlineBalance)}
+                                          </Typography>
+                                        </Box>
+                                      </Box>
+                                    </Paper>
+                                  </Box>
 
                                   {/* Final Confirm Changes Bar */}
                                   <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5, pt: 3, mt: 3, borderTop: '1px solid #e2e8f0' }}>

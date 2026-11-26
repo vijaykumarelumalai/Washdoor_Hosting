@@ -1,13 +1,14 @@
 // src/components/OrdersV2.jsx - Orders & POS v2 Core Shell matching reference UI design
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
-  Box, Paper, Card, Typography, Button, IconButton, Chip,
+  Box, Paper, Card, Typography, Button, IconButton, Chip, Checkbox, Popover,
   TextField, MenuItem, Snackbar, Alert, Tooltip, InputAdornment,
 } from '@mui/material';
 import {
   Add, Refresh, Search, ShoppingCartRounded, FilterAltOutlined,
   Inventory2Outlined, TrendingUp, AccessTime, LocalShippingOutlined,
-  Storefront, OpenInNew,
+  Storefront, OpenInNew, ViewColumnRounded, KeyboardArrowDown, CloseRounded,
+  LockOutlined,
 } from '@mui/icons-material';
 import { useLanguage } from '../context/LanguageContext';
 import { normalizeOrder } from '../utils/normalizeOrder';
@@ -26,6 +27,17 @@ import ThermalReceiptModal from './ThermalReceiptModal';
 import OrdersV2CreateOrder from './OrdersV2CreateOrder';
 import { deleteOrderFromSupabase } from '../services/customerService';
 import { fetchServiceTypes, SERVICE_TYPES_UPDATED_EVENT } from '../services/serviceTypeService';
+import {
+  ORDERS_V2_ALL_COLUMN_IDS,
+  ORDERS_V2_COLUMN_GROUPS,
+  ORDERS_V2_DEFAULT_COLUMN_IDS,
+  ORDERS_V2_REQUIRED_COLUMN_IDS,
+  enforceOrdersV2RequiredColumns,
+} from '../config/ordersV2ColumnsConfig';
+import {
+  loadOrdersV2ColumnPreferences,
+  saveOrdersV2ColumnPreferences,
+} from '../services/ordersV2ColumnPreferenceService';
 import '../styles/OrdersV2.css';
 
 const MONEY = (v) => {
@@ -118,6 +130,10 @@ export function OrdersV2({
   const [serviceTypesError, setServiceTypesError] = useState('');
   const serviceNameHistoryRef = useRef(new Map());
 
+  const [visibleColumnIds, setVisibleColumnIds] = useState([...ORDERS_V2_DEFAULT_COLUMN_IDS]);
+  const [draftColumnIds, setDraftColumnIds] = useState([...ORDERS_V2_DEFAULT_COLUMN_IDS]);
+  const [columnMenuAnchor, setColumnMenuAnchor] = useState(null);
+
   // Sync external search query
   useEffect(() => {
     if (searchQuery !== undefined && searchQuery !== topSearch) {
@@ -125,10 +141,56 @@ export function OrdersV2({
     }
   }, [searchQuery]);
 
+  useEffect(() => {
+    let active = true;
+    loadOrdersV2ColumnPreferences().then((columns) => {
+      if (!active) return;
+      const sanitized = enforceOrdersV2RequiredColumns(columns);
+      setVisibleColumnIds(sanitized);
+      setDraftColumnIds([...sanitized]);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const showSnack = useCallback((msg, severity = 'success') => {
     setSnack({ open: true, message: msg, severity });
     showToast?.(msg);
   }, [showToast]);
+
+  const handleOpenColumnMenu = (event) => {
+    setDraftColumnIds([...visibleColumnIds]);
+    setColumnMenuAnchor(event.currentTarget);
+  };
+
+  const handleCloseColumnMenu = () => {
+    setColumnMenuAnchor(null);
+    setDraftColumnIds([...visibleColumnIds]);
+  };
+
+  const handleToggleDraftColumn = (columnId, required) => {
+    if (required) return;
+    setDraftColumnIds((current) => (
+      current.includes(columnId) ? current.filter((id) => id !== columnId) : [...current, columnId]
+    ));
+  };
+
+  const allColumnsSelected = ORDERS_V2_ALL_COLUMN_IDS.every((id) => draftColumnIds.includes(id));
+  const handleToggleAllColumns = () => {
+    setDraftColumnIds(allColumnsSelected
+      ? [...ORDERS_V2_REQUIRED_COLUMN_IDS]
+      : [...ORDERS_V2_ALL_COLUMN_IDS]);
+  };
+
+  const handleApplyColumns = async () => {
+    const sanitized = enforceOrdersV2RequiredColumns(draftColumnIds);
+    const saved = await saveOrdersV2ColumnPreferences(sanitized);
+    setVisibleColumnIds(saved);
+    setDraftColumnIds([...saved]);
+    setColumnMenuAnchor(null);
+    showSnack(`${saved.length} of ${ORDERS_V2_ALL_COLUMN_IDS.length} columns applied`, 'success');
+  };
 
   const withNameHistory = useCallback((services) => {
     const history = serviceNameHistoryRef.current;
@@ -657,8 +719,8 @@ export function OrdersV2({
           sx={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'flex-start',
-            flexWrap: 'wrap',
+            justifyContent: 'space-between',
+            flexWrap: 'nowrap',
             gap: { xs: 0.5, sm: 0.75 },
             width: '100%',
             maxWidth: 'none',
@@ -669,45 +731,172 @@ export function OrdersV2({
             flexShrink: 0,
           }}
         >
-          {[
-            'All',
-            'Order Received',
-            'In Progress',
-            'Ready',
-            'Delivered',
-            'Cancelled',
-          ].map((st) => {
-            const isSelected = statusFilter === st;
-            const count = statusCounts[st] || 0;
-            return (
-              <Chip
-                key={st}
-                label={`${st} (${count})`}
-                onClick={() => setStatusFilter(st)}
-                size="small"
-                clickable
-                sx={{
-                  height: 26,
-                  px: 0.5,
-                  flexShrink: 0,
-                  whiteSpace: 'nowrap',
-                  fontWeight: isSelected ? 700 : 600,
-                  fontSize: '0.72rem',
-                  borderRadius: 2,
-                  bgcolor: isSelected ? '#2563eb' : '#ffffff',
-                  color: isSelected ? '#ffffff' : '#475569',
-                  border: '1px solid',
-                  borderColor: isSelected ? '#2563eb' : '#dbeafe',
-                  boxShadow: isSelected ? '0 2px 6px rgba(37, 99, 235, 0.2)' : 'none',
-                  transition: 'all 0.15s ease',
-                  '&:hover': {
-                    bgcolor: isSelected ? '#1d4ed8' : '#eff6ff',
-                    borderColor: isSelected ? '#1d4ed8' : '#93c5fd',
-                  },
-                }}
-              />
-            );
-          })}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: { xs: 0.5, sm: 0.75 },
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
+            {[
+              'All',
+              'Order Received',
+              'In Progress',
+              'Ready',
+              'Delivered',
+              'Cancelled',
+            ].map((st) => {
+              const isSelected = statusFilter === st;
+              const count = statusCounts[st] || 0;
+              return (
+                <Chip
+                  key={st}
+                  label={`${st} (${count})`}
+                  onClick={() => setStatusFilter(st)}
+                  size="small"
+                  clickable
+                  sx={{
+                    height: 26,
+                    px: 0.5,
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap',
+                    fontWeight: isSelected ? 700 : 600,
+                    fontSize: '0.72rem',
+                    borderRadius: 2,
+                    bgcolor: isSelected ? '#2563eb' : '#ffffff',
+                    color: isSelected ? '#ffffff' : '#475569',
+                    border: '1px solid',
+                    borderColor: isSelected ? '#2563eb' : '#dbeafe',
+                    boxShadow: isSelected ? '0 2px 6px rgba(37, 99, 235, 0.2)' : 'none',
+                    transition: 'all 0.15s ease',
+                    '&:hover': {
+                      bgcolor: isSelected ? '#1d4ed8' : '#eff6ff',
+                      borderColor: isSelected ? '#1d4ed8' : '#93c5fd',
+                    },
+                  }}
+                />
+              );
+            })}
+          </Box>
+
+          <Box className="orders-v2-columns-control" sx={{ flexShrink: 0 }}>
+            <Button
+              className="orders-v2-columns-button"
+              size="small"
+              variant="outlined"
+              onClick={handleOpenColumnMenu}
+              aria-label="Manage table columns"
+              startIcon={<ViewColumnRounded sx={{ fontSize: 16 }} />}
+              endIcon={<KeyboardArrowDown sx={{ fontSize: 16 }} />}
+              sx={{
+                height: 28,
+                px: 1,
+                whiteSpace: 'nowrap',
+                textTransform: 'none',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                borderRadius: 2,
+                borderColor: '#bfdbfe',
+                bgcolor: '#eff6ff',
+                color: '#2563eb',
+                '&:hover': { bgcolor: '#dbeafe', borderColor: '#60a5fa' },
+              }}
+            >
+              Columns ({visibleColumnIds.length}/{ORDERS_V2_ALL_COLUMN_IDS.length})
+            </Button>
+            <Popover
+              open={Boolean(columnMenuAnchor)}
+              anchorEl={columnMenuAnchor}
+              onClose={handleCloseColumnMenu}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              PaperProps={{ className: 'orders-v2-column-popover-paper' }}
+            >
+              <Box className="orders-v2-column-popover">
+                <Box className="orders-v2-column-popover-header">
+                  <Box className="orders-v2-column-popover-heading">
+                    <Typography className="orders-v2-column-popover-title">Manage Columns</Typography>
+                    <Typography className="orders-v2-column-popover-count">
+                      <span className="orders-v2-column-count-badge">
+                        {draftColumnIds.length} of {ORDERS_V2_ALL_COLUMN_IDS.length}
+                      </span>
+                      <span>columns selected</span>
+                    </Typography>
+                  </Box>
+                  <Box className="orders-v2-column-header-actions">
+                    <Button
+                      size="small"
+                      className="orders-v2-column-select-all"
+                      onClick={handleToggleAllColumns}
+                    >
+                      {allColumnsSelected ? 'Clear' : 'All'}
+                    </Button>
+                    <IconButton size="small" onClick={handleCloseColumnMenu} aria-label="Close column manager">
+                      <CloseRounded sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  </Box>
+                </Box>
+
+                <Box className="orders-v2-column-groups">
+                  {ORDERS_V2_COLUMN_GROUPS.map((group) => (
+                    <Box className="orders-v2-column-group" key={group.id}>
+                      <Typography className="orders-v2-column-group-label">{group.label}</Typography>
+                      {group.columns.map((column) => {
+                        const isSelected = draftColumnIds.includes(column.id);
+                        const badgeLabel = column.required
+                          ? 'Required'
+                          : (column.default && !column.required ? 'Default' : null);
+                        return (
+                          <Box
+                            className={`orders-v2-column-option${isSelected ? ' is-selected' : ''}`}
+                            key={column.id}
+                          >
+                            <Checkbox
+                              size="small"
+                              checked={isSelected}
+                              disabled={column.required}
+                              onChange={() => handleToggleDraftColumn(column.id, column.required)}
+                              inputProps={{ 'aria-label': column.label }}
+                            />
+                            <Box className="orders-v2-column-option-text">
+                              <Typography
+                                variant="body2"
+                                className="orders-v2-column-option-name"
+                                sx={{ fontSize: '12px', fontWeight: 500, lineHeight: 1.35, fontFamily: 'inherit', color: '#0f172a' }}
+                              >
+                                {column.label}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                className="orders-v2-column-option-description"
+                                sx={{ fontSize: '11px', fontWeight: 400, lineHeight: 1.35, fontFamily: 'inherit', color: '#64748b' }}
+                              >
+                                {column.purpose}
+                              </Typography>
+                            </Box>
+                            {badgeLabel && (
+                              <span className={`orders-v2-column-badge${column.required ? ' is-required' : ''}`}>
+                                {column.required && <LockOutlined className="orders-v2-column-badge-icon" />}
+                                {badgeLabel}
+                              </span>
+                            )}
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  ))}
+                </Box>
+
+                <Box className="orders-v2-column-popover-footer">
+                  <Button size="small" onClick={() => setDraftColumnIds([...ORDERS_V2_DEFAULT_COLUMN_IDS])}>Reset</Button>
+                  <Button size="small" variant="contained" onClick={handleApplyColumns}>Apply Columns</Button>
+                </Box>
+              </Box>
+            </Popover>
+          </Box>
         </Box>
 
         {/* ── 4 KPI Summary Cards ── */}
@@ -977,6 +1166,7 @@ export function OrdersV2({
               dateFilter={dateFilter}
               topSearch={topSearch}
               currencySymbol={currencySymbol}
+              visibleColumnIds={visibleColumnIds}
               onOpenSideEdit={(order) => setSideEditOrder(order)}
               onOpenViewOrder={(order) => { setViewOrderTab('details'); setViewOrderModal(order); }}
               onOpenReceipt={(order) => setReceiptOrderModal(order)}

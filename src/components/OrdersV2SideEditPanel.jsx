@@ -27,11 +27,13 @@ import {
 } from '../utils/laundryProcessing';
 import {
   updateOrderInSupabase,
+  updateCustomer,
   getOrderById,
   getGarmentBarcodeDetails,
   fetchOrderGarmentBarcodes,
   fetchActiveStaffMaster,
   fetchActivePickupDeliveryMaster,
+  fetchCustomerAddresses,
 } from '../services/customerService';
 import {
   BARCODE_RENDER_OPTIONS,
@@ -52,6 +54,12 @@ import {
   NOT_SCHEDULED_LABEL,
 } from '../utils/onCallScheduling';
 import '../styles/OrdersV2SideEditPanel.css';
+import OrdersV2AddressManager, {
+  formatAddressForOrder,
+  normalizeAdditionalAddresses,
+  toStoredAdditionalAddresses,
+  validateAdditionalAddresses,
+} from './OrdersV2AddressManager';
 
 // 16 Standard Catalog Items matching reference mockup display order
 const CATALOG_ITEMS = [
@@ -208,6 +216,9 @@ export default function OrdersV2SideEditPanel({
   const initialAltPhone = order?.alternate_phone || order?.customer?.alternate_phone || '';
   const initialEmail = order?.email || order?.customer?.email || 'arun.k@example.com';
   const initialAddress = order?.address || order?.delivery_address || order?.customer?.address || 'No.16, Anna Nagar, Ranipet - 632401';
+  const initialAddresses = normalizeAdditionalAddresses(
+    order?.additional_addresses || order?.customer?.additional_addresses || [],
+  );
   const initialStatus = normalizeOrdersV2Status(order?.status || order?.order_status || 'Delivered');
   const initialOrderType = order?.order_type || 'Walk-in';
   const initialExpectedDelivery = formatDeliveryDateTimeForDisplay(order);
@@ -219,6 +230,10 @@ export default function OrdersV2SideEditPanel({
   const [alternatePhone, setAlternatePhone] = useState(initialAltPhone);
   const [email, setEmail] = useState(initialEmail);
   const [address, setAddress] = useState(initialAddress);
+  const [addresses, setAddresses] = useState(initialAddresses);
+  const [selectedAddressId, setSelectedAddressId] = useState(order?.selected_customer_address_id || null);
+  const [showAddressErrors, setShowAddressErrors] = useState(false);
+  const addressTokenRef = useRef(0);
   const [status, setStatus] = useState(initialStatus);
   const [orderType, setOrderType] = useState(initialOrderType);
   const [expectedDelivery, setExpectedDelivery] = useState(initialExpectedDelivery);
@@ -230,6 +245,11 @@ export default function OrdersV2SideEditPanel({
   const [scheduledDeliveryDate, setScheduledDeliveryDate] = useState(initialDeliverySplit.date || '');
   const [scheduledDeliveryTime, setScheduledDeliveryTime] = useState(initialDeliverySplit.time || '');
   const [scheduleErrors, setScheduleErrors] = useState({});
+
+  const normalizedAddresses = useMemo(() => normalizeAdditionalAddresses(addresses), [addresses]);
+  const selectedAddress = normalizedAddresses.find((item) => item.id === selectedAddressId) || null;
+  const effectiveAddress = selectedAddress ? formatAddressForOrder(selectedAddress) : sanitizeAddress(address);
+
   const [attendStaffName, setAttendStaffName] = useState(
     order?.attend_staff_name || order?.status_updated_by || order?.assigned_staff || 'Ramesh K. (CNT102)'
   );
@@ -1090,6 +1110,12 @@ export default function OrdersV2SideEditPanel({
       setAlternatePhone(order.alternate_phone || order.customer?.alternate_phone || '');
       setEmail(order.email || order.customer?.email || 'arun.k@example.com');
       setAddress(order.address || order.delivery_address || order.customer?.address || 'No.16, Anna Nagar, Ranipet - 632401');
+      setAddresses(normalizeAdditionalAddresses(
+        order.additional_addresses || order.customer?.additional_addresses || [],
+      ));
+      setSelectedAddressId(order.selected_customer_address_id || null);
+      setShowAddressErrors(false);
+      addressTokenRef.current += 1;
       setStatus(normalizeOrdersV2Status(order.status || order.order_status || 'Delivered'));
       setOrderType(order.order_type || 'Walk-in');
       deliveryTouchedRef.current = false;
@@ -1167,6 +1193,23 @@ export default function OrdersV2SideEditPanel({
       .catch(() => {});
     return () => { cancelled = true; };
   }, [savedOrderKey]);
+
+  const savedCustomerKey = order?.customer_id || order?.customer?.customer_id || null;
+  useEffect(() => {
+    if (!savedCustomerKey) return undefined;
+    let cancelled = false;
+    const token = addressTokenRef.current + 1;
+    addressTokenRef.current = token;
+    fetchCustomerAddresses(savedCustomerKey)
+      .then(({ data }) => {
+        if (cancelled || token !== addressTokenRef.current) return;
+        if (Array.isArray(data) && data.length > 0) {
+          setAddresses(normalizeAdditionalAddresses(data));
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [savedCustomerKey]);
 
   // Sync selected product rate
   useEffect(() => {
@@ -1336,7 +1379,7 @@ export default function OrdersV2SideEditPanel({
   };
 
   // Comprehensive Save
-  const handleSave = () => {
+  const handleSave = async () => {
     // 1. Shared Validation
     if (!customerName || !customerName.trim()) {
       showToast?.('⚠️ Customer Name is required.');
@@ -1345,6 +1388,19 @@ export default function OrdersV2SideEditPanel({
     const cleanPhone = String(mobileNumber || '').replace(/\D/g, '');
     if (!cleanPhone || cleanPhone.length < 10) {
       showToast?.('⚠️ A valid 10-digit mobile number is required.');
+      return;
+    }
+
+    const addressValidationErrors = validateAdditionalAddresses(normalizedAddresses);
+    if (Object.keys(addressValidationErrors).length > 0) {
+      setShowAddressErrors(true);
+      showToast?.('⚠️ Review the highlighted additional addresses before saving.');
+      return;
+    }
+    setShowAddressErrors(false);
+
+    if (isOnCallOrderType(orderType) && !effectiveAddress) {
+      showToast?.('⚠️ A valid selected address is required for On-Call orders.');
       return;
     }
 
@@ -1464,7 +1520,10 @@ export default function OrdersV2SideEditPanel({
       mobile_number: mobileNumber,
       alternate_phone: alternatePhone,
       email: email,
-      address: address,
+      address: effectiveAddress,
+      additional_addresses: toStoredAdditionalAddresses(normalizedAddresses),
+      selected_customer_address_id: selectedAddress?.id || null,
+      selected_address: effectiveAddress,
       status: resolvedStatus,
       order_status: resolvedStatus,
       order_type: orderType,
@@ -1569,6 +1628,18 @@ export default function OrdersV2SideEditPanel({
       updated_at: nowIso,
     };
 
+    const customerId = order?.customer_id || order?.customer?.customer_id || null;
+    if (customerId) {
+      const { error: customerUpdateError } = await updateCustomer(customerId, {
+        customer_id: customerId,
+        additional_addresses: toStoredAdditionalAddresses(normalizedAddresses),
+      });
+      if (customerUpdateError) {
+        showToast?.(`⚠️ ${customerUpdateError.message || 'Could not save customer addresses.'}`);
+        return;
+      }
+    }
+
     if (onUpdateOrder) {
       onUpdateOrder(updatedOrder);
     }
@@ -1584,6 +1655,9 @@ export default function OrdersV2SideEditPanel({
         alternatePhone: updatedOrder.alternate_phone,
         email: updatedOrder.email,
         address: updatedOrder.address,
+        additional_addresses: updatedOrder.additional_addresses,
+        selected_customer_address_id: updatedOrder.selected_customer_address_id,
+        selected_address: updatedOrder.selected_address,
         serviceCategory: updatedOrder.service_category,
         orderType: updatedOrder.order_type,
         expectedDelivery: updatedOrder.expected_delivery,
@@ -1787,6 +1861,13 @@ export default function OrdersV2SideEditPanel({
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
                     placeholder="No.16, Anna Nagar, Ranipet - 632401"
+                  />
+                  <OrdersV2AddressManager
+                    value={normalizedAddresses}
+                    onChange={(next) => setAddresses(normalizeAdditionalAddresses(next))}
+                    selectedId={selectedAddressId}
+                    onSelect={setSelectedAddressId}
+                    showErrors={showAddressErrors}
                   />
                 </div>
 

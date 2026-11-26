@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Accordion,
   AccordionDetails,
@@ -46,11 +46,13 @@ import {
   createOrderWithCustomer,
   fetchActivePickupDeliveryMaster,
   fetchActiveStaffMaster,
+  fetchCustomerAddresses,
   formatOrderId,
   getNextCustomerId,
   getNextOrderId,
   getProducts,
   searchCustomers,
+  updateCustomer,
 } from '../services/customerService';
 import {
   BUSINESS_CONFIG,
@@ -77,6 +79,12 @@ import {
 } from '../utils/validation';
 import ClothIllustration from './ClothIllustration';
 import UPIPaymentQRDialog from './UPIPaymentQRDialog';
+import OrdersV2AddressManager, {
+  formatAddressForOrder,
+  normalizeAdditionalAddresses,
+  toStoredAdditionalAddresses,
+  validateAdditionalAddresses,
+} from './OrdersV2AddressManager';
 
 const PRIMARY = '#2563EB';
 const PRIMARY_DARK = '#1D4ED8';
@@ -93,6 +101,43 @@ const FIELD_SX = {
   '&.Mui-focused fieldset': { borderColor: PRIMARY, borderWidth: 1.5 },
   '& .MuiInputBase-input': { py: '10.5px', fontSize: '0.9rem' },
   '& .MuiInputLabel-root': { fontSize: '0.9rem' },
+};
+
+const ADVANCED_FIELD_SX = {
+  '& .MuiInputBase-root': {
+    minHeight: '40px',
+    borderRadius: '8px',
+    backgroundColor: '#ffffff',
+  },
+  '& .MuiOutlinedInput-notchedOutline': {
+    borderColor: BORDER,
+    borderRadius: '8px',
+  },
+  '&:hover .MuiOutlinedInput-notchedOutline': {
+    borderColor: '#93C5FD',
+  },
+  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+    borderColor: PRIMARY,
+    borderWidth: '1.5px',
+  },
+  '&.Mui-error .MuiOutlinedInput-notchedOutline': {
+    borderColor: '#EF4444',
+  },
+  '& .MuiInputBase-input': {
+    py: '8px',
+    fontSize: '14px',
+    lineHeight: '20px',
+  },
+  '& .MuiSelect-select': {
+    py: '8px',
+    fontSize: '14px',
+    lineHeight: '20px',
+  },
+  '& .MuiInputBase-input::placeholder, & .MuiInputBase-inputMultiline::placeholder': {
+    color: '#94A3B8',
+    fontSize: '14px',
+    opacity: 1,
+  },
 };
 
 const CARD_SX = {
@@ -178,6 +223,174 @@ const getCustomerName = (customer) => customer?.customer_name || customer?.name 
 const getCustomerPhone = (customer) => customer?.mobile_number || customer?.phone || '';
 const getCustomerAddress = (customer) => customer?.address || customer?.delivery_address || customer?.street_area || '';
 
+const INITIAL_ADVANCED_FIELDS = {
+  company_name: '',
+  gst_number: '',
+  alternate_phone: '',
+  email: '',
+  city: '',
+  pincode: '',
+  date_of_birth: '',
+  map_link: '',
+  communication_pref: 'WhatsApp',
+  communication_lang: 'English',
+  dnd: false,
+  internal_comments: '',
+  customer_classification: 'Regular Customer',
+  customer_status: 'Active',
+  price_list: 'Standard',
+  service_zone: 'Zone 1',
+  order_preference: 'Laundry',
+  marketing_source: 'Walk-in',
+  default_discount: 0,
+  referral_code: '',
+  membership_id: '',
+  credit_limit: '',
+  notes: '',
+};
+
+const INITIAL_ADVANCED_SECTIONS = {
+  business: false,
+  communication: false,
+  profile: false,
+  customer: false,
+};
+
+const COMMUNICATION_PREF_OPTIONS = [
+  { value: 'WhatsApp', aliases: ['whatsapp', 'wa'] },
+  { value: 'SMS', aliases: ['sms'] },
+  { value: 'Email', aliases: ['email'] },
+  { value: 'Phone call', aliases: ['phone', 'phone call', 'phone_call'] },
+  { value: 'None (DND)', aliases: ['none', 'dnd', 'no communication (dnd)'] },
+];
+
+const COMMUNICATION_LANGUAGE_OPTIONS = [
+  { value: 'English', aliases: ['en', 'english'] },
+  { value: 'Tamil', aliases: ['ta', 'tamil'] },
+  { value: 'Hindi', aliases: ['hi', 'hindi'] },
+  { value: 'Telugu', aliases: ['te', 'telugu'] },
+  { value: 'Kannada', aliases: ['kn', 'kannada'] },
+  { value: 'Malayalam', aliases: ['ml', 'malayalam'] },
+];
+
+const CLASSIFICATION_OPTIONS = [
+  { value: 'Regular Customer', aliases: ['regular', 'regular customer'] },
+  { value: 'VIP Customer', aliases: ['vip', 'vip customer'] },
+  { value: 'Corporate Customer', aliases: ['corporate', 'corporate customer'] },
+  { value: 'Fraud / Review Required', aliases: ['fraud', 'fraud / review', 'fraud / review required'] },
+];
+
+const CUSTOMER_STATUS_OPTIONS = [
+  { value: 'Active', aliases: ['active'] },
+  { value: 'Inactive', aliases: ['inactive'] },
+  { value: 'Archived', aliases: ['archived'] },
+];
+
+const SERVICE_ZONE_OPTIONS = [
+  { value: 'Zone 1', aliases: ['zone-1', 'zone 1'] },
+  { value: 'Zone 2', aliases: ['zone-2', 'zone 2'] },
+  { value: 'Zone 3', aliases: ['zone-3', 'zone 3'] },
+  { value: 'Outside service zone', aliases: ['outside-zone', 'outside service zone'] },
+];
+
+const PRICE_LIST_OPTIONS = [
+  { value: 'Standard', aliases: ['standard'] },
+  { value: 'Premium', aliases: ['premium'] },
+  { value: 'Wholesale', aliases: ['wholesale'] },
+  { value: 'Corporate', aliases: ['corporate'] },
+];
+
+const MARKETING_SOURCE_OPTIONS = [
+  { value: 'Walk-in', aliases: ['walk-in', 'walk in'] },
+  { value: 'Google', aliases: ['google'] },
+  { value: 'Instagram', aliases: ['instagram'] },
+  { value: 'Word of Mouth', aliases: ['word of mouth'] },
+  { value: 'Pamphlet', aliases: ['pamphlet'] },
+];
+
+const stringValue = (value, fallback = '') => (
+  value === undefined || value === null || value === '' ? fallback : String(value)
+);
+
+const normalizeChoice = (value, options, fallback) => {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (!raw) return fallback;
+  const matched = options.find((option) => [option.value, ...(option.aliases || [])]
+    .some((candidate) => String(candidate).trim().toLowerCase() === raw));
+  return matched ? matched.value : fallback;
+};
+
+const normalizeAdvancedFields = (customer) => ({
+  ...INITIAL_ADVANCED_FIELDS,
+  company_name: stringValue(customer?.company_name),
+  gst_number: stringValue(customer?.gst_number),
+  alternate_phone: stringValue(customer?.alternate_phone),
+  email: stringValue(customer?.email),
+  city: stringValue(customer?.city),
+  pincode: stringValue(customer?.pincode),
+  date_of_birth: stringValue(customer?.date_of_birth),
+  map_link: stringValue(customer?.map_link),
+  communication_pref: normalizeChoice(
+    customer?.communication_pref || customer?.communicationPreference || (customer?.dnd ? 'None (DND)' : ''),
+    COMMUNICATION_PREF_OPTIONS,
+    customer?.dnd ? 'None (DND)' : 'WhatsApp',
+  ),
+  communication_lang: normalizeChoice(
+    customer?.communication_lang || customer?.preferredCommunicationLanguage || customer?.preferred_language,
+    COMMUNICATION_LANGUAGE_OPTIONS,
+    'English',
+  ),
+  dnd: Boolean(customer?.dnd),
+  internal_comments: stringValue(customer?.internal_comments || customer?.notes),
+  customer_classification: normalizeChoice(customer?.customer_classification, CLASSIFICATION_OPTIONS, 'Regular Customer'),
+  customer_status: normalizeChoice(customer?.customer_status, CUSTOMER_STATUS_OPTIONS, 'Active'),
+  price_list: normalizeChoice(customer?.price_list, PRICE_LIST_OPTIONS, 'Standard'),
+  service_zone: normalizeChoice(customer?.service_zone || customer?.area_service_zone, SERVICE_ZONE_OPTIONS, 'Zone 1'),
+  order_preference: stringValue(customer?.order_preference || customer?.service_category || customer?.preference, 'Laundry'),
+  marketing_source: normalizeChoice(customer?.marketing_source, MARKETING_SOURCE_OPTIONS, 'Walk-in'),
+  default_discount: customer?.default_discount ?? customer?.default_discount_pct ?? 0,
+  referral_code: stringValue(customer?.referral_code),
+  membership_id: stringValue(customer?.membership_id),
+  credit_limit: customer?.credit_limit ?? '',
+  notes: stringValue(customer?.notes),
+});
+
+const getAdvancedErrors = (fields) => {
+  const errors = {};
+  const baseErrors = validateCustomer({
+    customer_name: 'Advanced customer check',
+    mobile_number: '9999999999',
+    ...fields,
+  });
+
+  ['alternate_phone', 'email', 'pincode', 'map_link'].forEach((key) => {
+    if (baseErrors[key]) errors[key] = baseErrors[key];
+  });
+
+  if (fields.default_discount !== '' && fields.default_discount !== null && fields.default_discount !== undefined) {
+    const discount = Number(fields.default_discount);
+    if (!Number.isFinite(discount) || discount < 0 || discount > 100) {
+      errors.default_discount = 'Default discount must be between 0 and 100.';
+    }
+  }
+
+  if (fields.credit_limit !== '' && fields.credit_limit !== null && fields.credit_limit !== undefined) {
+    const creditLimit = Number(fields.credit_limit);
+    if (!Number.isFinite(creditLimit) || creditLimit < 0) {
+      errors.credit_limit = 'Credit limit cannot be negative.';
+    }
+  }
+
+  return errors;
+};
+
+const getAdvancedSectionForField = (field) => {
+  if (['company_name', 'gst_number', 'alternate_phone', 'email', 'city', 'pincode', 'date_of_birth', 'map_link'].includes(field)) return 'business';
+  if (['communication_pref', 'communication_lang', 'internal_comments', 'notes'].includes(field)) return 'communication';
+  if (['customer_classification', 'customer_status', 'service_zone', 'price_list', 'credit_limit'].includes(field)) return 'profile';
+  return 'customer';
+};
+
 const staffLabel = (option) => {
   const name = option?.name || '';
   const id = option?.uniqueId || option?.id || '';
@@ -197,7 +410,7 @@ const findStaffOption = (options, staffId) => {
   return key ? options.find((option) => staffOptionKey(option) === key) || null : null;
 };
 
-function getStageOneErrors({ customerMode, selectedCustomer, form, isOnCall }) {
+function getStageOneErrors({ customerMode, selectedCustomer, form, isOnCall, address }) {
   const nextErrors = {};
 
   if (customerMode === 'existing') {
@@ -235,7 +448,7 @@ function getStageOneErrors({ customerMode, selectedCustomer, form, isOnCall }) {
   }
 
   if (isOnCall) {
-    if (!String(form.address || '').trim()) {
+    if (!String(address || '').trim()) {
       nextErrors.address = 'Address is required for On-Call orders.';
     }
     const schedule = validateOnCallSchedule({
@@ -279,6 +492,61 @@ function SmallLabel({ children }) {
   );
 }
 
+function AdvancedTextField({ label, required = false, sx, id, slotProps, inputProps, size = 'small', fullWidth = true, ...props }) {
+  const generatedId = React.useId();
+  const fieldId = id || `orders-v2-advanced-${generatedId.replace(/:/g, '')}`;
+  const labelId = `${fieldId}-label`;
+  const { gridColumn, ...fieldSx } = sx || {};
+  const htmlInputProps = { 'aria-labelledby': labelId, ...inputProps, ...slotProps?.htmlInput };
+
+  return (
+    <Box className="orders-v2-advanced-field" sx={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0, gridColumn }}>
+      <Typography component="label" id={labelId} htmlFor={fieldId} className="orders-v2-advanced-field-label">
+        {label}
+        {required ? <span className="orders-v2-advanced-field-required">*</span> : null}
+      </Typography>
+      <TextField
+        {...props}
+        id={fieldId}
+        size={size}
+        fullWidth={fullWidth}
+        slotProps={{
+          ...slotProps,
+          htmlInput: htmlInputProps,
+          select: { 'aria-labelledby': labelId, ...slotProps?.select },
+        }}
+        sx={{ ...ADVANCED_FIELD_SX, ...fieldSx }}
+      />
+    </Box>
+  );
+}
+
+function AdvancedSection({ icon, title, expanded, onChange, children }) {
+  return (
+    <Accordion
+      disableGutters
+      elevation={0}
+      expanded={expanded}
+      onChange={onChange}
+      sx={{
+        border: `1px solid ${BORDER}`,
+        borderRadius: '10px !important',
+        '&:before': { display: 'none' },
+        bgcolor: '#fff',
+      }}
+    >
+      <AccordionSummary
+        expandIcon={<ExpandMore sx={{ fontSize: 20, color: MUTED }} />}
+        sx={{ minHeight: 46, '& .MuiAccordionSummary-content': { my: 1, display: 'flex', alignItems: 'center', gap: 1.25 } }}
+      >
+        {icon}
+        <Typography sx={{ fontSize: '0.88rem', fontWeight: 700, color: TEXT }}>{title}</Typography>
+      </AccordionSummary>
+      <AccordionDetails sx={{ pt: 0, pb: 2 }}>{children}</AccordionDetails>
+    </Accordion>
+  );
+}
+
 export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, showToast }) {
   const localServiceTypes = useServiceTypes();
   const [stage, setStage] = useState(1);
@@ -304,6 +572,13 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
   const [showQRModal, setShowQRModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [directSubmitting, setDirectSubmitting] = useState(false);
+  const [advancedFields, setAdvancedFields] = useState(INITIAL_ADVANCED_FIELDS);
+  const [advancedBaseline, setAdvancedBaseline] = useState(INITIAL_ADVANCED_FIELDS);
+  const [advancedSections, setAdvancedSections] = useState(INITIAL_ADVANCED_SECTIONS);
+  const [additionalAddresses, setAdditionalAddresses] = useState([]);
+  const [selectedAddressId, setSelectedAddressId] = useState(null);
+  const [showAddressErrors, setShowAddressErrors] = useState(false);
+  const addressLoadTokenRef = useRef(0);
   const [addingServiceIndex, setAddingServiceIndex] = useState(null);
   const [newServiceName, setNewServiceName] = useState('');
   const [isSavingService, setIsSavingService] = useState(false);
@@ -320,6 +595,13 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
     setCustomerLoading(false);
     setSelectedCustomer(null);
     setForm(INITIAL_FORM);
+    setAdvancedFields(INITIAL_ADVANCED_FIELDS);
+    setAdvancedBaseline(INITIAL_ADVANCED_FIELDS);
+    setAdvancedSections(INITIAL_ADVANCED_SECTIONS);
+    setAdditionalAddresses([]);
+    setSelectedAddressId(null);
+    setShowAddressErrors(false);
+    addressLoadTokenRef.current += 1;
     setErrors({});
     setActiveCategory('All');
     setSearchQuery('');
@@ -375,6 +657,11 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
     [localServiceTypes, dbServiceTypes],
   );
 
+  const advancedOrderPreferenceOptions = useMemo(
+    () => dedupeStrings([...serviceOptions, advancedFields.order_preference]),
+    [serviceOptions, advancedFields.order_preference],
+  );
+
   const paymentOptions = useMemo(() => {
     const settings = getStoredSettings();
     const enabled = settings?.enabledPayments || {};
@@ -424,9 +711,20 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
   }, [cart, form.taxExemption, discountPercent]);
 
   const isOnCall = isOnCallOrderType(form.orderType);
+  const normalizedAddresses = useMemo(
+    () => normalizeAdditionalAddresses(additionalAddresses),
+    [additionalAddresses],
+  );
+  const selectedAdditionalAddress = useMemo(
+    () => normalizedAddresses.find((address) => address.id === selectedAddressId) || null,
+    [normalizedAddresses, selectedAddressId],
+  );
+  const effectiveAddress = selectedAdditionalAddress
+    ? formatAddressForOrder(selectedAdditionalAddress)
+    : String(form.address || '').trim();
   const stageOneErrors = useMemo(
-    () => getStageOneErrors({ customerMode, selectedCustomer, form, isOnCall }),
-    [customerMode, selectedCustomer, form, isOnCall],
+    () => getStageOneErrors({ customerMode, selectedCustomer, form, isOnCall, address: effectiveAddress }),
+    [customerMode, selectedCustomer, form, isOnCall, effectiveAddress],
   );
   const isStageOneValid = Object.keys(stageOneErrors).length === 0;
   const canSave = !submitting && cart.length > 0 && isStageOneValid;
@@ -480,19 +778,96 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
     });
   };
 
+  const resetAdvancedFields = () => {
+    setAdvancedFields(INITIAL_ADVANCED_FIELDS);
+    setAdvancedBaseline(INITIAL_ADVANCED_FIELDS);
+    setAdvancedSections(INITIAL_ADVANCED_SECTIONS);
+    setAdditionalAddresses([]);
+    setSelectedAddressId(null);
+    setShowAddressErrors(false);
+    addressLoadTokenRef.current += 1;
+  };
+
+  const updateAdvancedFields = (patch) => {
+    const nextFields = { ...advancedFields, ...patch };
+    setAdvancedFields(nextFields);
+    setErrors((previous) => {
+      const next = { ...previous };
+      let changed = false;
+      Object.keys(patch).forEach((key) => {
+        if (next[key]) {
+          delete next[key];
+          changed = true;
+        }
+      });
+      return changed ? next : previous;
+    });
+
+    if (patch.price_list !== undefined || patch.default_discount !== undefined) {
+      const currentOrderDiscount = Number(discountPercent) || 0;
+      const previousCustomerDiscount = Number(advancedFields.default_discount) || 0;
+      const nextCustomerDiscount = Number(nextFields.default_discount) || 0;
+      if (Math.abs(currentOrderDiscount - previousCustomerDiscount) < 0.001) {
+        setDiscountPercent(Math.max(0, Math.min(100, nextCustomerDiscount)));
+      }
+    }
+  };
+
+  const validateAdvancedDetails = () => getAdvancedErrors(advancedFields);
+
+  const applyCustomerPricing = () => {
+    const discount = Math.max(0, Math.min(100, Number(advancedFields.default_discount) || 0));
+    setDiscountPercent(discount);
+    showToast?.(`Applied ${advancedFields.price_list} customer pricing (${discount}% default discount) to this order.`);
+  };
+
+  const getChangedAdvancedPayload = () => {
+    const changed = {};
+    Object.keys(advancedFields).forEach((key) => {
+      if (String(advancedFields[key] ?? '') !== String(advancedBaseline[key] ?? '')) {
+        changed[key] = advancedFields[key];
+      }
+    });
+    if (changed.default_discount !== undefined) changed.default_discount = Number(changed.default_discount) || 0;
+    if (changed.credit_limit !== undefined) changed.credit_limit = Number(changed.credit_limit) || 0;
+    if (changed.dnd !== undefined) changed.dnd = Boolean(changed.dnd);
+    return changed;
+  };
+
+  const loadCustomerAddresses = async (customer) => {
+    const token = addressLoadTokenRef.current + 1;
+    addressLoadTokenRef.current = token;
+    const seed = normalizeAdditionalAddresses(customer?.additional_addresses || customer?.additionalAddresses);
+    setAdditionalAddresses(seed);
+    setSelectedAddressId(null);
+    setShowAddressErrors(false);
+
+    const customerId = getCustomerId(customer);
+    if (!customerId) return;
+
+    const { data } = await fetchCustomerAddresses(customerId);
+    if (token !== addressLoadTokenRef.current) return;
+    const normalized = Array.isArray(data) && data.length > 0 ? normalizeAdditionalAddresses(data) : seed;
+    setAdditionalAddresses(normalized);
+    setSelectedAddressId(null);
+  };
+
   const prefillCustomer = (customer) => {
     const rawAddress = getCustomerAddress(customer);
     const tagMatch = String(rawAddress || '').match(/^(Home|Office|Other)\s*:/i);
     const detectedType = tagMatch ? (tagMatch[1].charAt(0).toUpperCase() + tagMatch[1].slice(1).toLowerCase()) : 'Home';
     const cleanAddress = stripAddressTag(rawAddress);
-    const storedDiscount = customer?.default_discount ?? customer?.defaultDiscountPercentage ?? 0;
-    setDiscountPercent(Math.max(0, Math.min(100, Number(storedDiscount) || 0)));
+    const normalizedAdvanced = normalizeAdvancedFields(customer);
+    setAdvancedFields(normalizedAdvanced);
+    setAdvancedBaseline(normalizedAdvanced);
+    setAdvancedSections(INITIAL_ADVANCED_SECTIONS);
     updateForm({
       customer_name: getCustomerName(customer),
       mobile_number: normalizeMobileNumber(getCustomerPhone(customer)),
       address: cleanAddress,
       addressType: detectedType,
     });
+    loadCustomerAddresses(customer);
   };
 
   const handleCustomerSelect = (_, option) => {
@@ -503,6 +878,7 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
       setCustomerMode('new');
       setSelectedCustomer(null);
       setDiscountPercent(0);
+      resetAdvancedFields();
       updateForm({
         customer_name: phoneMatch ? '' : query,
         mobile_number: phoneMatch ? phoneMatch[0] : '',
@@ -640,8 +1016,12 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
   const buildCustomerData = (schedule, primaryService) => {
     const rawAddress = String(form.address || '').trim();
     const cleanAddress = stripAddressTag(rawAddress);
-    const formattedAddress = cleanAddress ? `${form.addressType}: ${cleanAddress}` : '';
-    const notes = [form.internalNotes, form.orderNotes].filter(Boolean).join(' • ');
+    const formattedAddress = selectedAdditionalAddress
+      ? formatAddressForOrder(selectedAdditionalAddress)
+      : (cleanAddress ? `${form.addressType}: ${cleanAddress}` : '');
+    const storedAddresses = toStoredAdditionalAddresses(additionalAddresses);
+    const staffNotes = [advancedFields.internal_comments, form.internalNotes].filter(Boolean).join(' • ');
+    const notes = [staffNotes, advancedFields.notes, form.orderNotes].filter(Boolean).join(' • ');
     const advancePaid = Number(form.advancePaid) || 0;
 
     return {
@@ -649,35 +1029,37 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
       customer_name: String(form.customer_name || '').trim() || 'Walk-In Customer',
       country_code: '+91',
       mobile_number: normalizeMobileNumber(form.mobile_number),
-      alternate_phone: '',
+      alternate_phone: advancedFields.alternate_phone,
       address: formattedAddress,
-      additional_addresses: [],
-      city: selectedCustomer?.city || '',
-      pincode: selectedCustomer?.pincode || '',
-      date_of_birth: selectedCustomer?.date_of_birth || '',
-      map_link: selectedCustomer?.map_link || '',
-      email: selectedCustomer?.email || '',
-      gst_number: selectedCustomer?.gst_number || '',
-      company_name: selectedCustomer?.company_name || '',
+      additional_addresses: storedAddresses,
+      selected_customer_address_id: selectedAdditionalAddress?.id || null,
+      selected_address: formattedAddress,
+      city: advancedFields.city,
+      pincode: advancedFields.pincode,
+      date_of_birth: advancedFields.date_of_birth,
+      map_link: advancedFields.map_link,
+      email: advancedFields.email,
+      gst_number: advancedFields.gst_number,
+      company_name: advancedFields.company_name,
       tax_exemption: Boolean(form.taxExemption),
       notes,
-      communication_pref: selectedCustomer?.communication_pref || 'sms',
-      communication_lang: selectedCustomer?.communication_lang || 'en',
-      dnd: Boolean(selectedCustomer?.dnd),
+      communication_pref: advancedFields.communication_pref,
+      communication_lang: advancedFields.communication_lang,
+      dnd: Boolean(advancedFields.dnd),
       property_status: form.propertyStatus,
       priority: form.propertyStatus === 'Yes' ? 'Yes' : 'No',
       order_status: 'order recived',
-      internal_comments: notes,
-      order_preference: primaryService,
-      default_discount: totals.discountPercent,
-      referral_code: selectedCustomer?.referral_code || '',
-      marketing_source: selectedCustomer?.marketing_source || '',
-      membership_id: selectedCustomer?.membership_id || '',
-      customer_classification: selectedCustomer?.customer_classification || 'regular',
-      customer_status: selectedCustomer?.customer_status || 'active',
-      price_list: selectedCustomer?.price_list || '',
-      service_zone: selectedCustomer?.service_zone || form.addressType || '',
-      credit_limit: Number(selectedCustomer?.credit_limit) || 0,
+      internal_comments: staffNotes,
+      order_preference: advancedFields.order_preference || primaryService,
+      default_discount: Number(advancedFields.default_discount) || 0,
+      referral_code: advancedFields.referral_code,
+      marketing_source: advancedFields.marketing_source,
+      membership_id: advancedFields.membership_id,
+      customer_classification: advancedFields.customer_classification,
+      customer_status: advancedFields.customer_status,
+      price_list: advancedFields.price_list,
+      service_zone: advancedFields.service_zone,
+      credit_limit: Number(advancedFields.credit_limit) || 0,
       service_category: primaryService,
       item_count: totals.itemCount,
       product_weight: '',
@@ -728,10 +1110,56 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
   };
 
   const persistOrder = async ({ scheduleResult, primaryService, setSaving }) => {
+    const addressValidationErrors = validateAdditionalAddresses(additionalAddresses);
+    if (Object.keys(addressValidationErrors).length > 0) {
+      setShowAddressErrors(true);
+      showToast?.('Review the highlighted additional addresses before saving.');
+      return;
+    }
+    setShowAddressErrors(false);
+
+    if (isOnCall && !String(effectiveAddress || '').trim()) {
+      setErrors((previous) => ({ ...previous, address: 'Address is required for On-Call orders.' }));
+      showToast?.('A valid selected address is required for On-Call orders.');
+      return;
+    }
+
+    const advancedValidationErrors = validateAdvancedDetails();
+    const advancedErrorKeys = Object.keys(advancedValidationErrors);
+    if (advancedErrorKeys.length > 0) {
+      setErrors((previous) => ({ ...previous, ...advancedValidationErrors }));
+      const sectionsToExpand = [...new Set(advancedErrorKeys.map(getAdvancedSectionForField))];
+      setAdvancedSections((previous) => ({
+        ...previous,
+        ...Object.fromEntries(sectionsToExpand.map((section) => [section, true])),
+      }));
+      showToast?.('Review the highlighted customer details before saving.');
+      return;
+    }
+
     const customerData = buildCustomerData(scheduleResult, primaryService);
     const existingCustomerId = customerMode === 'existing' ? (getCustomerId(selectedCustomer) || null) : null;
 
     setSaving(true);
+    if (existingCustomerId) {
+      const changedAdvanced = {
+        ...getChangedAdvancedPayload(),
+        additional_addresses: toStoredAdditionalAddresses(additionalAddresses),
+      };
+      if (Object.keys(changedAdvanced).length > 0) {
+        const { error: updateError } = await updateCustomer(existingCustomerId, {
+          customer_id: existingCustomerId,
+          ...changedAdvanced,
+        });
+        if (updateError) {
+          setSaving(false);
+          showToast?.(`⚠️ ${friendlySupabaseError(updateError)}`);
+          return;
+        }
+        setAdvancedBaseline(advancedFields);
+      }
+    }
+
     const { data, error } = await createOrderWithCustomer({
       existingCustomerId,
       customerData: {
@@ -898,6 +1326,7 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
           onClick={() => {
             setCustomerMode('existing');
             setErrors({});
+            if (!selectedCustomer) resetAdvancedFields();
           }}
           sx={{ flex: 1, textTransform: 'none', bgcolor: customerMode === 'existing' ? PRIMARY : 'transparent', borderColor: PRIMARY, color: customerMode === 'existing' ? '#fff' : PRIMARY_DARK, fontWeight: 700, fontSize: '0.82rem' }}
         >
@@ -911,6 +1340,7 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
             setSelectedCustomer(null);
             setCustomerQuery('');
             setDiscountPercent(0);
+            resetAdvancedFields();
             setErrors({});
           }}
           sx={{ flex: 1, textTransform: 'none', bgcolor: customerMode === 'new' ? PRIMARY : 'transparent', borderColor: PRIMARY, color: customerMode === 'new' ? '#fff' : PRIMARY_DARK, fontWeight: 700, fontSize: '0.82rem' }}
@@ -983,6 +1413,7 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
               onClick={() => {
                 setSelectedCustomer(null);
                 setCustomerQuery('');
+                resetAdvancedFields();
               }}
               sx={{ textTransform: 'none', color: PRIMARY_DARK, fontSize: '0.76rem', fontWeight: 700, minWidth: 0 }}
             >
@@ -1055,6 +1486,23 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
           error={Boolean(errors.address)}
           helperText={errors.address || ''}
           sx={{ ...FIELD_SX, '& textarea': { fontSize: '0.88rem', lineHeight: 1.5 } }}
+        />
+        <OrdersV2AddressManager
+          value={additionalAddresses}
+          onChange={(next) => setAdditionalAddresses(normalizeAdditionalAddresses(next))}
+          selectedId={selectedAddressId}
+          onSelect={(id) => {
+            setSelectedAddressId(id);
+            if (id) {
+              setErrors((previous) => {
+                if (!previous.address) return previous;
+                const next = { ...previous };
+                delete next.address;
+                return next;
+              });
+            }
+          }}
+          showErrors={showAddressErrors}
         />
       </Box>
     </SectionCard>
@@ -1693,7 +2141,7 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
   );
 
   const renderStageTwo = () => (
-    <Box sx={{ maxWidth: 1200, mx: 'auto', width: '100%', minWidth: 0 }}>
+    <Box className="orders-v2-create-step2" sx={{ maxWidth: 1200, mx: 'auto', width: '100%', minWidth: 0 }}>
       {/* Top Header Chips matching Image 2 */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 2 }}>
         <Chip
@@ -1924,6 +2372,236 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
           </Accordion>
         ) : null}
 
+        <AdvancedSection
+          icon={<StorefrontOutlined sx={{ fontSize: 20, color: PRIMARY }} />}
+          title="Business Details"
+          expanded={advancedSections.business}
+          onChange={(_, isExpanded) => setAdvancedSections((previous) => ({ ...previous, business: isExpanded }))}
+        >
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
+            <AdvancedTextField
+              label="Company Name"
+              value={advancedFields.company_name}
+              onChange={(event) => updateAdvancedFields({ company_name: event.target.value })}
+            />
+            <AdvancedTextField
+              label="GST Number"
+              value={advancedFields.gst_number}
+              onChange={(event) => updateAdvancedFields({ gst_number: event.target.value })}
+            />
+            <AdvancedTextField
+              label="Alternate Phone"
+              value={advancedFields.alternate_phone}
+              onChange={(event) => updateAdvancedFields({ alternate_phone: event.target.value })}
+              error={Boolean(errors.alternate_phone)}
+              helperText={errors.alternate_phone || ''}
+            />
+            <AdvancedTextField
+              label="Email"
+              type="email"
+              value={advancedFields.email}
+              onChange={(event) => updateAdvancedFields({ email: event.target.value })}
+              error={Boolean(errors.email)}
+              helperText={errors.email || ''}
+            />
+            <AdvancedTextField
+              label="City"
+              value={advancedFields.city}
+              onChange={(event) => updateAdvancedFields({ city: event.target.value })}
+            />
+            <AdvancedTextField
+              label="Pincode"
+              value={advancedFields.pincode}
+              onChange={(event) => updateAdvancedFields({ pincode: event.target.value })}
+              error={Boolean(errors.pincode)}
+              helperText={errors.pincode || ''}
+            />
+            <AdvancedTextField
+              type="date"
+              label="Date of Birth"
+              value={advancedFields.date_of_birth}
+              onChange={(event) => updateAdvancedFields({ date_of_birth: event.target.value })}
+            />
+            <AdvancedTextField
+              label="Map Link"
+              value={advancedFields.map_link}
+              onChange={(event) => updateAdvancedFields({ map_link: event.target.value })}
+              error={Boolean(errors.map_link)}
+              helperText={errors.map_link || ''}
+              sx={{ gridColumn: '1 / -1' }}
+            />
+          </Box>
+        </AdvancedSection>
+
+        <AdvancedSection
+          icon={<LocalPhoneOutlined sx={{ fontSize: 20, color: PRIMARY }} />}
+          title="Communication Preferences"
+          expanded={advancedSections.communication}
+          onChange={(_, isExpanded) => setAdvancedSections((previous) => ({ ...previous, communication: isExpanded }))}
+        >
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
+            <AdvancedTextField
+              select
+              label="Communication Preference"
+              value={advancedFields.communication_pref}
+              onChange={(event) => updateAdvancedFields({
+                communication_pref: event.target.value,
+                dnd: event.target.value === 'None (DND)',
+              })}
+            >
+              {COMMUNICATION_PREF_OPTIONS.map((option) => (
+                <MenuItem key={option.value} value={option.value}>{option.value === 'None (DND)' ? 'No communication (DND)' : option.value}</MenuItem>
+              ))}
+            </AdvancedTextField>
+            <AdvancedTextField
+              select
+              label="Preferred Communication Language"
+              value={advancedFields.communication_lang}
+              onChange={(event) => updateAdvancedFields({ communication_lang: event.target.value })}
+            >
+              {COMMUNICATION_LANGUAGE_OPTIONS.map((option) => (
+                <MenuItem key={option.value} value={option.value}>{option.value}</MenuItem>
+              ))}
+            </AdvancedTextField>
+            <AdvancedTextField
+              multiline
+              minRows={2}
+              label="Internal Comments (staff only)"
+              value={advancedFields.internal_comments}
+              onChange={(event) => updateAdvancedFields({ internal_comments: event.target.value })}
+              sx={{ gridColumn: '1 / -1' }}
+            />
+          </Box>
+        </AdvancedSection>
+
+        <AdvancedSection
+          icon={<PeopleAltOutlined sx={{ fontSize: 20, color: PRIMARY }} />}
+          title="Profile & Services Setting"
+          expanded={advancedSections.profile}
+          onChange={(_, isExpanded) => setAdvancedSections((previous) => ({ ...previous, profile: isExpanded }))}
+        >
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
+            <AdvancedTextField
+              select
+              label="Customer Classification"
+              value={advancedFields.customer_classification}
+              onChange={(event) => updateAdvancedFields({ customer_classification: event.target.value })}
+            >
+              {CLASSIFICATION_OPTIONS.map((option) => (
+                <MenuItem key={option.value} value={option.value}>{option.value}</MenuItem>
+              ))}
+            </AdvancedTextField>
+            <AdvancedTextField
+              select
+              label="Customer Status"
+              value={advancedFields.customer_status}
+              onChange={(event) => updateAdvancedFields({ customer_status: event.target.value })}
+            >
+              {CUSTOMER_STATUS_OPTIONS.map((option) => (
+                <MenuItem key={option.value} value={option.value}>{option.value}</MenuItem>
+              ))}
+            </AdvancedTextField>
+            <AdvancedTextField
+              select
+              label="Area Service Zone"
+              value={advancedFields.service_zone}
+              onChange={(event) => updateAdvancedFields({ service_zone: event.target.value })}
+            >
+              {SERVICE_ZONE_OPTIONS.map((option) => (
+                <MenuItem key={option.value} value={option.value}>{option.value}</MenuItem>
+              ))}
+            </AdvancedTextField>
+            <AdvancedTextField
+              select
+              label="Specific Price List"
+              value={advancedFields.price_list}
+              onChange={(event) => updateAdvancedFields({ price_list: event.target.value })}
+            >
+              {PRICE_LIST_OPTIONS.map((option) => (
+                <MenuItem key={option.value} value={option.value}>{option.value}</MenuItem>
+              ))}
+            </AdvancedTextField>
+            <AdvancedTextField
+              type="number"
+              label="Credit Limit (₹)"
+              value={advancedFields.credit_limit}
+              onChange={(event) => updateAdvancedFields({ credit_limit: event.target.value })}
+              inputProps={{ min: 0, step: '100' }}
+              error={Boolean(errors.credit_limit)}
+              helperText={errors.credit_limit || 'Approved credit limit for postpaid customer orders.'}
+            />
+          </Box>
+        </AdvancedSection>
+
+        <AdvancedSection
+          icon={<CreditCardOutlined sx={{ fontSize: 20, color: PRIMARY }} />}
+          title="Customer & Membership"
+          expanded={advancedSections.customer}
+          onChange={(_, isExpanded) => setAdvancedSections((previous) => ({ ...previous, customer: isExpanded }))}
+        >
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
+            <AdvancedTextField
+              label="Membership ID (optional)"
+              value={advancedFields.membership_id}
+              onChange={(event) => updateAdvancedFields({ membership_id: event.target.value })}
+            />
+            <AdvancedTextField
+              select
+              label="Order Preference"
+              value={advancedFields.order_preference}
+              onChange={(event) => updateAdvancedFields({ order_preference: event.target.value })}
+            >
+              {advancedOrderPreferenceOptions.map((service) => (
+                <MenuItem key={service} value={service}>{service}</MenuItem>
+              ))}
+            </AdvancedTextField>
+            <AdvancedTextField
+              select
+              label="Marketing Source"
+              value={advancedFields.marketing_source}
+              onChange={(event) => updateAdvancedFields({ marketing_source: event.target.value })}
+            >
+              {MARKETING_SOURCE_OPTIONS.map((option) => (
+                <MenuItem key={option.value} value={option.value}>{option.value}</MenuItem>
+              ))}
+            </AdvancedTextField>
+            <AdvancedTextField
+              type="number"
+              label="Default Discount (%)"
+              value={advancedFields.default_discount}
+              onChange={(event) => updateAdvancedFields({ default_discount: event.target.value })}
+              inputProps={{ min: 0, max: 100, step: '0.01' }}
+              error={Boolean(errors.default_discount)}
+              helperText={errors.default_discount || ''}
+            />
+            <AdvancedTextField
+              label="Referral Code (optional)"
+              value={advancedFields.referral_code}
+              onChange={(event) => updateAdvancedFields({ referral_code: event.target.value })}
+            />
+            <AdvancedTextField
+              multiline
+              minRows={2}
+              label="Customer Notes"
+              value={advancedFields.notes}
+              onChange={(event) => updateAdvancedFields({ notes: event.target.value })}
+              sx={{ gridColumn: '1 / -1' }}
+            />
+            <Typography sx={{ gridColumn: '1 / -1', fontSize: '0.74rem', color: MUTED, lineHeight: 1.45 }}>
+              Customer pricing is stored on the customer and kept separate from the manual order discount. Changing Price List or Default Discount recalculates this cart only while it still uses the customer default; use Apply customer pricing after editing the order discount manually.
+            </Typography>
+            <Button
+              type="button"
+              size="small"
+              variant="outlined"
+              onClick={applyCustomerPricing}
+              sx={{ gridColumn: '1 / -1', justifySelf: 'start', textTransform: 'none', borderColor: PRIMARY, color: PRIMARY_DARK, fontWeight: 700, fontSize: '0.76rem' }}
+            >
+              Apply customer pricing to cart
+            </Button>
+          </Box>
+        </AdvancedSection>
+
         <Accordion
           disableGutters
           elevation={0}
@@ -1944,6 +2622,7 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
           <AccordionDetails sx={{ pt: 0, pb: 2, display: 'grid', gap: 1 }}>
             {[
               `Customer: ${getCustomerName(selectedCustomer) || form.customer_name || 'Not set'}`,
+              `Address: ${effectiveAddress || 'Not set'}`,
               `Order type: ${isOnCall ? 'On-Call' : 'Walk-In'}`,
               `Staff: ${form.attendStaffName || 'Counter Staff'}`,
               `Items: ${totals.itemCount}`,
