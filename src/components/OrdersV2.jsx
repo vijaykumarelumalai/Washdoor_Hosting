@@ -1,14 +1,14 @@
 // src/components/OrdersV2.jsx - Orders & POS v2 Core Shell matching reference UI design
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
-  Box, Paper, Card, Typography, Button, IconButton, Chip, Checkbox, Popover,
+  Box, Paper, Typography, Button, IconButton, Chip, Checkbox, Popover,
   TextField, MenuItem, Snackbar, Alert, Tooltip, InputAdornment,
 } from '@mui/material';
 import {
   Add, Refresh, Search, ShoppingCartRounded, FilterAltOutlined,
-  Inventory2Outlined, TrendingUp, AccessTime, LocalShippingOutlined,
+  Inventory2Outlined, TrendingUp, LocalShippingOutlined,
   Storefront, OpenInNew, ViewColumnRounded, KeyboardArrowDown, CloseRounded,
-  LockOutlined,
+  LockOutlined, BarChartRounded, AccountBalanceWalletOutlined,
 } from '@mui/icons-material';
 import { useLanguage } from '../context/LanguageContext';
 import { normalizeOrder } from '../utils/normalizeOrder';
@@ -133,6 +133,7 @@ export function OrdersV2({
   const [visibleColumnIds, setVisibleColumnIds] = useState([...ORDERS_V2_DEFAULT_COLUMN_IDS]);
   const [draftColumnIds, setDraftColumnIds] = useState([...ORDERS_V2_DEFAULT_COLUMN_IDS]);
   const [columnMenuAnchor, setColumnMenuAnchor] = useState(null);
+  const [overallDetailsAnchorEl, setOverallDetailsAnchorEl] = useState(null);
 
   // Sync external search query
   useEffect(() => {
@@ -167,6 +168,14 @@ export function OrdersV2({
   const handleCloseColumnMenu = () => {
     setColumnMenuAnchor(null);
     setDraftColumnIds([...visibleColumnIds]);
+  };
+
+  const handleToggleOverallDetails = (event) => {
+    setOverallDetailsAnchorEl((current) => (current ? null : event.currentTarget));
+  };
+
+  const handleCloseOverallDetails = () => {
+    setOverallDetailsAnchorEl(null);
   };
 
   const handleToggleDraftColumn = (columnId, required) => {
@@ -331,6 +340,13 @@ export function OrdersV2({
   const readyCount = useMemo(() => {
     return filteredOrders.filter((o) => normalizeOrdersV2Status(o.order_status || o.status) === 'Ready').length;
   }, [filteredOrders]);
+
+  const overallSummaryRows = [
+    { label: 'Total Orders', value: String(filteredOrders.length), Icon: Inventory2Outlined, tone: 'blue' },
+    { label: 'Total Revenue', value: `${currencySymbol}${MONEY(totalRevenue)}`, Icon: TrendingUp, tone: 'green' },
+    { label: 'Pending Balance', value: `${currencySymbol}${MONEY(pendingBalance)}`, Icon: AccountBalanceWalletOutlined, tone: 'orange' },
+    { label: 'Ready for Pickup', value: String(readyCount), Icon: LocalShippingOutlined, tone: 'purple' },
+  ];
 
   // Status breakdown counts
   const statusCounts = useMemo(() => {
@@ -727,7 +743,7 @@ export function OrdersV2({
             minWidth: 0,
             boxSizing: 'border-box',
             minHeight: 28,
-            mb: 1,
+            mb: 1.5,
             flexShrink: 0,
           }}
         >
@@ -782,7 +798,69 @@ export function OrdersV2({
             })}
           </Box>
 
-          <Box className="orders-v2-columns-control" sx={{ flexShrink: 0 }}>
+          <Box className="orders-v2-toolbar-actions" sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+            <Button
+              className="orders-v2-summary-button"
+              size="small"
+              variant="outlined"
+              onClick={handleToggleOverallDetails}
+              aria-label="Overall Order Details"
+              aria-haspopup="dialog"
+              aria-expanded={Boolean(overallDetailsAnchorEl)}
+              aria-controls="orders-v2-overall-details-popover"
+              startIcon={<BarChartRounded sx={{ fontSize: 16 }} />}
+              sx={{
+                height: 28,
+                px: 1,
+                whiteSpace: 'nowrap',
+                textTransform: 'none',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                borderRadius: 2,
+                borderColor: '#bfdbfe',
+                bgcolor: '#eff6ff',
+                color: '#2563eb',
+                '&:hover': { bgcolor: '#dbeafe', borderColor: '#60a5fa' },
+              }}
+            >
+              Overall Order Details
+            </Button>
+            <Popover
+              open={Boolean(overallDetailsAnchorEl)}
+              anchorEl={overallDetailsAnchorEl}
+              onClose={handleCloseOverallDetails}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              slotProps={{ paper: { className: 'orders-v2-summary-popover-paper', id: 'orders-v2-overall-details-popover' } }}
+            >
+              <Box className="orders-v2-summary-popover">
+                <Box className="orders-v2-summary-popover-header">
+                  <Typography className="orders-v2-summary-popover-title">Overall Order Details</Typography>
+                  <IconButton
+                    size="small"
+                    className="orders-v2-summary-popover-close"
+                    aria-label="Close overall order details"
+                    onClick={handleCloseOverallDetails}
+                  >
+                    <CloseRounded sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </Box>
+                <Box className="orders-v2-summary-rows">
+                  {overallSummaryRows.map(({ label, value, Icon, tone }) => (
+                    <Box className={`orders-v2-summary-row orders-v2-summary-${tone}`} key={label}>
+                      <Box className="orders-v2-summary-row-left">
+                        <Box className="orders-v2-summary-icon">
+                          <Icon sx={{ fontSize: 18 }} />
+                        </Box>
+                        <Typography className="orders-v2-summary-label">{label}</Typography>
+                      </Box>
+                      <Typography className="orders-v2-summary-value">{value}</Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            </Popover>
+            <Box className="orders-v2-columns-control" sx={{ flexShrink: 0 }}>
             <Button
               className="orders-v2-columns-button"
               size="small"
@@ -896,246 +974,7 @@ export function OrdersV2({
                 </Box>
               </Box>
             </Popover>
-          </Box>
-        </Box>
-
-        {/* ── 4 KPI Summary Cards ── */}
-        <Box
-          className="orders-v2-kpi-section"
-          sx={{
-            display: 'grid',
-            width: '100%',
-            maxWidth: 'none',
-            minWidth: 0,
-            boxSizing: 'border-box',
-            gridTemplateColumns: {
-              xs: 'minmax(0, 1fr)',
-              sm: 'repeat(2, minmax(0, 1fr))',
-              md: 'repeat(4, minmax(0, 1fr))',
-            },
-            gap: { xs: 0.75, sm: 1 },
-            mb: 1.25,
-            flexShrink: 0,
-          }}
-        >
-          {/* 1. Total Orders */}
-          <Box sx={{ minWidth: 0, width: '100%', display: 'flex' }}>
-            <Card
-              elevation={0}
-              sx={{
-                p: { xs: 1.25, sm: 1.5 },
-                width: '100%',
-                minHeight: { xs: 72, sm: 78 },
-                border: '1px solid #dbeafe',
-                borderTop: '3px solid #2563eb',
-                borderRadius: 2,
-                bgcolor: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                gap: { xs: 1, sm: 1.5 },
-                boxShadow: '0 1px 3px rgba(37, 99, 235, 0.05)',
-                transition: 'box-shadow 0.15s ease',
-                '&:hover': { boxShadow: '0 4px 12px rgba(37, 99, 235, 0.12)' },
-              }}
-            >
-              <Box
-                sx={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: '9px',
-                  bgcolor: '#eff6ff',
-                  color: '#2563eb',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                <Inventory2Outlined sx={{ fontSize: 22 }} />
-              </Box>
-              <Box sx={{ minWidth: 0, flex: 1 }}>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: '#64748b',
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    fontSize: '0.75rem',
-                    letterSpacing: '0.02em',
-                  }}
-                >
-                  Total Orders
-                </Typography>
-                <Typography variant="h5" fontWeight={800} sx={{ mt: 0.2, color: '#0f172a', fontSize: '1.35rem' }}>
-                  {filteredOrders.length}
-                </Typography>
-              </Box>
-            </Card>
-          </Box>
-
-          {/* 2. Total Revenue */}
-          <Box sx={{ minWidth: 0, width: '100%', display: 'flex' }}>
-            <Card
-              elevation={0}
-              sx={{
-                p: { xs: 1.25, sm: 1.5 },
-                width: '100%',
-                minHeight: { xs: 72, sm: 78 },
-                border: '1px solid #dbeafe',
-                borderTop: '3px solid #2563eb',
-                borderRadius: 2,
-                bgcolor: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                gap: { xs: 1, sm: 1.5 },
-                boxShadow: '0 1px 3px rgba(37, 99, 235, 0.05)',
-                transition: 'box-shadow 0.15s ease',
-                '&:hover': { boxShadow: '0 4px 12px rgba(37, 99, 235, 0.12)' },
-              }}
-            >
-              <Box
-                sx={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: '9px',
-                  bgcolor: '#dbeafe',
-                  color: '#1d4ed8',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                <TrendingUp sx={{ fontSize: 22 }} />
-              </Box>
-              <Box sx={{ minWidth: 0, flex: 1 }}>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: '#64748b',
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    fontSize: '0.75rem',
-                    letterSpacing: '0.02em',
-                  }}
-                >
-                  Total Revenue
-                </Typography>
-                <Typography variant="h5" fontWeight={800} sx={{ mt: 0.2, color: '#0f172a', fontSize: '1.35rem' }}>
-                  {currencySymbol}{MONEY(totalRevenue)}
-                </Typography>
-              </Box>
-            </Card>
-          </Box>
-
-          {/* 3. Pending Balance */}
-          <Box sx={{ minWidth: 0, width: '100%', display: 'flex' }}>
-            <Card
-              elevation={0}
-              sx={{
-                p: { xs: 1.25, sm: 1.5 },
-                width: '100%',
-                minHeight: { xs: 72, sm: 78 },
-                border: '1px solid #dbeafe',
-                borderTop: '3px solid #2563eb',
-                borderRadius: 2,
-                bgcolor: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                gap: { xs: 1, sm: 1.5 },
-                boxShadow: '0 1px 3px rgba(37, 99, 235, 0.05)',
-                transition: 'box-shadow 0.15s ease',
-                '&:hover': { boxShadow: '0 4px 12px rgba(37, 99, 235, 0.12)' },
-              }}
-            >
-              <Box
-                sx={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: '9px',
-                  bgcolor: '#eff6ff',
-                  color: '#2563eb',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                <AccessTime sx={{ fontSize: 22 }} />
-              </Box>
-              <Box sx={{ minWidth: 0, flex: 1 }}>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: '#64748b',
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    fontSize: '0.75rem',
-                    letterSpacing: '0.02em',
-                  }}
-                >
-                  Pending Balance
-                </Typography>
-                <Typography variant="h5" fontWeight={800} sx={{ mt: 0.2, color: '#2563eb', fontSize: '1.35rem' }}>
-                  {currencySymbol}{MONEY(pendingBalance)}
-                </Typography>
-              </Box>
-            </Card>
-          </Box>
-
-          {/* 4. Ready for Pickup */}
-          <Box sx={{ minWidth: 0, width: '100%', display: 'flex' }}>
-            <Card
-              elevation={0}
-              sx={{
-                p: { xs: 1.25, sm: 1.5 },
-                width: '100%',
-                minHeight: { xs: 72, sm: 78 },
-                border: '1px solid #dbeafe',
-                borderTop: '3px solid #2563eb',
-                borderRadius: 2,
-                bgcolor: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                gap: { xs: 1, sm: 1.5 },
-                boxShadow: '0 1px 3px rgba(37, 99, 235, 0.05)',
-                transition: 'box-shadow 0.15s ease',
-                '&:hover': { boxShadow: '0 4px 12px rgba(37, 99, 235, 0.12)' },
-              }}
-            >
-              <Box
-                sx={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: '9px',
-                  bgcolor: '#dbeafe',
-                  color: '#1d4ed8',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                <LocalShippingOutlined sx={{ fontSize: 22 }} />
-              </Box>
-              <Box sx={{ minWidth: 0, flex: 1 }}>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: '#64748b',
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    fontSize: '0.75rem',
-                    letterSpacing: '0.02em',
-                  }}
-                >
-                  Ready for Pickup
-                </Typography>
-                <Typography variant="h5" fontWeight={800} sx={{ mt: 0.2, color: '#0f172a', fontSize: '1.35rem' }}>
-                  {readyCount}
-                </Typography>
-              </Box>
-            </Card>
+            </Box>
           </Box>
         </Box>
 

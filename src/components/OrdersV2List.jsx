@@ -3,13 +3,13 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   Box, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Collapse, Chip, Avatar, IconButton, Typography, Grid, Stack,
-  Tooltip, TextField, MenuItem, Button, Divider, InputAdornment, Dialog,
+  Tooltip, TextField, Menu, MenuItem, Button, Divider, InputAdornment, Dialog,
   DialogTitle, DialogContent, DialogActions, Select, Alert, CircularProgress,
   Popover, ButtonBase, ToggleButton, ToggleButtonGroup,
 } from '@mui/material';
 import {
   KeyboardArrowRight, KeyboardArrowLeft, KeyboardArrowDown, FirstPage, LastPage, EditOutlined, VisibilityOutlined,
-  ReceiptLongOutlined, DeleteOutlined, Save, Close, Add, Remove, Search,
+  ReceiptLongOutlined, DeleteOutlined, ViewSidebarOutlined, MoreVertOutlined, Save, Close, Add, Remove, Search,
   PersonOutlined, PhoneOutlined, LocationOnOutlined, DirectionsWalkOutlined,
   CallOutlined, BadgeOutlined, LocalShippingOutlined, LayersOutlined,
   AssignmentOutlined, FactoryOutlined, CreditCardOutlined, CheckCircleOutlined,
@@ -471,7 +471,60 @@ const TABLE_COLUMN_CONFIG = {
   communication_pref: { default: 180, min: 150, max: 280 },
   dob: { default: 150, min: 130, max: 240 },
   tax_exemption: { default: 130, min: 110, max: 220 },
-  actions: { default: 200, min: 180, max: 260 },
+  actions: { default: 180, min: 165, max: 240 },
+};
+
+const ORDERS_V2_ACTION_TONES = {
+  blue: {
+    color: '#2563EB',
+    background: '#EFF6FF',
+    border: '#BFDBFE',
+    hoverBackground: '#DBEAFE',
+    hoverBorder: '#93C5FD',
+  },
+  slate: {
+    color: '#475569',
+    background: '#F8FAFC',
+    border: '#E2E8F0',
+    hoverBackground: '#EEF2F6',
+    hoverBorder: '#CBD5E1',
+  },
+  red: {
+    color: '#DC2626',
+    background: '#FEF2F2',
+    border: '#FECACA',
+    hoverBackground: '#FEE2E2',
+    hoverBorder: '#FCA5A5',
+  },
+};
+
+const getOrdersV2ActionButtonSx = (tone) => {
+  const colors = ORDERS_V2_ACTION_TONES[tone] || ORDERS_V2_ACTION_TONES.blue;
+  return {
+    width: 32,
+    height: 32,
+    minWidth: 32,
+    padding: 0,
+    flex: '0 0 32px',
+    borderRadius: '50%',
+    border: `1px solid ${colors.border}`,
+    bgcolor: colors.background,
+    color: colors.color,
+    transition: 'background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease',
+    '&:hover': {
+      bgcolor: colors.hoverBackground,
+      borderColor: colors.hoverBorder,
+    },
+    '&:focus-visible': {
+      outline: `2px solid ${colors.color}`,
+      outlineOffset: '2px',
+    },
+    '&.Mui-disabled': {
+      color: '#94a3b8',
+      bgcolor: '#f1f5f9',
+      borderColor: '#e2e8f0',
+    },
+  };
 };
 
 const SERVICE_ICON_OPTIONS = [
@@ -1230,6 +1283,7 @@ export function OrdersV2List({
     fallbackOrder: null,
     expanded: {},
   });
+  const [ordersV2MoreMenu, setOrdersV2MoreMenu] = useState({ anchorEl: null, orderId: null });
 
   const [tableColumnWidths, setTableColumnWidths] = useState(() =>
     Object.keys(TABLE_COLUMN_CONFIG).reduce((acc, key) => {
@@ -1254,6 +1308,20 @@ export function OrdersV2List({
     return orders.find((order) => String(order.order_number || order.id) === String(servicesPopup.orderId))
       || servicesPopup.fallbackOrder;
   }, [orders, servicesPopup.fallbackOrder, servicesPopup.orderId]);
+
+  const ordersV2MoreMenuOrder = useMemo(() => {
+    if (ordersV2MoreMenu.orderId == null) return null;
+    return orders.find((order) => String(order.order_number || order.id) === String(ordersV2MoreMenu.orderId)) || null;
+  }, [orders, ordersV2MoreMenu.orderId]);
+
+  const closeOrdersV2MoreMenu = useCallback(() => {
+    setOrdersV2MoreMenu({ anchorEl: null, orderId: null });
+  }, []);
+
+  const openOrdersV2MoreMenu = useCallback((event, orderId) => {
+    event.stopPropagation();
+    setOrdersV2MoreMenu({ anchorEl: event.currentTarget, orderId });
+  }, []);
 
   const servicesPopupGroups = useMemo(
     () => (servicesPopupOrder ? getOrderServiceColumnGroups(servicesPopupOrder, serviceTypes) : []),
@@ -2753,79 +2821,100 @@ export function OrdersV2List({
                     </TableCell>
                     )}
 
-                    {/* Actions */}
                     {isColumnVisible('actions') && (
                     <TableCell
                       className={`orders-v2-actions-cell${isInlineOpen ? ' is-inline-open' : ''}`}
                       sx={{
                         py: 1.2,
+                        px: 1,
                         textAlign: 'center',
+                        verticalAlign: 'middle',
                         ...getColumnWidthSx('actions'),
-                        minWidth: 180,
+                        minWidth: 165,
                         overflow: 'visible',
                       }}
                     >
                       <Box
                         sx={{
-                          display: 'inline-flex',
+                          display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           flexWrap: 'nowrap',
                           flexShrink: 0,
-                          gap: 1.5,
-                          minWidth: 0,
+                          width: '100%',
+                          gap: '6px',
+                          minWidth: 146,
                           overflow: 'visible',
                         }}
                       >
-                        {/* Edit Action */}
                         <Tooltip title="Inline Edit Order">
                           <IconButton
+                            className="orders-v2-action-button"
                             size="small"
-                            onClick={() => handleToggleInlineEdit(order)}
-                            sx={{ color: '#2563eb', p: 0.7, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                            aria-label={`Inline edit order ${orderId}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleToggleInlineEdit(order);
+                            }}
+                            sx={getOrdersV2ActionButtonSx('blue')}
                           >
                             <EditOutlined sx={{ fontSize: 18 }} />
                           </IconButton>
                         </Tooltip>
 
-                        {/* View Action */}
-                        {onOpenViewOrder && (
-                          <Tooltip title="View Order Details">
-                            <IconButton
-                              size="small"
-                              onClick={() => onOpenViewOrder(order)}
-                              sx={{ color: '#475569', p: 0.7, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                            >
-                              <VisibilityOutlined sx={{ fontSize: 18 }} />
-                            </IconButton>
-                          </Tooltip>
-                        )}
+                        <Tooltip title={`Open Side Edit Panel for ${orderId}`}>
+                          <IconButton
+                            className="orders-v2-action-button"
+                            size="small"
+                            disabled={!onOpenSideEdit}
+                            aria-label={`Open Side Edit Panel for order ${orderId}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onOpenSideEdit?.(order);
+                            }}
+                            sx={getOrdersV2ActionButtonSx('blue')}
+                          >
+                            <ViewSidebarOutlined sx={{ fontSize: 18 }} />
+                          </IconButton>
+                        </Tooltip>
 
-                        {/* Invoice Action */}
-                        {onOpenReceipt && (
-                          <Tooltip title="Invoice">
-                            <IconButton
-                              size="small"
-                              onClick={() => onOpenReceipt(order)}
-                              sx={{ color: '#2563eb', p: 0.7, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                            >
-                              <ReceiptLongOutlined sx={{ fontSize: 18 }} />
-                            </IconButton>
-                          </Tooltip>
-                        )}
+                        <Tooltip title="Delete Order">
+                          <IconButton
+                            className="orders-v2-action-button"
+                            size="small"
+                            disabled={!onDelete}
+                            aria-label={`Delete order ${orderId}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onDelete?.(orderId);
+                            }}
+                            sx={getOrdersV2ActionButtonSx('red')}
+                          >
+                            <DeleteOutlined sx={{ fontSize: 18 }} />
+                          </IconButton>
+                        </Tooltip>
 
-                        {/* Delete Action in Red */}
-                        {onDelete && (
-                          <Tooltip title="Delete Order">
-                            <IconButton
-                              size="small"
-                              onClick={() => onDelete(orderId)}
-                              sx={{ color: '#dc2626', p: 0.7, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                            >
-                              <DeleteOutlined sx={{ fontSize: 18 }} />
-                            </IconButton>
-                          </Tooltip>
-                        )}
+                        <Tooltip title="More Actions">
+                          <IconButton
+                            className="orders-v2-action-button"
+                            size="small"
+                            disabled={!onOpenViewOrder && !onOpenReceipt}
+                            aria-label={`More actions for order ${orderId}`}
+                            aria-haspopup="true"
+                            aria-expanded={ordersV2MoreMenu.anchorEl != null && String(ordersV2MoreMenu.orderId) === String(orderId)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (String(ordersV2MoreMenu.orderId) === String(orderId)) {
+                                closeOrdersV2MoreMenu();
+                              } else {
+                                openOrdersV2MoreMenu(event, orderId);
+                              }
+                            }}
+                            sx={getOrdersV2ActionButtonSx('slate')}
+                          >
+                            <MoreVertOutlined sx={{ fontSize: 18 }} />
+                          </IconButton>
+                        </Tooltip>
                       </Box>
                     </TableCell>
                     )}
@@ -6341,6 +6430,72 @@ export function OrdersV2List({
           </Box>
         </Box>
       </Popover>
+
+      <Menu
+        anchorEl={ordersV2MoreMenu.anchorEl}
+        open={Boolean(ordersV2MoreMenu.anchorEl)}
+        onClose={closeOrdersV2MoreMenu}
+        disablePortal={false}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        slotProps={{
+          paper: {
+            sx: {
+              minWidth: 190,
+              mt: 0.5,
+              borderRadius: 2,
+              border: '1px solid #e2e8f0',
+              bgcolor: '#ffffff',
+              boxShadow: '0 8px 24px rgba(15, 23, 42, 0.12)',
+            },
+          },
+        }}
+        sx={{
+          '& .MuiMenu-list': { py: '4px', px: '4px' },
+          '& .MuiMenuItem-root': {
+            height: 36,
+            minHeight: 36,
+            gap: 1.25,
+            borderRadius: '8px',
+            fontSize: '0.8125rem',
+            fontWeight: 600,
+            color: '#334155',
+            '& .MuiSvgIcon-root': { fontSize: 18, color: '#475569' },
+            '&:hover': {
+              bgcolor: '#EFF6FF',
+              color: '#1D4ED8',
+              '& .MuiSvgIcon-root': { color: '#2563EB' },
+            },
+            '&.Mui-disabled': {
+              color: '#94a3b8',
+              '& .MuiSvgIcon-root': { color: '#CBD5E1' },
+            },
+          },
+        }}
+      >
+        <MenuItem
+          disabled={!onOpenViewOrder || !ordersV2MoreMenuOrder}
+          onClick={() => {
+            const selectedOrder = ordersV2MoreMenuOrder;
+            closeOrdersV2MoreMenu();
+            if (selectedOrder) onOpenViewOrder(selectedOrder);
+          }}
+        >
+          <VisibilityOutlined />
+          View Order Details
+        </MenuItem>
+        <MenuItem
+          disabled={!onOpenReceipt || !ordersV2MoreMenuOrder}
+          onClick={() => {
+            const selectedOrder = ordersV2MoreMenuOrder;
+            closeOrdersV2MoreMenu();
+            if (selectedOrder) onOpenReceipt(selectedOrder);
+          }}
+        >
+          <ReceiptLongOutlined />
+          Generate Invoice
+        </MenuItem>
+      </Menu>
 
       {/* ── UPI Payment QR Code Modal in Orders v2 Inline Edit ── */}
       <UPIPaymentQRDialog

@@ -130,7 +130,7 @@ test('Orders v2 table uses a fixed five-row viewport with internal scrolling and
   assert.ok(ordersV2List.includes("position: 'sticky',\n          top: 0,\n          zIndex: 6,"));
 });
 
-test('Orders v2 header, filters, tabs, and summary cards use compact spacing', () => {
+test('Orders v2 header, filters, tabs, and toolbar actions use compact spacing', () => {
   assert.ok(ordersV2.includes("pt: { xs: 1.25, sm: 1.5 },"));
   assert.ok(ordersV2.includes("mb: { xs: 1, sm: 1.25 },"));
   assert.ok(ordersV2.includes("width: 40,\n                height: 40,"));
@@ -138,9 +138,10 @@ test('Orders v2 header, filters, tabs, and summary cards use compact spacing', (
   assert.ok(ordersV2.includes("'& .MuiInputBase-input': { py: '8px' },"));
   assert.ok(ordersV2.includes("md: 'minmax(0, 2fr) repeat(3, minmax(0, 1.2fr)) 36px',"));
   assert.ok(ordersV2.includes('minHeight: 28,'));
-  assert.ok(ordersV2.includes('minHeight: { xs: 72, sm: 78 },'));
-  assert.match(ordersV2, /width: 42,[\s\S]{0,60}height: 42,/);
-  assert.ok(ordersV2.includes("fontSize: '1.35rem'"));
+  assert.ok(ordersV2.includes('mb: 1.5,'));
+  assert.ok(ordersV2.includes('className="orders-v2-toolbar-actions"'));
+  assert.ok(ordersV2.includes('gap: 1, flexShrink: 0'));
+  assert.ok(!ordersV2.includes('orders-v2-kpi-section'));
 });
 
 test('Orders v2 page ends at the pagination footer without trailing page spacing', () => {

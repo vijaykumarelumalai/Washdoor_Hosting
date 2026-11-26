@@ -128,9 +128,9 @@ export const ORDERS_V2_COLUMNS = [
     default: true,
     required: true,
     fixed: true,
-    purpose: 'Edit, view, invoice and delete actions',
-    minWidth: '180px',
-    align: 'right',
+    purpose: 'Inline edit, side panel, delete and more actions',
+    minWidth: '165px',
+    align: 'center',
   },
 ];
 
