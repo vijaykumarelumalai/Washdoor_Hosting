@@ -641,4 +641,3 @@ export default function OrdersV2AdvancedCustomerDetails({
     </Box>
   );
 }
-s
