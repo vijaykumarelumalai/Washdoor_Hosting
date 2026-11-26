@@ -87,6 +87,17 @@ import OrdersV2AddressManager, {
   toStoredAdditionalAddresses,
   validateAdditionalAddresses,
 } from './OrdersV2AddressManager';
+import OrdersV2AdvancedCustomerDetails, {
+  INITIAL_ADVANCED_FIELDS,
+  INITIAL_ADVANCED_SECTIONS,
+  buildAdvancedReviewLines,
+  getAdvancedErrors,
+  getAdvancedSectionForField,
+  getChangedAdvancedPayload,
+  getCustomerPricingDiscount,
+  loadAdvancedCustomerProfile,
+  normalizeAdvancedFields,
+} from './OrdersV2AdvancedCustomerDetails';
 
 const normalizePaymentStatusOption = (status, balance = 0, advance = 0, total = 0) => {
   const adv = Number(advance) || 0;
@@ -694,6 +705,12 @@ export function OrdersV2List({
   const [inlineSelectedAddressId, setInlineSelectedAddressId] = useState(null);
   const [showInlineAddressErrors, setShowInlineAddressErrors] = useState(false);
   const inlineAddressTokenRef = useRef(0);
+  const [inlineAdvancedFields, setInlineAdvancedFields] = useState(INITIAL_ADVANCED_FIELDS);
+  const [inlineAdvancedBaseline, setInlineAdvancedBaseline] = useState(INITIAL_ADVANCED_FIELDS);
+  const [inlineAdvancedSections, setInlineAdvancedSections] = useState(INITIAL_ADVANCED_SECTIONS);
+  const [inlineAdvancedErrors, setInlineAdvancedErrors] = useState({});
+  const inlineAdvancedTokenRef = useRef(0);
+  const inlineAdvancedDirtyRef = useRef(false);
   const [isSavingInline, setIsSavingInline] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [scanMode, setScanMode] = useState('order');
@@ -722,6 +739,24 @@ export function OrdersV2List({
   const inlineEffectiveAddress = selectedInlineAddress
     ? formatAddressForOrder(selectedInlineAddress)
     : sanitizeAddress(inlineDraft?.address || '');
+
+  const inlineServiceOptions = useMemo(() => {
+    const values = [
+      ...serviceTypes.map((service) => (
+        typeof service === 'string' ? service : service?.name || service?.service_name || service?.title || ''
+      )),
+      inlineAdvancedFields.order_preference,
+      'Laundry',
+    ];
+    const seen = new Set();
+    return values.reduce((result, value) => {
+      const name = String(value || '').trim();
+      if (!name || seen.has(name.toLowerCase())) return result;
+      seen.add(name.toLowerCase());
+      result.push(name);
+      return result;
+    }, []);
+  }, [serviceTypes, inlineAdvancedFields.order_preference]);
 
   const inlineCustomerValidation = useMemo(() => {
     if (!inlineDraft) return { isValid: false, message: 'Please enter Customer Name and Phone Number.' };
@@ -757,6 +792,38 @@ export function OrdersV2List({
     }
     return { isValid: true, message: 'All required customer details are valid.' };
   }, [inlineDraft, inlineAddresses, inlineEffectiveAddress]);
+
+  const updateInlineAdvancedFields = (patch) => {
+    inlineAdvancedDirtyRef.current = true;
+    const nextFields = { ...inlineAdvancedFields, ...patch };
+    setInlineAdvancedFields(nextFields);
+    setInlineAdvancedErrors((previous) => {
+      const next = { ...previous };
+      let changed = false;
+      Object.keys(patch).forEach((key) => {
+        if (next[key]) {
+          delete next[key];
+          changed = true;
+        }
+      });
+      return changed ? next : previous;
+    });
+
+    if ((patch.price_list !== undefined || patch.default_discount !== undefined) && discountType === '%') {
+      const currentPercent = Number(discountValue) || 0;
+      const previousCustomerDiscount = getCustomerPricingDiscount(inlineAdvancedFields);
+      if (Math.abs(currentPercent - previousCustomerDiscount) < 0.001) {
+        setDiscountValue(getCustomerPricingDiscount(nextFields));
+      }
+    }
+  };
+
+  const applyInlineCustomerPricing = () => {
+    const discount = getCustomerPricingDiscount(inlineAdvancedFields);
+    setDiscountType('%');
+    setDiscountValue(discount);
+    showToast?.(`Applied ${inlineAdvancedFields.price_list} customer pricing (${discount}% default discount) to this order.`);
+  };
 
   const inlineSelectedPickup = driverList.find(
     (option) => String(option.uniqueId) === String(inlineDraft?.assigned_pickup_person_id)
@@ -1688,6 +1755,12 @@ export function OrdersV2List({
       setInlineSelectedAddressId(null);
       setShowInlineAddressErrors(false);
       inlineAddressTokenRef.current += 1;
+      setInlineAdvancedFields(INITIAL_ADVANCED_FIELDS);
+      setInlineAdvancedBaseline(INITIAL_ADVANCED_FIELDS);
+      setInlineAdvancedSections(INITIAL_ADVANCED_SECTIONS);
+      setInlineAdvancedErrors({});
+      inlineAdvancedTokenRef.current += 1;
+      inlineAdvancedDirtyRef.current = false;
       setActiveTab('customer');
       return;
     }
@@ -1774,6 +1847,32 @@ export function OrdersV2List({
     setInlineDraft(draft);
     setInlineCart(items);
     setInspections(order.garment_inspections || order.inspections || {});
+
+    const advancedSeed = normalizeAdvancedFields(order.customer || order);
+    setInlineAdvancedFields(advancedSeed);
+    setInlineAdvancedBaseline(advancedSeed);
+    setInlineAdvancedSections(INITIAL_ADVANCED_SECTIONS);
+    setInlineAdvancedErrors({});
+    const advancedToken = inlineAdvancedTokenRef.current + 1;
+    inlineAdvancedTokenRef.current = advancedToken;
+    inlineAdvancedDirtyRef.current = false;
+    const advancedCustomerId = order.customer_id
+      || order.customerId
+      || order.customer?.customer_id
+      || order.customer?.customerId
+      || null;
+    const advancedMobile = order.mobile_number || order.customer?.mobile_number || '';
+    if (advancedCustomerId || advancedMobile) {
+      loadAdvancedCustomerProfile({ customerId: advancedCustomerId, mobileNumber: advancedMobile })
+        .then((profile) => {
+          if (!profile || inlineAdvancedTokenRef.current !== advancedToken || inlineAdvancedDirtyRef.current) return;
+          const normalizedProfile = normalizeAdvancedFields({ ...(order.customer || {}), ...profile });
+          setInlineAdvancedFields(normalizedProfile);
+          setInlineAdvancedBaseline(normalizedProfile);
+        })
+        .catch(() => {});
+    }
+
     setScanMode('order');
     setScanInput('');
     setScanResult(null);
@@ -2098,6 +2197,19 @@ export function OrdersV2List({
       resolvedDelivery = deliveryResult.scheduled_delivery_at;
     }
 
+    const advancedValidationErrors = getAdvancedErrors(inlineAdvancedFields);
+    const advancedErrorKeys = Object.keys(advancedValidationErrors);
+    if (advancedErrorKeys.length > 0) {
+      setInlineAdvancedErrors(advancedValidationErrors);
+      setInlineAdvancedSections((previous) => ({
+        ...previous,
+        ...Object.fromEntries(advancedErrorKeys.map((field) => [getAdvancedSectionForField(field), true])),
+      }));
+      alert('Review the highlighted customer details before saving.');
+      return;
+    }
+    setInlineAdvancedErrors({});
+
     setIsSavingInline(true);
     try {
       const cartServices = [...new Set(inlineCart.map((i) => i.serviceType).filter(Boolean))];
@@ -2251,15 +2363,22 @@ export function OrdersV2List({
       };
 
       const inlineCustomerId = inlineDraft.customer_id
+        || inlineDraft.customerId
+        || inlineDraft.customer_code
         || inlineDraft.customer?.customer_id
         || inlineDraft.customer?.customerId
+        || inlineDraft.customer?.customer_code
+        || inlineDraft.customer?.id
         || null;
       if (inlineCustomerId) {
+        const changedAdvanced = getChangedAdvancedPayload(inlineAdvancedFields, inlineAdvancedBaseline);
         const { error: customerUpdateError } = await updateCustomer(inlineCustomerId, {
           customer_id: inlineCustomerId,
+          ...changedAdvanced,
           additional_addresses: toStoredAdditionalAddresses(inlineAddresses),
         });
         if (customerUpdateError) throw customerUpdateError;
+        setInlineAdvancedBaseline(inlineAdvancedFields);
       }
 
       await updateOrderInSupabase(updatedRecord.order_number, {
@@ -2312,6 +2431,12 @@ export function OrdersV2List({
       setInlineCart([]);
       setInspections({});
       setPaymentHistory([]);
+      setInlineAdvancedFields(INITIAL_ADVANCED_FIELDS);
+      setInlineAdvancedBaseline(INITIAL_ADVANCED_FIELDS);
+      setInlineAdvancedSections(INITIAL_ADVANCED_SECTIONS);
+      setInlineAdvancedErrors({});
+      inlineAdvancedTokenRef.current += 1;
+      inlineAdvancedDirtyRef.current = false;
       setIsSavingInline(false);
     } catch (err) {
       setIsSavingInline(false);
@@ -3612,6 +3737,29 @@ export function OrdersV2List({
                                       </Grid>
                                     </div>
                                   </div>
+
+                                  <Box className="orders-v2-inline-advanced-section" data-inspect="inline-advanced-customer-details" sx={{ mt: 2, minWidth: 0 }}>
+                                    <OrdersV2AdvancedCustomerDetails
+                                      fields={inlineAdvancedFields}
+                                      errors={inlineAdvancedErrors}
+                                      sections={inlineAdvancedSections}
+                                      onChange={updateInlineAdvancedFields}
+                                      onSectionChange={(section, isExpanded) => setInlineAdvancedSections((previous) => ({ ...previous, [section]: isExpanded }))}
+                                      orderPreferenceOptions={inlineServiceOptions}
+                                      reviewLines={buildAdvancedReviewLines({
+                                        customerName: inlineDraft.customer_name,
+                                        address: inlineEffectiveAddress,
+                                        onCall: isOnCallOrderType(inlineDraft.order_type),
+                                        staff: inlineDraft.assigned_staff || inlineDraft.attend_staff_name,
+                                        itemCount: inlineTotalCount,
+                                        pickupDate: inlineDraft.scheduled_pickup_date,
+                                        pickupTime: inlineDraft.scheduled_pickup_time,
+                                        deliveryDate: inlineDraft.scheduled_delivery_date,
+                                        deliveryTime: inlineDraft.scheduled_delivery_time,
+                                      })}
+                                      onApplyPricing={applyInlineCustomerPricing}
+                                    />
+                                  </Box>
 
                                   <Box className="orders-v2-inline-customer-footer" data-inspect="inline-customer-footer">
                                     <Box className="orders-v2-inline-customer-status">

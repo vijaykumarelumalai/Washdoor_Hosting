@@ -261,7 +261,7 @@ export default function OrdersV2AddressManager({
             '&:hover': { bgcolor: PRIMARY_LIGHT, borderColor: PRIMARY },
           }}
         >
-          {addLabel || `+ Add Additional Address (${addresses.length}/${MAX_ADDITIONAL_ADDRESSES})`}
+          {addLabel || `Add Additional Address (${addresses.length}/${MAX_ADDITIONAL_ADDRESSES})`}
         </Button>
 
         {addresses.length > 0 ? (

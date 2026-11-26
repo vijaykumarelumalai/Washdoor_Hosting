@@ -523,7 +523,7 @@ export function OrdersV2({
                 },
               }}
             >
-              + Create Order
+              Create Order
             </Button>
 
             <Button

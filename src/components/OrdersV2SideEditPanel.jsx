@@ -10,8 +10,19 @@ import { GarmentBarcodeSvg, normalizeOrdersV2Status } from './OrdersV2List';
 import { sanitizeAddress } from '../utils/normalizeOrder';
 import ClothIllustration from './ClothIllustration';
 import GarmentInspectionSection from './GarmentInspectionSection';
-import ServiceTypeSelect from './ServiceTypeSelect';
+import ServiceTypeSelect, { useServiceTypes } from './ServiceTypeSelect';
 import StaffSearchDropdown from './StaffSearchDropdown';
+import OrdersV2AdvancedCustomerDetails, {
+  INITIAL_ADVANCED_FIELDS,
+  INITIAL_ADVANCED_SECTIONS,
+  buildAdvancedReviewLines,
+  getAdvancedErrors,
+  getAdvancedSectionForField,
+  getChangedAdvancedPayload,
+  getCustomerPricingDiscount,
+  loadAdvancedCustomerProfile,
+  normalizeAdvancedFields,
+} from './OrdersV2AdvancedCustomerDetails';
 import { formatServiceBreakdown } from '../config/businessRules';
 import {
   PROCESSING_PRIORITIES,
@@ -207,7 +218,7 @@ export default function OrdersV2SideEditPanel({
   currencySymbol = '₹',
   onUpdateOrder,
 }) {
-  if (!isOpen) return null;
+  const localServiceTypes = useServiceTypes();
 
   // Extract order defaults
   const initialOrderNum = order?.order_number || order?.order_id || order?.work_number || 'ORD00060';
@@ -234,6 +245,12 @@ export default function OrdersV2SideEditPanel({
   const [selectedAddressId, setSelectedAddressId] = useState(order?.selected_customer_address_id || null);
   const [showAddressErrors, setShowAddressErrors] = useState(false);
   const addressTokenRef = useRef(0);
+  const [advancedFields, setAdvancedFields] = useState(INITIAL_ADVANCED_FIELDS);
+  const [advancedBaseline, setAdvancedBaseline] = useState(INITIAL_ADVANCED_FIELDS);
+  const [advancedSections, setAdvancedSections] = useState(INITIAL_ADVANCED_SECTIONS);
+  const [advancedErrors, setAdvancedErrors] = useState({});
+  const advancedTokenRef = useRef(0);
+  const advancedDirtyRef = useRef(false);
   const [status, setStatus] = useState(initialStatus);
   const [orderType, setOrderType] = useState(initialOrderType);
   const [expectedDelivery, setExpectedDelivery] = useState(initialExpectedDelivery);
@@ -249,6 +266,24 @@ export default function OrdersV2SideEditPanel({
   const normalizedAddresses = useMemo(() => normalizeAdditionalAddresses(addresses), [addresses]);
   const selectedAddress = normalizedAddresses.find((item) => item.id === selectedAddressId) || null;
   const effectiveAddress = selectedAddress ? formatAddressForOrder(selectedAddress) : sanitizeAddress(address);
+
+  const advancedOrderPreferenceOptions = useMemo(() => {
+    const values = [...localServiceTypes, advancedFields.order_preference, 'Laundry'];
+    const seen = new Set();
+    return values.reduce((result, value) => {
+      const name = String(value || '').trim();
+      if (!name || seen.has(name.toLowerCase())) return result;
+      seen.add(name.toLowerCase());
+      result.push(name);
+      return result;
+    }, []);
+  }, [localServiceTypes, advancedFields.order_preference]);
+
+  const effectiveAdvancedFields = useMemo(() => ({
+    ...advancedFields,
+    alternate_phone: alternatePhone || '',
+    email: email || '',
+  }), [advancedFields, alternatePhone, email]);
 
   const [attendStaffName, setAttendStaffName] = useState(
     order?.attend_staff_name || order?.status_updated_by || order?.assigned_staff || 'Ramesh K. (CNT102)'
@@ -1127,6 +1162,34 @@ export default function OrdersV2SideEditPanel({
       setScheduledDeliveryDate(dSplit.date || '');
       setScheduledDeliveryTime(dSplit.time || '');
       setScheduleErrors({});
+
+      const advancedSeed = normalizeAdvancedFields(order.customer || order);
+      setAdvancedFields(advancedSeed);
+      setAdvancedBaseline(advancedSeed);
+      setAdvancedSections(INITIAL_ADVANCED_SECTIONS);
+      setAdvancedErrors({});
+      const advancedToken = advancedTokenRef.current + 1;
+      advancedTokenRef.current = advancedToken;
+      advancedDirtyRef.current = false;
+      const advancedCustomerId = order.customer_id
+        || order.customerId
+        || order.customer?.customer_id
+        || order.customer?.customerId
+        || null;
+      const advancedMobile = order.mobile_number || order.customer?.mobile_number || '';
+      if (advancedCustomerId || advancedMobile) {
+        loadAdvancedCustomerProfile({ customerId: advancedCustomerId, mobileNumber: advancedMobile })
+          .then((profile) => {
+            if (!profile || advancedTokenRef.current !== advancedToken || advancedDirtyRef.current) return;
+            const normalizedProfile = normalizeAdvancedFields({ ...(order.customer || {}), ...profile });
+            setAdvancedFields(normalizedProfile);
+            setAdvancedBaseline(normalizedProfile);
+            setAlternatePhone(normalizedProfile.alternate_phone || '');
+            setEmail(normalizedProfile.email || '');
+          })
+          .catch(() => {});
+      }
+
       setComments(order.comments || order.order_notes || order.special_instructions || '');
       if (order.items && Array.isArray(order.items) && order.items.length > 0) {
         setCartItems(order.items.map((it, idx) => ({
@@ -1247,6 +1310,41 @@ export default function OrdersV2SideEditPanel({
   const totalCartCount = useMemo(() => {
     return cartItems.reduce((sum, item) => sum + Number(item.qty || 0), 0);
   }, [cartItems]);
+
+  const updateAdvancedFields = (patch) => {
+    advancedDirtyRef.current = true;
+    const nextFields = { ...advancedFields, ...patch };
+    setAdvancedFields(nextFields);
+    if (patch.alternate_phone !== undefined) setAlternatePhone(String(patch.alternate_phone || ''));
+    if (patch.email !== undefined) setEmail(String(patch.email || ''));
+    setAdvancedErrors((previous) => {
+      const next = { ...previous };
+      let changed = false;
+      Object.keys(patch).forEach((key) => {
+        if (next[key]) {
+          delete next[key];
+          changed = true;
+        }
+      });
+      return changed ? next : previous;
+    });
+
+    if (patch.price_list !== undefined || patch.default_discount !== undefined) {
+      const previousPercent = getCustomerPricingDiscount(advancedFields);
+      const expectedAmount = Number((subtotal * previousPercent / 100).toFixed(2));
+      if (Math.abs(Number(discountAmount || 0) - expectedAmount) < 0.01) {
+        const nextPercent = getCustomerPricingDiscount(nextFields);
+        setDiscountAmount(Number((subtotal * nextPercent / 100).toFixed(2)));
+      }
+    }
+  };
+
+  const applyCustomerPricing = () => {
+    const discount = getCustomerPricingDiscount(effectiveAdvancedFields);
+    const amount = Number((subtotal * discount / 100).toFixed(2));
+    setDiscountAmount(amount);
+    showToast?.(`Applied ${effectiveAdvancedFields.price_list} customer pricing (${discount}% default discount, ₹${amount}) to this order.`);
+  };
 
   // Cart Handlers
   const handleAddToCart = (productToAdd = selectedProduct) => {
@@ -1436,6 +1534,19 @@ export default function OrdersV2SideEditPanel({
       setScheduleErrors({});
       resolvedScheduledDeliveryAt = deliveryResult.scheduled_delivery_at;
     }
+
+    const advancedValidationErrors = getAdvancedErrors(effectiveAdvancedFields);
+    const advancedErrorKeys = Object.keys(advancedValidationErrors);
+    if (advancedErrorKeys.length > 0) {
+      setAdvancedErrors(advancedValidationErrors);
+      setAdvancedSections((previous) => ({
+        ...previous,
+        ...Object.fromEntries(advancedErrorKeys.map((field) => [getAdvancedSectionForField(field), true])),
+      }));
+      showToast?.('⚠️ Review the highlighted customer details before saving.');
+      return;
+    }
+    setAdvancedErrors({});
 
     const totalPieces = cartItems.reduce((sum, c) => sum + Number(c.qty || 0), 0);
     const barcodeAssignment = assignGarmentBarcodes({ orderId: initialOrderNum, inspections });
@@ -1628,16 +1739,27 @@ export default function OrdersV2SideEditPanel({
       updated_at: nowIso,
     };
 
-    const customerId = order?.customer_id || order?.customer?.customer_id || null;
+    const customerId = order?.customer_id
+      || order?.customerId
+      || order?.customer_code
+      || order?.customer?.customer_id
+      || order?.customer?.customerId
+      || order?.customer?.customer_code
+      || order?.customer?.id
+      || null;
     if (customerId) {
+      const changedAdvanced = getChangedAdvancedPayload(effectiveAdvancedFields, advancedBaseline);
       const { error: customerUpdateError } = await updateCustomer(customerId, {
         customer_id: customerId,
+        ...changedAdvanced,
         additional_addresses: toStoredAdditionalAddresses(normalizedAddresses),
       });
       if (customerUpdateError) {
-        showToast?.(`⚠️ ${customerUpdateError.message || 'Could not save customer addresses.'}`);
+        showToast?.(`⚠️ ${customerUpdateError.message || 'Could not save customer details.'}`);
         return;
       }
+      setAdvancedBaseline(effectiveAdvancedFields);
+      advancedDirtyRef.current = false;
     }
 
     if (onUpdateOrder) {
@@ -1723,6 +1845,8 @@ export default function OrdersV2SideEditPanel({
     if (s.includes('progress') || s.includes('wash')) return 'in-progress';
     return 'received';
   };
+
+  if (!isOpen || !order) return null;
 
   return (
     <div className="side-edit-backdrop" onClick={onClose}>
@@ -2034,6 +2158,29 @@ export default function OrdersV2SideEditPanel({
                       placeholder="Customer special requests or instructions..."
                     />
                   </div>
+                </div>
+
+                <div className="side-edit-advanced-customer" data-inspect="side-advanced-customer-details">
+                  <OrdersV2AdvancedCustomerDetails
+                    fields={effectiveAdvancedFields}
+                    errors={advancedErrors}
+                    sections={advancedSections}
+                    onChange={updateAdvancedFields}
+                    onSectionChange={(section, isExpanded) => setAdvancedSections((previous) => ({ ...previous, [section]: isExpanded }))}
+                    orderPreferenceOptions={advancedOrderPreferenceOptions}
+                    reviewLines={buildAdvancedReviewLines({
+                      customerName,
+                      address: effectiveAddress,
+                      onCall: isOnCallOrderType(orderType),
+                      staff: attendStaffName,
+                      itemCount: totalCartCount,
+                      pickupDate: scheduledPickupDate,
+                      pickupTime: scheduledPickupTime,
+                      deliveryDate: scheduledDeliveryDate,
+                      deliveryTime: scheduledDeliveryTime,
+                    })}
+                    onApplyPricing={applyCustomerPricing}
+                  />
                 </div>
               </div>
             )}

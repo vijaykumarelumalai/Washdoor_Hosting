@@ -1,0 +1,154 @@
+.orders-v2-advanced-customer-details {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.orders-v2-advanced-customer-details .MuiAccordion-root {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.orders-v2-advanced-customer-details .MuiAccordion-root.Mui-expanded {
+  margin: 0;
+}
+
+.orders-v2-advanced-customer-details .MuiAccordionSummary-root {
+  min-height: 46px;
+}
+
+.orders-v2-advanced-customer-details .MuiAccordionSummary-content {
+  min-width: 0;
+}
+
+.orders-v2-advanced-customer-details .MuiAccordionDetails-root {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 0 16px 16px;
+  overflow: visible;
+}
+
+.orders-v2-advanced-customer-details .orders-v2-advanced-field {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.orders-v2-advanced-customer-details .orders-v2-advanced-field-label {
+  display: block;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  color: #334155;
+}
+
+.orders-v2-advanced-customer-details .orders-v2-advanced-field-required {
+  margin-left: 2px;
+  color: #ef4444;
+}
+
+.orders-v2-advanced-customer-details .MuiInputBase-root {
+  box-sizing: border-box;
+  width: 100%;
+  height: auto;
+  min-height: 40px;
+  min-width: 0;
+}
+
+.orders-v2-advanced-customer-details .MuiInputBase-input,
+.orders-v2-advanced-customer-details .MuiSelect-select {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 8px 10px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.orders-v2-advanced-customer-details textarea.MuiInputBase-input {
+  min-height: 52px;
+  resize: vertical;
+}
+
+.orders-v2-advanced-customer-details .MuiFormHelperText-root {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.orders-v2-inline-customer-layout .orders-v2-advanced-customer-details .MuiInputBase-root,
+.side-edit-panel .orders-v2-advanced-customer-details .MuiInputBase-root {
+  height: auto;
+  min-height: 40px;
+}
+
+.orders-v2-inline-customer-layout .orders-v2-advanced-customer-details .MuiInputBase-input,
+.orders-v2-inline-customer-layout .orders-v2-advanced-customer-details .MuiSelect-select,
+.side-edit-panel .orders-v2-advanced-customer-details .MuiInputBase-input,
+.side-edit-panel .orders-v2-advanced-customer-details .MuiSelect-select {
+  padding: 8px 10px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.orders-v2-inline-customer-layout .orders-v2-advanced-customer-details input[type="date"],
+.side-edit-panel .orders-v2-advanced-customer-details input[type="date"] {
+  box-sizing: border-box;
+  width: 100%;
+  height: auto;
+  min-height: 20px;
+  font-size: 14px;
+}
+
+.orders-v2-inline-customer-layout .orders-v2-advanced-customer-details .MuiAccordionDetails-root,
+.side-edit-panel .orders-v2-advanced-customer-details .MuiAccordionDetails-root {
+  padding: 0 16px 16px;
+}
+
+.orders-v2-inline-advanced-section,
+.side-edit-advanced-customer {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
+[data-theme="dark"] .side-edit-panel .orders-v2-advanced-customer-details .MuiInputBase-root,
+body:not(.light-theme) .side-edit-panel .orders-v2-advanced-customer-details .MuiInputBase-root {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+[data-theme="dark"] .side-edit-panel .orders-v2-advanced-customer-details input,
+[data-theme="dark"] .side-edit-panel .orders-v2-advanced-customer-details select,
+[data-theme="dark"] .side-edit-panel .orders-v2-advanced-customer-details textarea,
+body:not(.light-theme) .side-edit-panel .orders-v2-advanced-customer-details input,
+body:not(.light-theme) .side-edit-panel .orders-v2-advanced-customer-details select,
+body:not(.light-theme) .side-edit-panel .orders-v2-advanced-customer-details textarea {
+  background: transparent !important;
+  border-color: #dbe4f0 !important;
+  color: #0f172a !important;
+}
+
+[data-theme="dark"] .side-edit-panel .orders-v2-advanced-customer-details .orders-v2-advanced-field-label,
+body:not(.light-theme) .side-edit-panel .orders-v2-advanced-customer-details .orders-v2-advanced-field-label {
+  color: #334155 !important;
+}
+
+@media (max-width: 600px) {
+  .orders-v2-advanced-customer-details .MuiAccordionDetails-root {
+    padding: 0 12px 12px;
+  }
+
+  .orders-v2-inline-customer-layout .orders-v2-advanced-customer-details .MuiAccordionDetails-root,
+  .side-edit-panel .orders-v2-advanced-customer-details .MuiAccordionDetails-root {
+    padding: 0 12px 12px;
+  }
+}
