@@ -1,5 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Accordion,
   AccordionDetails,
@@ -48,13 +47,11 @@ import {
   fetchActivePickupDeliveryMaster,
   fetchActiveStaffMaster,
   fetchCustomerAddresses,
-  fetchCustomerAddresses,
   formatOrderId,
   getNextCustomerId,
   getNextOrderId,
   getProducts,
   searchCustomers,
-  updateCustomer,
   updateCustomer,
 } from '../services/customerService';
 import {
@@ -82,12 +79,6 @@ import {
 } from '../utils/validation';
 import ClothIllustration from './ClothIllustration';
 import UPIPaymentQRDialog from './UPIPaymentQRDialog';
-import OrdersV2AddressManager, {
-  formatAddressForOrder,
-  normalizeAdditionalAddresses,
-  toStoredAdditionalAddresses,
-  validateAdditionalAddresses,
-} from './OrdersV2AddressManager';
 import OrdersV2AddressManager, {
   formatAddressForOrder,
   normalizeAdditionalAddresses,
@@ -400,174 +391,6 @@ const getAdvancedSectionForField = (field) => {
   return 'customer';
 };
 
-const INITIAL_ADVANCED_FIELDS = {
-  company_name: '',
-  gst_number: '',
-  alternate_phone: '',
-  email: '',
-  city: '',
-  pincode: '',
-  date_of_birth: '',
-  map_link: '',
-  communication_pref: 'WhatsApp',
-  communication_lang: 'English',
-  dnd: false,
-  internal_comments: '',
-  customer_classification: 'Regular Customer',
-  customer_status: 'Active',
-  price_list: 'Standard',
-  service_zone: 'Zone 1',
-  order_preference: 'Laundry',
-  marketing_source: 'Walk-in',
-  default_discount: 0,
-  referral_code: '',
-  membership_id: '',
-  credit_limit: '',
-  notes: '',
-};
-
-const INITIAL_ADVANCED_SECTIONS = {
-  business: false,
-  communication: false,
-  profile: false,
-  customer: false,
-};
-
-const COMMUNICATION_PREF_OPTIONS = [
-  { value: 'WhatsApp', aliases: ['whatsapp', 'wa'] },
-  { value: 'SMS', aliases: ['sms'] },
-  { value: 'Email', aliases: ['email'] },
-  { value: 'Phone call', aliases: ['phone', 'phone call', 'phone_call'] },
-  { value: 'None (DND)', aliases: ['none', 'dnd', 'no communication (dnd)'] },
-];
-
-const COMMUNICATION_LANGUAGE_OPTIONS = [
-  { value: 'English', aliases: ['en', 'english'] },
-  { value: 'Tamil', aliases: ['ta', 'tamil'] },
-  { value: 'Hindi', aliases: ['hi', 'hindi'] },
-  { value: 'Telugu', aliases: ['te', 'telugu'] },
-  { value: 'Kannada', aliases: ['kn', 'kannada'] },
-  { value: 'Malayalam', aliases: ['ml', 'malayalam'] },
-];
-
-const CLASSIFICATION_OPTIONS = [
-  { value: 'Regular Customer', aliases: ['regular', 'regular customer'] },
-  { value: 'VIP Customer', aliases: ['vip', 'vip customer'] },
-  { value: 'Corporate Customer', aliases: ['corporate', 'corporate customer'] },
-  { value: 'Fraud / Review Required', aliases: ['fraud', 'fraud / review', 'fraud / review required'] },
-];
-
-const CUSTOMER_STATUS_OPTIONS = [
-  { value: 'Active', aliases: ['active'] },
-  { value: 'Inactive', aliases: ['inactive'] },
-  { value: 'Archived', aliases: ['archived'] },
-];
-
-const SERVICE_ZONE_OPTIONS = [
-  { value: 'Zone 1', aliases: ['zone-1', 'zone 1'] },
-  { value: 'Zone 2', aliases: ['zone-2', 'zone 2'] },
-  { value: 'Zone 3', aliases: ['zone-3', 'zone 3'] },
-  { value: 'Outside service zone', aliases: ['outside-zone', 'outside service zone'] },
-];
-
-const PRICE_LIST_OPTIONS = [
-  { value: 'Standard', aliases: ['standard'] },
-  { value: 'Premium', aliases: ['premium'] },
-  { value: 'Wholesale', aliases: ['wholesale'] },
-  { value: 'Corporate', aliases: ['corporate'] },
-];
-
-const MARKETING_SOURCE_OPTIONS = [
-  { value: 'Walk-in', aliases: ['walk-in', 'walk in'] },
-  { value: 'Google', aliases: ['google'] },
-  { value: 'Instagram', aliases: ['instagram'] },
-  { value: 'Word of Mouth', aliases: ['word of mouth'] },
-  { value: 'Pamphlet', aliases: ['pamphlet'] },
-];
-
-const stringValue = (value, fallback = '') => (
-  value === undefined || value === null || value === '' ? fallback : String(value)
-);
-
-const normalizeChoice = (value, options, fallback) => {
-  const raw = String(value ?? '').trim().toLowerCase();
-  if (!raw) return fallback;
-  const matched = options.find((option) => [option.value, ...(option.aliases || [])]
-    .some((candidate) => String(candidate).trim().toLowerCase() === raw));
-  return matched ? matched.value : fallback;
-};
-
-const normalizeAdvancedFields = (customer) => ({
-  ...INITIAL_ADVANCED_FIELDS,
-  company_name: stringValue(customer?.company_name),
-  gst_number: stringValue(customer?.gst_number),
-  alternate_phone: stringValue(customer?.alternate_phone),
-  email: stringValue(customer?.email),
-  city: stringValue(customer?.city),
-  pincode: stringValue(customer?.pincode),
-  date_of_birth: stringValue(customer?.date_of_birth),
-  map_link: stringValue(customer?.map_link),
-  communication_pref: normalizeChoice(
-    customer?.communication_pref || customer?.communicationPreference || (customer?.dnd ? 'None (DND)' : ''),
-    COMMUNICATION_PREF_OPTIONS,
-    customer?.dnd ? 'None (DND)' : 'WhatsApp',
-  ),
-  communication_lang: normalizeChoice(
-    customer?.communication_lang || customer?.preferredCommunicationLanguage || customer?.preferred_language,
-    COMMUNICATION_LANGUAGE_OPTIONS,
-    'English',
-  ),
-  dnd: Boolean(customer?.dnd),
-  internal_comments: stringValue(customer?.internal_comments || customer?.notes),
-  customer_classification: normalizeChoice(customer?.customer_classification, CLASSIFICATION_OPTIONS, 'Regular Customer'),
-  customer_status: normalizeChoice(customer?.customer_status, CUSTOMER_STATUS_OPTIONS, 'Active'),
-  price_list: normalizeChoice(customer?.price_list, PRICE_LIST_OPTIONS, 'Standard'),
-  service_zone: normalizeChoice(customer?.service_zone || customer?.area_service_zone, SERVICE_ZONE_OPTIONS, 'Zone 1'),
-  order_preference: stringValue(customer?.order_preference || customer?.service_category || customer?.preference, 'Laundry'),
-  marketing_source: normalizeChoice(customer?.marketing_source, MARKETING_SOURCE_OPTIONS, 'Walk-in'),
-  default_discount: customer?.default_discount ?? customer?.default_discount_pct ?? 0,
-  referral_code: stringValue(customer?.referral_code),
-  membership_id: stringValue(customer?.membership_id),
-  credit_limit: customer?.credit_limit ?? '',
-  notes: stringValue(customer?.notes),
-});
-
-const getAdvancedErrors = (fields) => {
-  const errors = {};
-  const baseErrors = validateCustomer({
-    customer_name: 'Advanced customer check',
-    mobile_number: '9999999999',
-    ...fields,
-  });
-
-  ['alternate_phone', 'email', 'pincode', 'map_link'].forEach((key) => {
-    if (baseErrors[key]) errors[key] = baseErrors[key];
-  });
-
-  if (fields.default_discount !== '' && fields.default_discount !== null && fields.default_discount !== undefined) {
-    const discount = Number(fields.default_discount);
-    if (!Number.isFinite(discount) || discount < 0 || discount > 100) {
-      errors.default_discount = 'Default discount must be between 0 and 100.';
-    }
-  }
-
-  if (fields.credit_limit !== '' && fields.credit_limit !== null && fields.credit_limit !== undefined) {
-    const creditLimit = Number(fields.credit_limit);
-    if (!Number.isFinite(creditLimit) || creditLimit < 0) {
-      errors.credit_limit = 'Credit limit cannot be negative.';
-    }
-  }
-
-  return errors;
-};
-
-const getAdvancedSectionForField = (field) => {
-  if (['company_name', 'gst_number', 'alternate_phone', 'email', 'city', 'pincode', 'date_of_birth', 'map_link'].includes(field)) return 'business';
-  if (['communication_pref', 'communication_lang', 'internal_comments', 'notes'].includes(field)) return 'communication';
-  if (['customer_classification', 'customer_status', 'service_zone', 'price_list', 'credit_limit'].includes(field)) return 'profile';
-  return 'customer';
-};
-
 const staffLabel = (option) => {
   const name = option?.name || '';
   const id = option?.uniqueId || option?.id || '';
@@ -587,7 +410,6 @@ const findStaffOption = (options, staffId) => {
   return key ? options.find((option) => staffOptionKey(option) === key) || null : null;
 };
 
-function getStageOneErrors({ customerMode, selectedCustomer, form, isOnCall, address }) {
 function getStageOneErrors({ customerMode, selectedCustomer, form, isOnCall, address }) {
   const nextErrors = {};
 
@@ -626,7 +448,6 @@ function getStageOneErrors({ customerMode, selectedCustomer, form, isOnCall, add
   }
 
   if (isOnCall) {
-    if (!String(address || '').trim()) {
     if (!String(address || '').trim()) {
       nextErrors.address = 'Address is required for On-Call orders.';
     }
@@ -758,13 +579,6 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
   const [selectedAddressId, setSelectedAddressId] = useState(null);
   const [showAddressErrors, setShowAddressErrors] = useState(false);
   const addressLoadTokenRef = useRef(0);
-  const [advancedFields, setAdvancedFields] = useState(INITIAL_ADVANCED_FIELDS);
-  const [advancedBaseline, setAdvancedBaseline] = useState(INITIAL_ADVANCED_FIELDS);
-  const [advancedSections, setAdvancedSections] = useState(INITIAL_ADVANCED_SECTIONS);
-  const [additionalAddresses, setAdditionalAddresses] = useState([]);
-  const [selectedAddressId, setSelectedAddressId] = useState(null);
-  const [showAddressErrors, setShowAddressErrors] = useState(false);
-  const addressLoadTokenRef = useRef(0);
   const [addingServiceIndex, setAddingServiceIndex] = useState(null);
   const [newServiceName, setNewServiceName] = useState('');
   const [isSavingService, setIsSavingService] = useState(false);
@@ -781,13 +595,6 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
     setCustomerLoading(false);
     setSelectedCustomer(null);
     setForm(INITIAL_FORM);
-    setAdvancedFields(INITIAL_ADVANCED_FIELDS);
-    setAdvancedBaseline(INITIAL_ADVANCED_FIELDS);
-    setAdvancedSections(INITIAL_ADVANCED_SECTIONS);
-    setAdditionalAddresses([]);
-    setSelectedAddressId(null);
-    setShowAddressErrors(false);
-    addressLoadTokenRef.current += 1;
     setAdvancedFields(INITIAL_ADVANCED_FIELDS);
     setAdvancedBaseline(INITIAL_ADVANCED_FIELDS);
     setAdvancedSections(INITIAL_ADVANCED_SECTIONS);
@@ -855,11 +662,6 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
     [serviceOptions, advancedFields.order_preference],
   );
 
-  const advancedOrderPreferenceOptions = useMemo(
-    () => dedupeStrings([...serviceOptions, advancedFields.order_preference]),
-    [serviceOptions, advancedFields.order_preference],
-  );
-
   const paymentOptions = useMemo(() => {
     const settings = getStoredSettings();
     const enabled = settings?.enabledPayments || {};
@@ -920,20 +722,7 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
   const effectiveAddress = selectedAdditionalAddress
     ? formatAddressForOrder(selectedAdditionalAddress)
     : String(form.address || '').trim();
-  const normalizedAddresses = useMemo(
-    () => normalizeAdditionalAddresses(additionalAddresses),
-    [additionalAddresses],
-  );
-  const selectedAdditionalAddress = useMemo(
-    () => normalizedAddresses.find((address) => address.id === selectedAddressId) || null,
-    [normalizedAddresses, selectedAddressId],
-  );
-  const effectiveAddress = selectedAdditionalAddress
-    ? formatAddressForOrder(selectedAdditionalAddress)
-    : String(form.address || '').trim();
   const stageOneErrors = useMemo(
-    () => getStageOneErrors({ customerMode, selectedCustomer, form, isOnCall, address: effectiveAddress }),
-    [customerMode, selectedCustomer, form, isOnCall, effectiveAddress],
     () => getStageOneErrors({ customerMode, selectedCustomer, form, isOnCall, address: effectiveAddress }),
     [customerMode, selectedCustomer, form, isOnCall, effectiveAddress],
   );
@@ -1063,89 +852,11 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
     setSelectedAddressId(null);
   };
 
-  const resetAdvancedFields = () => {
-    setAdvancedFields(INITIAL_ADVANCED_FIELDS);
-    setAdvancedBaseline(INITIAL_ADVANCED_FIELDS);
-    setAdvancedSections(INITIAL_ADVANCED_SECTIONS);
-    setAdditionalAddresses([]);
-    setSelectedAddressId(null);
-    setShowAddressErrors(false);
-    addressLoadTokenRef.current += 1;
-  };
-
-  const updateAdvancedFields = (patch) => {
-    const nextFields = { ...advancedFields, ...patch };
-    setAdvancedFields(nextFields);
-    setErrors((previous) => {
-      const next = { ...previous };
-      let changed = false;
-      Object.keys(patch).forEach((key) => {
-        if (next[key]) {
-          delete next[key];
-          changed = true;
-        }
-      });
-      return changed ? next : previous;
-    });
-
-    if (patch.price_list !== undefined || patch.default_discount !== undefined) {
-      const currentOrderDiscount = Number(discountPercent) || 0;
-      const previousCustomerDiscount = Number(advancedFields.default_discount) || 0;
-      const nextCustomerDiscount = Number(nextFields.default_discount) || 0;
-      if (Math.abs(currentOrderDiscount - previousCustomerDiscount) < 0.001) {
-        setDiscountPercent(Math.max(0, Math.min(100, nextCustomerDiscount)));
-      }
-    }
-  };
-
-  const validateAdvancedDetails = () => getAdvancedErrors(advancedFields);
-
-  const applyCustomerPricing = () => {
-    const discount = Math.max(0, Math.min(100, Number(advancedFields.default_discount) || 0));
-    setDiscountPercent(discount);
-    showToast?.(`Applied ${advancedFields.price_list} customer pricing (${discount}% default discount) to this order.`);
-  };
-
-  const getChangedAdvancedPayload = () => {
-    const changed = {};
-    Object.keys(advancedFields).forEach((key) => {
-      if (String(advancedFields[key] ?? '') !== String(advancedBaseline[key] ?? '')) {
-        changed[key] = advancedFields[key];
-      }
-    });
-    if (changed.default_discount !== undefined) changed.default_discount = Number(changed.default_discount) || 0;
-    if (changed.credit_limit !== undefined) changed.credit_limit = Number(changed.credit_limit) || 0;
-    if (changed.dnd !== undefined) changed.dnd = Boolean(changed.dnd);
-    return changed;
-  };
-
-  const loadCustomerAddresses = async (customer) => {
-    const token = addressLoadTokenRef.current + 1;
-    addressLoadTokenRef.current = token;
-    const seed = normalizeAdditionalAddresses(customer?.additional_addresses || customer?.additionalAddresses);
-    setAdditionalAddresses(seed);
-    setSelectedAddressId(null);
-    setShowAddressErrors(false);
-
-    const customerId = getCustomerId(customer);
-    if (!customerId) return;
-
-    const { data } = await fetchCustomerAddresses(customerId);
-    if (token !== addressLoadTokenRef.current) return;
-    const normalized = Array.isArray(data) && data.length > 0 ? normalizeAdditionalAddresses(data) : seed;
-    setAdditionalAddresses(normalized);
-    setSelectedAddressId(null);
-  };
-
   const prefillCustomer = (customer) => {
     const rawAddress = getCustomerAddress(customer);
     const tagMatch = String(rawAddress || '').match(/^(Home|Office|Other)\s*:/i);
     const detectedType = tagMatch ? (tagMatch[1].charAt(0).toUpperCase() + tagMatch[1].slice(1).toLowerCase()) : 'Home';
     const cleanAddress = stripAddressTag(rawAddress);
-    const normalizedAdvanced = normalizeAdvancedFields(customer);
-    setAdvancedFields(normalizedAdvanced);
-    setAdvancedBaseline(normalizedAdvanced);
-    setAdvancedSections(INITIAL_ADVANCED_SECTIONS);
     const normalizedAdvanced = normalizeAdvancedFields(customer);
     setAdvancedFields(normalizedAdvanced);
     setAdvancedBaseline(normalizedAdvanced);
@@ -1157,7 +868,6 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
       addressType: detectedType,
     });
     loadCustomerAddresses(customer);
-    loadCustomerAddresses(customer);
   };
 
   const handleCustomerSelect = (_, option) => {
@@ -1168,7 +878,6 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
       setCustomerMode('new');
       setSelectedCustomer(null);
       setDiscountPercent(0);
-      resetAdvancedFields();
       resetAdvancedFields();
       updateForm({
         customer_name: phoneMatch ? '' : query,
@@ -1313,12 +1022,6 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
     const storedAddresses = toStoredAdditionalAddresses(additionalAddresses);
     const staffNotes = [advancedFields.internal_comments, form.internalNotes].filter(Boolean).join(' • ');
     const notes = [staffNotes, advancedFields.notes, form.orderNotes].filter(Boolean).join(' • ');
-    const formattedAddress = selectedAdditionalAddress
-      ? formatAddressForOrder(selectedAdditionalAddress)
-      : (cleanAddress ? `${form.addressType}: ${cleanAddress}` : '');
-    const storedAddresses = toStoredAdditionalAddresses(additionalAddresses);
-    const staffNotes = [advancedFields.internal_comments, form.internalNotes].filter(Boolean).join(' • ');
-    const notes = [staffNotes, advancedFields.notes, form.orderNotes].filter(Boolean).join(' • ');
     const advancePaid = Number(form.advancePaid) || 0;
 
     return {
@@ -1327,18 +1030,7 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
       country_code: '+91',
       mobile_number: normalizeMobileNumber(form.mobile_number),
       alternate_phone: advancedFields.alternate_phone,
-      alternate_phone: advancedFields.alternate_phone,
       address: formattedAddress,
-      additional_addresses: storedAddresses,
-      selected_customer_address_id: selectedAdditionalAddress?.id || null,
-      selected_address: formattedAddress,
-      city: advancedFields.city,
-      pincode: advancedFields.pincode,
-      date_of_birth: advancedFields.date_of_birth,
-      map_link: advancedFields.map_link,
-      email: advancedFields.email,
-      gst_number: advancedFields.gst_number,
-      company_name: advancedFields.company_name,
       additional_addresses: storedAddresses,
       selected_customer_address_id: selectedAdditionalAddress?.id || null,
       selected_address: formattedAddress,
@@ -1354,23 +1046,9 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
       communication_pref: advancedFields.communication_pref,
       communication_lang: advancedFields.communication_lang,
       dnd: Boolean(advancedFields.dnd),
-      communication_pref: advancedFields.communication_pref,
-      communication_lang: advancedFields.communication_lang,
-      dnd: Boolean(advancedFields.dnd),
       property_status: form.propertyStatus,
       priority: form.propertyStatus === 'Yes' ? 'Yes' : 'No',
       order_status: 'order recived',
-      internal_comments: staffNotes,
-      order_preference: advancedFields.order_preference || primaryService,
-      default_discount: Number(advancedFields.default_discount) || 0,
-      referral_code: advancedFields.referral_code,
-      marketing_source: advancedFields.marketing_source,
-      membership_id: advancedFields.membership_id,
-      customer_classification: advancedFields.customer_classification,
-      customer_status: advancedFields.customer_status,
-      price_list: advancedFields.price_list,
-      service_zone: advancedFields.service_zone,
-      credit_limit: Number(advancedFields.credit_limit) || 0,
       internal_comments: staffNotes,
       order_preference: advancedFields.order_preference || primaryService,
       default_discount: Number(advancedFields.default_discount) || 0,
@@ -1459,56 +1137,10 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
       return;
     }
 
-    const addressValidationErrors = validateAdditionalAddresses(additionalAddresses);
-    if (Object.keys(addressValidationErrors).length > 0) {
-      setShowAddressErrors(true);
-      showToast?.('Review the highlighted additional addresses before saving.');
-      return;
-    }
-    setShowAddressErrors(false);
-
-    if (isOnCall && !String(effectiveAddress || '').trim()) {
-      setErrors((previous) => ({ ...previous, address: 'Address is required for On-Call orders.' }));
-      showToast?.('A valid selected address is required for On-Call orders.');
-      return;
-    }
-
-    const advancedValidationErrors = validateAdvancedDetails();
-    const advancedErrorKeys = Object.keys(advancedValidationErrors);
-    if (advancedErrorKeys.length > 0) {
-      setErrors((previous) => ({ ...previous, ...advancedValidationErrors }));
-      const sectionsToExpand = [...new Set(advancedErrorKeys.map(getAdvancedSectionForField))];
-      setAdvancedSections((previous) => ({
-        ...previous,
-        ...Object.fromEntries(sectionsToExpand.map((section) => [section, true])),
-      }));
-      showToast?.('Review the highlighted customer details before saving.');
-      return;
-    }
-
     const customerData = buildCustomerData(scheduleResult, primaryService);
     const existingCustomerId = customerMode === 'existing' ? (getCustomerId(selectedCustomer) || null) : null;
 
     setSaving(true);
-    if (existingCustomerId) {
-      const changedAdvanced = {
-        ...getChangedAdvancedPayload(),
-        additional_addresses: toStoredAdditionalAddresses(additionalAddresses),
-      };
-      if (Object.keys(changedAdvanced).length > 0) {
-        const { error: updateError } = await updateCustomer(existingCustomerId, {
-          customer_id: existingCustomerId,
-          ...changedAdvanced,
-        });
-        if (updateError) {
-          setSaving(false);
-          showToast?.(`⚠️ ${friendlySupabaseError(updateError)}`);
-          return;
-        }
-        setAdvancedBaseline(advancedFields);
-      }
-    }
-
     if (existingCustomerId) {
       const changedAdvanced = {
         ...getChangedAdvancedPayload(),
@@ -1695,7 +1327,6 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
             setCustomerMode('existing');
             setErrors({});
             if (!selectedCustomer) resetAdvancedFields();
-            if (!selectedCustomer) resetAdvancedFields();
           }}
           sx={{ flex: 1, textTransform: 'none', bgcolor: customerMode === 'existing' ? PRIMARY : 'transparent', borderColor: PRIMARY, color: customerMode === 'existing' ? '#fff' : PRIMARY_DARK, fontWeight: 700, fontSize: '0.82rem' }}
         >
@@ -1709,7 +1340,6 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
             setSelectedCustomer(null);
             setCustomerQuery('');
             setDiscountPercent(0);
-            resetAdvancedFields();
             resetAdvancedFields();
             setErrors({});
           }}
@@ -1784,7 +1414,6 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
                 setSelectedCustomer(null);
                 setCustomerQuery('');
                 resetAdvancedFields();
-                resetAdvancedFields();
               }}
               sx={{ textTransform: 'none', color: PRIMARY_DARK, fontSize: '0.76rem', fontWeight: 700, minWidth: 0 }}
             >
@@ -1857,23 +1486,6 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
           error={Boolean(errors.address)}
           helperText={errors.address || ''}
           sx={{ ...FIELD_SX, '& textarea': { fontSize: '0.88rem', lineHeight: 1.5 } }}
-        />
-        <OrdersV2AddressManager
-          value={additionalAddresses}
-          onChange={(next) => setAdditionalAddresses(normalizeAdditionalAddresses(next))}
-          selectedId={selectedAddressId}
-          onSelect={(id) => {
-            setSelectedAddressId(id);
-            if (id) {
-              setErrors((previous) => {
-                if (!previous.address) return previous;
-                const next = { ...previous };
-                delete next.address;
-                return next;
-              });
-            }
-          }}
-          showErrors={showAddressErrors}
         />
         <OrdersV2AddressManager
           value={additionalAddresses}
@@ -3010,7 +2622,6 @@ export default function OrdersV2CreateOrder({ isOpen, onClose, onOrderSuccess, s
           <AccordionDetails sx={{ pt: 0, pb: 2, display: 'grid', gap: 1 }}>
             {[
               `Customer: ${getCustomerName(selectedCustomer) || form.customer_name || 'Not set'}`,
-              `Address: ${effectiveAddress || 'Not set'}`,
               `Address: ${effectiveAddress || 'Not set'}`,
               `Order type: ${isOnCall ? 'On-Call' : 'Walk-In'}`,
               `Staff: ${form.attendStaffName || 'Counter Staff'}`,

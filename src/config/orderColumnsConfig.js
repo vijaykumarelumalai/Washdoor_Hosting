@@ -170,3 +170,42 @@ export function enforceOrdersV2RequiredColumns(selectedIds) {
   const current = Array.isArray(selectedIds) ? selectedIds : ORDERS_V2_DEFAULT_COLUMN_IDS;
   return sanitizeOrdersV2Columns([...new Set([...current, ...ORDERS_V2_REQUIRED_COLUMN_IDS])]);
 }
+
+export const ORDER_COLUMNS = [
+  { id: 'order_id', label: 'Order ID', default: true, required: true, fixed: true },
+  { id: 'customer', label: 'Customer', default: true, required: true, fixed: true },
+  { id: 'address', label: 'Address', default: true },
+  { id: 'services', label: 'Services', default: true },
+  { id: 'status', label: 'Status', default: true },
+  { id: 'payment', label: 'Payment', default: true },
+  { id: 'order_details', label: 'Order Details', default: true },
+  { id: 'pickup_delivery', label: 'Pickup & Delivery', default: true },
+  { id: 'actions', label: 'Actions', default: true, required: true, fixed: true },
+  { id: 'driver', label: 'Driver', default: false },
+  { id: 'comments', label: 'Comments', default: false },
+  { id: 'pincode', label: 'PIN Code', default: false },
+  { id: 'email', label: 'Email', default: false },
+  { id: 'business_name', label: 'Business Name', default: false },
+  { id: 'communication_pref', label: 'Communication Preference', default: false },
+  { id: 'dob', label: 'Date of Birth', default: false },
+  { id: 'tax_exemption', label: 'Tax Exemption', default: false },
+];
+
+export const DEFAULT_COLUMN_IDS = ORDER_COLUMNS.filter((column) => column.default).map((column) => column.id);
+export const ALL_COLUMN_IDS = ORDER_COLUMNS.map((column) => column.id);
+export const REQUIRED_COLUMN_IDS = ORDER_COLUMNS.filter((column) => column.required).map((column) => column.id);
+export const FIXED_COLUMN_IDS = REQUIRED_COLUMN_IDS;
+export const COLUMN_STORAGE_KEY = 'washdoor_pos_column_preferences_v1';
+
+export function sanitizeAndOrderColumns(selectedIds) {
+  if (!Array.isArray(selectedIds) || selectedIds.length === 0) {
+    return [...DEFAULT_COLUMN_IDS];
+  }
+  const idSet = new Set(ALL_COLUMN_IDS);
+  return ALL_COLUMN_IDS.filter((id) => selectedIds.includes(id) && idSet.has(id));
+}
+
+export function enforceRequiredColumns(selectedIds) {
+  const current = Array.isArray(selectedIds) ? selectedIds : [];
+  return sanitizeAndOrderColumns([...new Set([...current, ...REQUIRED_COLUMN_IDS])]);
+}

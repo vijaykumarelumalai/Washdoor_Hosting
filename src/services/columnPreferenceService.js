@@ -4,6 +4,12 @@ import {
   sanitizeOrdersV2Columns,
   enforceOrdersV2RequiredColumns,
 } from '../config/ordersV2ColumnsConfig.js';
+import {
+  COLUMN_STORAGE_KEY,
+  sanitizeAndOrderColumns,
+  enforceRequiredColumns,
+  DEFAULT_COLUMN_IDS,
+} from '../config/orderColumnsConfig.js';
 
 const REMOTE_METADATA_KEY = 'orders_v2_table_columns';
 
@@ -66,5 +72,28 @@ export async function saveOrdersV2ColumnPreferences(selectedColumns, userId) {
     } catch {}
   }
 
+  return sanitized;
+}
+
+export async function loadColumnPreferences() {
+  try {
+    const storage = getLocalStorage();
+    const stored = storage?.getItem(COLUMN_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return sanitizeAndOrderColumns(parsed);
+      }
+    }
+  } catch {}
+
+  return [...DEFAULT_COLUMN_IDS];
+}
+
+export async function saveColumnPreferences(selectedColumns) {
+  const sanitized = sanitizeAndOrderColumns(selectedColumns);
+  try {
+    getLocalStorage()?.setItem(COLUMN_STORAGE_KEY, JSON.stringify(sanitized));
+  } catch {}
   return sanitized;
 }
