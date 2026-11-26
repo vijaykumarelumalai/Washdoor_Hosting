@@ -3145,9 +3145,9 @@ export function OrdersV2List({
                                     </Grid>
                                   </Box>
 
-                                  <Grid container className="orders-v2-inline-customer-fields" data-inspect="inline-customer-address-scheduling-staff">
+                                  <div className="orders-v2-inline-customer-fields" data-inspect="inline-customer-address-scheduling-staff">
 
-                                    <Grid item xs={12} className="orders-v2-inline-customer-address" data-inspect="inline-customer-address">
+                                    <div className="orders-v2-inline-customer-address" data-inspect="inline-customer-address">
                                       <Typography className="orders-v2-inline-customer-section-title">
                                         Address Information
                                       </Typography>
@@ -3195,9 +3195,9 @@ export function OrdersV2List({
                                         hideSavedLabel="Hide Saved Addresses"
                                         inspectId="inline-customer-address-manager"
                                       />
-                                    </Grid>
+                                    </div>
 
-                                    <Grid item xs={12} className="orders-v2-inline-customer-scheduling" data-inspect="inline-customer-scheduling">
+                                    <div className="orders-v2-inline-customer-scheduling" data-inspect="inline-customer-scheduling">
                                       <Box className="orders-v2-inline-customer-scheduling-panel">
                                         <Typography className="orders-v2-inline-customer-section-title" sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1 }}>
                                           {isOnCallOrderType(inlineDraft.order_type) ? <CallOutlined sx={{ fontSize: 16 }} /> : <LocalShippingOutlined sx={{ fontSize: 16 }} />}
@@ -3278,9 +3278,9 @@ export function OrdersV2List({
                                           </Grid>
                                         </Grid>
                                       </Box>
-                                    </Grid>
+                                    </div>
 
-                                    <Grid item xs={12} className="orders-v2-inline-customer-staff" data-inspect="inline-customer-staff">
+                                    <div className="orders-v2-inline-customer-staff" data-inspect="inline-customer-staff">
                                       <Typography className="orders-v2-inline-customer-section-title">
                                         Staff Assignment
                                       </Typography>
@@ -3521,8 +3521,8 @@ export function OrdersV2List({
                                         </TextField>
                                         </Grid>
                                       </Grid>
-                                    </Grid>
-                                  </Grid>
+                                    </div>
+                                  </div>
 
                                   <Box className="orders-v2-inline-customer-footer" data-inspect="inline-customer-footer">
                                     <Box className="orders-v2-inline-customer-status">

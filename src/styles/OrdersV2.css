@@ -579,6 +579,7 @@ body:not(.light-theme):not([data-theme="light"]) .main.orders-v2-main::-webkit-s
 }
 
 .orders-v2-inline-customer-pair-grid {
+  box-sizing: border-box;
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
@@ -586,14 +587,6 @@ body:not(.light-theme):not([data-theme="light"]) .main.orders-v2-main::-webkit-s
   min-width: 0;
   margin: 0 !important;
   padding: 0 !important;
-}
-
-.orders-v2-inline-customer-pair-grid > .MuiGrid-item {
-  width: 100%;
-  min-width: 0;
-  max-width: none;
-  margin: 0;
-  padding: 0;
 }
 
 .orders-v2-inline-customer-layout input[type="date"],
@@ -651,17 +644,20 @@ body:not(.light-theme):not([data-theme="light"]) .main.orders-v2-main::-webkit-s
 }
 
 .orders-v2-inline-customer-fields {
-  display: grid !important;
+  box-sizing: border-box;
+  display: grid;
   grid-template-columns: minmax(0, 65fr) minmax(0, 35fr);
-  align-items: start !important;
-  gap: 16px;
+  align-items: start;
+  column-gap: 16px;
+  row-gap: 16px;
   width: 100%;
   min-width: 0;
-  margin: 16px 0 0 !important;
-  padding: 0 !important;
+  margin: 16px 0 0;
+  padding: 0;
 }
 
-.orders-v2-inline-customer-fields > .MuiGrid-item {
+.orders-v2-inline-customer-fields > div {
+  box-sizing: border-box;
   width: 100%;
   min-width: 0;
   max-width: none;
@@ -708,6 +704,70 @@ body:not(.light-theme):not([data-theme="light"]) .main.orders-v2-main::-webkit-s
 
 .orders-v2-inline-customer-schedule-row + .orders-v2-inline-customer-schedule-row {
   margin-top: 16px;
+}
+
+/* Customer Details: scoped spacing and overflow corrections for Inline Edit only */
+.orders-v2-inline-customer-layout .orders-v2-inline-customer-address,
+.orders-v2-inline-customer-layout .orders-v2-inline-customer-scheduling,
+.orders-v2-inline-customer-layout .orders-v2-inline-customer-staff {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.orders-v2-inline-customer-layout .orders-v2-inline-customer-input,
+.orders-v2-inline-customer-layout .orders-v2-inline-customer-input .MuiInputBase-root {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.orders-v2-inline-customer-layout .orders-v2-inline-customer-staff .orders-v2-inline-customer-section-title {
+  margin-bottom: 8px;
+}
+
+.orders-v2-inline-customer-layout .orders-v2-inline-address-manager {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin-top: 8px;
+  row-gap: 12px;
+}
+
+.orders-v2-inline-customer-layout .orders-v2-inline-address-actions {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  gap: 12px;
+  margin: 0;
+}
+
+.orders-v2-inline-customer-layout .orders-v2-inline-address-limit {
+  display: none;
+}
+
+.orders-v2-inline-customer-layout .orders-v2-inline-address-cards {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  align-items: start;
+  margin-top: 0;
+  row-gap: 12px;
+}
+
+.orders-v2-inline-customer-layout .orders-v2-inline-address-cards:empty {
+  display: none;
+}
+
+.orders-v2-inline-customer-layout .orders-v2-inline-address-cards > .MuiBox-root {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .orders-v2-inline-customer-footer {

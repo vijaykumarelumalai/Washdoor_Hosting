@@ -10,7 +10,7 @@ import {
 } from '@mui/material';
 import {
   AddRounded,
-  CheckCircleOutlineRounded,a
+  CheckCircleOutlineRounded,
   DeleteOutlineRounded,
   ExpandMoreRounded,
   RadioButtonUncheckedRounded,
@@ -216,6 +216,7 @@ export default function OrdersV2AddressManager({
 
   return (
     <Box
+      className={compact ? 'orders-v2-inline-address-manager' : undefined}
       data-inspect={inspectId}
       sx={{
         mt: compact ? 1 : 1.25,
@@ -231,6 +232,7 @@ export default function OrdersV2AddressManager({
       }}
     >
       <Box
+        className={compact ? 'orders-v2-inline-address-actions' : undefined}
         sx={{
           display: 'flex',
           flexWrap: 'wrap',
@@ -282,13 +284,14 @@ export default function OrdersV2AddressManager({
       </Box>
 
       {addresses.length >= MAX_ADDITIONAL_ADDRESSES ? (
-        <Typography sx={{ mt: 0.75, fontSize: '0.7rem', color: MUTED }}>
+        <Typography className="orders-v2-inline-address-limit" sx={{ mt: 0.75, fontSize: '0.7rem', color: MUTED }}>
           Maximum {MAX_ADDITIONAL_ADDRESSES} additional addresses reached.
         </Typography>
       ) : null}
 
       {expanded ? (
         <Box
+          className={compact ? 'orders-v2-inline-address-cards' : undefined}
           data-inspect={compact ? 'inline-customer-address-cards' : undefined}
           sx={{
             display: 'grid',
@@ -307,6 +310,7 @@ export default function OrdersV2AddressManager({
             return (
               <Box
                 key={address.id}
+                className={compact ? 'orders-v2-inline-address-card' : undefined}
                 sx={{
                   alignSelf: 'start',
                   height: 'auto',
